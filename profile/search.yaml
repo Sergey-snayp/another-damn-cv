@@ -1,0 +1,29 @@
+# What counts as a job worth your morning attention. Tune freely — this file is
+# read on every run, no rebuild needed.
+titles_include:
+  [senior software engineer, senior backend, senior full stack, staff engineer,
+   backend engineer, full stack engineer, node.js engineer, typescript engineer,
+   platform engineer, senior developer, lead engineer, software engineer iii,
+   principal engineer, senior software developer]
+titles_exclude:
+  [intern, internship, co-op, junior, graduate, new grad, manager, director, vp,
+   head of, recruiter, sales, marketing, designer, data scientist, machine learning
+   engineer, ml engineer, qa, sdet, support, android, ios developer, php, ruby,
+   golang, .net, salesforce, sap, drupal, wordpress]
+
+# Hard stack gate: a posting must mention at least one of these to survive.
+stack_required_any: [node, node.js, nodejs, typescript, javascript, nestjs, react,
+  next.js, express, graphql, aws, serverless, microservice]
+
+locations:
+  # Matched case-insensitively against the posting's location string.
+  allow: [canada, vancouver, british columbia, "bc", toronto, ontario, montreal,
+    quebec, calgary, alberta, ottawa, victoria, burnaby, richmond, surrey, remote]
+  # Rejected even if "remote" appears — remote-but-US-only is the common trap.
+  deny_remote_scoped_to: [united states only, us only, usa only, "u.s. only",
+    must reside in the united states, eu only, uk only, europe only, india, latam only]
+
+freshness_days: 21          # ignore postings older than this
+min_score: 65               # 0-100; below this it never reaches Telegram
+daily_digest_limit: 10      # top N per morning
+digest_hour: 8              # local time, 24h

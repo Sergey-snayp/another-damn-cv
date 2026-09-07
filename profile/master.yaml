@@ -1,0 +1,268 @@
+# Single source of truth for resume generation.
+# HARD RULE: the tailorer may reorder, select, and rephrase ONLY what appears here.
+# It may never invent a company, date, title, technology, or metric.
+#
+# Source: Serhii_Proniuk_MASTER_CV.docx
+# Imported: 2026-09-05T08:39:10.315Z
+#
+# Generated from an uploaded resume. Edit freely — this file wins over the upload.
+identity:
+  name: Serhii Proniuk
+  headline: "Senior Full Stack Engineer | Node.js, TypeScript, React, AWS, BFSI & Payments"
+  email: sergeypronyuk@gmail.com
+  location: Vancouver, BC, Canada
+  github: null
+  linkedin: null
+  website: null
+
+summary: >
+  Senior Full Stack Engineer with 7+ years of experience building scalable web, mobile,
+  backend, and cloud-based systems using TypeScript, Node.js, React, React Native, Next.js,
+  NestJS, AWS, PostgreSQL, MongoDB, DynamoDB, Redis, Docker, and Kubernetes. Currently working
+  through Ciklum across enterprise projects in payments and BFSI: a Verifone payment
+  processing platform and a SymphonyAI financial crime investigation management system.
+  Strong background in microservices, event-driven architecture, high-load systems, CI/CD,
+  monitoring, security, authentication, and production reliability.
+
+skills:
+  languages:
+    - TypeScript
+    - JavaScript
+    - Vanilla JS
+  frontend_mobile:
+    - React
+    - Next.js
+    - Redux
+    - Material UI
+    - React Native
+    - Expo
+    - Expo Router
+    - Reanimated
+    - Gesture Handler
+    - FlashList
+    - i18next
+    - Yup
+    - Zod
+    - AsyncStorage
+    - Expo Notifications
+    - Expo Haptics
+    - Expo Audio
+    - Expo Image Picker
+    - Apple Authentication
+    - Google Sign-In
+  backend:
+    - Node.js
+    - NestJS
+    - Express
+    - Fastify
+    - GraphQL / Apollo Server
+    - REST APIs
+    - WebSockets
+    - Socket.IO
+    - Telegram API
+    - Swagger / OpenAPI
+    - Apache Kafka
+    - RabbitMQ
+    - Slack Webhooks
+    - Lodash
+  data:
+    - PostgreSQL
+    - MySQL
+    - Oracle
+    - MongoDB
+    - DynamoDB
+    - Redis
+    - ClickHouse
+    - Aerospike
+    - OpenSearch / Elasticsearch
+    - MinIO (S3)
+  cloud_devops:
+    - AWS Lambda
+    - API Gateway
+    - Step Functions
+    - SQS/SNS
+    - ECS
+    - Fargate
+    - EC2
+    - S3
+    - CloudWatch
+    - CDK
+    - Serverless Framework
+    - Docker
+    - Docker Compose
+    - Kubernetes
+    - Terraform
+    - Nginx
+    - load balancers
+    - Nx monorepo
+    - Route53
+    - KMS
+    - Secrets Manager
+    - SSM
+    - AWS SDK
+    - Bamboo
+    - Firebase
+  architecture:
+    - Microservices
+    - event-driven architecture
+    - DDD
+    - Clean Architecture
+    - monolith-to-microservices migration
+    - high-load systems
+    - performance optimization
+    - idempotency
+    - retries
+    - dead-letter queues
+  auth_testing_observability:
+    - JWT
+    - SAML
+    - Auth0
+    - Passport.js
+    - RBAC
+    - policies
+    - Jest
+    - jest-expo
+    - cucumber-js / BDD
+    - Mocha
+    - Chai
+    - Sinon.js
+    - Datadog
+    - Grafana
+    - CloudWatch
+  security_compliance:
+    - ACME / Let's Encrypt
+    - X.509 / PKI
+    - TLS certificate management
+  payments_integrations:
+    - Mastercard token network
+    - Amex token network
+    - Visa token network
+    - Discover token network
+    - TRID merchant onboarding
+  ai:
+    - Claude
+    - GitHub Copilot
+    - ChatGPT
+    - OpenAI API
+    - Anthropic API
+
+experience:
+  - company: Ciklum
+    title: Senior Software Engineer / Senior Backend Developer
+    start: 2024-10
+    end: null
+    location: null
+    context: "Paymorrow / Verifone payment processing platform — Payments domain"
+    highlights:
+      - Developed and maintained microservices powering card tokenization and certificate lifecycle management for a payment processing platform.
+      - Built integrations with Mastercard, Amex, Visa, and Discover token networks, including notification processing, merchant onboarding (TRID), payment data retrieval, and validation pipelines across consumer-facing and scheme-facing APIs.
+      - Designed and built real-time Slack alerting for Intercard gateway errors, including daily reporting and timeout monitoring for production visibility.
+      - Led development of an automated TLS certificate service from scratch using ACME / Let's Encrypt, DNS-01 challenge automation via Route53, Step Functions issuance workflows, retries, cleanup mechanisms, and JWT-secured certificate delivery to mobile clients.
+      - Maintained security posture through vulnerability remediation, dependency upgrades, input validation, AWS secrets handling, and production monitoring.
+
+  - company: Ciklum
+    title: Senior Software Engineer / Senior Backend Developer
+    start: 2023-11
+    end: 2024-06
+    location: null
+    context: "SymphonyAI — Financial Crime Investigation Management System, BFSI domain"
+    highlights:
+      - Implemented backend features for investigation workflows, suspicious customer review, and alert management using NestJS, Node.js, TypeScript, GraphQL / Apollo Server, REST APIs, and OpenAPI documentation.
+      - Participated in architecture design discussions, code reviews, refactoring, performance improvements, and business-needs alignment across the product team.
+      - Worked with PostgreSQL, Oracle, Redis, OpenSearch / Elasticsearch, Apache Kafka, RabbitMQ, Socket.IO, and MinIO-compatible S3 storage.
+      - Contributed to authentication, authorization, testing, and platform quality using JWT, SAML, Passport.js, Jest, Cucumber / BDD, Docker, Nginx, and Nx monorepo workflows.
+      - Supported coworker onboarding and improved maintainability, reliability, and delivery quality across the project.
+
+  - company: EPAM
+    title: Senior Full Stack Software Engineer
+    start: 2023-02
+    end: 2023-09
+    location: null
+    context: "ADBM Project — global multichannel programmatic advertising platform"
+    highlights:
+      - Worked as a senior developer on a high-traffic advertising platform where performance, resilience, and client satisfaction were critical.
+      - Optimized and rewrote backend and frontend components across a system processing approximately 20,000 requests per second.
+      - Designed resilient services and failure-handling approaches to support uninterrupted service and stable production behavior.
+      - Implemented bug fixes, product improvements, and architectural changes across backend, frontend, messaging, caching, storage, and real-time components.
+
+  - company: EPAM
+    title: Middle Software Engineer
+    start: 2021-12
+    end: 2023-02
+    location: null
+    context: "Liberty Mutual Project — major American global insurer"
+    highlights:
+      - Implemented features and improved AWS serverless microservices using Lambda, SQS, SNS, Step Functions, DynamoDB, Redis, S3, and CloudWatch.
+      - Participated in architectural decisions, codebase rewrites, scalability improvements, and development process optimization.
+      - Communicated with client stakeholders to clarify acceptance criteria and align technical solutions with business needs.
+      - Mentored and onboarded new team members and contributed unit and integration tests to improve reliability and maintainability.
+
+  - company: Mavelich Web
+    title: Full Stack Engineer
+    start: 2020-07
+    end: 2021-12
+    location: null
+    context: "Worked across 4 projects with different requirements, stacks, and delivery responsibilities; notable project: HYPT (places, cultural/entertainment events, ticket purchases)"
+    highlights:
+      - Built full-stack features and grew from junior to middle-level engineer while owning estimates, client discussions, and onboarding of new developers.
+      - Worked on HYPT, a platform for places, cultural events, entertainment events, and ticket purchases, including portal, blog, admin panel, statistics, and user account features.
+      - Built Node.js, NestJS, React, PostgreSQL, and microservice functionality with payment gateway integration, RTL adaptation, and RBAC-based access control for managers, institutions, and event organizers.
+      - Delivered features across backend services, frontend interfaces, search, real-time communication, tests, and integrations.
+
+  - company: WizardsDev
+    title: Junior Software Engineer
+    start: 2019-08
+    end: 2020-07
+    location: null
+    context: "Waivio — a social media platform where users can earn crypto rewards for posts"
+    highlights:
+      - Implemented backend features and wrote unit and integration tests for Node.js microservices.
+      - Worked with business logic, client communication, and cross-functional collaboration to deliver product improvements.
+      - Contributed to backend services using TypeScript, Express, MongoDB, Redis, and Nginx.
+
+projects:
+  - name: Independent Mobile Product
+    description: >
+      Personal project (React Native / Expo Developer, recent). Built cross-platform mobile
+      functionality using React Native and Expo, including file-based routing,
+      internationalization, offline-first local storage, camera/gallery access, haptics,
+      audio, push notifications, social login, animated UI, gestures, virtualized lists,
+      and tests.
+    tech:
+      - React Native 0.81
+      - React 19
+      - Expo SDK 54
+      - Expo Router 6
+      - TypeScript 5.9
+      - Reanimated 4
+      - Gesture Handler
+      - FlashList
+      - AsyncStorage
+      - i18next
+      - Expo Notifications
+      - Expo Haptics
+      - Expo Audio
+      - Expo Image Picker
+      - Apple Authentication
+      - Google Sign-In
+      - Jest
+      - jest-expo
+
+education:
+  - school: DIIT
+    degree: B.Sc., Computer and Information Systems Security
+    start: 2012
+    end: 2016
+
+training:
+  - "EPAM Advanced Node.js - Streams, Event Emitters, Microservices Architecture, Performance Optimization (2023)"
+  - "ITVDN - JavaScript, Node.js, SOLID, HTML/CSS (2019)"
+  - "DevEducation - OOP, C#, MySQL, Redis (2018-2019)"
+
+languages:
+  - name: Ukrainian
+    level: Native
+  - name: Russian
+    level: Fluent
+  - name: English
+    level: Professional working proficiency

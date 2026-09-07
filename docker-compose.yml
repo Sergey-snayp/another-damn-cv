@@ -1,0 +1,15 @@
+services:
+  job-agent:
+    build: .
+    container_name: job-agent
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # The claude CLI authenticates via the macOS Keychain, which the container
+      # cannot reach — the containerised path must use the metered API.
+      LLM_PROVIDER: api
+    volumes:
+      - ./data:/app/data
+      - ./out:/app/out
+      # Edit these on the host and the container picks them up on next run.
+      - ./profile:/app/profile:ro

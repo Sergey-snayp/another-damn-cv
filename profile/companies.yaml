@@ -1,0 +1,27 @@
+# Canadian-and-relevant employers whose ATS boards are polled daily.
+# `npm run discover` probes each token against Greenhouse/Lever/Ashby and rewrites
+# the `ats` field with whatever actually answers — so you can add a bare token and
+# let the tool figure out the provider.
+#
+# ats: greenhouse | lever | ashby | unknown  (unknown = discover will resolve it)
+companies:
+  - { token: 1password, name: 1Password, ats: ashby }
+  - { token: wealthsimple, name: Wealthsimple, ats: ashby }
+  - { token: benevity, name: Benevity, ats: ashby }
+  - { token: jane, name: Jane Software, ats: ashby }
+  - { token: hootsuite, name: Hootsuite, ats: greenhouse }
+  - { token: later, name: Later, ats: greenhouse }
+  - { token: faire, name: Faire, ats: greenhouse }
+  - { token: thinkific, name: Thinkific, ats: ashby }
+  - { token: cohere, name: Cohere, ats: ashby }
+  - { token: float, name: Float, ats: ashby }
+  - { token: neofinancial, name: Neo Financial, ats: ashby }
+  - { token: koho, name: KOHO, ats: ashby }
+  - { token: lightspeed, name: Lightspeed, ats: ashby }
+  - { token: docebo, name: Docebo, ats: ashby }
+  - { token: jobber, name: Jobber, ats: ashby }
+  - { token: procurify, name: Procurify, ats: ashby }
+  - { token: trulioo, name: Trulioo, ats: ashby }
+  - { token: aircall, name: Aircall, ats: lever }
+  - { token: fullscript, name: Fullscript, ats: lever }
+  - { token: apryse, name: Apryse, ats: lever }

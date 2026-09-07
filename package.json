@@ -1,0 +1,40 @@
+{
+  "name": "job-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/bot/index.ts",
+    "bot": "tsx src/bot/index.ts",
+    "harvest": "tsx src/cli.ts harvest",
+    "digest": "tsx src/cli.ts digest",
+    "tailor": "tsx src/cli.ts tailor",
+    "discover": "tsx src/cli.ts discover",
+    "stats": "tsx src/cli.ts stats",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --import tsx dist-test/**/*.test.js || tsx --test src/**/*.test.ts",
+    "profile": "tsx src/cli.ts profile"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7",
+    "grammy": "^1.32.0",
+    "mammoth": "^1.12.2",
+    "node-cron": "^3.0.3",
+    "pdf-parse": "^2.4.5",
+    "yaml": "^2.6.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
