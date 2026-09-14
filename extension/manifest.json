@@ -1,0 +1,76 @@
+{
+  "manifest_version": 3,
+  "name": "CV Autofill",
+  "version": "0.7.0",
+  "description": "Fills job application forms from your own profile. Local only.",
+  "minimum_chrome_version": "114",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "scripting",
+    "tabs",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://boards.greenhouse.io/*",
+    "https://job-boards.greenhouse.io/*",
+    "https://boards.eu.greenhouse.io/*",
+    "https://jobs.lever.co/*",
+    "https://jobs.ashbyhq.com/*",
+    "https://jobs.smartrecruiters.com/*",
+    "https://apply.workable.com/*",
+    "https://*.bamboohr.com/*",
+    "https://*.recruitee.com/*",
+    "https://*.breezy.hr/*",
+    "https://*.applytojob.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.icims.com/*",
+    "http://localhost:3001/*"
+  ],
+  "action": {
+    "default_title": "CV Autofill"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://boards.eu.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://jobs.smartrecruiters.com/*",
+        "https://apply.workable.com/*",
+        "https://*.bamboohr.com/*",
+        "https://*.recruitee.com/*",
+        "https://*.breezy.hr/*",
+        "https://*.applytojob.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.icims.com/*",
+        "file:///*"
+      ],
+      "js": [
+        "src/sites.js",
+        "src/fields.js",
+        "src/filler.js",
+        "src/content.js"
+      ],
+      "all_frames": false,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost:5173/*"
+      ],
+      "js": [
+        "src/bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

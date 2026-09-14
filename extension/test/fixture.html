@@ -1,0 +1,85 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Fake application form — CV Autofill test</title>
+<style>
+  body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 640px; margin: 0 auto; padding: 40px 24px 120px; color: #1a2332; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .co { color: #7b8794; margin-top: 0; }
+  label { display: block; margin: 18px 0 0; }
+  label span { display: block; font-size: 13px; color: #52606d; margin-bottom: 4px; }
+  select { width: 100%; box-sizing: border-box; padding: 9px 11px;
+           border: 1px solid #dfe3e8; border-radius: 6px; font: inherit; background: #fff; }
+  input[type=text], input[type=email], input[type=tel], textarea {
+    width: 100%; box-sizing: border-box; padding: 9px 11px;
+    border: 1px solid #dfe3e8; border-radius: 6px; font: inherit; }
+  textarea { min-height: 90px; }
+  .hint { margin-top: 40px; padding: 14px; background: #f7f9fb;
+          border-left: 3px solid #1a3a5c; font-size: 13px; }
+</style>
+
+<h1>Senior Backend Engineer</h1>
+<p class="co">Acme Corp — Vancouver, BC</p>
+
+<form onsubmit="event.preventDefault(); alert('Submitted (not really)');">
+  <label><span>First Name *</span><input type="text" name="first_name" id="first_name"></label>
+  <label><span>Last Name *</span><input type="text" name="last_name" id="last_name"></label>
+  <label><span>Email *</span><input type="email" name="email" id="email"></label>
+  <label><span>Phone</span><input type="tel" name="phone" id="phone"></label>
+  <label><span>Location (City)</span><input type="text" name="location" id="location"></label>
+  <label><span>LinkedIn Profile</span><input type="text" name="urls[LinkedIn]" id="linkedin"></label>
+  <label><span>GitHub URL</span><input type="text" name="urls[GitHub]" id="github"></label>
+  <label><span>Website</span><input type="text" name="urls[Portfolio]" id="website"></label>
+  <label><span>Resume/CV *</span><input type="file" name="resume" id="resume" accept=".pdf"></label>
+  <label><span>Cover Letter</span><textarea name="cover_letter" id="cover_letter"></textarea></label>
+
+  <label><span>Current Company</span><input type="text" name="company" id="company"></label>
+  <label><span>Current Job Title</span><input type="text" name="title" id="title"></label>
+  <label><span>Years of Experience</span><input type="text" name="yoe" id="yoe"></label>
+
+  <label><span>Country</span>
+    <select name="country" id="country">
+      <option value="">Select…</option>
+      <option>United States</option>
+      <option>Canada</option>
+      <option>United Kingdom</option>
+    </select>
+  </label>
+
+  <label><span>Are you legally authorized to work in Canada?</span>
+    <select name="work_auth" id="work_auth">
+      <option value="">Select…</option>
+      <option>Yes</option>
+      <option>No</option>
+    </select>
+  </label>
+
+  <label><span>Will you require visa sponsorship?</span>
+    <select name="sponsorship" id="sponsorship">
+      <option value="">Select…</option>
+      <option>Yes</option>
+      <option>No</option>
+    </select>
+  </label>
+
+  <label><span>Expected Salary</span><input type="text" name="salary" id="salary"></label>
+
+  <!-- sensitive: must be recognised and deliberately left blank -->
+  <label><span>Gender</span>
+    <select name="gender" id="gender">
+      <option value="">Decline to self identify</option>
+      <option>Male</option><option>Female</option>
+    </select>
+  </label>
+  <label><span>Veteran Status</span><input type="text" name="veteran" id="veteran"></label>
+
+  <!-- deliberately unrecognised, to check we leave strangers alone -->
+  <label><span>How did you hear about us?</span><input type="text" name="source" id="source"></label>
+</form>
+
+<div class="hint">
+  This page is not a real ATS. It exists so the sidebar can be styled and tested
+  without opening a live application. Click the extension icon to open the side panel.
+</div>
+
+
