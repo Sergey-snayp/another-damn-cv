@@ -13,6 +13,7 @@ import { loadMasterRaw } from './config.js';
 import { renderPdf } from './resume/render.js';
 import { jobFromUrl } from './sources/url.js';
 import { ingestResume } from './resume/ingest.js';
+import { discoveryAgent } from './agent/discover.js';
 import { readFileSync as readBin } from 'node:fs';
 import { basename } from 'node:path';
 
@@ -123,6 +124,19 @@ async function main(): Promise<void> {
       await cmdProfile(arg);
       break;
     case 'discover': await cmdDiscover(); break;
+    case 'agent': {
+      const targets = process.argv.slice(3);
+      if (targets.length === 0) throw new Error('usage: npm run agent -- "Shopify" "Telus" ...');
+      console.log(`Agent goal: find ATS boards for ${targets.join(', ')}\n`);
+      const run = await discoveryAgent(targets, (s) => {
+        const arg = JSON.stringify(s.args).slice(0, 70);
+        console.log(`  ${s.n}. ${s.ok ? '·' : '✗'} ${s.tool}${arg} (${s.ms}ms)`);
+        if (s.thought) console.log(`     ↳ ${s.thought.slice(0, 110)}`);
+      });
+      console.log(`\n[${run.stopped}] after ${run.steps.length} steps`);
+      console.log(run.answer);
+      break;
+    }
     case 'stats':
       console.log(Object.entries(stats()).map(([k, v]) => `${k.padEnd(10)} ${v}`).join('\n'));
       break;
@@ -133,6 +147,7 @@ async function main(): Promise<void> {
   tailor <id|url>      generate a tailored PDF + application advice
   profile <file>       rebuild master.yaml from a resume (PDF/DOCX/TXT)
   discover             probe company tokens and rewrite companies.yaml
+  agent <companies...> agentic discovery: find and verify new ATS boards
   stats                pipeline counters
 
 LLM provider: ${env.llmProvider}   model: ${env.model}`);

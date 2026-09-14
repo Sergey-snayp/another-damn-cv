@@ -17,7 +17,12 @@
     "stats": "tsx src/cli.ts stats",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test --import tsx dist-test/**/*.test.js || tsx --test src/**/*.test.ts",
-    "profile": "tsx src/cli.ts profile"
+    "profile": "tsx src/cli.ts profile",
+    "agent": "tsx src/cli.ts agent",
+    "dev:backend": "npm run start:dev --workspace @cv/backend",
+    "dev:frontend": "npm run dev --workspace @cv/frontend",
+    "build:all": "npm run build --workspaces --if-present",
+    "typecheck:all": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
@@ -36,5 +41,10 @@
     "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
-  }
+  },
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend",
+    "packages/*"
+  ]
 }

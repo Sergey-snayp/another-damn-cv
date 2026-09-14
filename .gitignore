@@ -1,8 +1,18 @@
 node_modules/
 dist/
-data/*.db
-data/*.db-*
-out/
+build/
+
+# Secrets and local config
 .env
-.DS_Store
+.env.local
+*.pem
+
+# Generated and machine-local data
+data/
+*.db
+*.db-*
+out/
 profile/*.bak.yaml
+*.bak.yaml
+
+.DS_Store
