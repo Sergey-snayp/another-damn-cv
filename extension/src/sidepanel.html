@@ -1,0 +1,82 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>CV Autofill</title>
+<link rel="stylesheet" href="sidepanel.css">
+
+<header>
+  <div class="brand"><span class="mark"></span>CV Autofill</div>
+  <button class="gear" id="reload" title="Rescan this page">&#8635;</button>
+</header>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" data-panel="autofill" aria-selected="true">Autofill</button>
+  <button class="tab" role="tab" data-panel="resume" aria-selected="false">Resume</button>
+  <button class="tab" role="tab" data-panel="profile" aria-selected="false">Profile</button>
+</div>
+
+<main>
+  <section class="panel" id="panel-autofill"></section>
+
+  <section class="panel" id="panel-resume" hidden>
+    <div class="card">
+      <h2>Resume <span class="muted" id="resume-state"></span></h2>
+      <label class="field">
+        <span>PDF to attach</span>
+        <input type="file" id="resume-file" accept="application/pdf">
+      </label>
+      <button class="ghost" id="save-resume">Save resume</button>
+      <div class="status" id="resume-status"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-profile" hidden>
+    <div class="card">
+      <h2>Account <span class="muted" id="sync-state">never synced</span></h2>
+
+      <div id="signed-out">
+        <p class="hint" style="text-align:left;margin:0 0 10px">
+          Sign in to pull your details from the server.
+        </p>
+        <button class="primary" id="sign-in">Sign in with Google</button>
+
+        <details class="redirect">
+          <summary>Redirect URI for Google Console</summary>
+          <code id="redirect-uri"></code>
+          <button class="ghost" id="copy-redirect">Copy</button>
+          <p class="hint" style="text-align:left">
+            Paste this into your OAuth client under <b>Authorised redirect URIs</b>
+            — not JavaScript origins. It must match character for character,
+            including the trailing slash.
+          </p>
+        </details>
+      </div>
+
+      <div id="signed-in" hidden>
+        <div class="account">
+          <img id="account-avatar" alt="">
+          <div>
+            <div id="account-name"></div>
+            <div class="muted" id="account-email"></div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="pull-now">Pull latest</button>
+          <button class="ghost" id="sign-out">Sign out</button>
+        </div>
+      </div>
+
+      <div class="status" id="auth-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Your details <span class="muted">local only</span></h2>
+      <form id="profile-form"></form>
+      <button class="primary" id="save-profile">Save</button>
+      <div class="status" id="profile-status"></div>
+    </div>
+  </section>
+</main>
+
+<footer>Stored in this browser. Nothing is uploaded.</footer>
+
+<script type="module" src="sidepanel.js"></script>

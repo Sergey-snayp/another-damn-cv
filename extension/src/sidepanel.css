@@ -1,0 +1,154 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1a2332;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* --- header --------------------------------------------------------------- */
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+}
+
+.brand { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; }
+.brand .mark {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: linear-gradient(135deg, #2d6fb0, #1a3a5c);
+}
+
+.gear { background: none; border: 0; cursor: pointer; padding: 4px; color: #52606d; font-size: 15px; }
+.gear:hover { color: #1a2332; }
+
+/* --- tabs ----------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  margin: 0 12px 14px;
+  padding: 3px;
+  background: #f4f6f8;
+  border-radius: 10px;
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 6px;
+  font: 600 13px/1 inherit;
+  color: #52606d;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] { color: #1a3a5c; background: #fff; box-shadow: 0 1px 3px rgba(16,24,40,.10); }
+
+/* --- panels --------------------------------------------------------------- */
+
+main { flex: 1; overflow-y: auto; padding: 0 12px 16px; }
+.panel[hidden] { display: none; }
+
+.card {
+  border: 1px solid #e6e9ed;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.card h2 {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 0 10px; font-size: 14px; font-weight: 600;
+}
+.card h2 .muted { font-weight: 400; color: #7b8794; font-size: 13px; }
+
+.notice {
+  display: flex; gap: 10px;
+  padding: 14px;
+  background: #f7f9fb;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.notice .icon { color: #b42318; font-weight: 700; }
+.notice strong { display: block; font-size: 14px; }
+.notice span { color: #52606d; font-size: 13px; }
+
+ul.fields { list-style: none; margin: 0; padding: 0; }
+ul.fields li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid #f1f3f5;
+}
+ul.fields li:last-child { border-bottom: 0; }
+.key { font-weight: 500; font-size: 13px; }
+.val { font-size: 12px; color: #52606d; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.missing { font-size: 12px; color: #b42318; }
+
+button.primary {
+  width: 100%; padding: 11px; font: 600 14px/1 inherit;
+  color: #fff; background: #1a3a5c; border: 0; border-radius: 999px; cursor: pointer;
+}
+button.primary:hover { background: #14304c; }
+button.primary:disabled { background: #c3cad2; cursor: default; }
+
+button.ghost {
+  width: 100%; padding: 10px; font: 600 13px/1 inherit;
+  color: #1a3a5c; background: #f2f7fc; border: 1px solid #cfe0f0;
+  border-radius: 10px; cursor: pointer;
+}
+button.ghost:hover { background: #e7f0fa; }
+
+.status { margin-top: 9px; min-height: 18px; font-size: 12px; color: #52606d; text-align: center; }
+.hint { margin: 8px 2px 0; font-size: 11px; color: #7b8794; text-align: center; }
+
+/* --- profile form --------------------------------------------------------- */
+
+label.field { display: block; margin-bottom: 10px; }
+label.field span { display: block; font-size: 12px; color: #52606d; margin-bottom: 4px; }
+label.field input {
+  width: 100%; padding: 8px 10px; font: inherit; font-size: 13px;
+  border: 1px solid #dfe3e8; border-radius: 7px;
+}
+label.field input:focus { outline: 2px solid #cfe0f0; border-color: #2d6fb0; }
+
+footer {
+  padding: 12px 16px;
+  border-top: 1px solid #eef1f4;
+  text-align: center;
+  font-size: 12px;
+  color: #7b8794;
+}
+
+/* --- account --------------------------------------------------------------- */
+
+.account { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.account img { width: 36px; height: 36px; border-radius: 50%; background: #eef1f4; }
+.account > div > div:first-child { font-weight: 600; font-size: 13px; }
+.account .muted { font-size: 12px; }
+
+.actions { display: flex; gap: 8px; }
+.actions button { flex: 1; }
+
+details.redirect { margin-top: 12px; }
+details.redirect summary { font-size: 12px; color: #52606d; cursor: pointer; }
+details.redirect code {
+  display: block; margin: 8px 0; padding: 8px;
+  font-size: 11px; word-break: break-all;
+  background: #f4f6f8; border: 1px solid #e6e9ed; border-radius: 6px;
+}
+details.redirect button { width: 100%; }
+
+p.group {
+  margin: 14px 0 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #9aa5b1;
+}
+p.group:first-child { margin-top: 0; }
+
+.exact { color: #1a7f4b; margin-right: 5px; font-weight: 700; }
