@@ -3,6 +3,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { ProfileModule } from './profile/profile.module';
 import { ImportModule } from './import/import.module';
+import { ResumeModule } from './resume/resume.module';
 import { FactBaseModule } from './factbase/factbase.module';
 import { TailorModule } from './tailor/tailor.module';
 import { ScannerModule } from './scanner/scanner.module';
@@ -14,6 +15,7 @@ import { ApplicationsModule } from './applications/applications.module';
     AuthModule,
     ProfileModule,
     ImportModule,
+    ResumeModule,
     FactBaseModule,
     TailorModule,
     ScannerModule,

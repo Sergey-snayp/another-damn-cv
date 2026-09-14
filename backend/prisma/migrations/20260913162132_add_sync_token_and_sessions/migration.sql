@@ -12,3 +12,4 @@ CREATE TABLE IF NOT EXISTS "user_sessions" (
     CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
 );
 CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "user_sessions"("expire");
+

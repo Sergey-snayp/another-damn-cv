@@ -30,6 +30,7 @@ model User {
 
   factBase     FactBase?
   applications Application[]
+  profile      Profile?
 
   @@map("users")
 }
@@ -98,4 +99,249 @@ model UserSession {
 
   @@index([expire], map: "IDX_session_expire")
   @@map("user_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Versioned resumes
+//
+// A Snapshot is a commit. Content rows carry the snapshot they appeared in and
+// the one that replaced them; supersededInSnapshotId = null means live.
+// Unchanged rows are never copied — they simply keep living.
+//
+// Resume.current is a materialised projection of the live rows. It is DERIVED:
+// only materialise() writes it, and rebuild() can always reconstruct it. That
+// is what makes it a cache rather than a second source of truth.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The person. Never versioned — it changes rarely and is what the extension
+/// fills into application forms.
+model Profile {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  firstName     String  @default("")
+  lastName      String  @default("")
+  preferredName String?
+  pronouns      String?
+  email         String  @default("")
+  phone         String?
+
+  location   String?
+  city       String?
+  state      String?
+  country    String?
+  postalCode String?
+
+  linkedin  String?
+  github    String?
+  portfolio String?
+  website   String?
+
+  workAuthorization   String?
+  requiresSponsorship String?
+  salaryExpectation   String?
+  noticePeriod        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumes Resume[]
+
+  @@map("profiles")
+}
+
+/// One resume. A profile keeps several: "Backend Engineer", "Platform".
+model Resume {
+  id         String  @id @default(uuid())
+  profileId  String
+  name       String
+  targetRole String?
+  isPrimary  Boolean @default(false)
+
+  currentSnapshotId String?
+  /// Materialised live state. Derived; never authored.
+  current        Json?
+  materialisedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile     Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  snapshots   Snapshot[]
+  contacts    ContactInformation[]
+  experiences ExperienceEntry[]
+  achievements Achievement[]
+  educations  EducationEntry[]
+  skills      SkillEntry[]
+  summaries   SummaryVariant[]
+
+  @@index([profileId])
+  @@map("resumes")
+}
+
+/// A save. Holds no content — content is whatever was live at this point.
+model Snapshot {
+  id       String @id @default(uuid())
+  resumeId String
+  number   Int
+  message  String?
+
+  createdAt DateTime @default(now())
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@unique([resumeId, number])
+  @@map("snapshots")
+}
+
+model ContactInformation {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  firstName String  @default("")
+  lastName  String  @default("")
+  email     String  @default("")
+  phone     String?
+  location  String?
+  linkedin  String?
+  github    String?
+  website   String?
+
+  createdInSnapshot Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("contact_information")
+}
+
+model ExperienceEntry {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  company  String
+  client   String?
+  title    String
+  location String?
+  from     String
+  to       String?
+  current  Boolean @default(false)
+  blurb    String?
+  position Int     @default(0)
+
+  createdInSnapshot Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("experience_entries")
+}
+
+/// Bullets live apart from the role: they are reworded far more often than a
+/// job title changes, and keeping them inside would copy company and dates
+/// every time one word moved.
+model Achievement {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  /// Points at the role's LINEAGE, not a version — otherwise editing a job
+  /// title orphans every bullet under it.
+  experienceLineageId String
+
+  problem String?
+  action  String?
+  result  String?
+  bullet  String
+
+  /// True only with an evidence string naming a repo, commit, file or migration.
+  verified Boolean @default(false)
+  evidence String?
+  /// 1-5, how much the owner wants this surfaced.
+  weight   Int     @default(3)
+  /// Human wording is never overwritten by the generator.
+  authoredBy String @default("generator")
+  position   Int    @default(0)
+
+  createdInSnapshot Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([experienceLineageId])
+  @@index([lineageId])
+  @@map("achievements")
+}
+
+model EducationEntry {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  institution String
+  fullName    String?
+  degree      String
+  field       String?
+  from        String
+  to          String?
+  position    Int     @default(0)
+
+  createdInSnapshot Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("education_entries")
+}
+
+model SkillEntry {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  name     String
+  category String   @default("")
+  level    String?
+  years    Int?
+  verified Boolean  @default(false)
+  evidence String?
+  weight   Int      @default(3)
+  aliases  String[]
+
+  createdInSnapshot Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("skill_entries")
+}
+
+/// "default", "payments", "highload" — one career, angled differently.
+model SummaryVariant {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  variant String
+  text    String
+
+  createdInSnapshot Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("summary_variants")
 }
