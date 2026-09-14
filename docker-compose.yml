@@ -1,15 +1,26 @@
+# Postgres for local development.
+#
+# Reviewers should be able to run `docker compose up -d` and have a working
+# database without installing anything. That is the whole job of this file.
+
 services:
-  job-agent:
-    build: .
-    container_name: job-agent
+  postgres:
+    image: postgres:17-alpine
+    container_name: cv-postgres
     restart: unless-stopped
-    env_file: .env
     environment:
-      # The claude CLI authenticates via the macOS Keychain, which the container
-      # cannot reach — the containerised path must use the metered API.
-      LLM_PROVIDER: api
+      POSTGRES_USER: cv
+      POSTGRES_PASSWORD: cv
+      POSTGRES_DB: cv_platform
+    ports:
+      - "5433:5432"          # 5433 on the host, to avoid clashing with a local Postgres
     volumes:
-      - ./data:/app/data
-      - ./out:/app/out
-      # Edit these on the host and the container picks them up on next run.
-      - ./profile:/app/profile:ro
+      - cv-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cv -d cv_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  cv-pgdata:
