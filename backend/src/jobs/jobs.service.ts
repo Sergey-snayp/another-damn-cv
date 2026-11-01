@@ -1,9 +1,12 @@
 import {
-  BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnApplicationBootstrap,
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnApplicationBootstrap,
 } from '@nestjs/common';
-import {
-  Prisma, type Job, type JobStatusEvent, JobExtraction, JobSource, JobStatus,
-} from '@prisma/client';
+import { Prisma, type Job, type JobStatusEvent, JobExtraction, JobSource, JobStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
 import { canonicalUrl } from './canonical-url';
@@ -11,7 +14,11 @@ import { tidy } from './html-text';
 import { jobFromJsonLd } from './structured-data';
 import { PAGE_READER_SYSTEM, pageReaderPrompt, parsePageReading } from './page-reader';
 import {
-  CAPTURE_LIMITS, EDITABLE_FIELDS, type CaptureRequest, type EditableField, type JobFields,
+  CAPTURE_LIMITS,
+  EDITABLE_FIELDS,
+  type CaptureRequest,
+  type EditableField,
+  type JobFields,
 } from './jobs.types';
 
 /** What the web app and the extension see. The captured page itself stays on the server. */
@@ -105,10 +112,13 @@ export class JobsService implements OnApplicationBootstrap {
     const edited = new Set(existing?.editedFields ?? []);
 
     const read = structured
-      ? { extraction: JobExtraction.STRUCTURED, fields: { ...structured, description: structured.description ?? (pageText || undefined) } }
+      ? {
+          extraction: JobExtraction.STRUCTURED,
+          fields: { ...structured, description: structured.description ?? (pageText || undefined) },
+        }
       : pageText
-        // Shown while the model reads; replaced by the cut-out description after.
-        ? { extraction: JobExtraction.PENDING, fields: { description: pageText } as JobFields }
+        ? // Shown while the model reads; replaced by the cut-out description after.
+          { extraction: JobExtraction.PENDING, fields: { description: pageText } as JobFields }
         : { extraction: JobExtraction.FAILED, fields: {} as JobFields };
 
     const data = {
@@ -118,7 +128,8 @@ export class JobsService implements OnApplicationBootstrap {
       pageText: pageText || null,
       structuredData: input.jsonLd?.length ? (input.jsonLd as Prisma.InputJsonValue) : Prisma.DbNull,
       extraction: read.extraction,
-      extractionError: read.extraction === JobExtraction.FAILED ? 'Nothing readable was captured from that page.' : null,
+      extractionError:
+        read.extraction === JobExtraction.FAILED ? 'Nothing readable was captured from that page.' : null,
       capturedAt: new Date(),
       // Re-sending a job the model already read keeps its fields until the new
       // read lands, rather than blanking them for the minute it takes.
@@ -140,7 +151,8 @@ export class JobsService implements OnApplicationBootstrap {
     const input = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
     const description = typeof input.description === 'string' ? tidy(input.description) : '';
     if (!description) throw new BadRequestException('Paste the job description.');
-    if (description.length > CAPTURE_LIMITS.text) throw new BadRequestException('That description is too long.');
+    if (description.length > CAPTURE_LIMITS.text)
+      throw new BadRequestException('That description is too long.');
 
     const url = optionalString(input.url, 'url');
     const canonical = url ? canonicalUrl(url) : null;
@@ -190,7 +202,10 @@ export class JobsService implements OnApplicationBootstrap {
       const updated = await this.prisma.job.update({
         where: { id },
         data: {
-          ...fieldsData({ ...structured, description: structured.description ?? job.pageText ?? undefined }, new Set()),
+          ...fieldsData(
+            { ...structured, description: structured.description ?? job.pageText ?? undefined },
+            new Set(),
+          ),
           editedFields: [],
           extraction: JobExtraction.STRUCTURED,
           extractionError: null,
@@ -199,7 +214,8 @@ export class JobsService implements OnApplicationBootstrap {
       return this.detail(updated);
     }
 
-    if (!job.pageText) throw new BadRequestException('There is no captured page to read again. Send it from the extension.');
+    if (!job.pageText)
+      throw new BadRequestException('There is no captured page to read again. Send it from the extension.');
 
     const updated = await this.prisma.job.update({
       where: { id },
@@ -239,13 +255,20 @@ export class JobsService implements OnApplicationBootstrap {
     }
 
     // Edits made while it was reading win over what the model found.
-    const current = await this.prisma.job.findUnique({ where: { id }, select: { editedFields: true, extraction: true } });
+    const current = await this.prisma.job.findUnique({
+      where: { id },
+      select: { editedFields: true, extraction: true },
+    });
     if (!current || current.extraction !== JobExtraction.PENDING) return;
 
     await this.prisma.job.update({
       where: { id },
       data: fields
-        ? { ...fieldsData(fields, new Set(current.editedFields)), extraction: JobExtraction.LLM, extractionError: null }
+        ? {
+            ...fieldsData(fields, new Set(current.editedFields)),
+            extraction: JobExtraction.LLM,
+            extractionError: null,
+          }
         : { extraction: JobExtraction.FAILED, extractionError: failure },
     });
   }
@@ -295,7 +318,8 @@ export class JobsService implements OnApplicationBootstrap {
       const value = patch[key];
 
       if (key === 'remote') {
-        if (value !== null && typeof value !== 'boolean') throw new BadRequestException('remote must be true, false or null.');
+        if (value !== null && typeof value !== 'boolean')
+          throw new BadRequestException('remote must be true, false or null.');
         data.remote = value;
       } else {
         data[key] = optionalString(value, key);
@@ -330,7 +354,10 @@ export class JobsService implements OnApplicationBootstrap {
     if (typeof eventId !== 'string' || !eventId) throw new BadRequestException('Say which move to undo.');
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const latest = await tx.jobStatusEvent.findFirst({ where: { jobId: id }, orderBy: [{ at: 'desc' }, { id: 'desc' }] });
+      const latest = await tx.jobStatusEvent.findFirst({
+        where: { jobId: id },
+        orderBy: [{ at: 'desc' }, { id: 'desc' }],
+      });
       if (!latest || latest.id !== eventId) {
         throw new ConflictException('This job has moved since. Change its status instead.');
       }
@@ -342,7 +369,8 @@ export class JobsService implements OnApplicationBootstrap {
 
   private async detail(job: Job): Promise<JobDetailDto> {
     const events = await this.prisma.jobStatusEvent.findMany({
-      where: { jobId: job.id }, orderBy: [{ at: 'desc' }, { id: 'desc' }],
+      where: { jobId: job.id },
+      orderBy: [{ at: 'desc' }, { id: 'desc' }],
     });
     return { ...toDto(job), history: events.map(eventDto) };
   }
@@ -366,14 +394,17 @@ function validateCapture(body: unknown): CaptureRequest {
   if (typeof body !== 'object' || body === null) throw new BadRequestException('Expected a captured page.');
   const input = body as Record<string, unknown>;
 
-  if (typeof input.url !== 'string' || !input.url) throw new BadRequestException('The page address is missing.');
+  if (typeof input.url !== 'string' || !input.url)
+    throw new BadRequestException('The page address is missing.');
 
   const html = typeof input.html === 'string' ? input.html : undefined;
   const text = typeof input.text === 'string' ? input.text : undefined;
   const jsonLd = Array.isArray(input.jsonLd) ? input.jsonLd : undefined;
 
-  if (html && html.length > CAPTURE_LIMITS.html) throw new BadRequestException('That page is too large to save.');
-  if (text && text.length > CAPTURE_LIMITS.text) throw new BadRequestException('That page has too much text to save.');
+  if (html && html.length > CAPTURE_LIMITS.html)
+    throw new BadRequestException('That page is too large to save.');
+  if (text && text.length > CAPTURE_LIMITS.text)
+    throw new BadRequestException('That page has too much text to save.');
   if (jsonLd && JSON.stringify(jsonLd).length > CAPTURE_LIMITS.jsonLd) {
     throw new BadRequestException('That page carries too much structured data to save.');
   }

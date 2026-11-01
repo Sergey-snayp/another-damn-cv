@@ -1,5 +1,14 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { SyncTokenGuard } from '../auth/sync-token.guard';
@@ -77,7 +86,8 @@ export class JobsController {
     @Param('id') id: string,
     @Body() body: { sourceResumeId?: unknown },
   ) {
-    const source = typeof body?.sourceResumeId === 'string' && body.sourceResumeId ? body.sourceResumeId : undefined;
+    const source =
+      typeof body?.sourceResumeId === 'string' && body.sourceResumeId ? body.sourceResumeId : undefined;
     return this.tailor.tailorForJob(userId, id, source);
   }
 

@@ -1,5 +1,9 @@
 import {
-  BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException,
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type Resume } from '@prisma/client';
@@ -8,7 +12,13 @@ import { LlmService } from '../llm/llm.service';
 import { ResumeService } from './resume.service';
 import type { RenderedResume, ResumeChanges } from './resume.types';
 import {
-  TAILOR_SYSTEM, applyRetry, blockedLines, readTailoring, retryPrompt, tailorPrompt, type Tailoring,
+  TAILOR_SYSTEM,
+  applyRetry,
+  blockedLines,
+  readTailoring,
+  retryPrompt,
+  tailorPrompt,
+  type Tailoring,
 } from './tailoring';
 
 /**
@@ -26,7 +36,11 @@ export class TailorResumeService {
     private readonly llm: LlmService,
   ) {}
 
-  async tailorForJob(userId: string, jobId: string, sourceResumeId?: string): Promise<{ resumeId: string; tailoring: Tailoring }> {
+  async tailorForJob(
+    userId: string,
+    jobId: string,
+    sourceResumeId?: string,
+  ): Promise<{ resumeId: string; tailoring: Tailoring }> {
     const job = await this.prisma.job.findFirst({ where: { id: jobId, userId } });
     if (!job) throw new NotFoundException('No such job.');
     if (job.extraction === 'PENDING') {
@@ -39,9 +53,11 @@ export class TailorResumeService {
     const profile = await this.prisma.profile.findUnique({ where: { userId } });
     if (!profile) throw new BadRequestException('Make a resume first.');
 
-    const copy = await this.prisma.resume.findFirst({
-      where: { jobId, profileId: profile.id }, orderBy: { createdAt: 'desc' },
-    }) ?? await this.copyFor(profile.id, job, sourceResumeId);
+    const copy =
+      (await this.prisma.resume.findFirst({
+        where: { jobId, profileId: profile.id },
+        orderBy: { createdAt: 'desc' },
+      })) ?? (await this.copyFor(profile.id, job, sourceResumeId));
 
     const resume = await this.resumes.current(copy.id);
     if (resume.experiences.length === 0 && Object.keys(resume.summaries).length === 0) {
@@ -155,11 +171,14 @@ export function copyOf(from: RenderedResume): ResumeChanges {
   };
 
   return {
-    contact: from.contact ? clean(from.contact) as never : undefined,
+    contact: from.contact ? (clean(from.contact) as never) : undefined,
     experiences: from.experiences.map((e) => ({ ...clean(e), lineageId: roleIds.get(e.lineageId) })) as never,
-    achievements: from.experiences.flatMap((e) => e.achievements.map((a) => ({
-      ...clean(a), experienceLineageId: roleIds.get(e.lineageId)!,
-    }))) as never,
+    achievements: from.experiences.flatMap((e) =>
+      e.achievements.map((a) => ({
+        ...clean(a),
+        experienceLineageId: roleIds.get(e.lineageId)!,
+      })),
+    ) as never,
     educations: from.educations.map(clean) as never,
     skills: from.skills.map(clean) as never,
     summaries: Object.entries(from.summaries).map(([variant, text]) => ({ variant, text })),

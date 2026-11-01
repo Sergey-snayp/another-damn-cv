@@ -45,7 +45,11 @@ export interface SnapshotDiff {
 
 /** Columns that describe the row rather than its content. */
 const BOOKKEEPING = new Set([
-  'id', 'lineageId', 'resumeId', 'createdInSnapshot', 'supersededInSnapshot',
+  'id',
+  'lineageId',
+  'resumeId',
+  'createdInSnapshot',
+  'supersededInSnapshot',
   'experienceLineageId',
 ]);
 

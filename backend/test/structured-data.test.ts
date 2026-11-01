@@ -12,7 +12,10 @@ const greenhouseStyle = {
   hiringOrganization: { '@type': 'Organization', name: 'Acme &amp; Co' },
   jobLocation: [
     { '@type': 'Place', address: { addressLocality: 'Toronto', addressRegion: 'ON', addressCountry: 'CA' } },
-    { '@type': 'Place', address: { addressLocality: 'Vancouver', addressRegion: 'BC', addressCountry: { name: 'Canada' } } },
+    {
+      '@type': 'Place',
+      address: { addressLocality: 'Vancouver', addressRegion: 'BC', addressCountry: { name: 'Canada' } },
+    },
   ],
   jobLocationType: 'TELECOMMUTE',
   baseSalary: {
@@ -20,7 +23,8 @@ const greenhouseStyle = {
     currency: 'CAD',
     value: { '@type': 'QuantitativeValue', minValue: 140000, maxValue: 170000, unitText: 'YEAR' },
   },
-  description: '&lt;p&gt;We build &lt;strong&gt;payments&lt;/strong&gt;.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Node.js&lt;/li&gt;&lt;li&gt;Postgres&lt;/li&gt;&lt;/ul&gt;',
+  description:
+    '&lt;p&gt;We build &lt;strong&gt;payments&lt;/strong&gt;.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Node.js&lt;/li&gt;&lt;li&gt;Postgres&lt;/li&gt;&lt;/ul&gt;',
 };
 
 test('reads a full JobPosting', () => {
@@ -40,7 +44,13 @@ test('reads a full JobPosting', () => {
 test('finds the posting inside @graph among other blocks', () => {
   const blocks = [
     { '@type': 'BreadcrumbList', itemListElement: [] },
-    { '@context': 'https://schema.org', '@graph': [{ '@type': 'WebPage' }, { '@type': ['JobPosting'], title: 'Platform Engineer', hiringOrganization: 'Globex' }] },
+    {
+      '@context': 'https://schema.org',
+      '@graph': [
+        { '@type': 'WebPage' },
+        { '@type': ['JobPosting'], title: 'Platform Engineer', hiringOrganization: 'Globex' },
+      ],
+    },
   ];
   const job = jobFromJsonLd(blocks);
   assert.equal(job?.title, 'Platform Engineer');

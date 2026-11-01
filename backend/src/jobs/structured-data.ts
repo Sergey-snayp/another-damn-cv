@@ -21,7 +21,8 @@ export function jobFromJsonLd(blocks: unknown[]): JobFields | null {
     employmentType: list(posting.employmentType)?.map(humanise).join(', ') || undefined,
     salary: salary(posting.baseSalary),
     postedAt: date(posting.datePosted),
-    description: typeof posting.description === 'string' ? htmlToText(posting.description) || undefined : undefined,
+    description:
+      typeof posting.description === 'string' ? htmlToText(posting.description) || undefined : undefined,
   };
 
   // A JobPosting with neither a title nor a description is not one worth trusting.
@@ -47,7 +48,10 @@ function findPosting(blocks: unknown[]): Obj | null {
 
   while (queue.length > 0 && visited++ < 5_000) {
     const node = queue.shift();
-    if (Array.isArray(node)) { queue.push(...node); continue; }
+    if (Array.isArray(node)) {
+      queue.push(...node);
+      continue;
+    }
     if (!isObj(node)) continue;
     if (isPosting(node)) return node;
     for (const value of Object.values(node)) {
@@ -74,16 +78,21 @@ function organisation(value: unknown): string | undefined {
 }
 
 function location(value: unknown): string | undefined {
-  const places = (list(value) ?? []).map((place) => {
-    if (!isObj(place)) return text(place);
-    const address = place.address;
-    if (!isObj(address)) return text(address) ?? text(place.name);
+  const places = (list(value) ?? [])
+    .map((place) => {
+      if (!isObj(place)) return text(place);
+      const address = place.address;
+      if (!isObj(address)) return text(address) ?? text(place.name);
 
-    const country = isObj(address.addressCountry) ? text(address.addressCountry.name) : text(address.addressCountry);
-    return [text(address.addressLocality), text(address.addressRegion), country]
-      .filter(Boolean)
-      .join(', ') || undefined;
-  }).filter((place): place is string => Boolean(place));
+      const country = isObj(address.addressCountry)
+        ? text(address.addressCountry.name)
+        : text(address.addressCountry);
+      return (
+        [text(address.addressLocality), text(address.addressRegion), country].filter(Boolean).join(', ') ||
+        undefined
+      );
+    })
+    .filter((place): place is string => Boolean(place));
 
   return [...new Set(places)].join(' · ') || undefined;
 }
@@ -94,7 +103,13 @@ function remote(posting: Obj): boolean | undefined {
   return undefined;
 }
 
-const UNITS: Record<string, string> = { HOUR: 'hour', DAY: 'day', WEEK: 'week', MONTH: 'month', YEAR: 'year' };
+const UNITS: Record<string, string> = {
+  HOUR: 'hour',
+  DAY: 'day',
+  WEEK: 'week',
+  MONTH: 'month',
+  YEAR: 'year',
+};
 
 function salary(value: unknown): string | undefined {
   if (!isObj(value)) return text(value);
@@ -102,7 +117,7 @@ function salary(value: unknown): string | undefined {
   const currency = text(value.currency) ?? '';
   const amount = isObj(value.value) ? value.value : { value: value.value };
   const unitText = text(amount.unitText) ?? text(value.unitText);
-  const unit = unitText ? UNITS[unitText.toUpperCase()] ?? unitText.toLowerCase() : undefined;
+  const unit = unitText ? (UNITS[unitText.toUpperCase()] ?? unitText.toLowerCase()) : undefined;
 
   const money = (n: unknown) => {
     const num = typeof n === 'number' ? n : typeof n === 'string' ? Number(n) : NaN;
@@ -113,7 +128,7 @@ function salary(value: unknown): string | undefined {
   const max = money(amount.maxValue);
   const single = money(amount.value);
 
-  const range = min && max && min !== max ? `${min}–${max}` : min ?? max ?? single;
+  const range = min && max && min !== max ? `${min}–${max}` : (min ?? max ?? single);
   if (!range) return undefined;
 
   return [currency, range].filter(Boolean).join(' ') + (unit ? ` / ${unit}` : '');

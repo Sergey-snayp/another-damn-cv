@@ -2,9 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type {
-  ResumeChanges, RenderedResume, RenderedExperience, Versioned,
-} from './resume.types';
+import type { ResumeChanges, RenderedResume, RenderedExperience, Versioned } from './resume.types';
 
 type Tx = Prisma.TransactionClient;
 
@@ -40,8 +38,12 @@ const NATURAL_KEY: Record<string, string> = { summaryVariant: 'variant' };
 
 /** The versioned tables, all of which share the same four columns. */
 const SECTIONS = [
-  'contactInformation', 'experienceEntry', 'achievement',
-  'educationEntry', 'skillEntry', 'summaryVariant',
+  'contactInformation',
+  'experienceEntry',
+  'achievement',
+  'educationEntry',
+  'skillEntry',
+  'summaryVariant',
 ] as const;
 
 /**
@@ -98,9 +100,11 @@ export class ResumeService {
 
   /** Every version of one entry, newest first. */
   async history(table: (typeof SECTIONS)[number], lineageId: string) {
-    const rows = await (this.prisma[table] as never as {
-      findMany(a: unknown): Promise<Record<string, unknown>[]>;
-    }).findMany({
+    const rows = await (
+      this.prisma[table] as never as {
+        findMany(a: unknown): Promise<Record<string, unknown>[]>;
+      }
+    ).findMany({
       where: { lineageId },
       orderBy: { createdInSnapshot: 'desc' },
     });
@@ -128,38 +132,46 @@ export class ResumeService {
    * rebuilt, the snapshot never existed either.
    */
   async save(resumeId: string, changes: ResumeChanges, message?: string): Promise<RenderedResume> {
-    return this.prisma.$transaction(async (tx) => {
-      const number = await this.nextSnapshotNumber(tx, resumeId);
-      let touched = false;
+    return this.prisma.$transaction(
+      async (tx) => {
+        const number = await this.nextSnapshotNumber(tx, resumeId);
+        let touched = false;
 
-      if (changes.contact) {
-        touched = await this.applySingle(tx, 'contactInformation', resumeId, number, changes.contact) || touched;
-      }
-      if (changes.experiences) {
-        touched = await this.applyList(tx, 'experienceEntry', resumeId, number, changes.experiences) || touched;
-      }
-      if (changes.achievements) {
-        touched = await this.applyList(tx, 'achievement', resumeId, number, changes.achievements) || touched;
-      }
-      if (changes.educations) {
-        touched = await this.applyList(tx, 'educationEntry', resumeId, number, changes.educations) || touched;
-      }
-      if (changes.skills) {
-        touched = await this.applyList(tx, 'skillEntry', resumeId, number, changes.skills) || touched;
-      }
-      if (changes.summaries) {
-        touched = await this.applyList(tx, 'summaryVariant', resumeId, number, changes.summaries) || touched;
-      }
+        if (changes.contact) {
+          touched =
+            (await this.applySingle(tx, 'contactInformation', resumeId, number, changes.contact)) || touched;
+        }
+        if (changes.experiences) {
+          touched =
+            (await this.applyList(tx, 'experienceEntry', resumeId, number, changes.experiences)) || touched;
+        }
+        if (changes.achievements) {
+          touched =
+            (await this.applyList(tx, 'achievement', resumeId, number, changes.achievements)) || touched;
+        }
+        if (changes.educations) {
+          touched =
+            (await this.applyList(tx, 'educationEntry', resumeId, number, changes.educations)) || touched;
+        }
+        if (changes.skills) {
+          touched = (await this.applyList(tx, 'skillEntry', resumeId, number, changes.skills)) || touched;
+        }
+        if (changes.summaries) {
+          touched =
+            (await this.applyList(tx, 'summaryVariant', resumeId, number, changes.summaries)) || touched;
+        }
 
-      // A Save that changed nothing must not create a version, or the history
-      // fills with identical entries nobody can navigate.
-      if (!touched) {
-        return this.current(resumeId);
-      }
+        // A Save that changed nothing must not create a version, or the history
+        // fills with identical entries nobody can navigate.
+        if (!touched) {
+          return this.current(resumeId);
+        }
 
-      const snapshot = await tx.snapshot.create({ data: { resumeId, number, message } });
-      return this.materialise(tx, resumeId, number, snapshot.id);
-    }, { timeout: 20_000 });
+        const snapshot = await tx.snapshot.create({ data: { resumeId, number, message } });
+        return this.materialise(tx, resumeId, number, snapshot.id);
+      },
+      { timeout: 20_000 },
+    );
   }
 
   /**
@@ -169,14 +181,18 @@ export class ResumeService {
   async revertTo(resumeId: string, number: number): Promise<RenderedResume> {
     const past = await this.atSnapshot(resumeId, number);
 
-    return this.save(resumeId, {
-      contact: past.contact as never,
-      experiences: past.experiences.map(stripRuntime) as never,
-      achievements: past.experiences.flatMap((e) => e.achievements.map(stripRuntime)) as never,
-      educations: past.educations.map(stripRuntime) as never,
-      skills: past.skills.map(stripRuntime) as never,
-      summaries: Object.entries(past.summaries).map(([variant, text]) => ({ variant, text })) as never,
-    }, `revert to snapshot ${number}`);
+    return this.save(
+      resumeId,
+      {
+        contact: past.contact as never,
+        experiences: past.experiences.map(stripRuntime) as never,
+        achievements: past.experiences.flatMap((e) => e.achievements.map(stripRuntime)) as never,
+        educations: past.educations.map(stripRuntime) as never,
+        skills: past.skills.map(stripRuntime) as never,
+        summaries: Object.entries(past.summaries).map(([variant, text]) => ({ variant, text })) as never,
+      },
+      `revert to snapshot ${number}`,
+    );
   }
 
   // ── projection ─────────────────────────────────────────────────────────────
@@ -192,14 +208,18 @@ export class ResumeService {
     if (!resume) throw new NotFoundException('No such resume.');
 
     const latest = await this.prisma.snapshot.findFirst({
-      where: { resumeId }, orderBy: { number: 'desc' },
+      where: { resumeId },
+      orderBy: { number: 'desc' },
     });
 
     return this.materialise(this.prisma, resumeId, latest?.number ?? 0, latest?.id ?? null);
   }
 
   private async materialise(
-    tx: Tx | PrismaService, resumeId: string, number: number, snapshotId: string | null,
+    tx: Tx | PrismaService,
+    resumeId: string,
+    number: number,
+    snapshotId: string | null,
   ): Promise<RenderedResume> {
     const live = { resumeId, supersededInSnapshot: null };
 
@@ -225,14 +245,17 @@ export class ResumeService {
   }
 
   /** Nests achievements under their role by lineage, never by version id. */
-  private assemble(number: number, rows: {
-    contact: Record<string, unknown> | null;
-    experiences: Record<string, unknown>[];
-    achievements: Record<string, unknown>[];
-    educations: Record<string, unknown>[];
-    skills: Record<string, unknown>[];
-    summaries: Record<string, unknown>[];
-  }): RenderedResume {
+  private assemble(
+    number: number,
+    rows: {
+      contact: Record<string, unknown> | null;
+      experiences: Record<string, unknown>[];
+      achievements: Record<string, unknown>[];
+      educations: Record<string, unknown>[];
+      skills: Record<string, unknown>[];
+      summaries: Record<string, unknown>[];
+    },
+  ): RenderedResume {
     const byExperience = new Map<string, Record<string, unknown>[]>();
 
     for (const achievement of rows.achievements) {
@@ -251,9 +274,7 @@ export class ResumeService {
       })) as RenderedExperience[],
       educations: rows.educations,
       skills: rows.skills,
-      summaries: Object.fromEntries(
-        rows.summaries.map((s) => [s.variant as string, s.text as string]),
-      ),
+      summaries: Object.fromEntries(rows.summaries.map((s) => [s.variant as string, s.text as string])),
     };
   }
 
@@ -261,14 +282,19 @@ export class ResumeService {
 
   private async nextSnapshotNumber(tx: Tx, resumeId: string): Promise<number> {
     const latest = await tx.snapshot.findFirst({
-      where: { resumeId }, orderBy: { number: 'desc' },
+      where: { resumeId },
+      orderBy: { number: 'desc' },
     });
     return (latest?.number ?? 0) + 1;
   }
 
   /** A section with at most one live row, such as the contact block. */
   private async applySingle(
-    tx: Tx, table: 'contactInformation', resumeId: string, number: number, input: Versioned,
+    tx: Tx,
+    table: 'contactInformation',
+    resumeId: string,
+    number: number,
+    input: Versioned,
   ): Promise<boolean> {
     const existing = await tx[table].findFirst({ where: { resumeId, supersededInSnapshot: null } });
 
@@ -303,18 +329,20 @@ export class ResumeService {
   private async applyList(
     tx: Tx,
     table: 'experienceEntry' | 'achievement' | 'educationEntry' | 'skillEntry' | 'summaryVariant',
-    resumeId: string, number: number, inputs: Versioned[],
+    resumeId: string,
+    number: number,
+    inputs: Versioned[],
   ): Promise<boolean> {
-    const live = await (tx[table] as never as {
-      findMany(a: unknown): Promise<Record<string, unknown>[]>;
-    }).findMany({ where: { resumeId, supersededInSnapshot: null } });
+    const live = await (
+      tx[table] as never as {
+        findMany(a: unknown): Promise<Record<string, unknown>[]>;
+      }
+    ).findMany({ where: { resumeId, supersededInSnapshot: null } });
 
     const liveByLineage = new Map(live.map((row) => [row.lineageId as string, row]));
 
     const naturalKey = NATURAL_KEY[table];
-    const liveByNatural = naturalKey
-      ? new Map(live.map((row) => [String(row[naturalKey]), row]))
-      : null;
+    const liveByNatural = naturalKey ? new Map(live.map((row) => [String(row[naturalKey]), row])) : null;
 
     const seen = new Set<string>();
     let touched = false;
@@ -322,11 +350,9 @@ export class ResumeService {
     for (const [index, input] of inputs.entries()) {
       const matched = input.lineageId
         ? liveByLineage.get(input.lineageId)
-        : liveByNatural?.get(String((input as Record<string, unknown>)[naturalKey!]));
+        : liveByNatural?.get(String((input as Record<string, unknown>)[naturalKey]));
 
-      const lineageId = matched?.lineageId as string | undefined
-        ?? input.lineageId
-        ?? randomUUID();
+      const lineageId = (matched?.lineageId as string | undefined) ?? input.lineageId ?? randomUUID();
 
       seen.add(lineageId);
 
@@ -344,12 +370,15 @@ export class ResumeService {
       if (existing && !this.differs(existing, payload)) continue;
 
       if (existing) {
-        await (tx[table] as never as { update(a: unknown): Promise<unknown> })
-          .update({ where: { id: existing.id }, data: { supersededInSnapshot: number } });
+        await (tx[table] as never as { update(a: unknown): Promise<unknown> }).update({
+          where: { id: existing.id },
+          data: { supersededInSnapshot: number },
+        });
       }
 
-      await (tx[table] as never as { create(a: unknown): Promise<unknown> })
-        .create({ data: { ...payload, lineageId, resumeId, createdInSnapshot: number } });
+      await (tx[table] as never as { create(a: unknown): Promise<unknown> }).create({
+        data: { ...payload, lineageId, resumeId, createdInSnapshot: number },
+      });
 
       touched = true;
     }
@@ -358,8 +387,10 @@ export class ResumeService {
     for (const [lineageId, row] of liveByLineage) {
       if (seen.has(lineageId)) continue;
 
-      await (tx[table] as never as { update(a: unknown): Promise<unknown> })
-        .update({ where: { id: row.id }, data: { supersededInSnapshot: number } });
+      await (tx[table] as never as { update(a: unknown): Promise<unknown> }).update({
+        where: { id: row.id },
+        data: { supersededInSnapshot: number },
+      });
 
       touched = true;
     }

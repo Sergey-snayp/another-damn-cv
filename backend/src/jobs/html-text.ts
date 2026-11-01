@@ -7,18 +7,35 @@
  */
 
 const NAMED: Record<string, string> = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
-  ndash: '–', mdash: '—', hellip: '…', bull: '•', middot: '·',
-  rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', laquo: '«', raquo: '»',
-  copy: '©', reg: '®', trade: '™', euro: '€', pound: '£',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  ndash: '–',
+  mdash: '—',
+  hellip: '…',
+  bull: '•',
+  middot: '·',
+  rsquo: '’',
+  lsquo: '‘',
+  rdquo: '”',
+  ldquo: '“',
+  laquo: '«',
+  raquo: '»',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+  euro: '€',
+  pound: '£',
 };
 
 export function decodeEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, code: string) => {
     if (code[0] === '#') {
-      const value = code[1] === 'x' || code[1] === 'X'
-        ? parseInt(code.slice(2), 16)
-        : parseInt(code.slice(1), 10);
+      const value =
+        code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
       return Number.isFinite(value) && value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : match;
     }
     return NAMED[code.toLowerCase()] ?? match;
@@ -46,7 +63,9 @@ export function tidy(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
     .replace(/[ \t ]+/g, ' ')
-    .split('\n').map((line) => line.trim()).join('\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

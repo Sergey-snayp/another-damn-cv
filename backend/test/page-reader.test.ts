@@ -14,7 +14,11 @@ Similar jobs
 Frontend Engineer at Globex`;
 
 test('cuts the description out of the page text, across line breaks', () => {
-  const cut = cutDescription(page, 'We are building the payments platform that moves money', 'health, dental and a learning budget.');
+  const cut = cutDescription(
+    page,
+    'We are building the payments platform that moves money',
+    'health, dental and a learning budget.',
+  );
   assert.ok(cut.startsWith('We are building'));
   assert.ok(cut.endsWith('learning budget.'));
   assert.ok(!cut.includes('Similar jobs'));
@@ -25,17 +29,20 @@ test('falls back to the whole text when the phrases are not found', () => {
 });
 
 test('parses a fenced answer and nulls', () => {
-  const answer = 'Here you go:\n```json\n' + JSON.stringify({
-    isJobPosting: true,
-    title: 'Senior Backend Engineer',
-    company: 'Acme',
-    location: 'Toronto, ON',
-    remote: false,
-    employmentType: null,
-    salary: 'null',
-    descriptionStart: 'We are building the payments platform',
-    descriptionEnd: 'and a learning budget.',
-  }) + '\n```';
+  const answer =
+    'Here you go:\n```json\n' +
+    JSON.stringify({
+      isJobPosting: true,
+      title: 'Senior Backend Engineer',
+      company: 'Acme',
+      location: 'Toronto, ON',
+      remote: false,
+      employmentType: null,
+      salary: 'null',
+      descriptionStart: 'We are building the payments platform',
+      descriptionEnd: 'and a learning budget.',
+    }) +
+    '\n```';
 
   const reading = parsePageReading(answer, page);
   assert.equal(reading.kind, 'job');

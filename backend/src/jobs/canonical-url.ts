@@ -8,9 +8,24 @@
 
 /** Parameters that say how you got here, never which job it is. */
 const TRACKING = new Set([
-  'gclid', 'fbclid', 'msclkid', 'mc_cid', 'mc_eid', '_hsenc', '_hsmi',
-  'ref', 'referrer', 'refid', 'trk', 'trkinfo', 'trackingid', 'lipi',
-  'lever-source', 'lever-origin', 'gh_src', 'ashby_jid_source',
+  'gclid',
+  'fbclid',
+  'msclkid',
+  'mc_cid',
+  'mc_eid',
+  '_hsenc',
+  '_hsmi',
+  'ref',
+  'referrer',
+  'refid',
+  'trk',
+  'trkinfo',
+  'trackingid',
+  'lipi',
+  'lever-source',
+  'lever-origin',
+  'gh_src',
+  'ashby_jid_source',
 ]);
 
 export function canonicalUrl(raw: string): string | null {
@@ -27,8 +42,8 @@ export function canonicalUrl(raw: string): string | null {
   // LinkedIn: a search page shows the job as ?currentJobId=, the job page
   // carries it at the end of the slug. Both are the same posting.
   if (host === 'linkedin.com' || host.endsWith('.linkedin.com')) {
-    const id = url.searchParams.get('currentJobId')
-      ?? url.pathname.match(/\/jobs\/view\/(?:[^/]*?-)?(\d+)\/?$/)?.[1];
+    const id =
+      url.searchParams.get('currentJobId') ?? url.pathname.match(/\/jobs\/view\/(?:[^/]*?-)?(\d+)\/?$/)?.[1];
     if (id && /^\d+$/.test(id)) return `https://www.linkedin.com/jobs/view/${id}`;
   }
 

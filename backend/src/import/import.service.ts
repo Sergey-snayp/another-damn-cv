@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { ExtractService } from './extract.service';
 import { LlmService } from '../llm/llm.service';
 
-
 const SYSTEM = `You convert a CV into structured fields.
 
 This is TRANSCRIPTION, not writing. Whatever you produce will be shown to the
@@ -30,11 +29,24 @@ export interface ImportedExperience {
 
 /** Everything a CV can yield. Flat fields plus the structure of a career. */
 export interface ImportedProfile {
-  firstName?: string; lastName?: string; fullName?: string; preferredName?: string;
-  email?: string; phone?: string;
-  location?: string; city?: string; state?: string; country?: string; postalCode?: string;
-  linkedin?: string; github?: string; portfolio?: string; website?: string;
-  currentCompany?: string; currentTitle?: string; yearsExperience?: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  preferredName?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  website?: string;
+  currentCompany?: string;
+  currentTitle?: string;
+  yearsExperience?: string;
   summary?: string;
   skills?: string[];
   experience?: ImportedExperience[];
@@ -142,9 +154,18 @@ they never wrote down.`;
     for (let i = start; i < body.length; i++) {
       const char = body[i];
 
-      if (escaped) { escaped = false; continue; }
-      if (char === '\\') { escaped = true; continue; }
-      if (char === '"') { inString = !inString; continue; }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
       if (inString) continue;
 
       if (char === '{') depth++;

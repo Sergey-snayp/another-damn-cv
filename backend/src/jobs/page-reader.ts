@@ -46,13 +46,12 @@ export function pageReaderPrompt(input: { url: string; pageTitle?: string | null
     '<page>',
     input.text.slice(0, MAX_PROMPT_CHARS),
     '</page>',
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
-export type PageReading =
-  | { kind: 'job'; fields: JobFields }
-  | { kind: 'not-a-job' }
-  | { kind: 'unreadable' };
+export type PageReading = { kind: 'job'; fields: JobFields } | { kind: 'not-a-job' } | { kind: 'unreadable' };
 
 export function parsePageReading(answer: string, pageText: string): PageReading {
   const raw = firstJsonObject(answer);
@@ -62,7 +61,9 @@ export function parsePageReading(answer: string, pageText: string): PageReading 
   if (data.isJobPosting === false) return { kind: 'not-a-job' };
 
   const str = (value: unknown) =>
-    typeof value === 'string' && value.trim() && value.trim().toLowerCase() !== 'null' ? value.trim() : undefined;
+    typeof value === 'string' && value.trim() && value.trim().toLowerCase() !== 'null'
+      ? value.trim()
+      : undefined;
 
   const fields: JobFields = {
     title: str(data.title),
@@ -101,6 +102,9 @@ export function cutDescription(text: string, start?: string, end?: string): stri
 
 /** "Build  reliable\nsystems" matches "Build reliable systems". */
 function phrase(words: string): RegExp {
-  const parts = words.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const parts = words
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   return new RegExp(parts.join('\\s+'), 'i');
 }

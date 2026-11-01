@@ -101,9 +101,18 @@ cannotDo.`;
     for (let i = start; i < body.length; i++) {
       const char = body[i];
 
-      if (escaped) { escaped = false; continue; }
-      if (char === '\\') { escaped = true; continue; }
-      if (char === '"') { inString = !inString; continue; }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
       if (inString) continue;
 
       if (char === '{') depth++;

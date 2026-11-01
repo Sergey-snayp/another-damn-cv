@@ -24,8 +24,9 @@ export class ExtractService {
 
       if (cleaned.length < 200) {
         throw new BadRequestException(
-          'That PDF has almost no extractable text — it is probably a scan. '
-          + 'Send the DOCX, or export a text-based PDF.');
+          'That PDF has almost no extractable text — it is probably a scan. ' +
+            'Send the DOCX, or export a text-based PDF.',
+        );
       }
 
       return cleaned;
@@ -41,7 +42,9 @@ export class ExtractService {
       .replace(/-\n(?=[a-z])/g, '')
       .replace(/[ \t]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
-      .split('\n').map((line) => line.trim()).join('\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .join('\n')
       .trim();
   }
 }

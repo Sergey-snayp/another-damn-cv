@@ -26,22 +26,24 @@ async function bootstrap() {
    */
   const PgStore = connectPgSimple(session);
 
-  app.use(session({
-    store: new PgStore({
-      conString: config.databaseUrl,
-      tableName: 'user_sessions',
-      createTableIfMissing: false,   // Prisma owns this table
+  app.use(
+    session({
+      store: new PgStore({
+        conString: config.databaseUrl,
+        tableName: 'user_sessions',
+        createTableIfMissing: false, // Prisma owns this table
+      }),
+      secret: config.sessionSecret,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true, // unreadable from JavaScript, so XSS cannot steal it
+        sameSite: 'lax', // blocks the cookie on cross-site POSTs — CSRF defence
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 1000 * 60 * 60 * 24 * 30,
+      },
     }),
-    secret: config.sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,               // unreadable from JavaScript, so XSS cannot steal it
-      sameSite: 'lax',              // blocks the cookie on cross-site POSTs — CSRF defence
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 1000 * 60 * 60 * 24 * 30,
-    },
-  }));
+  );
 
   // credentials: true is required for the browser to send the session cookie.
   /**
@@ -65,11 +67,13 @@ async function bootstrap() {
   await app.listen(config.port);
   // Node cuts requests at 5 minutes by default; tailoring a resume can take
   // two AI calls back to back.
-  const server = app.getHttpServer() as import('node:http').Server;
+  const server = app.getHttpServer();
   server.requestTimeout = 10 * 60_000;
 
   console.log(`API on http://localhost:${config.port}/api`);
-  console.log(`Google sign-in: ${config.google.configured ? 'configured' : 'NOT configured — set GOOGLE_CLIENT_ID'}`);
+  console.log(
+    `Google sign-in: ${config.google.configured ? 'configured' : 'NOT configured — set GOOGLE_CLIENT_ID'}`,
+  );
 }
 
 void bootstrap();

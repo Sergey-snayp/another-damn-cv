@@ -8,14 +8,6 @@ import { ResumeModule } from './resume/resume.module';
 import { JobsModule } from './jobs/jobs.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    LlmModule,
-    AuthModule,
-    ProfileModule,
-    ImportModule,
-    ResumeModule,
-    JobsModule,
-  ],
+  imports: [PrismaModule, LlmModule, AuthModule, ProfileModule, ImportModule, ResumeModule, JobsModule],
 })
 export class AppModule {}

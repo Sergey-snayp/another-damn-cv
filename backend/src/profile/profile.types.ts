@@ -32,13 +32,28 @@ export interface ContactFields {
 }
 
 export const EMPTY_CONTACT: ContactFields = {
-  firstName: '', lastName: '', fullName: '', preferredName: '',
-  email: '', phone: '',
-  location: '', city: '', state: '', country: '', postalCode: '',
-  linkedin: '', github: '', portfolio: '', website: '',
-  currentCompany: '', currentTitle: '', yearsExperience: '',
-  workAuthorization: '', requiresSponsorship: '',
-  salaryExpectation: '', noticePeriod: '',
+  firstName: '',
+  lastName: '',
+  fullName: '',
+  preferredName: '',
+  email: '',
+  phone: '',
+  location: '',
+  city: '',
+  state: '',
+  country: '',
+  postalCode: '',
+  linkedin: '',
+  github: '',
+  portfolio: '',
+  website: '',
+  currentCompany: '',
+  currentTitle: '',
+  yearsExperience: '',
+  workAuthorization: '',
+  requiresSponsorship: '',
+  salaryExpectation: '',
+  noticePeriod: '',
 };
 
 /** Keys the extension fills. Experience and education are not autofilled. */

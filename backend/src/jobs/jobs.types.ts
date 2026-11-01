@@ -12,7 +12,13 @@ export interface JobFields {
 
 /** Fields a person can edit, and so fields a re-capture must not overwrite once they have. */
 export const EDITABLE_FIELDS = [
-  'title', 'company', 'location', 'remote', 'employmentType', 'salary', 'description',
+  'title',
+  'company',
+  'location',
+  'remote',
+  'employmentType',
+  'salary',
+  'description',
 ] as const satisfies readonly (keyof JobFields)[];
 
 export type EditableField = (typeof EDITABLE_FIELDS)[number];

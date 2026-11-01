@@ -70,7 +70,7 @@ export class AuthService {
       create: {
         googleId,
         email,
-        name: payload.name ?? email.split('@')[0]!,
+        name: payload.name ?? email.split('@')[0],
         avatarUrl: payload.picture ?? null,
       },
       update: {

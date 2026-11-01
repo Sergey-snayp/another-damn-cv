@@ -25,8 +25,16 @@ export class ResumeController {
 
     const rows = await this.prisma.resume.findMany({
       where: { profileId: profile.id },
-      select: { id: true, name: true, targetRole: true, isPrimary: true,
-                currentSnapshotId: true, updatedAt: true, jobId: true, tailoring: true },
+      select: {
+        id: true,
+        name: true,
+        targetRole: true,
+        isPrimary: true,
+        currentSnapshotId: true,
+        updatedAt: true,
+        jobId: true,
+        tailoring: true,
+      },
       orderBy: { updatedAt: 'desc' },
     });
 
@@ -72,8 +80,14 @@ export class ResumeController {
   @Get(':id/history')
   history(
     @Param('id') _id: string,
-    @Query('table') table: 'experienceEntry' | 'achievement' | 'skillEntry'
-      | 'educationEntry' | 'summaryVariant' | 'contactInformation',
+    @Query('table')
+    table:
+      | 'experienceEntry'
+      | 'achievement'
+      | 'skillEntry'
+      | 'educationEntry'
+      | 'summaryVariant'
+      | 'contactInformation',
     @Query('lineageId') lineageId: string,
   ) {
     return this.resumes.history(table, lineageId);

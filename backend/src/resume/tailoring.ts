@@ -37,7 +37,13 @@ export interface Tailoring {
   basedOnSnapshot: number;
   createdAt: string;
   summaryVariant: string;
-  summary: { before: string; after: string; blocked: string | null; rejected?: string | null; problems?: string[] };
+  summary: {
+    before: string;
+    after: string;
+    blocked: string | null;
+    rejected?: string | null;
+    problems?: string[];
+  };
   bullets: BulletSuggestion[];
   /** Every skill's lineageId, most relevant first. */
   skills: string[];
@@ -103,7 +109,10 @@ export function summaryVariantOf(resume: RenderedResume): string {
   return Object.keys(resume.summaries)[0] ?? 'default';
 }
 
-export function tailorPrompt(resume: RenderedResume, job: JobForTailoring): { prompt: string; ids: PromptIds } {
+export function tailorPrompt(
+  resume: RenderedResume,
+  job: JobForTailoring,
+): { prompt: string; ids: PromptIds } {
   const ids: PromptIds = { roles: new Map(), bullets: new Map(), skills: new Map() };
   const parts: string[] = [];
 
@@ -117,7 +126,9 @@ export function tailorPrompt(resume: RenderedResume, job: JobForTailoring): { pr
     const roleId = `r${r + 1}`;
     ids.roles.set(roleId, role.lineageId);
     const head = [role.title, role.company, role.client].filter(Boolean).join(' | ');
-    parts.push(`<role id="${roleId}" name="${attr(head)}" dates="${attr(`${role.from ?? ''} - ${role.to ?? 'present'}`)}">`);
+    parts.push(
+      `<role id="${roleId}" name="${attr(head)}" dates="${attr(`${role.from ?? ''} - ${role.to ?? 'present'}`)}">`,
+    );
     if (role.blurb) parts.push(`<about>${role.blurb}</about>`);
 
     for (const achievement of sortedAchievements(role.achievements)) {
@@ -127,9 +138,11 @@ export function tailorPrompt(resume: RenderedResume, job: JobForTailoring): { pr
         experienceLineageId: role.lineageId,
       });
       const facts = ['problem', 'action', 'result']
-        .map((key) => achievement[key] ? `${key}: ${String(achievement[key])}` : null)
+        .map((key) => (achievement[key] ? `${key}: ${String(achievement[key])}` : null))
         .filter(Boolean);
-      parts.push(`<bullet id="${bulletId}">${String(achievement.bullet)}${facts.length ? `\n<facts>${facts.join('\n')}</facts>` : ''}</bullet>`);
+      parts.push(
+        `<bullet id="${bulletId}">${String(achievement.bullet)}${facts.length ? `\n<facts>${facts.join('\n')}</facts>` : ''}</bullet>`,
+      );
     }
     parts.push('</role>');
   });
@@ -196,20 +209,27 @@ export function readTailoring(
   const summaryProblems = summaryWanted ? unsupportedClaims(summaryWanted, resumeText(resume), jobTerms) : [];
   const summary = {
     before: summaryBefore,
-    after: summaryWanted && summaryProblems.length === 0 && !sameWords(summaryWanted, summaryBefore)
-      ? summaryWanted : summaryBefore,
+    after:
+      summaryWanted && summaryProblems.length === 0 && !sameWords(summaryWanted, summaryBefore)
+        ? summaryWanted
+        : summaryBefore,
     blocked: summaryProblems.length ? blockedNote(summaryProblems, 'the resume') : null,
     rejected: summaryProblems.length ? summaryWanted : null,
     problems: summaryProblems,
   };
 
   // Bullets: only from their own role.
-  const answered = new Map<string, Array<{ id: string; text: string; keep: boolean; reason: string | null }>>();
+  const answered = new Map<
+    string,
+    Array<{ id: string; text: string; keep: boolean; reason: string | null }>
+  >();
   for (const role of Array.isArray(parsed.roles) ? parsed.roles : []) {
     const roleLineage = ids.roles.get(String((role as { id?: unknown })?.id));
     if (!roleLineage) continue;
     const list = answered.get(roleLineage) ?? [];
-    for (const bullet of Array.isArray((role as { bullets?: unknown }).bullets) ? (role as { bullets: unknown[] }).bullets : []) {
+    for (const bullet of Array.isArray((role as { bullets?: unknown }).bullets)
+      ? (role as { bullets: unknown[] }).bullets
+      : []) {
       const b = bullet as { id?: unknown; text?: unknown; keep?: unknown; reason?: unknown };
       list.push({
         id: String(b.id),
@@ -245,7 +265,7 @@ export function readTailoring(
         before,
         after: item.text && problems.length === 0 && !sameWords(item.text, before) ? item.text : before,
         keep: item.keep,
-        reason: item.keep ? null : item.reason ?? 'Less relevant to this job.',
+        reason: item.keep ? null : (item.reason ?? 'Less relevant to this job.'),
         blocked: problems.length ? blockedNote(problems, 'this role') : null,
         rejected: problems.length ? item.text : null,
         problems,
@@ -257,19 +277,27 @@ export function readTailoring(
     for (const { a, index } of byLineage.values()) {
       if (seen.has(String(a.lineageId))) continue;
       ordered.push({
-        lineageId: String(a.lineageId), experienceLineageId: role.lineageId,
-        before: String(a.bullet), after: String(a.bullet),
-        keep: true, reason: null, blocked: null, from: index, to: 0,
+        lineageId: String(a.lineageId),
+        experienceLineageId: role.lineageId,
+        before: String(a.bullet),
+        after: String(a.bullet),
+        keep: true,
+        reason: null,
+        blocked: null,
+        from: index,
+        to: 0,
       });
     }
 
     // Never leave a role with nothing under it.
     if (ordered.length > 0 && ordered.every((b) => !b.keep)) {
-      ordered[0]!.keep = true;
-      ordered[0]!.reason = null;
+      ordered[0].keep = true;
+      ordered[0].reason = null;
     }
 
-    ordered.forEach((b, to) => { b.to = to; });
+    ordered.forEach((b, to) => {
+      b.to = to;
+    });
     bullets.push(...ordered);
   }
 
@@ -295,23 +323,35 @@ export function readTailoring(
 // --- a second try for blocked lines --------------------------------------------
 
 /** The lines whose rewrite was thrown away, named for a follow-up prompt. */
-export function blockedLines(t: Pick<Tailoring, 'summary' | 'bullets'>): Array<{ id: string; original: string; rejected: string; problems: string[] }> {
+export function blockedLines(
+  t: Pick<Tailoring, 'summary' | 'bullets'>,
+): Array<{ id: string; original: string; rejected: string; problems: string[] }> {
   const lines: Array<{ id: string; original: string; rejected: string; problems: string[] }> = [];
   if (t.summary.rejected) {
-    lines.push({ id: 'summary', original: t.summary.before, rejected: t.summary.rejected, problems: t.summary.problems ?? [] });
+    lines.push({
+      id: 'summary',
+      original: t.summary.before,
+      rejected: t.summary.rejected,
+      problems: t.summary.problems ?? [],
+    });
   }
   t.bullets.forEach((b, index) => {
-    if (b.rejected && b.keep) lines.push({ id: `l${index}`, original: b.before, rejected: b.rejected, problems: b.problems ?? [] });
+    if (b.rejected && b.keep)
+      lines.push({ id: `l${index}`, original: b.before, rejected: b.rejected, problems: b.problems ?? [] });
   });
   return lines;
 }
 
 export function retryPrompt(lines: ReturnType<typeof blockedLines>): string {
-  const body = lines.map((line) => `<line id="${line.id}">
+  const body = lines
+    .map(
+      (line) => `<line id="${line.id}">
 <original>${line.original}</original>
 <your-rewrite>${line.rejected}</your-rewrite>
 <not-allowed>${line.problems.join(', ')}</not-allowed>
-</line>`).join('\n');
+</line>`,
+    )
+    .join('\n');
 
   return `Your rewrites of these lines used words the resume does not support.
 Rewrite each again WITHOUT any word listed in <not-allowed>, and without adding
@@ -333,7 +373,7 @@ export function applyRetry(
 ): Tailoring {
   const parsed = firstJsonObject(answer) as { lines?: unknown } | null;
   const texts = new Map<string, string>();
-  for (const line of Array.isArray(parsed?.lines) ? parsed!.lines : []) {
+  for (const line of Array.isArray(parsed?.lines) ? parsed.lines : []) {
     const l = line as { id?: unknown; text?: unknown };
     if (typeof l.text === 'string' && l.text.trim()) texts.set(String(l.id), tidyLine(l.text));
   }
@@ -345,7 +385,13 @@ export function applyRetry(
   if (summaryText && next.summary.rejected) {
     const problems = unsupportedClaims(summaryText, resumeText(resume), jobTerms);
     if (problems.length === 0 && !sameWords(summaryText, next.summary.before)) {
-      next.summary = { before: next.summary.before, after: summaryText, blocked: null, rejected: null, problems: [] };
+      next.summary = {
+        before: next.summary.before,
+        after: summaryText,
+        blocked: null,
+        rejected: null,
+        problems: [],
+      };
     }
   }
 
@@ -388,9 +434,10 @@ export function unsupportedClaims(text: string, source: string, jobTerms: Set<st
   for (const { word, sentenceStart } of wordsIn(text)) {
     if (!/\p{L}/u.test(word)) continue;
     const lower = word.toLowerCase();
-    const suspect = looksTechnical(word)
-      || (!sentenceStart && /^\p{Lu}/u.test(word))
-      || (jobTerms.has(lower) && /^\p{Lu}/u.test(word));
+    const suspect =
+      looksTechnical(word) ||
+      (!sentenceStart && /^\p{Lu}/u.test(word)) ||
+      (jobTerms.has(lower) && /^\p{Lu}/u.test(word));
     if (!suspect || isKnown(word, known)) continue;
     if (!problems.includes(word)) problems.push(word);
   }
@@ -423,10 +470,10 @@ function isKnown(word: string, known: Set<string>): boolean {
   if (known.has(`${lower}s`) || (lower.endsWith('s') && known.has(lower.slice(0, -1)))) return true;
   const parts = word.split(/[/\-.'’]+/).filter(Boolean);
   if (parts.length < 2) return false;
-  return parts.every((part) =>
-    known.has(part.toLowerCase())
-    || /^\d+$/.test(part)
-    || (/^\p{Ll}+$/u.test(part) && part !== 'js'));
+  return parts.every(
+    (part) =>
+      known.has(part.toLowerCase()) || /^\d+$/.test(part) || (/^\p{Ll}+$/u.test(part) && part !== 'js'),
+  );
 }
 
 function vocabulary(text: string): Set<string> {
@@ -456,7 +503,7 @@ function wordsIn(text: string): Array<{ word: string; sentenceStart: boolean }> 
 export function numbersIn(text: string): string[] {
   const out: string[] = [];
   for (const match of text.matchAll(/(?<![\p{L}\d.,])(\d[\d,]*(?:\.\d+)?)\s*([kKmM])?(?![\p{L}])/gu)) {
-    let value = Number(match[1]!.replace(/,/g, ''));
+    let value = Number(match[1].replace(/,/g, ''));
     if (Number.isNaN(value)) continue;
     const unit = match[2]?.toLowerCase();
     if (unit === 'k') value *= 1_000;
@@ -476,7 +523,11 @@ function blockedNote(problems: string[], where: string): string {
 function roleText(role: RenderedResume['experiences'][number]): string {
   const head = [role.title, role.company, role.client, role.location, role.blurb].filter(Boolean).map(String);
   const body = role.achievements.flatMap((a) =>
-    ['bullet', 'problem', 'action', 'result'].map((key) => a[key]).filter(Boolean).map(String));
+    ['bullet', 'problem', 'action', 'result']
+      .map((key) => a[key])
+      .filter(Boolean)
+      .map(String),
+  );
   return [...head, ...body].join('\n');
 }
 
@@ -486,8 +537,8 @@ function resumeText(resume: RenderedResume): string {
     ...resume.experiences.map(roleText),
     ...resume.experiences.flatMap((r) => [r.from, r.to].filter(Boolean).map(String)),
     ...resume.skills.flatMap((s) => [s.name, ...(Array.isArray(s.aliases) ? s.aliases : [])].map(String)),
-    ...resume.educations.flatMap((e) => Object.values(e).filter((v) => typeof v === 'string') as string[]),
-    ...Object.values(resume.contact ?? {}).filter((v) => typeof v === 'string') as string[],
+    ...resume.educations.flatMap((e) => Object.values(e).filter((v) => typeof v === 'string')),
+    ...Object.values(resume.contact ?? {}).filter((v) => typeof v === 'string'),
   ].join('\n');
 }
 
@@ -501,8 +552,8 @@ function tidyLine(text: string): string {
 
 /** Quotes, dashes and spacing: a rewrite that changed only these changed nothing. */
 function sameWords(a: string, b: string): boolean {
-  const plain = (t: string) => t.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
-    .replace(/\s+/g, ' ').trim();
+  const plain = (t: string) =>
+    t.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
   return plain(a) === plain(b);
 }
 

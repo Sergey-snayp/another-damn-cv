@@ -18,19 +18,32 @@ export class LlmService {
   private readonly cwd = mkdtempSync(join(tmpdir(), 'cv-import-'));
 
   private readonly deniedTools = [
-    'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash',
-    'WebFetch', 'WebSearch', 'NotebookEdit', 'Task',
+    'Read',
+    'Write',
+    'Edit',
+    'Glob',
+    'Grep',
+    'Bash',
+    'WebFetch',
+    'WebSearch',
+    'NotebookEdit',
+    'Task',
   ];
 
   /** `timeoutMs`: a whole-resume tailoring needs longer than reading one page. */
   complete(prompt: string, system: string, { timeoutMs = 180_000 } = {}): Promise<string> {
     const args = [
-      '-p', '--output-format', 'text',
-      '--model', config.llmModel,
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      config.llmModel,
       '--strict-mcp-config',
-      '--disallowed-tools', ...this.deniedTools,
+      '--disallowed-tools',
+      ...this.deniedTools,
       '--exclude-dynamic-system-prompt-sections',
-      '--system-prompt', system,
+      '--system-prompt',
+      system,
     ];
 
     return new Promise((resolve, reject) => {
@@ -48,13 +61,16 @@ export class LlmService {
       let stdout = '';
       let stderr = '';
 
-      child.stdout.on('data', (chunk) => { stdout += chunk; });
-      child.stderr.on('data', (chunk) => { stderr += chunk; });
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+      });
 
       child.on('error', () => {
         clearTimeout(timer);
-        reject(new ServiceUnavailableException(
-          `Cannot run "${config.claudeBin}". Set CLAUDE_BIN in .env.`));
+        reject(new ServiceUnavailableException(`Cannot run "${config.claudeBin}". Set CLAUDE_BIN in .env.`));
       });
 
       child.on('close', (code) => {
