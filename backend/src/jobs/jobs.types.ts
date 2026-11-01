@@ -23,18 +23,6 @@ export const EDITABLE_FIELDS = [
 
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
-/** What the extension sends when you press "Send this job to the app". */
-export interface CaptureRequest {
-  url: string;
-  pageTitle?: string;
-  /** The job's part of the page, with scripts, styles, images and forms removed. */
-  html?: string;
-  /** The same part as the browser renders it — the best text we can get. */
-  text?: string;
-  /** Every parsed JSON-LD block on the page; the job may be any of them. */
-  jsonLd?: unknown[];
-}
-
 export const CAPTURE_LIMITS = {
   html: 1_500_000,
   text: 200_000,

@@ -11,16 +11,33 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { SyncTokenGuard } from '../auth/sync-token.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { JobsService } from './jobs.service';
+import { SyncTokenGuard } from '../auth/sync-token.guard';
+import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { TailorResumeService } from '../resume/tailor-resume.service';
+import { JobCaptureService } from './job-capture.service';
+import {
+  captureSchema,
+  jobEditSchema,
+  listQuerySchema,
+  manualJobSchema,
+  tailorSchema,
+  undoStatusSchema,
+  type CaptureInput,
+  type JobEditInput,
+  type ListQuery,
+  type ManualJobInput,
+  type TailorInput,
+  type UndoStatusInput,
+} from './jobs.schemas';
+import { JobsService } from './jobs.service';
 
 @Controller('jobs')
 export class JobsController {
   constructor(
     private readonly jobs: JobsService,
-    private readonly tailor: TailorResumeService,
+    private readonly capturing: JobCaptureService,
+    private readonly tailoring: TailorResumeService,
   ) {}
 
   /**
@@ -31,20 +48,20 @@ export class JobsController {
    */
   @Post('capture')
   @UseGuards(SyncTokenGuard)
-  capture(@CurrentUser() userId: string, @Body() body: unknown) {
-    return this.jobs.capture(userId, body);
+  capture(@CurrentUser() userId: string, @Body(new ZodValidationPipe(captureSchema)) body: CaptureInput) {
+    return this.capturing.capture(userId, body);
   }
 
   @Get()
   @UseGuards(AuthGuard)
-  list(@CurrentUser() userId: string, @Query('status') status?: string) {
-    return this.jobs.list(userId, status);
+  list(@CurrentUser() userId: string, @Query(new ZodValidationPipe(listQuerySchema)) query: ListQuery) {
+    return this.jobs.list(userId, query.status);
   }
 
   @Post()
   @UseGuards(AuthGuard)
-  create(@CurrentUser() userId: string, @Body() body: unknown) {
-    return this.jobs.createManual(userId, body);
+  create(@CurrentUser() userId: string, @Body(new ZodValidationPipe(manualJobSchema)) body: ManualJobInput) {
+    return this.capturing.createManual(userId, body);
   }
 
   @Get(':id')
@@ -55,7 +72,11 @@ export class JobsController {
 
   @Patch(':id')
   @UseGuards(AuthGuard)
-  update(@CurrentUser() userId: string, @Param('id') id: string, @Body() body: unknown) {
+  update(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(jobEditSchema)) body: JobEditInput,
+  ) {
     return this.jobs.update(userId, id, body);
   }
 
@@ -63,15 +84,19 @@ export class JobsController {
   @Post(':id/status/undo')
   @HttpCode(200)
   @UseGuards(AuthGuard)
-  undoStatus(@CurrentUser() userId: string, @Param('id') id: string, @Body() body: { eventId?: unknown }) {
-    return this.jobs.undoStatus(userId, id, body?.eventId);
+  undoStatus(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(undoStatusSchema)) body: UndoStatusInput,
+  ) {
+    return this.jobs.undoStatus(userId, id, body.eventId);
   }
 
   /** Reads the captured page again, discarding edits. */
   @Post(':id/reread')
   @UseGuards(AuthGuard)
   reread(@CurrentUser() userId: string, @Param('id') id: string) {
-    return this.jobs.reread(userId, id);
+    return this.capturing.reread(userId, id);
   }
 
   /**
@@ -81,14 +106,12 @@ export class JobsController {
   @Post(':id/tailor')
   @HttpCode(200)
   @UseGuards(AuthGuard)
-  tailorResume(
+  tailor(
     @CurrentUser() userId: string,
     @Param('id') id: string,
-    @Body() body: { sourceResumeId?: unknown },
+    @Body(new ZodValidationPipe(tailorSchema)) body: TailorInput,
   ) {
-    const source =
-      typeof body?.sourceResumeId === 'string' && body.sourceResumeId ? body.sourceResumeId : undefined;
-    return this.tailor.tailorForJob(userId, id, source);
+    return this.tailoring.tailorForJob(userId, id, body.sourceResumeId);
   }
 
   @Delete(':id')

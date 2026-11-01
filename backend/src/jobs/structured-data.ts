@@ -49,7 +49,7 @@ function findPosting(blocks: unknown[]): Obj | null {
   while (queue.length > 0 && visited++ < 5_000) {
     const node = queue.shift();
     if (Array.isArray(node)) {
-      queue.push(...node);
+      queue.push(...(node as unknown[]));
       continue;
     }
     if (!isObj(node)) continue;
@@ -69,7 +69,7 @@ function text(value: unknown): string | undefined {
 
 function list(value: unknown): unknown[] | undefined {
   if (value === undefined || value === null) return undefined;
-  return Array.isArray(value) ? value : [value];
+  return Array.isArray(value) ? (value as unknown[]) : [value];
 }
 
 function organisation(value: unknown): string | undefined {

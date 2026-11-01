@@ -46,7 +46,7 @@ test('routes without an id are left to the controller', async () => {
 
 test('entry history never crosses into another resume', async () => {
   const [summary] = await prisma.summaryVariant.findMany({ where: { resumeId, supersededInSnapshot: null } });
-  const lineageId = summary!.lineageId;
+  const lineageId = summary.lineageId;
 
   assert.equal((await resumes.history(resumeId, 'summaryVariant', lineageId)).length, 2);
 

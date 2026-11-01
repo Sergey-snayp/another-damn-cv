@@ -62,7 +62,7 @@ export function htmlToText(html: string): string {
 export function tidy(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
-    .replace(/[ \t ]+/g, ' ')
+    .replace(/[ \t\u00a0]+/g, ' ')
     .split('\n')
     .map((line) => line.trim())
     .join('\n')
