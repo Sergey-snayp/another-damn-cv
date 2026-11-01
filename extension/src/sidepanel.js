@@ -1,4 +1,7 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
+import {
+  captureTab, jobUrl, NotSignedInError, requestSiteAccess, sendCapture, unsendableReason,
+} from './jobs.js';
 
 /**
  * The side panel.
@@ -162,6 +165,86 @@ async function runFill() {
   status.textContent = result.failures.length
     ? `Filled ${result.filled}. Failed: ${result.failures.join('; ')}`
     : `Filled ${result.filled} field${result.filled === 1 ? '' : 's'}.`;
+}
+
+// --- send this job --------------------------------------------------------------
+
+/** Kept current by refresh(), so a click can ask for access before any await. */
+let currentTab = null;
+let sending = false;
+
+function renderSendButton() {
+  const reason = unsendableReason(currentTab);
+  const button = $('send-job');
+  button.disabled = sending || Boolean(reason);
+  button.title = reason ?? '';
+  if (!sending && reason && currentTab?.url) $('send-status').textContent = reason;
+}
+
+function showSendResult({ job, created }) {
+  const name = [job.title, job.company].filter(Boolean).join(' at ') || job.pageTitle || 'This job';
+  const verb = created ? 'Saved' : 'Already saved, updated';
+
+  const note = job.extraction === 'pending'
+    ? 'Reading the page. Title and company will appear in the app in a minute.'
+    : job.extraction === 'failed'
+      ? (job.extractionError ?? 'Could not read the job details. Fix them in the app.')
+      : '';
+
+  const status = $('send-status');
+  status.replaceChildren();
+
+  const line = document.createElement('div');
+  line.textContent = `${verb}: ${name}`;
+  const open = document.createElement('a');
+  open.href = jobUrl(job.id);
+  open.textContent = 'Open in app';
+  open.addEventListener('click', (event) => {
+    event.preventDefault();
+    void chrome.tabs.create({ url: jobUrl(job.id) });
+  });
+
+  status.append(line);
+  if (note) {
+    const hint = document.createElement('div');
+    hint.className = 'muted';
+    hint.textContent = note;
+    status.append(hint);
+  }
+  status.append(open);
+}
+
+function sendJob() {
+  const tab = currentTab;
+  if (sending || !tab?.id || unsendableReason(tab)) return;
+
+  // Called synchronously from the click: Chrome only prompts during the gesture.
+  const access = requestSiteAccess(tab);
+
+  sending = true;
+  renderSendButton();
+  $('send-status').textContent = 'Reading the page…';
+
+  void (async () => {
+    try {
+      if (!(await access)) {
+        $('send-status').textContent = 'Access to this site was not allowed, so nothing was sent.';
+        return;
+      }
+
+      const capture = await captureTab(tab.id);
+      $('send-status').textContent = `Sending (${capture.matched})…`;
+      showSendResult(await sendCapture(capture));
+    } catch (err) {
+      if (err instanceof NotSignedInError) selectTab('profile');
+      $('send-status').textContent = /Cannot access|cannot be scripted|Frame with ID/i.test(err.message)
+        ? 'Chrome does not let extensions read this page.'
+        : err.message;
+    } finally {
+      sending = false;
+      renderSendButton();
+    }
+  })();
 }
 
 // --- profile panel ------------------------------------------------------------
@@ -335,6 +418,12 @@ async function refresh() {
   const stored = await chrome.storage.local.get('profile');
   profile = stored.profile ?? {};
 
+  const tab = await activeTab();
+  // A new page clears the last send's result; a refresh of the same one keeps it.
+  if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
+  currentTab = tab ?? null;
+  renderSendButton();
+
   scan = await askPage({ type: 'scan' });
 
   renderAutofill();
@@ -349,6 +438,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
 });
 
 $('reload').addEventListener('click', refresh);
+$('send-job').addEventListener('click', sendJob);
 $('sign-in').addEventListener('click', () => void doSignIn());
 $('sign-out').addEventListener('click', () => void doSignOut());
 $('pull-now').addEventListener('click', () => void doPull());

@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { ResumeService } from './resume.service';
+import { RewriteService, type RewriteRequest } from './rewrite.service';
+import { DiffService } from './diff.service';
+import { TailorResumeService } from './tailor-resume.service';
 import type { ResumeChanges } from './resume.types';
 
 @Controller('resumes')
@@ -10,6 +13,9 @@ import type { ResumeChanges } from './resume.types';
 export class ResumeController {
   constructor(
     private readonly resumes: ResumeService,
+    private readonly rewrites: RewriteService,
+    private readonly diffs: DiffService,
+    private readonly tailor: TailorResumeService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -17,12 +23,14 @@ export class ResumeController {
   async list(@CurrentUser() userId: string) {
     const profile = await this.profileFor(userId);
 
-    return this.prisma.resume.findMany({
+    const rows = await this.prisma.resume.findMany({
       where: { profileId: profile.id },
       select: { id: true, name: true, targetRole: true, isPrimary: true,
-                currentSnapshotId: true, updatedAt: true },
+                currentSnapshotId: true, updatedAt: true, jobId: true, tailoring: true },
       orderBy: { updatedAt: 'desc' },
     });
+
+    return rows.map(({ tailoring, ...row }) => ({ ...row, hasTailoring: tailoring !== null }));
   }
 
   @Post()
@@ -49,6 +57,12 @@ export class ResumeController {
     return this.resumes.snapshots(id);
   }
 
+  /** What changed in one snapshot — added, reworded and removed. */
+  @Get(':id/diff/:number')
+  diff(@Param('id') id: string, @Param('number') number: string) {
+    return this.diffs.diff(id, Number(number));
+  }
+
   @Get(':id/at/:number')
   atSnapshot(@Param('id') id: string, @Param('number') number: string) {
     return this.resumes.atSnapshot(id, Number(number));
@@ -69,6 +83,28 @@ export class ResumeController {
   @Post(':id/revert/:number')
   revert(@Param('id') id: string, @Param('number') number: string) {
     return this.resumes.revertTo(id, Number(number));
+  }
+
+  /**
+   * Suggests a rewrite of one line. Nothing is saved — the browser shows the
+   * original beside the suggestion and the person decides.
+   */
+  @Post(':id/rewrite')
+  rewrite(@Param('id') _id: string, @Body() body: RewriteRequest) {
+    return this.rewrites.rewrite(body);
+  }
+
+  /** Suggestions from "Tailor resume for this job", waiting for review. */
+  @Get(':id/tailoring')
+  tailoring(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.tailor.pending(userId, id);
+  }
+
+  /** Done reviewing: the suggestions are dropped, whatever was saved stays. */
+  @Delete(':id/tailoring')
+  @HttpCode(204)
+  discardTailoring(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.tailor.discard(userId, id);
   }
 
   /** The projection is derived, so a suspected drift is fixed by rebuilding. */

@@ -1,0 +1,320 @@
+/* ── the page ──────────────────────────────────────────────────────────────
+   Sized as A4 at 96dpi so what you see is what prints.                      */
+
+.docwrap { display: grid; grid-template-columns: 1fr 214px; gap: 20px; align-items: start; }
+
+.page {
+  width: 794px;
+  min-height: 1123px;
+  padding: 48px 56px;
+  background: #fff;
+  border: 1px solid #e6e9ed;
+  border-radius: 3px;
+  box-shadow: 0 2px 14px rgba(16, 24, 40, 0.07);
+
+  font-family: var(--r-font);
+  font-size: var(--r-size);
+  line-height: var(--r-line);
+  color: #1a1a1a;
+}
+
+.page.tpl-compact { padding: 36px 44px; }
+
+/* ── inline editing ─────────────────────────────────────────────────────── */
+
+.editable {
+  font: inherit; color: inherit; background: transparent;
+  border: 0; border-radius: 3px; padding: 1px 2px; margin: 0;
+  outline: 0; max-width: 100%;
+}
+.editable:hover { background: #f1f5f9; }
+.editable:focus { background: #e8f0fa; box-shadow: 0 0 0 1px #b9d2ea; }
+.editable::placeholder { color: #b9c2cc; font-style: italic; }
+
+textarea.editable { display: block; width: 100%; resize: none; overflow: hidden; }
+
+/* ── document structure ─────────────────────────────────────────────────── */
+
+.doc-head { text-align: center; margin-bottom: calc(var(--r-gap) * 1.2); }
+.doc-head h1 { margin: 0 0 5px; font-size: 1.9em; font-weight: 700; letter-spacing: -0.01em; }
+.doc-contact { font-size: 0.88em; color: #444; }
+.doc-contact .sep { margin: 0 5px; color: #b9c2cc; }
+
+.doc-section { margin-bottom: var(--r-gap); }
+.doc-section > h2 {
+  margin: 0 0 6px;
+  font-size: 0.92em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--r-accent);
+  border-bottom: 1px solid var(--r-accent);
+  padding-bottom: 2px;
+}
+
+.doc-summary { color: #222; }
+
+.doc-role { margin-bottom: calc(var(--r-gap) * 0.7); }
+.doc-role:last-of-type { margin-bottom: 4px; }
+
+.doc-roleline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px; }
+.doc-company .editable { font-weight: 700; }
+.doc-sep { color: #b9c2cc; margin: 0 3px; }
+.doc-dates { margin-left: auto; font-size: 0.86em; font-style: italic; color: #555; white-space: nowrap; }
+
+.doc-bullets { list-style: none; margin: 4px 0 0; padding: 0; }
+.doc-bullets li { position: relative; display: flex; gap: 6px; padding-left: 13px; margin-bottom: 2px; }
+.doc-bullets li::before {
+  content: '•'; position: absolute; left: 2px; top: 1px; color: var(--r-accent);
+}
+
+/* Controls stay out of the way until the row is hovered. */
+.doc-bulletmeta { display: flex; align-items: center; gap: 2px; opacity: 0; flex-shrink: 0; }
+.doc-bullets li:hover .doc-bulletmeta,
+.doc-roleline:hover .doc-remove { opacity: 1; }
+
+.doc-remove {
+  opacity: 0; border: 0; background: none; cursor: pointer;
+  color: #c0392b; font-size: 14px; line-height: 1; padding: 0 3px;
+}
+.doc-remove:hover { opacity: 1 !important; }
+
+.verified {
+  border: 0; background: none; cursor: pointer; padding: 0 3px;
+  color: #c3cad2; font-size: 12px; line-height: 1;
+}
+.verified.on { color: #1a7f4b; opacity: 1; }
+
+.doc-add {
+  margin-top: 4px; padding: 2px 8px;
+  font: inherit; font-size: 0.82em; color: var(--r-accent);
+  background: none; border: 1px dashed #cfd8e0; border-radius: 5px; cursor: pointer;
+}
+.doc-add:hover { background: #f4f7fa; border-color: var(--r-accent); }
+.doc-add.inline { margin-top: 0; }
+
+.doc-skills { display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: center; }
+.doc-skill { display: inline-flex; align-items: center; }
+.doc-skill::after { content: '·'; color: #cfd8e0; margin-left: 6px; }
+.doc-skill:last-of-type::after { content: ''; }
+
+/* ── style panel ────────────────────────────────────────────────────────── */
+
+.stylepanel {
+  position: sticky; top: 76px;
+  padding: 14px; background: #fff;
+  border: 1px solid #e6e9ed; border-radius: 10px;
+}
+.stylepanel select, .stylepanel input[type=range] { width: 100%; }
+.stylepanel select {
+  padding: 6px 8px; font: inherit; font-size: 12px;
+  border: 1px solid #dfe3e8; border-radius: 6px;
+}
+
+.segmented { display: flex; gap: 3px; padding: 3px; background: #f4f6f8; border-radius: 8px; }
+.segmented button {
+  flex: 1; padding: 5px; font: inherit; font-size: 12px; text-transform: capitalize;
+  color: #52606d; background: none; border: 0; border-radius: 6px; cursor: pointer;
+}
+.segmented button.on { background: #fff; color: #1a3a5c; font-weight: 600; }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch { width: 22px; height: 22px; border: 2px solid transparent; border-radius: 50%; cursor: pointer; }
+.swatch.on { border-color: #1a2332; }
+
+/* ── printing: the same DOM, so it cannot drift from the preview ────────── */
+
+@media print {
+  @page { size: A4; margin: 0; }
+  body { background: #fff; }
+  .topbar, .stylepanel, .savebar, .doc-add, .doc-remove, .doc-bulletmeta { display: none !important; }
+  .content { max-width: none; padding: 0; }
+  .docwrap { display: block; }
+  .page { width: auto; min-height: 0; border: 0; box-shadow: none; border-radius: 0; }
+  .editable { background: transparent !important; box-shadow: none !important; }
+  .editable::placeholder { color: transparent; }
+}
+
+/* Past versions are shown, never edited — history is not rewritten in place. */
+.page.read-only .editable { pointer-events: none; background: transparent !important; }
+.page.read-only .doc-add,
+.page.read-only .doc-remove,
+.page.read-only .verified { display: none; }
+
+/* ── history ─────────────────────────────────────────────────────────────── */
+
+.history { display: grid; grid-template-columns: 260px 1fr; gap: 18px; align-items: start; }
+
+ul.snapshots { list-style: none; margin: 0; padding: 0; }
+ul.snapshots li { margin-bottom: 4px; }
+ul.snapshots button {
+  width: 100%; padding: 9px 11px; text-align: left;
+  font: inherit; background: none; border: 1px solid transparent;
+  border-radius: 8px; cursor: pointer;
+}
+ul.snapshots button:hover { background: #f4f6f8; }
+ul.snapshots button.on { background: #eef4fa; border-color: #cfe0f0; }
+ul.snapshots .num { font-weight: 600; font-size: 13px; }
+ul.snapshots .msg { font-size: 12px; color: #52606d; }
+ul.snapshots .when { font-size: 11px; color: #9aa5b1; }
+
+.versionbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; margin-bottom: 12px;
+  background: #fff8e6; border: 1px solid #fde68a; border-radius: 8px;
+  font-size: 13px;
+}
+
+ul.entryversions { list-style: none; margin: 0; padding: 0; }
+ul.entryversions li { padding: 12px 0; border-bottom: 1px solid #f1f3f5; }
+ul.entryversions li:last-child { border-bottom: 0; }
+ul.entryversions .vnum {
+  display: inline-block; margin-bottom: 5px;
+  padding: 2px 8px; font-size: 11px; font-weight: 600;
+  background: #eef4fa; color: #1a3a5c; border-radius: 999px;
+}
+ul.entryversions .vtext { font-size: 13px; line-height: 1.5; }
+ul.entryversions li:first-child .vtext { font-weight: 500; }
+
+/* ── rewrite ─────────────────────────────────────────────────────────────── */
+
+.ai {
+  margin-left: 6px; padding: 0 3px;
+  font-size: 12px; line-height: 1; color: #7c3aed;
+  background: none; border: 0; cursor: pointer;
+}
+.doc-section > h2 .ai { opacity: 0; }
+.doc-section > h2:hover .ai { opacity: 1; }
+.ai:hover { color: #5b21b6; }
+
+.rewrite {
+  position: fixed; z-index: 40;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 440px; max-height: 78vh; overflow-y: auto;
+  padding: 16px; background: #fff;
+  border: 1px solid #e6e9ed; border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(16, 24, 40, 0.18);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1a2332;
+}
+
+.rewrite-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; font-weight: 600; font-size: 14px;
+}
+
+.rewrite textarea {
+  width: 100%; box-sizing: border-box; padding: 9px 11px; margin-bottom: 10px;
+  font: inherit; font-size: 13px; resize: vertical;
+  border: 1px solid #dfe3e8; border-radius: 8px;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chips button {
+  padding: 5px 10px; font: inherit; font-size: 11px; color: #52606d;
+  background: #f4f6f8; border: 1px solid #e6e9ed; border-radius: 999px; cursor: pointer;
+}
+.chips button:hover { background: #eef4fa; color: #1a3a5c; border-color: #cfe0f0; }
+
+.rewrite-before, .rewrite-after {
+  margin: 0 0 12px; padding: 10px 12px; font-size: 13px; border-radius: 8px;
+}
+.rewrite-before { background: #fafbfc; color: #7b8794; text-decoration: line-through; }
+.rewrite-after { background: #f2f9f5; color: #1a2332; border: 1px solid #cdeadb; }
+
+.rewrite-cannot {
+  padding: 10px 12px; margin-bottom: 12px;
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+  font-size: 12px; color: #92400e;
+}
+.rewrite-cannot p { margin: 0 0 4px; }
+.rewrite-cannot p:last-child { margin: 0; }
+
+/* ── diff ────────────────────────────────────────────────────────────────── */
+
+.diffpanel {
+  padding: 14px 16px; background: #fff;
+  border: 1px solid #e6e9ed; border-radius: 10px;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.diffhead {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #f1f3f5;
+}
+.diffcounts { display: flex; gap: 8px; font-size: 12px; }
+.diffcounts .added { color: #1a7f4b; }
+.diffcounts .changed { color: #b54708; }
+.diffcounts .removed { color: #b42318; }
+
+ul.changes { list-style: none; margin: 0; padding: 0; }
+ul.changes li { padding: 9px 0; border-bottom: 1px solid #f7f9fb; }
+ul.changes li:last-child { border-bottom: 0; }
+
+.changehead { display: flex; align-items: baseline; gap: 8px; }
+.changehead .mark { width: 12px; font-weight: 700; font-family: ui-monospace, monospace; }
+li.added .mark { color: #1a7f4b; }
+li.changed .mark { color: #b54708; }
+li.removed .mark { color: #b42318; }
+.changehead .section {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: #9aa5b1; min-width: 74px;
+}
+.changehead .label { color: #1a2332; }
+li.removed .label { color: #7b8794; text-decoration: line-through; }
+
+.fieldchange { margin: 6px 0 0 20px; }
+.fieldname {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: #9aa5b1; margin-bottom: 3px;
+}
+.fieldchange .before,
+.fieldchange .after {
+  padding: 5px 9px; margin-bottom: 3px; font-size: 12px; border-radius: 6px;
+}
+.fieldchange .before { background: #fef3f2; color: #8a3a34; text-decoration: line-through; }
+.fieldchange .after { background: #f2f9f5; color: #1a4d33; }
+
+/* ── the diff, shown inside the document ─────────────────────────────────── */
+
+.difftext .w-added {
+  background: #d7f0e1; color: #14532d; border-radius: 2px; padding: 0 1px;
+}
+.difftext .w-removed {
+  background: #fddede; color: #7f1d1d; text-decoration: line-through;
+  border-radius: 2px; padding: 0 1px;
+}
+
+/* A marker in the left margin, so the page still reads as a page. */
+.diff-added, .diff-changed, .diff-removed { position: relative; }
+.diff-added::after,
+.diff-changed::after,
+.diff-removed::after {
+  content: ''; position: absolute; left: -14px; top: 2px; bottom: 2px; width: 3px;
+  border-radius: 2px;
+}
+.diff-added::after { background: #1a7f4b; }
+.diff-changed::after { background: #d97706; }
+.diff-removed::after { background: #dc2626; }
+
+.doc-bullets li.diff-added::after,
+.doc-bullets li.diff-changed::after,
+.doc-bullets li.diff-removed::after { left: -10px; }
+
+.diff-removed > *, .doc-skill.diff-removed {
+  opacity: 0.5; text-decoration: line-through; text-decoration-color: #dc2626;
+}
+.doc-skill.diff-removed::after { content: ''; }
+
+/* ── UI review fixes ───────────────────────────────────────────────────────
+   The 794px A4 width includes the page margins, as it does in print. Without
+   this the preview was 112px wider than the PDF, so lines broke differently
+   on paper than on screen. */
+.page { box-sizing: border-box; }
+
+/* Narrow screens: the page keeps its A4 width and scrolls inside its own
+   column; the style panel moves below it instead of off the edge. */
+.page-scroll { min-width: 0; overflow-x: auto; }
+@media (max-width: 1060px) {
+  .docwrap { grid-template-columns: minmax(0, 1fr); }
+}
+@media print {
+  .page-scroll { overflow: visible; }
+}

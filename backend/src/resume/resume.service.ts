@@ -8,6 +8,36 @@ import type {
 
 type Tx = Prisma.TransactionClient;
 
+/**
+ * Columns the service owns. A caller echoing back a row it read would otherwise
+ * reuse its primary key and collide, or reopen a version that is already closed.
+ */
+const SYSTEM_COLUMNS = ['id', 'resumeId', 'createdInSnapshot', 'supersededInSnapshot'] as const;
+
+function withoutSystemColumns(input: object): Record<string, unknown> {
+  const clean: Record<string, unknown> = { ...input };
+  for (const column of SYSTEM_COLUMNS) delete clean[column];
+  return clean;
+}
+
+/**
+ * Tables whose rows have a meaningful order.
+ *
+ * Roles, education and skills read top-to-bottom on the page (tailoring puts
+ * the relevant skills first); summaries do not, and have no position column.
+ */
+const ORDERED_TABLES = new Set(['experienceEntry', 'achievement', 'educationEntry', 'skillEntry']);
+
+/**
+ * Natural keys, for rows whose identity survives without a lineageId.
+ *
+ * The projection flattens summaries into { variant: text }, which loses the
+ * lineageId — so a round trip would look like a delete and an insert, and every
+ * save would create a version. Matching on the variant restores the identity
+ * the shape threw away.
+ */
+const NATURAL_KEY: Record<string, string> = { summaryVariant: 'variant' };
+
 /** The versioned tables, all of which share the same four columns. */
 const SECTIONS = [
   'contactInformation', 'experienceEntry', 'achievement',
@@ -61,7 +91,7 @@ export class ResumeService {
       experiences: await this.prisma.experienceEntry.findMany({ where, orderBy: { position: 'asc' } }),
       achievements: await this.prisma.achievement.findMany({ where, orderBy: { position: 'asc' } }),
       educations: await this.prisma.educationEntry.findMany({ where, orderBy: { position: 'asc' } }),
-      skills: await this.prisma.skillEntry.findMany({ where }),
+      skills: await this.prisma.skillEntry.findMany({ where, orderBy: { position: 'asc' } }),
       summaries: await this.prisma.summaryVariant.findMany({ where }),
     });
   }
@@ -178,7 +208,7 @@ export class ResumeService {
       experiences: await tx.experienceEntry.findMany({ where: live, orderBy: { position: 'asc' } }),
       achievements: await tx.achievement.findMany({ where: live, orderBy: { position: 'asc' } }),
       educations: await tx.educationEntry.findMany({ where: live, orderBy: { position: 'asc' } }),
-      skills: await tx.skillEntry.findMany({ where: live }),
+      skills: await tx.skillEntry.findMany({ where: live, orderBy: { position: 'asc' } }),
       summaries: await tx.summaryVariant.findMany({ where: live }),
     });
 
@@ -253,7 +283,7 @@ export class ResumeService {
 
     await tx[table].create({
       data: {
-        ...(input as object),
+        ...withoutSystemColumns(input as object),
         lineageId: existing?.lineageId ?? input.lineageId ?? randomUUID(),
         resumeId,
         createdInSnapshot: number,
@@ -280,15 +310,36 @@ export class ResumeService {
     }).findMany({ where: { resumeId, supersededInSnapshot: null } });
 
     const liveByLineage = new Map(live.map((row) => [row.lineageId as string, row]));
+
+    const naturalKey = NATURAL_KEY[table];
+    const liveByNatural = naturalKey
+      ? new Map(live.map((row) => [String(row[naturalKey]), row]))
+      : null;
+
     const seen = new Set<string>();
     let touched = false;
 
     for (const [index, input] of inputs.entries()) {
-      const lineageId = input.lineageId ?? randomUUID();
+      const matched = input.lineageId
+        ? liveByLineage.get(input.lineageId)
+        : liveByNatural?.get(String((input as Record<string, unknown>)[naturalKey!]));
+
+      const lineageId = matched?.lineageId as string | undefined
+        ?? input.lineageId
+        ?? randomUUID();
+
       seen.add(lineageId);
 
-      const existing = liveByLineage.get(lineageId);
-      const payload = { ...(input as object), position: (input as { position?: number }).position ?? index };
+      const existing = matched ?? liveByLineage.get(lineageId);
+
+      // Only ordered tables have a position column; writing one elsewhere is a
+      // Prisma validation error, not a silently ignored field.
+      const payload = withoutSystemColumns(input as object);
+      if (ORDERED_TABLES.has(table)) {
+        payload.position = (input as { position?: number }).position ?? index;
+      } else {
+        delete payload.position;
+      }
 
       if (existing && !this.differs(existing, payload)) continue;
 

@@ -28,62 +28,108 @@ model User {
   /// alternative: it carries no ambient authority and can be rotated alone.
   syncToken String? @unique
 
-  factBase     FactBase?
-  applications Application[]
-  profile      Profile?
+  jobs    Job[]
+  profile Profile?
 
   @@map("users")
 }
 
-/// One fact base per user, kept as JSON rather than shredded into tables.
-///
-/// Deliberate: the shape is nested, versioned and read whole every time. Rows
-/// would buy referential integrity nobody needs here and cost the ability to
-/// diff a career as one document.
-model FactBase {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  data      Json
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("fact_bases")
+enum JobSource {
+  EXTENSION
+  SCANNER
+  MANUAL
 }
 
-enum ApplicationStatus {
-  DRAFT
+/// Where a job stands. Saved → Applied → Screening → Interview → Offer are
+/// the board's columns; Accepted, Rejected and Declined close it; Dismissed is
+/// "not for me" and stays off the board.
+enum JobStatus {
+  SAVED
+  DISMISSED
   APPLIED
   SCREENING
-  INTERVIEWING
-  REJECTED
+  INTERVIEW
   OFFER
+  ACCEPTED
+  REJECTED
+  DECLINED
 }
 
-/// The application log.
+/// How the fields were read. PENDING while a model is reading the page in the
+/// background; STRUCTURED when the page's own JSON-LD gave them.
+enum JobExtraction {
+  PENDING
+  STRUCTURED
+  LLM
+  MANUAL
+  FAILED
+}
+
+/// Every posting you might apply to: sent from the extension, found by the
+/// scanner, or pasted by hand.
 ///
-/// `masterCommit` is what lets a resume sent weeks ago be reproduced exactly.
-/// `notClaimed` is the interview-prep list for that specific application — the
-/// half of the output that matters more than the resume.
-model Application {
-  id        String            @id @default(uuid())
-  userId    String
-  company   String
-  role      String
-  url       String?
-  appliedAt DateTime          @default(now())
-  status    ApplicationStatus @default(DRAFT)
+/// `canonicalUrl` is what makes sending the same job twice an update. It is
+/// null for pasted jobs without a link, and Postgres lets nulls repeat under a
+/// unique index, so those never collide.
+///
+/// `html`, `pageText` and `structuredData` are kept as captured, so a better
+/// reader can re-run later and a posting outlives its page.
+model Job {
+  id     String    @id @default(uuid())
+  userId String
+  source JobSource
 
-  masterCommit   String?
-  summaryVariant String?
-  claimed        String[]
-  notClaimed     String[]
-  sentFile       String?
+  url          String?
+  canonicalUrl String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String?
+  company        String?
+  location       String?
+  remote         Boolean?
+  employmentType String?
+  salary         String?
+  postedAt       DateTime?
+  description    String?
 
-  @@index([userId, appliedAt])
-  @@map("applications")
+  /// Fields the person has edited. A re-capture refreshes everything else.
+  editedFields String[]
+
+  pageTitle      String?
+  html           String?
+  pageText       String?
+  structuredData Json?
+
+  extraction      JobExtraction
+  extractionError String?
+
+  status     JobStatus @default(SAVED)
+  capturedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumes      Resume[]
+  statusEvents JobStatusEvent[]
+
+  @@unique([userId, canonicalUrl])
+  @@index([userId, status, createdAt])
+  @@index([extraction])
+  @@map("jobs")
+}
+
+/// One status change, so a move can be undone and the job page can show its
+/// timeline. The job's status and its event are written in one transaction.
+model JobStatusEvent {
+  id    String    @id @default(uuid())
+  jobId String
+  from  JobStatus
+  to    JobStatus
+  at    DateTime  @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, at])
+  @@map("job_status_events")
 }
 
 /// Owned by connect-pg-simple, declared here so Prisma's migration history is
@@ -159,30 +205,40 @@ model Resume {
   targetRole String?
   isPrimary  Boolean @default(false)
 
+  /// Set on a copy tailored for one job. The job may be deleted; the copy stays.
+  jobId          String?
+  /// The resume this copy was made from.
+  sourceResumeId String?
+  /// Suggestions from the last "Tailor resume", waiting for review. Nothing in
+  /// here is on the resume until the person accepts it.
+  tailoring      Json?
+
   currentSnapshotId String?
   /// Materialised live state. Derived; never authored.
-  current        Json?
-  materialisedAt DateTime?
+  current           Json?
+  materialisedAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile     Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  snapshots   Snapshot[]
-  contacts    ContactInformation[]
-  experiences ExperienceEntry[]
+  profile      Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  job          Job?                 @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  snapshots    Snapshot[]
+  contacts     ContactInformation[]
+  experiences  ExperienceEntry[]
   achievements Achievement[]
-  educations  EducationEntry[]
-  skills      SkillEntry[]
-  summaries   SummaryVariant[]
+  educations   EducationEntry[]
+  skills       SkillEntry[]
+  summaries    SummaryVariant[]
 
   @@index([profileId])
+  @@index([jobId])
   @@map("resumes")
 }
 
 /// A save. Holds no content — content is whatever was live at this point.
 model Snapshot {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   resumeId String
   number   Int
   message  String?
@@ -208,7 +264,7 @@ model ContactInformation {
   github    String?
   website   String?
 
-  createdInSnapshot Int
+  createdInSnapshot    Int
   supersededInSnapshot Int?
 
   resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
@@ -233,7 +289,7 @@ model ExperienceEntry {
   blurb    String?
   position Int     @default(0)
 
-  createdInSnapshot Int
+  createdInSnapshot    Int
   supersededInSnapshot Int?
 
   resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
@@ -261,15 +317,15 @@ model Achievement {
   bullet  String
 
   /// True only with an evidence string naming a repo, commit, file or migration.
-  verified Boolean @default(false)
-  evidence String?
+  verified   Boolean @default(false)
+  evidence   String?
   /// 1-5, how much the owner wants this surfaced.
-  weight   Int     @default(3)
+  weight     Int     @default(3)
   /// Human wording is never overwritten by the generator.
-  authoredBy String @default("generator")
-  position   Int    @default(0)
+  authoredBy String  @default("generator")
+  position   Int     @default(0)
 
-  createdInSnapshot Int
+  createdInSnapshot    Int
   supersededInSnapshot Int?
 
   resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
@@ -293,7 +349,7 @@ model EducationEntry {
   to          String?
   position    Int     @default(0)
 
-  createdInSnapshot Int
+  createdInSnapshot    Int
   supersededInSnapshot Int?
 
   resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
@@ -316,8 +372,10 @@ model SkillEntry {
   evidence String?
   weight   Int      @default(3)
   aliases  String[]
+  /// Most relevant first; tailoring reorders these.
+  position Int      @default(0)
 
-  createdInSnapshot Int
+  createdInSnapshot    Int
   supersededInSnapshot Int?
 
   resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
@@ -336,7 +394,7 @@ model SummaryVariant {
   variant String
   text    String
 
-  createdInSnapshot Int
+  createdInSnapshot    Int
   supersededInSnapshot Int?
 
   resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)

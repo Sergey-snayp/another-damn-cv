@@ -1,12 +1,20 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { AppModule } from './app.module';
 import { config } from './config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  /**
+   * A captured job page is cleaned HTML plus its text — often 100–500 KB, well
+   * past Express's 100 KB default. The jobs service enforces its own, tighter
+   * per-field limits.
+   */
+  app.useBodyParser('json', { limit: '2mb' });
 
   /**
    * Sessions live in Postgres, not in memory.
@@ -55,6 +63,10 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   await app.listen(config.port);
+  // Node cuts requests at 5 minutes by default; tailoring a resume can take
+  // two AI calls back to back.
+  const server = app.getHttpServer() as import('node:http').Server;
+  server.requestTimeout = 10 * 60_000;
 
   console.log(`API on http://localhost:${config.port}/api`);
   console.log(`Google sign-in: ${config.google.configured ? 'configured' : 'NOT configured — set GOOGLE_CLIENT_ID'}`);

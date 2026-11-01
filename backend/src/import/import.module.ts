@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ExtractService } from './extract.service';
-import { LlmService } from './llm.service';
 import { ImportService } from './import.service';
 import { ImportController } from './import.controller';
 
 @Module({
-  providers: [ExtractService, LlmService, ImportService],
+  providers: [ExtractService, ImportService],
   controllers: [ImportController],
 })
 export class ImportModule {}

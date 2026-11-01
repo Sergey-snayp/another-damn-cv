@@ -42,35 +42,7 @@ export interface AuthConfig {
   configured: boolean;
 }
 
-export interface FactBaseStats {
-  skills: number;
-  skillsVerified: number;
-  projects: number;
-  achievements: number;
-  achievementsVerified: number;
-}
-
-export interface ExperienceEntry {
-  id: string;
-  company: string;
-  title: string;
-  location?: string;
-  from: string;
-  to: string;
-  current: boolean;
-  description?: string;
-}
-
-export interface EducationEntry {
-  id: string;
-  institution: string;
-  degree: string;
-  field: string;
-  from: string;
-  to: string;
-}
-
-export interface CandidateProfile {
+export interface ContactFields {
   firstName: string; lastName: string; fullName: string; preferredName: string;
   email: string; phone: string;
   location: string; city: string; state: string; country: string; postalCode: string;
@@ -78,13 +50,11 @@ export interface CandidateProfile {
   currentCompany: string; currentTitle: string; yearsExperience: string;
   workAuthorization: string; requiresSponsorship: string;
   salaryExpectation: string; noticePeriod: string;
-  experience: ExperienceEntry[];
-  education: EducationEntry[];
 }
 
 export interface ImportProposal {
   id: string;
-  proposed: Partial<CandidateProfile>;
+  proposed: Partial<ContactFields>;
   charsRead: number;
   notFound: string[];
 }
@@ -109,23 +79,11 @@ async function upload<T>(path: string, file: File): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export interface ApplicationRecord {
-  id: string;
-  company: string;
-  role: string;
-  url?: string;
-  appliedAt: string;
-  status: string;
-  claimed: string[];
-  notClaimed: string[];
-}
-
 export const api = {
-  applications: () => request<ApplicationRecord[]>('/applications'),
   importCv: (file: File) => upload<ImportProposal>('/import/cv', file),
-  profile: () => request<CandidateProfile>('/profile'),
-  saveProfile: (profile: Partial<CandidateProfile>) =>
-    request<CandidateProfile>('/profile', { method: 'PUT', body: JSON.stringify(profile) }),
+  profile: () => request<ContactFields>('/profile'),
+  saveProfile: (profile: Partial<ContactFields>) =>
+    request<ContactFields>('/profile', { method: 'PUT', body: JSON.stringify(profile) }),
   syncToken: () => request<{ token: string | null }>('/profile/sync-token'),
   rotateSyncToken: () =>
     request<{ token: string }>('/profile/sync-token', { method: 'POST' }),
@@ -137,5 +95,4 @@ export const api = {
       body: JSON.stringify({ credential }),
     }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
-  stats: () => request<FactBaseStats>('/factbase/stats'),
 };

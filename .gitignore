@@ -16,3 +16,6 @@ profile/*.bak.yaml
 *.bak.yaml
 
 .DS_Store
+
+# Database dumps: full copies of personal data
+backups/

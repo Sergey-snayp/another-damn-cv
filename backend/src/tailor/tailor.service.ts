@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import type { Coverage, JobPosting, TailorRequest, TailorResult } from '../shared';
-import { FactBaseService } from '../factbase/factbase.service';
 
 /**
  * Selection, not generation.
@@ -15,8 +14,6 @@ import { FactBaseService } from '../factbase/factbase.service';
  */
 @Injectable()
 export class TailorService {
-  constructor(private readonly factBase: FactBaseService) {}
-
   /**
    * Placeholder coverage: every concept lands in `missing` until analyse() is
    * ported. Deliberately pessimistic — a stub that over-reports coverage would

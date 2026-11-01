@@ -1,35 +1,32 @@
-import { useNavigate } from 'react-router-dom';
-import { api, type CandidateProfile } from '../api';
-import { ImportCv } from './ImportCv';
+import { Link } from 'react-router-dom';
 
 /**
- * Where documents come in and go out.
- *
- * Importing writes straight to the profile here rather than filling a form,
- * because there is no form on this page — so the review panel is the only
- * confirmation, and the page says so before you press it.
+ * Generated output. Importing a CV lives on the Resumes page now — it creates a
+ * resume, so that is where it belongs.
  */
 export function Documents() {
-  const navigate = useNavigate();
-
-  async function applyImport(values: Partial<CandidateProfile>) {
-    await api.saveProfile(values);
-    navigate('/profile');
-  }
-
   return (
     <>
       <h1>Documents</h1>
 
-      <ImportCv onApply={(values) => void applyImport(values)} />
-
       <section className="card">
         <h2>Generated resumes</h2>
         <p className="muted small">
-          Tailored PDFs appear here once the tailorer is ported, each one tied to
-          the posting it was written for and the fact-base commit it came from.
+          A sent resume is frozen here with the version it came from, so any
+          application can be reproduced exactly — even after the resume changes.
         </p>
-        <p className="empty">Nothing generated yet.</p>
+        <p className="empty">Nothing sent yet.</p>
+      </section>
+
+      <section className="card">
+        <h2>Start from a CV</h2>
+        <p className="muted small">
+          Reads a PDF or DOCX and fills a new resume. You read it before anything
+          is saved.
+        </p>
+        <Link className="ghost" to="/resumes" style={{ textDecoration: 'none' }}>
+          Go to Resumes
+        </Link>
       </section>
     </>
   );

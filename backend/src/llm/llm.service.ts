@@ -22,7 +22,8 @@ export class LlmService {
     'WebFetch', 'WebSearch', 'NotebookEdit', 'Task',
   ];
 
-  complete(prompt: string, system: string): Promise<string> {
+  /** `timeoutMs`: a whole-resume tailoring needs longer than reading one page. */
+  complete(prompt: string, system: string, { timeoutMs = 180_000 } = {}): Promise<string> {
     const args = [
       '-p', '--output-format', 'text',
       '--model', config.llmModel,
@@ -41,8 +42,8 @@ export class LlmService {
 
       const timer = setTimeout(() => {
         child.kill('SIGKILL');
-        reject(new ServiceUnavailableException('Parsing the CV took too long.'));
-      }, 180_000);
+        reject(new ServiceUnavailableException('The AI took too long to answer. Try again.'));
+      }, timeoutMs);
 
       let stdout = '';
       let stderr = '';

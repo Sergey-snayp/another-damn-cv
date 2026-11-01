@@ -38,7 +38,8 @@ Four modules, mirroring the brief:
 | Module | Routes | State |
 |---|---|---|
 | `factbase` | `GET /api/factbase`, `/stats`, `/skills`, `/achievements`, `/profile`, `PUT /api/factbase` | **working** — reads and writes the real JSON |
-| `applications` | `GET/POST /api/applications`, `PATCH /api/applications/:id` | **working** — flat JSON log |
+| `jobs` | `POST /api/jobs/capture` (extension token), `GET/POST /api/jobs`, `GET/PATCH/DELETE /api/jobs/:id`, `POST /api/jobs/:id/reread`, `POST /api/jobs/:id/status/undo` | **working** — Postgres; JSON-LD first, Claude CLI in the background when a page has none. Status runs Saved → Applied → Screening → Interview → Offer → Accepted/Rejected/Declined (or Dismissed); every move is logged and the latest can be undone. The web app shows jobs as a drag-and-drop board |
+| tailoring | `POST /api/jobs/:id/tailor`, `GET/DELETE /api/resumes/:id/tailoring` | **working** — copies a resume per job; Claude rewords, reorders and suggests hiding; a word-level check discards any number or technology the role doesn't contain; every line is reviewed before save |
 | `scanner` | `GET /api/scanner/repos`, `POST /api/scanner/scan` | partial — package.json and git remote; commit attribution still to do |
 | `tailor` | `POST /api/tailor/analyse`, `POST /api/tailor` | **stub** — port `CVs/cv-tailor.mjs` |
 

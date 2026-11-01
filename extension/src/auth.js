@@ -11,7 +11,7 @@
  * reason the web app needs none.
  */
 
-const API_URL = 'http://localhost:3001';
+export const API_URL = 'http://localhost:3001';
 const CLIENT_ID = '426705646151-f8k8g9qqi1jjf789c2r8p5hfde6lh47r.apps.googleusercontent.com';
 
 /** Random, echoed back by Google, so a token from another request cannot be replayed. */

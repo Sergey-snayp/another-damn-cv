@@ -9,7 +9,7 @@ body {
 
 h1 { font-size: 24px; margin: 0 0 24px; }
 
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 28px; }
 
 .stat { padding: 18px; background: #fff; border: 1px solid #e6e9ed; border-radius: 12px; }
 .stat .value { font-size: 28px; font-weight: 700; }
@@ -63,14 +63,14 @@ label.field input {
 label.field input:focus { outline: 2px solid #cfe0f0; border-color: #2d6fb0; }
 
 button.primary {
-  padding: 9px 18px; font: 600 13px/1 inherit; color: #fff;
+  padding: 9px 18px; font-family: inherit; font-weight: 600; font-size: 13px; line-height: 1; color: #fff;
   background: #1a3a5c; border: 0; border-radius: 8px; cursor: pointer;
 }
 button.primary:hover { background: #14304c; }
 button.primary:disabled { background: #c3cad2; cursor: default; }
 
 button.ghost {
-  padding: 8px 14px; font: 600 12px/1 inherit; color: #1a3a5c;
+  padding: 8px 14px; font-family: inherit; font-weight: 600; font-size: 12px; line-height: 1; color: #1a3a5c;
   background: #f2f7fc; border: 1px solid #cfe0f0; border-radius: 8px; cursor: pointer;
 }
 button.ghost:hover { background: #e7f0fa; }
@@ -222,12 +222,6 @@ ul.next { margin: 0; padding-left: 18px; font-size: 13px; color: #52606d; }
 ul.next li { margin-bottom: 6px; }
 ul.next a { color: #1a3a5c; font-weight: 500; }
 
-ul.applications { list-style: none; margin: 0; padding: 0; }
-ul.applications li {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 0; border-bottom: 1px solid #f1f3f5;
-}
-ul.applications li:last-child { border-bottom: 0; }
 .role { font-weight: 500; font-size: 14px; }
 
 .badge { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #f4f6f8; color: #52606d; }
@@ -235,3 +229,242 @@ ul.applications li:last-child { border-bottom: 0; }
 .badge.interviewing { background: #fff4e5; color: #b54708; }
 .badge.offer { background: #e9f7ef; color: #1a7f4b; }
 .badge.rejected { background: #fef3f2; color: #b42318; }
+
+/* --- resumes --------------------------------------------------------------- */
+
+ul.resumes { list-style: none; margin: 0 0 14px; padding: 0; }
+ul.resumes li { border-bottom: 1px solid #f1f3f5; }
+ul.resumes li:last-child { border-bottom: 0; }
+ul.resumes a {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 4px; text-decoration: none; color: inherit; border-radius: 8px;
+}
+ul.resumes a:hover { background: #fafbfc; }
+ul.resumes .role { display: flex; align-items: center; gap: 8px; }
+.chev { color: #c3cad2; font-size: 18px; }
+
+.bar .who { display: flex; align-items: center; gap: 10px; }
+.bar .who a.ghost { text-decoration: none; }
+
+.bullet {
+  padding: 10px; margin-bottom: 8px;
+  background: #fff; border: 1px solid #eef1f4; border-radius: 8px;
+}
+.bullet textarea {
+  width: 100%; box-sizing: border-box; padding: 7px 9px;
+  font: inherit; font-size: 13px; resize: vertical;
+  border: 1px solid #dfe3e8; border-radius: 6px;
+}
+.bulletmeta { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+.bulletmeta .check { margin: 0; white-space: nowrap; }
+.bulletmeta .evidence {
+  flex: 1; padding: 5px 8px; font: inherit; font-size: 11px;
+  border: 1px solid #eef1f4; border-radius: 6px; color: #52606d;
+}
+.bulletmeta a.tiny { color: #2d6fb0; text-decoration: none; white-space: nowrap; }
+.bulletmeta a.tiny:hover { text-decoration: underline; }
+
+button.ghost.small { padding: 5px 10px; font-size: 12px; }
+button.remove.spaced { margin-top: 10px; }
+
+.skills { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.skill { display: flex; align-items: center; gap: 4px; }
+.skill input {
+  width: 140px; padding: 5px 9px; font: inherit; font-size: 12px;
+  border: 1px solid #dfe3e8; border-radius: 999px;
+}
+
+.savebar .message {
+  flex: 1; padding: 9px 11px; font: inherit; font-size: 13px;
+  border: 1px solid #dfe3e8; border-radius: 8px;
+}
+.savebar .message:disabled { background: #f4f6f8; color: #9aa5b1; }
+
+/* The resume editor needs more room than the rest of the app. */
+.content:has(.docwrap) { max-width: 1100px; }
+
+/* --- jobs ------------------------------------------------------------------ */
+
+.filters { display: flex; gap: 4px; margin: 4px 0 12px; padding: 3px; background: #f4f6f8; border-radius: 9px; width: fit-content; }
+.filters button {
+  padding: 6px 12px; font-family: inherit; font-weight: 600; font-size: 12px; line-height: 1; color: #52606d;
+  background: none; border: 0; border-radius: 7px; cursor: pointer;
+}
+.filters button.on { color: #1a3a5c; background: #fff; box-shadow: 0 1px 3px rgba(16, 24, 40, .10); }
+
+ul.jobs .tiny { margin: 0; }
+
+.job-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: -8px 0 16px; }
+.job-meta a { color: #2d6fb0; }
+.badge.saved { background: #f4f6f8; color: #52606d; }
+.badge.dismissed { background: #f4f6f8; color: #9aa5b1; }
+
+.notice-line { padding: 12px 14px; background: #fff8eb; border: 1px solid #fde4b8; border-radius: 10px; color: #8a4b08; font-size: 13px; }
+
+label.field select {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit; font-size: 13px;
+  background: #fff; border: 1px solid #dfe3e8; border-radius: 7px;
+}
+
+/* --- tailoring --------------------------------------------------------------- */
+.tailor-gaps { margin-top: 16px; border-color: #fde4b8; background: #fffcf5; }
+.tailor-gaps ul { margin: 0; padding-left: 18px; font-size: 13px; columns: 2; column-gap: 24px; }
+.tailor-gaps li { margin-bottom: 4px; break-inside: avoid; }
+.tailor-reorder { display: flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; }
+.tailor-role h3 { font-size: 13px; margin: 18px 0 6px; }
+.tailor-role:first-of-type h3 { margin-top: 8px; }
+.tailor-row { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 10px 8px; border-top: 1px solid #f0f2f4; }
+.tailor-row.on { background: #f7fbf8; }
+.tailor-row input[type=checkbox] { margin-top: 3px; }
+.tailor-row.plain .tailor-text { color: #52606d; }
+.tailor-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.tailor-tags:empty { display: none; }
+.tailor-text { margin: 0; font-size: 13.5px; line-height: 1.5; }
+.tailor-text.hidden-line { text-decoration: line-through; color: #9aa5b1; }
+.tailor-row .tiny { margin: 4px 0 0; }
+.tailor-skills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tailor-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding: 12px 0; background: linear-gradient(transparent, #f7f9fb 30%); }
+@media (max-width: 640px) { .tailor-gaps ul { columns: 1; } }
+
+/* --- job board ---------------------------------------------------------------- */
+.content:has(.jobs-page.wide) { max-width: 1440px; }
+.jobs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.jobs-head h1 { margin-bottom: 0; }
+.jobs-head .filters { margin: 0; }
+
+.badge.screening { background: #f1effd; color: #4b3ab5; }
+.badge.interview { background: #fff4e5; color: #b54708; }
+.badge.accepted { background: #e9f7ef; color: #1a7f4b; }
+.badge.declined { background: #f4f6f8; color: #7b8794; }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #9aa5b1; }
+.dot.applied { background: #2f6fb0; }
+.dot.screening { background: #6a57d6; }
+.dot.interview { background: #e08a1e; }
+.dot.offer, .dot.accepted { background: #1a7f4b; }
+.dot.rejected { background: #d14343; }
+.dot.declined { background: #b8c0c8; }
+
+.board-options { display: flex; align-items: center; gap: 16px; margin: 4px 0 12px; }
+.board-options label { display: flex; align-items: center; gap: 6px; }
+.linklike { border: 0; background: none; padding: 0; color: #2f6fb0; font: inherit; cursor: pointer; text-decoration: underline; }
+
+.board { display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 14px; margin: 0 -2px 20px; align-items: stretch; }
+.board-col {
+  flex: 0 0 248px; display: flex; flex-direction: column; gap: 8px; min-height: 220px;
+  max-height: calc(100vh - 230px); padding: 10px; background: #eef1f4; border-radius: 12px;
+  outline: 1.5px dashed transparent; outline-offset: -2px; transition: background .12s, outline-color .12s;
+}
+.board-col.over { background: #e3e9f0; outline-color: #9aa5b1; }
+.board-col h2 { display: flex; align-items: center; gap: 8px; margin: 2px 4px 2px; font-size: 13px; font-weight: 600; }
+.board-col-name { flex: 1; }
+.board-col ul { list-style: none; margin: 0 -4px; padding: 2px 4px 4px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.board-empty { margin: 0; padding: 20px 8px; text-align: center; font-size: 12px; color: #9aa5b1; }
+
+.board-card-wrap { position: relative; touch-action: manipulation; }
+.board-card-wrap.dimmed { opacity: .4; }
+.board-card {
+  position: relative; display: flex; flex-direction: column; gap: 4px; padding: 11px 12px;
+  background: #fff; border: 1px solid #e1e5ea; border-radius: 10px; cursor: grab;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+}
+.board-card:hover { border-color: #c5ccd4; }
+.board-card.lifted { cursor: grabbing; box-shadow: 0 10px 24px rgba(16, 24, 40, .18); transform: rotate(1.5deg); }
+.board-company { margin: 0; padding-right: 64px; font-size: 11.5px; color: #7b8794; }
+.board-title { font-size: 13.5px; font-weight: 600; line-height: 1.35; color: #1f2933; text-decoration: none; }
+/* The title's link covers the whole card. */
+.board-title::after { content: ''; position: absolute; inset: 0; border-radius: 10px; }
+.board-title:focus-visible { outline: none; }
+.board-title:focus-visible::after { outline: 2px solid #2f6fb0; outline-offset: 2px; }
+.board-place { margin: 0; font-size: 12px; color: #7b8794; }
+.board-foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin: 4px 0 0; padding-top: 6px; border-top: 1px solid #f0f2f4; font-size: 11px; color: #9aa5b1; }
+.board-foot .badge { margin-right: 4px; font-size: 10px; padding: 2px 7px; }
+.board-move {
+  position: absolute; top: 7px; right: 7px; z-index: 1; width: auto; max-width: 74px; padding: 2px 4px;
+  font-size: 11px; color: #52606d; background: #f7f9fb; border: 1px solid #e1e5ea; border-radius: 6px; cursor: pointer;
+}
+
+.toast {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px);
+  padding: 11px 14px 11px 16px; background: #1f2933; color: #fff; border-radius: 10px;
+  font-size: 13px; box-shadow: 0 10px 30px rgba(16, 24, 40, .25);
+}
+.toast button { border: 0; background: none; color: #9cc9ff; font: inherit; font-weight: 600; cursor: pointer; padding: 2px 4px; }
+
+.timeline { list-style: none; margin: 14px 0 4px; padding: 0 0 0 14px; border-left: 2px solid #e6e9ed; font-size: 13px; }
+.timeline li { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+.timeline li::before { content: ''; position: absolute; left: -19px; top: 11px; width: 8px; height: 8px; border-radius: 50%; background: #c5ccd4; }
+.timeline li:first-child::before { background: #2f6fb0; }
+
+@media (max-width: 640px) {
+  .board-col { flex-basis: 78vw; max-height: none; }
+}
+
+/* --- dashboard: numbers above the board ----------------------------------------- */
+.stats-row { margin: 16px 0 14px; gap: 10px; }
+.stats-row .stat { padding: 12px 14px; }
+.stats-row .stat .value { font-size: 22px; }
+.stats-row .stat .label { font-size: 12px; }
+a.stat { color: inherit; text-decoration: none; }
+a.stat:hover { border-color: #c5ccd4; }
+
+/* --- pop-up dialogs ----------------------------------------------------------- */
+.jobs-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.modal {
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0;
+  border: 0; border-radius: 14px; background: #fff; color: inherit;
+  box-shadow: 0 24px 60px rgba(16, 24, 40, .25);
+}
+.modal::backdrop { background: rgba(16, 24, 40, .45); }
+.modal-body { padding: 22px 22px 18px; }
+.modal-body h2 { margin: 0 0 6px; font-size: 17px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+@media (max-width: 640px) { .modal .fieldgrid { grid-template-columns: 1fr; } }
+
+/* --- UI review fixes: shared basics ------------------------------------------- */
+/* Links were browser-default blue; one link colour everywhere. */
+a { color: #2d6fb0; text-underline-offset: 2px; }
+a:hover { color: #1a3a5c; }
+/* Hint text outside a card rendered at body size. */
+.small { font-size: 13px; }
+.muted.small { line-height: 1.5; }
+
+/* Back links: one line, quiet, cut with … when the title is long. */
+.crumb { margin: 0 0 10px; font-size: 12px; }
+.crumb a {
+  display: inline-block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  color: #52606d; text-decoration: none; vertical-align: bottom;
+}
+.crumb a:hover { color: #1a3a5c; text-decoration: underline; }
+
+/* Links that act as buttons look like the buttons beside them. */
+a.ghost {
+  display: inline-block; padding: 8px 14px; font-family: inherit; font-weight: 600; font-size: 12px; line-height: 1; color: #1a3a5c; text-decoration: none;
+  background: #f2f7fc; border: 1px solid #cfe0f0; border-radius: 8px;
+}
+a.ghost:hover { background: #e7f0fa; }
+.bar { gap: 12px; flex-wrap: wrap; }
+
+/* Cards stacked without a gap touched. */
+.card + .card { margin-top: 16px; }
+
+/* Job page: status sits right under the title. */
+.job-status { margin-bottom: 0; }
+.job-status .field { margin-bottom: 0; }
+
+/* Board cards: very long titles stop at three lines, places at two. */
+.board-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.board-place { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Header on narrow screens: brand on one line, nav scrolls, the name hides. */
+.topbar .brand { white-space: nowrap; }
+@media (max-width: 720px) {
+  .topbar { gap: 12px; padding: 0 16px; }
+  .nav { overflow-x: auto; scrollbar-width: none; }
+  .navlink { padding: 7px 10px; white-space: nowrap; }
+  .avatar .who, .avatar .chevron { display: none; }
+  .content { padding: 20px 16px 72px; }
+  .brand-name { display: none; }
+}
+.job-status .field { max-width: 320px; }

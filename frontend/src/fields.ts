@@ -1,6 +1,6 @@
-import type { CandidateProfile } from './api';
+import type { ContactFields } from './api';
 
-export type ContactKey = Exclude<keyof CandidateProfile, 'experience' | 'education'>;
+export type ContactKey = keyof ContactFields;
 
 export interface FieldSpec {
   key: ContactKey;

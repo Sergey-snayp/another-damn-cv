@@ -4,9 +4,8 @@ import { useAuth } from './AuthContext';
 
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
+  { to: '/resumes', label: 'Resumes' },
   { to: '/documents', label: 'Documents' },
-  { to: '/jobs', label: 'Jobs' },
-  { to: '/tracker', label: 'Tracker' },
 ];
 
 export function Layout() {
@@ -18,7 +17,7 @@ export function Layout() {
       <header className="topbar">
         <div className="brand">
           <span className="mark" />
-          CV Platform
+          <span className="brand-name">CV Platform</span>
         </div>
 
         <nav className="nav">

@@ -1,171 +1,105 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { randomBytes, randomUUID } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  EMPTY_PROFILE, CONTACT_KEYS,
-  type CandidateProfile, type ContactFields,
-  type ExperienceEntry, type EducationEntry,
-} from './profile.types';
-
-type Json = Record<string, unknown>;
+import { EMPTY_CONTACT, CONTACT_KEYS, type ContactFields } from './profile.types';
 
 /**
- * The candidate profile lives inside the user's fact base, under `contact`,
- * `profile`, `experience` and `education`.
+ * The person's own details — one row, never versioned.
  *
- * One source of truth: the name and employer on an application form are the
- * same ones a generated CV prints. Separate tables would drift apart, and the
- * drift would only show up on a real application.
+ * Deliberately separate from a resume's contact block. This is who you are and
+ * what the extension types into application forms; a resume's header is part of
+ * that document and versions with it, because a CV sent in March must not
+ * change when you update your phone number in June.
  */
 @Injectable()
 export class ProfileService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(userId: string): Promise<CandidateProfile> {
-    const row = await this.prisma.factBase.findUnique({ where: { userId } });
-    if (!row) return structuredClone(EMPTY_PROFILE);
+  /** Created on demand, seeded from the Google account. */
+  private async row(userId: string) {
+    const existing = await this.prisma.profile.findUnique({ where: { userId } });
+    if (existing) return existing;
 
-    const data = (row.data ?? {}) as Json;
-    const contact = (data.contact ?? {}) as Record<string, string>;
-    const profile = (data.profile ?? {}) as Record<string, string>;
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const [firstName = '', ...rest] = (user.name ?? '').split(' ');
 
-    const fullName = profile.name ?? '';
-    const [firstName = '', ...rest] = fullName.split(' ');
+    return this.prisma.profile.create({
+      data: { userId, firstName, lastName: rest.join(' '), email: user.email },
+    });
+  }
 
-    const flat = Object.fromEntries(
-      CONTACT_KEYS.map((key) => [key, contact[key] ?? '']),
+  async get(userId: string): Promise<ContactFields> {
+    const profile = await this.row(userId);
+
+    const contact = Object.fromEntries(
+      CONTACT_KEYS.map((key) => [key, (profile as Record<string, unknown>)[key] ?? '']),
     ) as unknown as ContactFields;
 
-    return {
-      ...flat,
-      fullName,
-      firstName: contact.firstName || firstName,
-      lastName: contact.lastName || rest.join(' '),
-      experience: this.readExperience(data),
-      education: this.readEducation(data),
-    };
+    // Derived, not stored: two places holding one fact drift, and the drift
+    // only shows up on a real application.
+    return { ...contact, ...(await this.derived(userId)), fullName: this.fullName(profile) };
   }
 
-  /**
-   * Accepts both shapes. A fact base imported from the CV JSON stores roles
-   * under `projects` with richer fields; the form writes the simpler
-   * `experience`. Reading both means an import is usable immediately.
-   */
-  private readExperience(data: Json): ExperienceEntry[] {
-    if (Array.isArray(data.experience)) return data.experience as ExperienceEntry[];
+  async save(userId: string, incoming: Partial<ContactFields>): Promise<ContactFields> {
+    await this.row(userId);
 
-    const projects = Array.isArray(data.projects) ? data.projects : [];
-
-    return projects.map((raw) => {
-      const p = raw as Record<string, string>;
-      return {
-        id: p.id ?? randomUUID(),
-        company: p.company ?? p.client ?? '',
-        title: p.employmentTitle ?? p.role ?? '',
-        from: p.dates ?? '',
-        to: '',
-        current: false,
-        description: p.blurb ?? '',
-      };
-    });
-  }
-
-  private readEducation(data: Json): EducationEntry[] {
-    const rows = Array.isArray(data.education) ? data.education : [];
-
-    return rows.map((raw) => {
-      const e = raw as Record<string, string>;
-      return {
-        id: e.id ?? randomUUID(),
-        institution: e.institution ?? e.school ?? '',
-        degree: e.degree ?? '',
-        field: e.field ?? '',
-        from: e.from ?? String(e.start ?? ''),
-        to: e.to ?? String(e.end ?? ''),
-      };
-    });
-  }
-
-  /**
-   * Current employer, title and total years all follow from the experience
-   * list, so they are computed rather than typed.
-   *
-   * Forms still ask for them separately — Greenhouse has a "current company"
-   * box — so they stay in the contact fields the extension fills. They just
-   * stop being something you maintain by hand, and therefore stop drifting out
-   * of step with the history below them.
-   */
-  private derive(experience: ExperienceEntry[]): Pick<ContactFields, 'currentCompany' | 'currentTitle' | 'yearsExperience'> {
-    const current = experience.find((role) => role.current)
-      ?? [...experience].sort((a, b) => (b.from ?? '').localeCompare(a.from ?? ''))[0];
-
-    const starts = experience
-      .map((role) => role.from)
-      .filter((from): from is string => Boolean(from))
-      .sort();
-
-    let years = '';
-    const earliest = starts[0];
-
-    if (earliest) {
-      const year = Number(earliest.slice(0, 4));
-      if (Number.isFinite(year) && year > 1950) {
-        years = String(Math.max(0, new Date().getFullYear() - year));
-      }
-    }
-
-    return {
-      currentCompany: current?.company ?? '',
-      currentTitle: current?.title ?? '',
-      yearsExperience: years,
-    };
-  }
-
-  /** Merges. A profile save must never drop skills, projects or achievements. */
-  async save(userId: string, incoming: Partial<CandidateProfile>): Promise<CandidateProfile> {
-    const row = await this.prisma.factBase.findUnique({ where: { userId } });
-    const data = ((row?.data ?? {}) as Json);
-
-    const existingProfile = (data.profile ?? {}) as Json;
-    const existingContact = (data.contact ?? {}) as Record<string, string>;
-
-    const contact: Record<string, string> = { ...existingContact };
+    const data: Record<string, string> = {};
     for (const key of CONTACT_KEYS) {
-      if (incoming[key] !== undefined) contact[key] = String(incoming[key]);
+      // currentCompany, currentTitle and yearsExperience are computed.
+      if (DERIVED.includes(key)) continue;
+      if (key === 'fullName') continue;
+      if (incoming[key] !== undefined) data[key] = String(incoming[key]);
     }
 
-    const fullName = incoming.fullName
-      || [incoming.firstName, incoming.lastName].filter(Boolean).join(' ')
-      || (existingProfile.name as string | undefined)
-      || '';
+    if (incoming.fullName && !incoming.firstName && !incoming.lastName) {
+      const [firstName = '', ...rest] = incoming.fullName.split(' ');
+      data.firstName = firstName;
+      data.lastName = rest.join(' ');
+    }
 
-    const experience = incoming.experience ?? this.readExperience(data);
-
-    const merged = {
-      ...data,
-      profile: { ...existingProfile, name: fullName },
-      contact: { ...contact, fullName, ...this.derive(experience) },
-      experience,
-      education: incoming.education ?? this.readEducation(data),
-    } as unknown as Prisma.InputJsonValue;
-
-    await this.prisma.factBase.upsert({
-      where: { userId },
-      create: { userId, data: merged },
-      update: { data: merged },
-    });
-
+    await this.prisma.profile.update({ where: { userId }, data });
     return this.get(userId);
   }
 
-  /** Only the flat fields go to the extension — never employment history. */
-  async contactOnly(userId: string): Promise<ContactFields> {
-    const full = await this.get(userId);
-    return Object.fromEntries(
-      CONTACT_KEYS.map((key) => [key, full[key]]),
-    ) as unknown as ContactFields;
+  /**
+   * Current employer, title and total years follow from the primary resume's
+   * live experience, so they are computed rather than maintained.
+   */
+  private async derived(userId: string) {
+    const resume = await this.prisma.resume.findFirst({
+      where: { profile: { userId } },
+      orderBy: [{ isPrimary: 'desc' }, { updatedAt: 'desc' }],
+    });
+
+    if (!resume) return { currentCompany: '', currentTitle: '', yearsExperience: '' };
+
+    const roles = await this.prisma.experienceEntry.findMany({
+      where: { resumeId: resume.id, supersededInSnapshot: null },
+      orderBy: { position: 'asc' },
+    });
+
+    if (roles.length === 0) return { currentCompany: '', currentTitle: '', yearsExperience: '' };
+
+    const current = roles.find((role) => role.current)
+      ?? [...roles].sort((a, b) => (b.from ?? '').localeCompare(a.from ?? ''))[0]!;
+
+    const earliest = roles.map((r) => r.from).filter(Boolean).sort()[0];
+    const startYear = earliest ? Number(earliest.slice(0, 4)) : NaN;
+
+    return {
+      currentCompany: current.company,
+      currentTitle: current.title,
+      yearsExperience: Number.isFinite(startYear) && startYear > 1950
+        ? String(Math.max(0, new Date().getFullYear() - startYear))
+        : '',
+    };
   }
+
+  private fullName(profile: { firstName: string; lastName: string }): string {
+    return [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  }
+
+  // ── the extension's bearer token ───────────────────────────────────────────
 
   async issueSyncToken(userId: string): Promise<string> {
     const syncToken = randomBytes(32).toString('base64url');
@@ -182,6 +116,15 @@ export class ProfileService {
     const user = await this.prisma.user.findUnique({ where: { syncToken: token } });
     // 401, not 404: the token is a credential, and a wrong one is not authorised.
     if (!user) throw new UnauthorizedException('Invalid sync token.');
-    return this.contactOnly(user.id);
+    return this.get(user.id);
+  }
+
+  /** Only the flat fields ever reach the extension. */
+  contactOnly(userId: string): Promise<ContactFields> {
+    return this.get(userId);
   }
 }
+
+const DERIVED = ['currentCompany', 'currentTitle', 'yearsExperience'] as const as readonly string[];
+
+export { EMPTY_CONTACT };

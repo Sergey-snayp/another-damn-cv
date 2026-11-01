@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CV Autofill",
-  "version": "0.7.0",
-  "description": "Fills job application forms from your own profile. Local only.",
+  "version": "0.8.0",
+  "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",
@@ -26,6 +26,10 @@
     "https://*.myworkdayjobs.com/*",
     "https://*.icims.com/*",
     "http://localhost:3001/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
   ],
   "action": {
     "default_title": "CV Autofill"

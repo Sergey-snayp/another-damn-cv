@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, Post, Put, UnauthorizedException, UseGu
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ProfileService } from './profile.service';
-import type { CandidateProfile } from './profile.types';
+import type { ContactFields } from './profile.types';
 
 @Controller('profile')
 export class ProfileController {
@@ -16,7 +16,7 @@ export class ProfileController {
 
   @Put()
   @UseGuards(AuthGuard)
-  save(@CurrentUser() userId: string, @Body() body: Partial<CandidateProfile>) {
+  save(@CurrentUser() userId: string, @Body() body: Partial<ContactFields>) {
     return this.profile.save(userId, body);
   }
 

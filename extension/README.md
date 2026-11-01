@@ -28,6 +28,26 @@ before submitting.
 
 **It never submits anything.** That is deliberate.
 
+## Send a job to the app
+
+On any job page — LinkedIn, Indeed, a company's careers page — open the side
+panel and press **Send this job to the app**. Sign in on the Profile tab first.
+
+- The first time on a site, Chrome asks to let the extension read it. It reads
+  that tab only when you press the button.
+- On search pages (LinkedIn, Indeed, Glassdoor) it captures the open job, not
+  the list beside it. The rules for that are in `src/capture-sites.js`; when a
+  site changes its layout, that is the file to update.
+- Sending the same job again updates it and keeps your edits and status.
+
+`test/capture.html` runs the capture script against a LinkedIn-shaped page:
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+  --allow-file-access-from-files --virtual-time-budget=3000 \
+  --dump-dom "file://$PWD/test/capture.html?site=linkedin"
+```
+
 ## How it works
 
 ```

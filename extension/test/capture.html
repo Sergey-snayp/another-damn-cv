@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Capture test — LinkedIn-style search page</title>
+<!--
+  Runs the capture script against a page shaped like a LinkedIn search: a list
+  of jobs beside the open one, a collapsed description, and JSON-LD.
+
+  Open it in Chrome, or headless:
+    chrome --headless --virtual-time-budget=3000 --dump-dom file://…/capture.html
+  The result is written into #result as JSON.
+
+  capture-sites.js matches on hostname, so `?site=linkedin` pretends to be
+  LinkedIn by swapping in a rule that matches any host.
+-->
+<script type="application/ld+json">
+{ "@context": "https://schema.org", "@type": "JobPosting", "title": "Senior Backend Engineer",
+  "hiringOrganization": { "name": "Acme" } }
+</script>
+<script type="application/ld+json">{ broken json </script>
+
+<nav>Jobs · Messaging · Notifications · Me</nav>
+<main>
+  <ul class="jobs-search-results-list">
+    <li>Frontend Engineer — Globex — Montreal. Some list text that should not be captured at all.</li>
+    <li>Data Engineer — Initech — Ottawa. More list text that belongs to other jobs, not this one.</li>
+  </ul>
+
+  <div class="jobs-search__job-details--container">
+    <h1>Senior Backend Engineer</h1>
+    <div class="company" style="color:red" onclick="alert(1)">Acme · Toronto, ON (Hybrid)</div>
+    <img src="logo.png" alt="logo">
+    <svg><circle r="4"/></svg>
+    <h2>About the job</h2>
+    <div class="jobs-description__content">
+      <p>We are building the payments platform that moves money for small businesses across Canada.</p>
+      <ul><li>Own services in Node.js and Postgres</li><li>Design APIs used by thousands of merchants</li></ul>
+      <p id="more" hidden>Benefits include health, dental and a learning budget.</p>
+      <a href="/company/acme">About Acme</a>
+    </div>
+    <button class="jobs-description__footer-button" aria-expanded="false"
+      onclick="document.getElementById('more').hidden = false; this.setAttribute('aria-expanded','true')">See more</button>
+    <form><input name="q"><button>Apply</button></form>
+  </div>
+</main>
+
+<pre id="result">pending</pre>
+
+<script src="../src/capture-sites.js"></script>
+<script src="../src/capture.js"></script>
+<script>
+  if (new URLSearchParams(location.search).get('site') === 'linkedin') {
+    globalThis.__cvCaptureSites[0].hosts = /.*/;
+  }
+  globalThis.__cvCapture().then((capture) => {
+    document.getElementById('result').textContent = JSON.stringify(capture, null, 2);
+  }, (err) => {
+    document.getElementById('result').textContent = 'ERROR ' + err.message;
+  });
+</script>

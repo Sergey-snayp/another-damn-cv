@@ -5,7 +5,8 @@
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -32,6 +33,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.2",
     "@types/passport": "^1.0.17",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2"
   }
 }
