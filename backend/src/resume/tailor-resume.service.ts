@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type Resume } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmService } from '../llm/llm.service';
+import { ProfileService } from '../profile/profile.service';
 import { ResumeService } from './resume.service';
 import type { RenderedResume, ResumeChanges } from './resume.types';
 import {
@@ -34,6 +35,7 @@ export class TailorResumeService {
     private readonly prisma: PrismaService,
     private readonly resumes: ResumeService,
     private readonly llm: LlmService,
+    private readonly profiles: ProfileService,
   ) {}
 
   async tailorForJob(
@@ -50,8 +52,7 @@ export class TailorResumeService {
       throw new BadRequestException('This job has no description to tailor to. Add one first.');
     }
 
-    const profile = await this.prisma.profile.findUnique({ where: { userId } });
-    if (!profile) throw new BadRequestException('Make a resume first.');
+    const profile = await this.profiles.ensureProfile(userId);
 
     const copy =
       (await this.prisma.resume.findFirst({

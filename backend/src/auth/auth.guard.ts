@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
-import './session';
+import type { AuthedRequest } from './session';
 
 /**
  * Route protection.
@@ -19,7 +19,7 @@ export class AuthGuard implements CanActivate {
     }
 
     // Handed to controllers so every query can be scoped to this user.
-    (request as Request & { userId: string }).userId = userId;
+    (request as AuthedRequest).userId = userId;
     return true;
   }
 }

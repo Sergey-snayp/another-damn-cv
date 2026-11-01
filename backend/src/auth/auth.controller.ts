@@ -1,3 +1,4 @@
+import { promisify } from 'node:util';
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
@@ -34,9 +35,7 @@ export class AuthController {
 
     // Rotate the session id on privilege change, so a session fixated before
     // login cannot be reused afterwards.
-    await new Promise<void>((resolve, reject) => {
-      request.session.regenerate((err) => (err ? reject(err) : resolve()));
-    });
+    await promisify(request.session.regenerate.bind(request.session))();
 
     request.session.userId = user.id;
 
@@ -72,9 +71,8 @@ export class AuthController {
   }
 
   @Post('logout')
-  logout(@Req() request: Request) {
-    return new Promise((resolve, reject) => {
-      request.session.destroy((err) => (err ? reject(err) : resolve({ ok: true })));
-    });
+  async logout(@Req() request: Request) {
+    await promisify(request.session.destroy.bind(request.session))();
+    return { ok: true };
   }
 }

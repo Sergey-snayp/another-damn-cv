@@ -1,49 +1,46 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { PrismaService } from '../prisma/prisma.service';
-import { ResumeService } from './resume.service';
+import { ProfileService } from '../profile/profile.service';
+import { ResumeOwnerGuard } from './resume-owner.guard';
+import { ResumeService, VERSIONED_TABLES, type VersionedTable } from './resume.service';
 import { RewriteService, type RewriteRequest } from './rewrite.service';
 import { DiffService } from './diff.service';
 import { TailorResumeService } from './tailor-resume.service';
 import type { ResumeChanges } from './resume.types';
 
+/** Every `:id` route is checked against the signed-in user by ResumeOwnerGuard. */
 @Controller('resumes')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, ResumeOwnerGuard)
 export class ResumeController {
   constructor(
     private readonly resumes: ResumeService,
     private readonly rewrites: RewriteService,
     private readonly diffs: DiffService,
     private readonly tailor: TailorResumeService,
-    private readonly prisma: PrismaService,
+    private readonly profiles: ProfileService,
   ) {}
 
   @Get()
   async list(@CurrentUser() userId: string) {
-    const profile = await this.profileFor(userId);
-
-    const rows = await this.prisma.resume.findMany({
-      where: { profileId: profile.id },
-      select: {
-        id: true,
-        name: true,
-        targetRole: true,
-        isPrimary: true,
-        currentSnapshotId: true,
-        updatedAt: true,
-        jobId: true,
-        tailoring: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    return rows.map(({ tailoring, ...row }) => ({ ...row, hasTailoring: tailoring !== null }));
+    const profile = await this.profiles.ensureProfile(userId);
+    return this.resumes.list(profile.id);
   }
 
   @Post()
   async create(@CurrentUser() userId: string, @Body() body: { name: string; targetRole?: string }) {
-    const profile = await this.profileFor(userId);
+    const profile = await this.profiles.ensureProfile(userId);
     return this.resumes.create(profile.id, body.name, body.targetRole);
   }
 
@@ -78,19 +75,11 @@ export class ResumeController {
 
   /** Every version of one entry — "this bullet has been reworded four times". */
   @Get(':id/history')
-  history(
-    @Param('id') _id: string,
-    @Query('table')
-    table:
-      | 'experienceEntry'
-      | 'achievement'
-      | 'skillEntry'
-      | 'educationEntry'
-      | 'summaryVariant'
-      | 'contactInformation',
-    @Query('lineageId') lineageId: string,
-  ) {
-    return this.resumes.history(table, lineageId);
+  history(@Param('id') id: string, @Query('table') table: string, @Query('lineageId') lineageId: string) {
+    if (!VERSIONED_TABLES.includes(table as VersionedTable)) {
+      throw new BadRequestException(`table must be one of: ${VERSIONED_TABLES.join(', ')}.`);
+    }
+    return this.resumes.history(id, table as VersionedTable, lineageId);
   }
 
   /** Reverting moves forward: the old content becomes a new snapshot. */
@@ -125,18 +114,5 @@ export class ResumeController {
   @Post(':id/rebuild')
   rebuild(@Param('id') id: string) {
     return this.resumes.rebuild(id);
-  }
-
-  /** Created on demand: a user gets a profile the first time they need one. */
-  private async profileFor(userId: string) {
-    const existing = await this.prisma.profile.findUnique({ where: { userId } });
-    if (existing) return existing;
-
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const [firstName = '', ...rest] = (user.name ?? '').split(' ');
-
-    return this.prisma.profile.create({
-      data: { userId, firstName, lastName: rest.join(' '), email: user.email },
-    });
   }
 }

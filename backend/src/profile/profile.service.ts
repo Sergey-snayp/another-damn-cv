@@ -15,8 +15,8 @@ import { EMPTY_CONTACT, CONTACT_KEYS, type ContactFields } from './profile.types
 export class ProfileService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Created on demand, seeded from the Google account. */
-  private async row(userId: string) {
+  /** The user's profile row, created on demand and seeded from the Google account. */
+  async ensureProfile(userId: string) {
     const existing = await this.prisma.profile.findUnique({ where: { userId } });
     if (existing) return existing;
 
@@ -29,7 +29,7 @@ export class ProfileService {
   }
 
   async get(userId: string): Promise<ContactFields> {
-    const profile = await this.row(userId);
+    const profile = await this.ensureProfile(userId);
 
     const contact = Object.fromEntries(
       CONTACT_KEYS.map((key) => [key, (profile as Record<string, unknown>)[key] ?? '']),
@@ -41,7 +41,7 @@ export class ProfileService {
   }
 
   async save(userId: string, incoming: Partial<ContactFields>): Promise<ContactFields> {
-    await this.row(userId);
+    await this.ensureProfile(userId);
 
     const data: Record<string, string> = {};
     for (const key of CONTACT_KEYS) {

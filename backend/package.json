@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "test:integration": "node --import tsx --test --test-concurrency=1 test/integration/*.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

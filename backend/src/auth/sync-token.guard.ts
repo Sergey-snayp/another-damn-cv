@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
+import type { AuthedRequest } from './session';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -21,7 +22,7 @@ export class SyncTokenGuard implements CanActivate {
     const user = await this.prisma.user.findUnique({ where: { syncToken: token }, select: { id: true } });
     if (!user) throw new UnauthorizedException('Invalid sync token.');
 
-    (request as Request & { userId: string }).userId = user.id;
+    (request as AuthedRequest).userId = user.id;
     return true;
   }
 }

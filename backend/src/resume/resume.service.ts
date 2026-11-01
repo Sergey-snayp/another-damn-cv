@@ -37,7 +37,7 @@ const ORDERED_TABLES = new Set(['experienceEntry', 'achievement', 'educationEntr
 const NATURAL_KEY: Record<string, string> = { summaryVariant: 'variant' };
 
 /** The versioned tables, all of which share the same four columns. */
-const SECTIONS = [
+export const VERSIONED_TABLES = [
   'contactInformation',
   'experienceEntry',
   'achievement',
@@ -45,6 +45,8 @@ const SECTIONS = [
   'skillEntry',
   'summaryVariant',
 ] as const;
+
+export type VersionedTable = (typeof VERSIONED_TABLES)[number];
 
 /**
  * Versioned resumes.
@@ -99,13 +101,33 @@ export class ResumeService {
   }
 
   /** Every version of one entry, newest first. */
-  async history(table: (typeof SECTIONS)[number], lineageId: string) {
+  /** Every resume of one profile, newest first, without their content. */
+  async list(profileId: string) {
+    const rows = await this.prisma.resume.findMany({
+      where: { profileId },
+      select: {
+        id: true,
+        name: true,
+        targetRole: true,
+        isPrimary: true,
+        currentSnapshotId: true,
+        updatedAt: true,
+        jobId: true,
+        tailoring: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return rows.map(({ tailoring, ...row }) => ({ ...row, hasTailoring: tailoring !== null }));
+  }
+
+  /** Every version of one entry of this resume, newest first. */
+  async history(resumeId: string, table: VersionedTable, lineageId: string) {
     const rows = await (
       this.prisma[table] as never as {
         findMany(a: unknown): Promise<Record<string, unknown>[]>;
       }
     ).findMany({
-      where: { lineageId },
+      where: { resumeId, lineageId },
       orderBy: { createdInSnapshot: 'desc' },
     });
 
