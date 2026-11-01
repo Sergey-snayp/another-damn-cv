@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import 'dotenv/config';
 
 /**
@@ -43,10 +42,4 @@ export const config = {
 
   claudeBin: optional('CLAUDE_BIN', 'claude'),
   llmModel: optional('LLM_MODEL', 'claude-sonnet-5'),
-
-  // Legacy single-user paths, kept for seeding the fact base into Postgres.
-  factBasePath: optional('FACTBASE_PATH',
-    resolve(process.env.HOME ?? '', 'Projects/CVs/sergey_proniuk_cv.json')),
-  dataDir: resolve(optional('DATA_DIR', './data')),
-  scanRoot: optional('SCAN_ROOT', resolve(process.env.HOME ?? '', 'Projects')),
 };
