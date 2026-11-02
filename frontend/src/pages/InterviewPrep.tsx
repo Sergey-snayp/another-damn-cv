@@ -4,7 +4,6 @@ import { jobsApi, jobName, STATUS_LABELS, type JobSummary } from '../jobsApi';
 import { CompanyAvatar } from '../jobs/ApplicationCard';
 import { DashboardIcon } from '../jobs/DashboardIcon';
 import { isInterviewJob, compareInterviewJobs } from '../interviews/interviewJobs';
-import { InterviewDateEditor } from '../interviews/InterviewDateEditor';
 import '../interviews/interview-prep.css';
 
 type StageFilter = 'all' | 'screening' | 'interview';
@@ -100,7 +99,7 @@ export function InterviewPrep() {
             </section>
           ) : (
             <div className="interview-prep-grid">
-              {shown.map((job) => <InterviewJobCard key={job.id} job={job} onSaved={(saved) => setJobs((current) => current?.map((row) => row.id === saved.id ? { ...row, ...saved } : row) ?? null)} />)}
+              {shown.map((job) => <InterviewJobCard key={job.id} job={job} />)}
             </div>
           )}
         </>
@@ -109,7 +108,7 @@ export function InterviewPrep() {
   );
 }
 
-function InterviewJobCard({ job, onSaved }: { job: JobSummary; onSaved(job: JobSummary): void }) {
+function InterviewJobCard({ job }: { job: JobSummary }) {
   return (
     <article className="interview-job-card" aria-label={`${job.company || 'Company not added'} — ${jobName(job)}`}>
       <div className="interview-job-card-top">
@@ -117,22 +116,14 @@ function InterviewJobCard({ job, onSaved }: { job: JobSummary; onSaved(job: JobS
         <span className={`interview-job-stage ${job.status}`}>{STATUS_LABELS[job.status]}</span>
       </div>
       <p className="interview-job-company">{job.company || 'Company not added'}</p>
-      <h2><Link to={`/interview-prep/${job.id}`}>{jobName(job)}</Link></h2>
+      <h2><Link to={`/interview-prep/${job.id}`} aria-label={`Prepare for ${jobName(job)} at ${job.company || 'Company not added'}`}>{jobName(job)}</Link></h2>
       <p className="interview-job-location"><DashboardIcon name="location" size={16} />{job.location || (job.remote ? 'Remote' : 'Location not added')}</p>
-      <InterviewDateEditor job={job} onSaved={(saved) => onSaved({ ...job, ...saved })} />
-      <div className="interview-job-resume">
-        <DashboardIcon name="file" size={20} />
-        {job.applicationResumeId && job.applicationSnapshot ? (
-          <div>
-            <span>CV used for this application</span>
-            <Link to={`/documents/${job.applicationResumeId}/history?snapshot=${job.applicationSnapshot}`}>View saved version {job.applicationSnapshot}</Link>
-          </div>
-        ) : (
-          <div><span>Application CV</span><p>Choose the CV you sent in the job details.</p></div>
-        )}
+      <div className="interview-job-date">
+        <DashboardIcon name="calendar" size={17} />
+        {job.interview ? <div><time dateTime={job.interview.date}>{new Date(`${job.interview.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time><span>{job.interview.time ? `${job.interview.time} · ${job.interview.timeZone.replaceAll('_', ' ')}` : 'Time not set'}</span></div> : <span>Interview date not set</span>}
       </div>
+      <p className="interview-job-resume"><DashboardIcon name="file" size={16} />{job.applicationResumeId && job.applicationSnapshot ? 'Application CV attached' : 'No application CV selected'}</p>
       <footer>
-        <Link className="interview-prep-button is-primary" to={`/interview-prep/${job.id}`}>Open preparation <DashboardIcon name="arrow" size={17} /></Link>
         {job.url && <a className="interview-job-posting" href={job.url} target="_blank" rel="noreferrer noopener">Original posting <DashboardIcon name="arrow" size={15} /></a>}
       </footer>
     </article>

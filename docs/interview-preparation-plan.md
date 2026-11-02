@@ -5,8 +5,10 @@ Product rules are in [business-logic.md](business-logic.md).
 
 ## 1. Available now
 
-**Interview Prep** lists active Screening and Interviewing jobs. Each opens its
-schedule, CV selection, and preparation form. **View job opening** and **View
+**Interview Prep** lists active Screening and Interviewing jobs. Click or tap a
+card to open preparation. Cards show the company, role, status, location, date,
+and whether a CV is attached. **Original posting** stays a separate link. Users
+change the schedule and CV inside preparation. **View job opening** and **View
 application CV** open separate reference pages, each with **Back to preparation**.
 The CV page shows the exact attached version. Users save
 the interview type, interviewer, instructions, notes, and questions. Unsaved
