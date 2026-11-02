@@ -45,6 +45,10 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   Set, change or remove the next interview date, optional time and time zone from
   an interview card or job details. Schedules save to your account; upcoming dates
   appear first. A date without a time stays date-only.
+  Open a preparation card to see the filled workspace: saved posting, schedule,
+  exact application CV experience, interview type, recruiter instructions, personal
+  notes and questions to ask. Notes save to your account; unsaved browser drafts
+  can be resumed or discarded.
   Preparation generation is still planned.
 
 Add Application saves the chosen resume version with the job. Later resume edits
@@ -69,6 +73,7 @@ currently filtered collection, descriptions, dates and attached resume versions.
 | `jobs` | `POST /api/jobs/capture` (extension token), `GET/POST /api/jobs`, `GET/PATCH/DELETE /api/jobs/:id`, `POST /api/jobs/:id/reread`, `POST /api/jobs/:id/status/undo` | Saved postings. JSON-LD first, the Claude CLI when a page has none. Status runs Saved → Applied → Screening → Interview → Offer → Accepted / Rejected / Declined, or Dismissed; every move is logged and the latest can be undone |
 | tailoring | `POST /api/jobs/:id/tailor`, `GET/DELETE /api/resumes/:id/tailoring` | Copies a resume per job and suggests a summary and bullets in the posting's words. A word-level check discards any number or technology a role does not contain; every line is reviewed before saving |
 | applications | `POST /api/jobs/applications`, `GET /api/jobs/applications/export`, `POST /api/jobs/applications/import`, `PATCH /api/jobs/applications/preferences`, `PATCH /api/jobs/applications/:id/resume` | Structured application entry, CSV tools, account favorites/archives and versioned resume attachments |
+| interviews | `GET/PUT /api/jobs/:jobId/preparation` | Account-owned interview type, interviewer, instructions, notes and questions for the next interview. Opening the form does not create a record |
 
 From `backend/`, `npm run check` runs types, lint, formatting and unit/architecture
 tests. `npm run test:http` checks routes with fake dependencies. `npm run build`

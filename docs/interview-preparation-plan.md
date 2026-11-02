@@ -1,7 +1,7 @@
 # Interview preparation plan
 
-Status: the Interview Prep collection page is built. Preparation generation and
-the growing work history remain planned.
+Status: the Interview Prep collection and filled preparation workspace are built.
+Preparation generation and the growing work history remain planned.
 Product rules are in [business-logic.md](business-logic.md).
 
 ## Goal
@@ -17,9 +17,10 @@ Documents. Active jobs in Screening or Interviewing appear automatically.
 Saved, Applied, closed, and archived jobs stay out of this collection. The page
 uses the same saved jobs as Dashboard; no separate copies are created.
 
-Available now: search, status filters, job details, original postings, and links
-to the exact application CV version. Dashboard card menus also link here for
-active interview jobs. Change application status on Dashboard to manage the list.
+Available now: search, status filters, original postings, and links to the exact
+application CV version. Open a card to enter its preparation workspace. Dashboard
+card menus also open that workspace for active interview jobs. Change application
+status on Dashboard to manage the list.
 
 Each job can also keep its next interview date, optional time, and time zone.
 Set, change, or remove it from Interview Prep or the job details. Dates save to
@@ -27,20 +28,18 @@ the account and sort upcoming interviews first, then undated jobs, then past
 interviews. A date without a time does not imply a midnight appointment.
 Separate schedules and preparation for multiple rounds remain planned.
 
+The workspace is filled with the saved job opening, schedule, application CV,
+and previous preparation. It shows experience from the exact attached CV version.
+Set the interview type and interviewer, then save recruiter instructions, personal
+notes, and questions to ask. Preparation saves to the account. Unsaved changes
+stay as a browser draft until saved or discarded; they do not update Profile.
+
 Application status and interview type are separate. Screening is the initial
 screening stage and may involve a recruiter or a technical screen. Interviewing
-covers later rounds. A future interview-type field will identify the specific
-round, such as HR, coding, system design, behavioural, or hiring manager.
+covers later rounds. Choose the specific type in the workspace; it is not guessed
+from application status.
 
-The next step is preparation for an individual interview, described below.
-
-The user chooses:
-
-- Interview stage: screening, technical, behavioural, system design, or final.
-- The CV sent with the application, or another saved CV.
-- Optional interview instructions, company notes, and work experience in text.
-
-The preparation page shows:
+The next step is generated preparation guidance inside this workspace:
 
 - A short introduction outline and a strategy for this role and stage.
 - Relevant strengths, linked to the user's actual experience.
@@ -54,12 +53,14 @@ data, failures, and trade-offs. Suggested study topics are not work experience.
 
 ## Build order
 
-1. **Preparation page:** choose inputs, generate a report, save it with the job,
-   and reopen it later. Preserve the exact CV version and source material used.
-2. **Work history in Profile:** save user-written notes under company, role, and
+1. **Workspace (done):** filled job context, schedule, CV reference, interview
+   type, and account-saved notes, with browser draft recovery.
+2. **Preparation guidance (planned):** generate and save a report for the chosen
+   interview type. Preserve the exact CV version and source material used.
+3. **Work history in Profile:** save user-written notes under company, role, and
    project. Let the user review follow-up answers before adding them. Support
    editing and removal; keep these notes independent of a particular job.
-3. **Improve preparation:** use confirmed answers in the next report, avoid
+4. **Improve preparation:** use confirmed answers in the next report, avoid
    repeated questions, and show when inputs changed since generation.
 
 Use the existing AI connection. For the first version, company context comes

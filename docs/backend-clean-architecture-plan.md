@@ -197,6 +197,7 @@ Placement notes:
 | Tailoring    | [`modules/tailoring`](../backend/src/modules/tailoring/tailoring.module.ts): generation steps and claim/suggestion/retry rules. Prompts and model parsing stay in AI adapters.         |
 | Line rewrite | [`modules/resume-rewrite`](../backend/src/modules/resume-rewrite/resume-rewrite.module.ts): check access and return a suggestion for review.                                           |
 | CV import    | [`modules/cv-import`](../backend/src/modules/cv-import/cv-import.module.ts): read/transcribe a document and return an unsaved draft.                                                   |
+| Interviews   | [`modules/interviews`](../backend/src/modules/interviews/interviews.module.ts): GetPreparation/SavePreparation, interview types, and user notes. Check job ownership through its public API; keep storage in the outbound adapter. |
 | Shared       | [`shared/ai`](../backend/src/shared/ai/ai.module.ts), [`shared/database`](../backend/src/shared/database/database.module.ts), config and HTTP helpers. No feature rules.               |
 
 Key connections:

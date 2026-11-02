@@ -10,6 +10,7 @@ import { ResumeEditor } from './pages/ResumeEditor';
 import { ResumeHistory } from './pages/ResumeHistory';
 import { TailorReview } from './pages/TailorReview';
 import { InterviewPrep } from './pages/InterviewPrep';
+import { InterviewWorkspace } from './pages/InterviewWorkspace';
 
 export function App() {
   return (
@@ -45,6 +46,7 @@ function Gate() {
           <Route path="resumes/:id/*" element={<LegacyResumeRedirect />} />
           <Route path="documents" element={<Documents />} />
           <Route path="interview-prep" element={<InterviewPrep />} />
+          <Route path="interview-prep/:id" element={<InterviewWorkspace />} />
           <Route path="documents/:id" element={<ResumeEditor />} />
           <Route path="documents/:id/history" element={<ResumeHistory />} />
           <Route path="documents/:id/tailor" element={<TailorReview />} />

@@ -117,7 +117,7 @@ function InterviewJobCard({ job, onSaved }: { job: JobSummary; onSaved(job: JobS
         <span className={`interview-job-stage ${job.status}`}>{STATUS_LABELS[job.status]}</span>
       </div>
       <p className="interview-job-company">{job.company || 'Company not added'}</p>
-      <h2><Link to={`/jobs/${job.id}`}>{jobName(job)}</Link></h2>
+      <h2><Link to={`/interview-prep/${job.id}`}>{jobName(job)}</Link></h2>
       <p className="interview-job-location"><DashboardIcon name="location" size={16} />{job.location || (job.remote ? 'Remote' : 'Location not added')}</p>
       <InterviewDateEditor job={job} onSaved={(saved) => onSaved({ ...job, ...saved })} />
       <div className="interview-job-resume">
@@ -132,7 +132,7 @@ function InterviewJobCard({ job, onSaved }: { job: JobSummary; onSaved(job: JobS
         )}
       </div>
       <footer>
-        <Link className="interview-prep-button is-primary" to={`/jobs/${job.id}`}>Review job <DashboardIcon name="arrow" size={17} /></Link>
+        <Link className="interview-prep-button is-primary" to={`/interview-prep/${job.id}`}>Open preparation <DashboardIcon name="arrow" size={17} /></Link>
         {job.url && <a className="interview-job-posting" href={job.url} target="_blank" rel="noreferrer noopener">Original posting <DashboardIcon name="arrow" size={15} /></a>}
       </footer>
     </article>

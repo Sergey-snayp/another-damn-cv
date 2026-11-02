@@ -28,8 +28,9 @@ model User {
   /// alternative: it carries no ambient authority and can be rotated alone.
   syncToken String? @unique
 
-  jobs    Job[]
-  profile Profile?
+  jobs                  Job[]
+  profile               Profile?
+  interviewPreparations InterviewPreparation[]
 
   @@map("users")
 }
@@ -117,16 +118,35 @@ model Job {
   interviewTime       String?
   interviewTimeZone   String?
 
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   resumes           Resume[]
   statusEvents      JobStatusEvent[]
-  applicationResume Resume?          @relation("ApplicationResume", fields: [applicationResumeId], references: [id], onDelete: SetNull)
+  applicationResume Resume?               @relation("ApplicationResume", fields: [applicationResumeId], references: [id], onDelete: SetNull)
+  preparation       InterviewPreparation?
 
   @@unique([userId, canonicalUrl])
   @@index([userId, status, createdAt])
   @@index([extraction])
   @@index([userId, archivedAt])
   @@map("jobs")
+}
+
+/// The user's notes for the next interview. Generated content never writes here.
+model InterviewPreparation {
+  id            String   @id @default(uuid())
+  userId        String
+  jobId         String   @unique
+  interviewType String?
+  interviewer   String   @default("")
+  instructions  String   @default("")
+  notes         String   @default("")
+  questions     String   @default("")
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("interview_preparations")
 }
 
 /// One status change, so a move can be undone and the job page can show its

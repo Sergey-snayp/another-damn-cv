@@ -74,7 +74,7 @@ export function ApplicationMenu({
         <span>View details</span>
       </Link>
       {isInterviewJob(row) && (
-        <Link to="/interview-prep" className="dashboard-menu-item">
+        <Link to={`/interview-prep/${row.id}`} className="dashboard-menu-item">
           <DashboardIcon name="interview" />
           <span>Interview Prep</span>
         </Link>
