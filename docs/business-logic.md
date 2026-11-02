@@ -3,6 +3,8 @@
 Status: agreed product direction. This document describes the intended behavior;
 it does not mean every feature is built.
 
+The proposed first feature is described in the [interview preparation plan](interview-preparation-plan.md).
+
 ## 1. Purpose
 
 Help people apply for jobs and prepare for interviews using their real experience.
