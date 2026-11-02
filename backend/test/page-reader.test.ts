@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cutDescription, pageReaderPrompt, parsePageReading } from '../src/jobs/page-reader';
+import {
+  cutDescription,
+  pageReaderPrompt,
+  parsePageReading,
+} from '../src/modules/jobs/adapters/outbound/ai/page-reader';
 
 const page = `Jobs  Search  Sign in
 Senior Backend Engineer

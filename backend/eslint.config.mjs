@@ -30,4 +30,10 @@ export default tseslint.config(
     files: ['test/**/*.ts'],
     rules: { '@typescript-eslint/no-floating-promises': 'off' },
   },
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['scripts/**/*.cjs'],
+    languageOptions: { globals: globals.node, parserOptions: { projectService: false } },
+    rules: { ...tseslint.configs.disableTypeChecked.rules, '@typescript-eslint/no-require-imports': 'off' },
+  },
 );

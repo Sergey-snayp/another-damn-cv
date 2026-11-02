@@ -1,19 +1,14 @@
 # Backend rewrite plan
 
-Status: not started. Follow [the architecture guide](backend-clean-architecture-plan.md).
-Move one working action at a time and keep current clients and data compatible.
-All implementation tasks below are still open.
+Status: implementation and automated verification complete.
+See [the architecture guide](backend-clean-architecture-plan.md) for code placement.
 
 ## 1. Starting point
 
-Last checked: 2026-11-01, using the installed Node 20.17 runtime.
-
-- 31 unit tests passed. Backend/frontend type checks and backend formatting passed.
-- Lint has two existing `console.log` errors in `backend/src/main.ts:73` and `:74`.
-- 11 database service/guard tests were read but not run. They do not test real HTTP
-  routes or Nest startup. Browser, live-provider and build checks were not run.
-- Keep existing uncommitted resume/tailoring work. The legacy `old/` folder is
-  outside this rewrite. No backend implementation has moved yet.
+Before the rewrite: 31 unit tests passed on Node 20.17. Lint had two console-log
+errors; real HTTP/startup coverage was missing. Existing resume/tailoring work
+was saved before moving it into the new modules. The unrelated `old/` folder
+was left alone.
 
 ## 2. What must stay compatible
 
@@ -36,133 +31,106 @@ Do not silently drop it or tighten validation while moving code.
 
 ## 3. Migration steps
 
-### Phase 0 — prepare tests and tools
+### Phase 0 — tests and tools
 
-- [ ] Record the current working tree; preserve unrelated changes.
-- [ ] Pin a supported Node version, align shell/npm/CI, fix the two lint errors,
-      and make `npm run check` reliable.
-- [ ] Update test discovery before adding nested suites; `test/*.test.ts` misses them.
-- [ ] Add a real HTTP/Nest startup test setup with fake Google/AI providers and a
-      dedicated `*_test` Postgres database. Run existing database tests.
-- [ ] Record the API cases above. Add synthetic resume/proposal fixtures and tests
-      for saves, no-op/partial saves, history, diff, revert, rebuild and rollback.
+- [x] Save the working tree and preserve existing resume/tailoring changes.
+- [x] Pin Node 22.23.2, fix lint, and add CI and recursive test discovery.
+- [x] Add real Nest/HTTP tests, fake Google/AI providers and an isolated test DB.
+- [x] Add synthetic fixtures for metadata, no-op/partial saves, history, diff,
+      revert, rebuild and rollback.
 
-Done when: checks pass and the current code has tests for the first action we move.
+### Phase 1 — job reads and status
 
-### Phase 1 — GetJob, then status changes
-
-Start from `jobs.controller.ts`, `jobs.service.ts`, and `jobs.dto.ts`.
-
-- [ ] Extract GetJob into a plain use case, user-scoped port, Prisma adapter and
-      presenter. Keep the current controller; switch only its `get` handler first.
-- [ ] Compare old/new results, history and foreign/missing 404s. Check the app
-      starts with both new and old handlers.
-- [ ] Move status/undo next. Test same-status no-op, event order, stale undo and
-      rollback. Keep mixed field/status PATCH on one existing path until Phase 3.
-- [ ] Add import checks for migrated code. Record any existing concurrency failure.
-
-Done when: one read and one write work through the current API and clients.
+- [x] Extract GetJob, repository ports, Prisma mapping and HTTP presentation.
+- [x] Compare old/new data, ownership failures, history and status/undo behavior.
+- [x] Keep mixed field/status updates atomic and test failed-write rollback.
+- [x] Add architecture import checks and record existing concurrency limits.
 
 ### Phase 2 — auth and profiles
 
-- [ ] Extract identity verification, account and token operations. Move tokens from
-      profiles to auth, keeping existing routes, session/cookie and token behavior.
-- [ ] Extract EnsureProfile/GetProfile/UpdateProfile through storage, identity and
-      career-reader ports. Use a temporary adapter for the old resume career query.
-- [ ] Keep stored-profile wiring separate from the combined profile view to avoid
-      module cycles. Test login/logout, rotated tokens, defaults, career fields,
-      profile save, extension sync and access by two different users.
+- [x] Extract Google identity, accounts and sync-token operations.
+- [x] Extract EnsureProfile/GetProfile/UpdateProfile through ports.
+- [x] Keep stored-profile wiring separate from the combined career/profile view.
+- [x] Test sessions, logout, rotation, defaults, save, sync and two-user access.
 
-Done when: existing web and extension authentication/profile flows still work.
+### Phase 3 — jobs and background reading
 
-### Phase 3 — remaining jobs and background reading
-
-Start from JobsService, JobCaptureService, JobReaderService and their helpers.
-
-- [ ] Move list/edit/delete/capture/manual/reread. Preserve URL identity, field
-      protection and response shapes. Move mixed field/status edits atomically.
-- [ ] Separate JSON-LD/AI parsing, worker startup and scheduling. Wrap the existing
-      Claude runner until Phase 5; keep one active reader worker.
-- [ ] Put resume associations behind a port, using old storage until Phase 4.
-- [ ] Test duplicate/failed/pending captures, edits during reads, recapture, late AI
-      results, deletion and restart recovery. Keep race fixes in separate changes.
-
-Done when: jobs use cases do not import Nest, Prisma or a concrete Claude runner.
+- [x] Extract list/edit/delete/capture/manual/reread and URL/edit rules.
+- [x] Separate structured/AI parsing, scheduling and startup recovery.
+- [x] Use the public resume query for links; register one reader worker.
+- [x] Test duplicates, failures, pending reads, recapture, edits during reads,
+      late results and deletion.
 
 ### Phase 4 — versioned resumes
 
-Start from ResumeService, DiffService, schemas/types, owner guard and copy helpers.
-
-- [ ] Define plain document/revision types and mappers. Extract pure matching,
-      comparison, copy and diff rules; keep Prisma details in the database adapter.
-- [ ] Move reads/history first, then save/revert/rebuild. Keep the complete save
-      in one transaction and preserve all metadata, defaults and lineage links.
-- [ ] Publish career, copy, resume-link and proposal operations. Replace temporary
-      adapters from Phases 2 and 3 without changing selection rules.
-- [ ] Test old snapshots/JSON, no-op/partial/deletion saves, copied IDs, source
-      preservation, rollback, rebuild and competing saves/copies.
-
-Done when: documents and history match the old behavior without data resets or
-mass re-saving. Record existing races and fix them separately.
+- [x] Extract plain document/revision types, matching, copy and diff rules.
+- [x] Move reads/history/save/revert/rebuild; keep each save transactional.
+- [x] Publish career, copy, resume-link and proposal operations.
+- [x] Test metadata, old stored JSON/rows, partial/no-op/removal saves, fresh copy
+      IDs, source preservation and rollback. Keep frozen legacy data fixtures.
 
 ### Phase 5 — Claude, import and rewrite
 
-- [ ] Move the process runner into shared code, keeping old/new callers on the
-      same provider. Replace the temporary runner adapter from Phase 3.
-- [ ] Extract ImportCv and RewriteResumeLine through file, transcription and
-      rewrite ports. Keep prompts/parsers outside business rules.
-- [ ] Test synthetic files and fake AI/process success, failure and timeout through
-      HTTP. Preserve limits, fallback, proposal fields and no automatic content save.
-      Keep live Google/Claude checks separate from normal tests.
-
-Done when: import/rewrite use cases run without external credentials in unit tests,
-and the existing import/editor UI still works.
+- [x] Share one Claude process runner; preserve flags, environment and timeouts.
+- [x] Extract ImportCv and RewriteResumeLine through document/AI/access ports.
+- [x] Test PDF/DOCX/TXT/MD, upload limits, HTTP errors, prompts and fallbacks.
+- [x] Test fake process success, failure and timeout; clean its temporary directory
+      after active calls finish on application close. Return suggestions without saving.
 
 ### Phase 6 — tailoring
 
-- [ ] Separate typed candidate parsing from claim/role/fallback/order rules.
-- [ ] Extract TailorResume using public job, resume-workspace and AI ports. Keep
-      copy selection/reuse, fresh IDs, pending proposals, one retry and discard.
-- [ ] Test access, empty/pending jobs, missing/cross-role bullets, malformed replies,
-      failure, changed snapshots and concurrent runs. Record existing bugs separately.
-- [ ] Check tailor → accept/reject/reorder → save → discard in the existing client.
-      Adding a server acceptance endpoint is separate work.
+- [x] Separate candidate parsing from claim, role, fallback, order and retry rules.
+- [x] Extract TailorResume through public job, resume-workspace and AI ports.
+- [x] Test malformed replies, pending/empty jobs, cross-role claims and retries.
+- [x] Test tailor → accepted/reordered content → normal save → discard through
+      the complete app HTTP API. Confirm the source resume stays unchanged.
 
-Done when: source resumes stay unchanged and proposals retain their review behavior.
+### Phase 7 — cleanup and whole-app checks
 
-### Phase 7 — remove old code and check the whole app
+- [x] Connect the new modules in AppModule and remove old services/bridges.
+- [x] Enforce boundaries and test single database/AI/reader providers.
+- [x] Finish backend checks/build, database/HTTP suites and frontend build.
+- [x] Update setup notes and architecture links.
 
-- [ ] Remove old services/adapters/providers only after their callers move. Keep
-      one Prisma connection owner, one Claude runner and one reader worker.
-- [ ] Enforce import/module boundaries and remove temporary exceptions. Check
-      routes are registered once and test commands discover every suite.
-- [ ] Run backend checks/build, database/HTTP suites and frontend build. Check
-      login/profile/sync, extension capture, board/edit/status/undo, import,
-      tailor/review/save/history/revert and deletion retaining resume copies.
-- [ ] Update setup notes and record results here.
+## 4. Data and rollback rules
 
-Done when: existing clients work, data/history remain compatible, and no old
-adapter bridges remain.
+Keep the Prisma schema and migration history unchanged. Do not reset data,
+renumber snapshots or bulk rewrite stored JSON. Run checks before changing
+providers, and let the previous worker finish before starting another version.
 
-## 4. Check and rollback each change
+If a change fails, restore its previous wiring/code from version control or the
+saved working-tree checkpoint. Preserve unrelated edits and data. The checkpoint
+is at `/private/tmp/job-agent-before-rewrite-gJqCYP`; it contains the original
+source and staged/unstaged patches, without environment secrets.
 
-1. Test the current behavior before replacing it. Keep schema/migration history
-   unchanged for the structural rewrite. Do not reset databases, renumber snapshots,
-   bulk re-save resumes, or rewrite stored JSON to fit new types.
-2. Switch one handler/provider. Run unit, real HTTP/startup and affected database
-   tests. Compare the same fixtures; ignore only expected differences in generated
-   IDs and timestamps.
-3. Make sure the previous application version can still read the data. Let active
-   worker/AI calls finish before changing the worker; preserve pending
-   rows for recovery and run only one scheduler implementation.
-4. If checks fail, restore that change's old wiring or revert its isolated code
-   change. Keep unrelated edits and data. Fix existing bugs separately from moving code.
+## 5. Results and remaining checks
 
-A step is finished when its API, ownership, data rules, app startup and client
-flow pass. Use fake ports for business tests and real Postgres for transactions.
-Ask before deciding unclear behavior or adding scope. Check tasks only when done.
+The new modules are active. Old services and temporary bridges are removed.
+Backend type, lint and format checks and both builds passed after cleanup:
 
-## 5. Progress
+| Suite                          | Passed |
+| ------------------------------ | -----: |
+| Unit and architecture          |     95 |
+| Isolated HTTP                  |     15 |
+| Database and complete-app HTTP |     32 |
 
-Documentation is split into architecture and this plan. Backend migration has
-not started. Next: Phase 0, then GetJob in Phase 1.
+All 142 tests passed. Before deleting the old services, all 31 database
+compatibility tests also passed against the old/new implementations.
+No database schema or migration files changed.
+
+Browser clicks with real Google/Claude have not been run. The full-app HTTP
+suite uses real sessions/Postgres and fake providers. It checks login/profile,
+extension capture, board/status/undo, import, rewrite, tailoring review/save,
+history/revert and deletion retaining copies.
+
+Existing limits kept for separate fixes:
+
+- Parallel saves can compete for the next snapshot number.
+- Parallel tailoring can create competing copies/proposals.
+- Job status is read before its write transaction.
+- An older AI read can finish while a newer capture is still pending.
+- Profile creation is lazy and can race on the first requests.
+
+The frontend still handles proposal review and stale-proposal checks. No server
+acceptance endpoint was added. Live provider/browser checks remain a manual
+follow-up; they are separate from the completed automated checks.

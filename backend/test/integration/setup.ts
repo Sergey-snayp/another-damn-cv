@@ -12,7 +12,7 @@
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from '../../src/prisma/prisma.service';
+import { PrismaService } from '../../src/shared/database/prisma.service';
 
 function testDatabaseUrl(): string {
   if (process.env.TEST_DATABASE_URL) return process.env.TEST_DATABASE_URL;

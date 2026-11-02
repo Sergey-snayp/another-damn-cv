@@ -1,6 +1,6 @@
 # Backend architecture
 
-Working draft. Migration steps and progress are in [plan.md](plan.md).
+Migration steps and progress are in [plan.md](plan.md).
 This file explains the structure, where code belongs, and the business rules.
 
 ## 1. Goal and choices
@@ -8,7 +8,7 @@ This file explains the structure, where code belongs, and the business rules.
 Keep business rules testable without NestJS, Postgres, or Claude.
 
 Agreed: organize by feature, put actions in `application/use-cases/`, and put
-common technical code in `shared/`. The proposed starting stack stays TypeScript,
+common technical code in `shared/`. The stack stays TypeScript,
 NestJS, Prisma, Postgres, and `node:test`, in one application.
 
 Framework changes, new APIs, a different AI provider, and durable background jobs
@@ -76,8 +76,7 @@ backend/
     main.ts                              # start the server
     app.module.ts                        # connect feature modules
     shared/
-      config/environment.ts              # read and validate settings
-      config/config.module.ts
+      config/config.ts                   # read and validate settings
       database/prisma.service.ts         # connection and lifecycle
       database/database.module.ts
       http/zod-validation.pipe.ts
@@ -92,7 +91,7 @@ backend/
     schema.prisma                        # database model definitions
     migrations/                          # keep existing history
   test/
-    unit/                                # domain and use cases
+    *.test.ts                            # domain and use cases
     integration/                         # real database and adapters
     http/                                # routes, auth, responses
     architecture/                        # imports and module cycles
@@ -187,17 +186,18 @@ Placement notes:
 - Add caching, events, extra services, or a durable queue when an actual need
   appears. The folder guide does not select a new library or service.
 
-## 5. Existing business logic and its home
+## 5. Business logic and its home
 
-| Area                  | Current code and proposed home                                                                                                                                                                                                                                                                                          |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth                  | [AuthService](../backend/src/auth/auth.service.ts) becomes sign-in/account use cases with Google and database adapters. Token methods move from ProfileService to auth. Keep Google's stable subject as account identity.                                                                                               |
-| Profiles              | [ProfileService](../backend/src/profile/profile.service.ts) becomes EnsureProfile/GetProfile/UpdateProfile. Contact rules stay here; career data comes from resumes through a port.                                                                                                                                     |
-| Jobs                  | [JobsService](../backend/src/jobs/jobs.service.ts), [JobCaptureService](../backend/src/jobs/job-capture.service.ts), and [JobReaderService](../backend/src/jobs/job-reader.service.ts) split into use cases, URL/edit/status rules, and database/extraction/worker adapters.                                            |
-| Resumes               | [ResumeService](../backend/src/resume/resume.service.ts) and [DiffService](../backend/src/resume/diff.service.ts) split into use cases, pure revision/diff/copy rules, a document builder, and database adapters. Prisma filters and version-row details stay in persistence.                                           |
-| Tailoring             | [TailorResumeService](../backend/src/resume/tailor-resume.service.ts), [RewriteService](../backend/src/resume/rewrite.service.ts), and [helpers](../backend/src/resume/tailoring/index.ts) split into use cases, claim/suggestion rules, and AI adapters. Prompts, JSON/Zod parsing, and provider IDs stay in adapters. |
-| CV import             | [ImportService](../backend/src/import/import.service.ts) coordinates file reading and transcription through ports. [ExtractService](../backend/src/import/extract.service.ts) becomes document adapters; draft/missing-field rules stay in this feature.                                                                |
-| Shared technical code | [LlmService](../backend/src/llm/llm.service.ts) becomes the shared Claude runner; [PrismaService](../backend/src/prisma/prisma.service.ts) manages the shared connection. Neither owns business rules.                                                                                                                  |
+| Area         | Home                                                                                                                                                                                   |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth         | [`modules/auth`](../backend/src/modules/auth/auth.module.ts): Google sign-in, accounts and sync tokens. Google subject identifies the account.                                         |
+| Profiles     | [`modules/profiles`](../backend/src/modules/profiles/profiles.module.ts): EnsureProfile/GetProfile/UpdateProfile and contact rules. Career data comes from resumes through a port.     |
+| Jobs         | [`modules/jobs`](../backend/src/modules/jobs/jobs.module.ts): capture, reading, editing, status and undo. Domain owns URL/edit rules; adapters own storage, extraction and scheduling. |
+| Resumes      | [`modules/resumes`](../backend/src/modules/resumes/resumes.module.ts): documents, snapshots, save/history/revert, copies and proposals. Prisma queries stay in persistence.            |
+| Tailoring    | [`modules/tailoring`](../backend/src/modules/tailoring/tailoring.module.ts): generation steps and claim/suggestion/retry rules. Prompts and model parsing stay in AI adapters.         |
+| Line rewrite | [`modules/resume-rewrite`](../backend/src/modules/resume-rewrite/resume-rewrite.module.ts): check access and return a suggestion for review.                                           |
+| CV import    | [`modules/cv-import`](../backend/src/modules/cv-import/cv-import.module.ts): read/transcribe a document and return an unsaved draft.                                                   |
+| Shared       | [`shared/ai`](../backend/src/shared/ai/ai.module.ts), [`shared/database`](../backend/src/shared/database/database.module.ts), config and HTTP helpers. No feature rules.               |
 
 Key connections:
 
@@ -209,7 +209,7 @@ Key connections:
   storage initially. Jobs reads associated resume IDs through a resume query.
 - Domain rules decide changes; adapters apply them. Resume assembly and conversion
   are plain application helpers. Generate IDs outside pure copy rules.
-- Current routes can stay in place while code moves between feature modules.
+- Route names stay the same while their handlers live in the new feature modules.
 
 ## 6. Business and data rules
 

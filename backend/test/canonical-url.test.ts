@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalUrl } from '../src/jobs/canonical-url';
+import { canonicalUrl } from '../src/modules/jobs/domain/canonical-url';
 
 test('LinkedIn search page and job page are the same job', () => {
   const id = 'https://www.linkedin.com/jobs/view/4012345678';

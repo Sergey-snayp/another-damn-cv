@@ -1,13 +1,21 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from './prisma/prisma.module';
-import { LlmModule } from './llm/llm.module';
-import { AuthModule } from './auth/auth.module';
-import { ProfileModule } from './profile/profile.module';
-import { ImportModule } from './import/import.module';
-import { ResumeModule } from './resume/resume.module';
-import { JobsModule } from './jobs/jobs.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
+import { CvImportModule } from './modules/cv-import/cv-import.module';
+import { ResumesModule } from './modules/resumes/resumes.module';
+import { JobsModule } from './modules/jobs/jobs.module';
+import { TailoringModule } from './modules/tailoring/tailoring.module';
+import { ResumeRewriteModule } from './modules/resume-rewrite/resume-rewrite.module';
 
 @Module({
-  imports: [PrismaModule, LlmModule, AuthModule, ProfileModule, ImportModule, ResumeModule, JobsModule],
+  imports: [
+    AuthModule,
+    ProfilesModule,
+    CvImportModule,
+    ResumesModule,
+    JobsModule,
+    TailoringModule,
+    ResumeRewriteModule,
+  ],
 })
 export class AppModule {}

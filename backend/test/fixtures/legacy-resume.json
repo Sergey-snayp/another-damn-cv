@@ -1,0 +1,310 @@
+{
+  "document": {
+    "snapshot": 1,
+    "contact": {
+      "id": "6bdf4c7a-e181-407a-936f-17cdd04a1d77",
+      "lineageId": "a63d28a8-087a-4203-8c77-142ae03448d7",
+      "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+      "firstName": "Sam",
+      "lastName": "Lee",
+      "email": "sam@example.com",
+      "phone": null,
+      "location": null,
+      "linkedin": null,
+      "github": null,
+      "website": null,
+      "createdInSnapshot": 1,
+      "supersededInSnapshot": null
+    },
+    "experiences": [
+      {
+        "id": "44f20cc9-c03f-4599-bc89-f4fde9fee216",
+        "lineageId": "854ae91c-3a21-4ec0-9c7f-02deb27d1424",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "company": "Acme",
+        "client": null,
+        "title": "Engineer",
+        "location": null,
+        "from": "2020",
+        "to": null,
+        "current": true,
+        "blurb": null,
+        "position": 0,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null,
+        "achievements": [
+          {
+            "id": "41d36198-ed0e-42f7-a7f3-c6e847544a47",
+            "lineageId": "932c3776-b185-4e25-aa00-07886afb1fb6",
+            "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+            "experienceLineageId": "854ae91c-3a21-4ec0-9c7f-02deb27d1424",
+            "problem": null,
+            "action": null,
+            "result": null,
+            "bullet": "Built Node.js services.",
+            "verified": true,
+            "evidence": "repo/commit",
+            "weight": 5,
+            "authoredBy": "human",
+            "position": 0,
+            "createdInSnapshot": 1,
+            "supersededInSnapshot": null
+          }
+        ]
+      }
+    ],
+    "educations": [
+      {
+        "id": "8b03971c-a9b3-4fba-9a4b-d2bacbe1e416",
+        "lineageId": "b1b3b51e-13c6-4370-90a7-ea9e0e28c907",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "institution": "UT",
+        "fullName": "University of Testing",
+        "degree": "BSc",
+        "field": null,
+        "from": "2016",
+        "to": null,
+        "position": 0,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ],
+    "skills": [
+      {
+        "id": "0e10a07f-438c-4b5f-8476-ec235e2914bf",
+        "lineageId": "074c48e2-de5b-4af5-a986-cdcbd8714f82",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "name": "Node.js",
+        "category": "",
+        "level": null,
+        "years": null,
+        "verified": false,
+        "evidence": "repo",
+        "weight": 4,
+        "aliases": ["Node"],
+        "position": 0,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ],
+    "summaries": {
+      "default": "Engineer."
+    }
+  },
+  "record": {
+    "id": "b3d08d37-fa45-4f48-858b-d277806d8280",
+    "profileId": "678a96e2-caef-4875-bdc5-87b311111140",
+    "name": "Existing",
+    "targetRole": null,
+    "isPrimary": false,
+    "jobId": null,
+    "sourceResumeId": null,
+    "tailoring": null,
+    "currentSnapshotId": "238c2be3-9754-417c-af30-c011097eb71e",
+    "current": {
+      "skills": [
+        {
+          "id": "0e10a07f-438c-4b5f-8476-ec235e2914bf",
+          "name": "Node.js",
+          "level": null,
+          "years": null,
+          "weight": 4,
+          "aliases": ["Node"],
+          "category": "",
+          "evidence": "repo",
+          "position": 0,
+          "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+          "verified": false,
+          "lineageId": "074c48e2-de5b-4af5-a986-cdcbd8714f82",
+          "createdInSnapshot": 1,
+          "supersededInSnapshot": null
+        }
+      ],
+      "contact": {
+        "id": "6bdf4c7a-e181-407a-936f-17cdd04a1d77",
+        "email": "sam@example.com",
+        "phone": null,
+        "github": null,
+        "website": null,
+        "lastName": "Lee",
+        "linkedin": null,
+        "location": null,
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "firstName": "Sam",
+        "lineageId": "a63d28a8-087a-4203-8c77-142ae03448d7",
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      },
+      "snapshot": 1,
+      "summaries": {
+        "default": "Engineer."
+      },
+      "educations": [
+        {
+          "id": "8b03971c-a9b3-4fba-9a4b-d2bacbe1e416",
+          "to": null,
+          "from": "2016",
+          "field": null,
+          "degree": "BSc",
+          "fullName": "University of Testing",
+          "position": 0,
+          "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+          "lineageId": "b1b3b51e-13c6-4370-90a7-ea9e0e28c907",
+          "institution": "UT",
+          "createdInSnapshot": 1,
+          "supersededInSnapshot": null
+        }
+      ],
+      "experiences": [
+        {
+          "id": "44f20cc9-c03f-4599-bc89-f4fde9fee216",
+          "to": null,
+          "from": "2020",
+          "blurb": null,
+          "title": "Engineer",
+          "client": null,
+          "company": "Acme",
+          "current": true,
+          "location": null,
+          "position": 0,
+          "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+          "lineageId": "854ae91c-3a21-4ec0-9c7f-02deb27d1424",
+          "achievements": [
+            {
+              "id": "41d36198-ed0e-42f7-a7f3-c6e847544a47",
+              "action": null,
+              "bullet": "Built Node.js services.",
+              "result": null,
+              "weight": 5,
+              "problem": null,
+              "evidence": "repo/commit",
+              "position": 0,
+              "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+              "verified": true,
+              "lineageId": "932c3776-b185-4e25-aa00-07886afb1fb6",
+              "authoredBy": "human",
+              "createdInSnapshot": 1,
+              "experienceLineageId": "854ae91c-3a21-4ec0-9c7f-02deb27d1424",
+              "supersededInSnapshot": null
+            }
+          ],
+          "createdInSnapshot": 1,
+          "supersededInSnapshot": null
+        }
+      ]
+    },
+    "materialisedAt": "2026-01-01T00:00:00.000Z",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  "snapshots": [
+    {
+      "id": "238c2be3-9754-417c-af30-c011097eb71e",
+      "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+      "number": 1,
+      "message": "Old implementation",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "rows": {
+    "contacts": [
+      {
+        "id": "6bdf4c7a-e181-407a-936f-17cdd04a1d77",
+        "lineageId": "a63d28a8-087a-4203-8c77-142ae03448d7",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "firstName": "Sam",
+        "lastName": "Lee",
+        "email": "sam@example.com",
+        "phone": null,
+        "location": null,
+        "linkedin": null,
+        "github": null,
+        "website": null,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ],
+    "experiences": [
+      {
+        "id": "44f20cc9-c03f-4599-bc89-f4fde9fee216",
+        "lineageId": "854ae91c-3a21-4ec0-9c7f-02deb27d1424",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "company": "Acme",
+        "client": null,
+        "title": "Engineer",
+        "location": null,
+        "from": "2020",
+        "to": null,
+        "current": true,
+        "blurb": null,
+        "position": 0,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ],
+    "achievements": [
+      {
+        "id": "41d36198-ed0e-42f7-a7f3-c6e847544a47",
+        "lineageId": "932c3776-b185-4e25-aa00-07886afb1fb6",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "experienceLineageId": "854ae91c-3a21-4ec0-9c7f-02deb27d1424",
+        "problem": null,
+        "action": null,
+        "result": null,
+        "bullet": "Built Node.js services.",
+        "verified": true,
+        "evidence": "repo/commit",
+        "weight": 5,
+        "authoredBy": "human",
+        "position": 0,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ],
+    "educations": [
+      {
+        "id": "8b03971c-a9b3-4fba-9a4b-d2bacbe1e416",
+        "lineageId": "b1b3b51e-13c6-4370-90a7-ea9e0e28c907",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "institution": "UT",
+        "fullName": "University of Testing",
+        "degree": "BSc",
+        "field": null,
+        "from": "2016",
+        "to": null,
+        "position": 0,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ],
+    "skills": [
+      {
+        "id": "0e10a07f-438c-4b5f-8476-ec235e2914bf",
+        "lineageId": "074c48e2-de5b-4af5-a986-cdcbd8714f82",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "name": "Node.js",
+        "category": "",
+        "level": null,
+        "years": null,
+        "verified": false,
+        "evidence": "repo",
+        "weight": 4,
+        "aliases": ["Node"],
+        "position": 0,
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ],
+    "summaries": [
+      {
+        "id": "f7d9d928-6c33-4df0-af9f-6d23d36f8b69",
+        "lineageId": "6623f2ec-d7d7-4c6c-b184-26e099002046",
+        "resumeId": "b3d08d37-fa45-4f48-858b-d277806d8280",
+        "variant": "default",
+        "text": "Engineer.",
+        "createdInSnapshot": 1,
+        "supersededInSnapshot": null
+      }
+    ]
+  }
+}

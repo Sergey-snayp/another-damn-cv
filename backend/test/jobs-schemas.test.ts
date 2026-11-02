@@ -2,8 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BadRequestException } from '@nestjs/common';
 import { JobStatus } from '@prisma/client';
-import { ZodValidationPipe } from '../src/common/zod-validation.pipe';
-import { captureSchema, jobEditSchema, manualJobSchema } from '../src/jobs/jobs.schemas';
+import { ZodValidationPipe } from '../src/shared/http/zod-validation.pipe';
+import {
+  captureSchema,
+  jobEditSchema,
+  manualJobSchema,
+} from '../src/modules/jobs/adapters/inbound/http/jobs.schemas';
 
 function rejection(run: () => unknown): string {
   try {
@@ -15,13 +19,13 @@ function rejection(run: () => unknown): string {
   throw new Error('expected a BadRequestException');
 }
 
-test('an edit: blank text clears a field, absent fields stay absent, status is uppercased', () => {
+test('an edit: blank text clears a field, absent fields stay absent, status keeps its public spelling', () => {
   const edit = new ZodValidationPipe(jobEditSchema).transform({
     title: '  ',
     company: ' Acme ',
     status: 'interview',
   });
-  assert.deepEqual(edit, { title: null, company: 'Acme', status: JobStatus.INTERVIEW });
+  assert.deepEqual(edit, { title: null, company: 'Acme', status: 'interview' });
   assert.ok(!('salary' in edit));
 });
 

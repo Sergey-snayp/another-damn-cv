@@ -1,70 +1,48 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  applyRetry,
-  blockedLines,
-  numbersIn,
-  readTailoring,
-  retryPrompt,
-  tailorPrompt,
-  techTerms,
-  unsupportedClaims,
-} from '../src/resume/tailoring';
-import type { RenderedResume } from '../src/resume/resume.types';
+import { numbersIn, techTerms, unsupportedClaims } from '../src/modules/tailoring/domain/claims';
+import { blockedLines, applyRetry as retryPlan } from '../src/modules/tailoring/domain/retry';
+import { planTailoring } from '../src/modules/tailoring/domain/policy';
+import { tailorPrompt } from '../src/modules/tailoring/adapters/outbound/ai/prompt';
+import { retryPrompt } from '../src/modules/tailoring/adapters/outbound/ai/retry-prompt';
+import { readCandidate, readRetry } from '../src/modules/tailoring/adapters/outbound/ai/answer';
+import type { PromptIds } from '../src/modules/tailoring/adapters/outbound/ai/prompt-ids';
+import type { JobForTailoring, Tailoring } from '../src/modules/tailoring/domain/types';
+import type { RenderedResume } from '../src/modules/resumes/contracts';
+import { bullet, contact, role, skill } from './fixtures/resume';
+
+function readTailoring(answer: string, resume: RenderedResume, job: JobForTailoring, ids: PromptIds) {
+  const candidate = readCandidate(answer, ids);
+  return candidate ? planTailoring(candidate, resume, job) : null;
+}
+function applyRetry(answer: string, tailoring: Tailoring, resume: RenderedResume, job: JobForTailoring) {
+  return retryPlan(readRetry(answer), tailoring, resume, job);
+}
 
 const resume: RenderedResume = {
   snapshot: 4,
-  contact: { firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com' },
+  contact: contact(),
   summaries: { default: 'Senior engineer with 7+ years in Node.js and AWS serverless.' },
   experiences: [
-    {
-      lineageId: 'role-pay',
-      title: 'Senior Software Engineer',
-      company: 'Ciklum',
-      client: 'Paymorrow',
-      from: '2024-10',
-      to: null,
-      achievements: [
-        {
-          lineageId: 'a1',
-          position: 0,
-          bullet: 'Built real-time Slack alerting on CloudWatch for gateway errors.',
-        },
-        {
-          lineageId: 'a2',
-          position: 1,
-          bullet: 'Led a TLS certificate service on AWS Lambda and Step Functions, deployed with CDK.',
+    role(
+      'role-pay',
+      { title: 'Senior Software Engineer', company: 'Ciklum', client: 'Paymorrow', from: '2024-10' },
+      [
+        bullet('a1', 'Built real-time Slack alerting on CloudWatch for gateway errors.'),
+        bullet('a2', 'Led a TLS certificate service on AWS Lambda and Step Functions, deployed with CDK.', {
           result: 'About 75% of its commits are mine.',
-        },
-        {
-          lineageId: 'a3',
-          position: 2,
-          bullet: 'Developed TypeScript REST APIs serving ~30,000 requests/day.',
-        },
+        }),
+        bullet('a3', 'Developed TypeScript REST APIs serving ~30,000 requests/day.'),
       ],
-    },
-    {
-      lineageId: 'role-ad',
-      title: 'Senior Engineer',
-      company: 'EPAM',
-      client: 'ADBM',
-      from: '2023-02',
-      to: '2023-09',
-      achievements: [
-        {
-          lineageId: 'b1',
-          position: 0,
-          bullet: 'Worked on a Node.js bidding engine with Kafka at 20k requests per second.',
-        },
-      ],
-    },
+    ),
+    role(
+      'role-ad',
+      { title: 'Senior Engineer', company: 'EPAM', client: 'ADBM', from: '2023-02', to: '2023-09' },
+      [bullet('b1', 'Worked on a Node.js bidding engine with Kafka at 20k requests per second.')],
+    ),
   ],
   educations: [],
-  skills: [
-    { lineageId: 'sk-ts', name: 'TypeScript' },
-    { lineageId: 'sk-aws', name: 'AWS Lambda' },
-    { lineageId: 'sk-kafka', name: 'Apache Kafka' },
-  ],
+  skills: [skill('sk-ts', 'TypeScript'), skill('sk-aws', 'AWS Lambda'), skill('sk-kafka', 'Apache Kafka')],
 };
 
 const job = {

@@ -1,77 +1,18 @@
 import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import session from 'express-session';
-import connectPgSimple from 'connect-pg-simple';
 import { AppModule } from './app.module';
-import { config } from './config';
+import { configureHttp } from './bootstrap';
+import { config } from './shared/config/config';
 
-async function bootstrap() {
+async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
-  /**
-   * A captured job page is cleaned HTML plus its text — often 100–500 KB, well
-   * past Express's 100 KB default. The jobs service enforces its own, tighter
-   * per-field limits.
-   */
-  app.useBodyParser('json', { limit: '2mb' });
-
-  /**
-   * Sessions live in Postgres, not in memory.
-   *
-   * The default MemoryStore loses every session on restart and leaks under
-   * load — it is explicitly not for production. Storing them in the database
-   * we already run costs one table and makes sessions revocable, which a
-   * stateless JWT would not be.
-   */
-  const PgStore = connectPgSimple(session);
-
-  app.use(
-    session({
-      store: new PgStore({
-        conString: config.databaseUrl,
-        tableName: 'user_sessions',
-        createTableIfMissing: false, // Prisma owns this table
-      }),
-      secret: config.sessionSecret,
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        httpOnly: true, // unreadable from JavaScript, so XSS cannot steal it
-        sameSite: 'lax', // blocks the cookie on cross-site POSTs — CSRF defence
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 1000 * 60 * 60 * 24 * 30,
-      },
-    }),
-  );
-
-  // credentials: true is required for the browser to send the session cookie.
-  /**
-   * The web app sends a cookie, so it needs an exact origin and credentials.
-   * The extension sends a bearer token and no cookie, so it is allowed in
-   * without credentials — a wildcard origin is safe precisely because nothing
-   * ambient travels with the request.
-   */
-  app.enableCors({
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      if (!origin || origin === config.frontendUrl || origin.startsWith('chrome-extension://')) {
-        callback(null, true);
-        return;
-      }
-      callback(null, false);
-    },
-    credentials: true,
-  });
-  app.setGlobalPrefix('api');
-
+  configureHttp(app);
   await app.listen(config.port);
-  // Node cuts requests at 5 minutes by default; tailoring a resume can take
-  // two AI calls back to back.
-  const server = app.getHttpServer();
-  server.requestTimeout = 10 * 60_000;
-
-  console.log(`API on http://localhost:${config.port}/api`);
-  console.log(
+  const logger = new Logger('Bootstrap');
+  logger.log(`API on http://localhost:${config.port}/api`);
+  logger.log(
     `Google sign-in: ${config.google.configured ? 'configured' : 'NOT configured — set GOOGLE_CLIENT_ID'}`,
   );
 }

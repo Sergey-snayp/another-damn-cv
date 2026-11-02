@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { jobFromJsonLd } from '../src/jobs/structured-data';
-import { htmlToText } from '../src/jobs/html-text';
+import { jobFromJsonLd } from '../src/modules/jobs/adapters/outbound/documents/structured-data';
+import { htmlToText } from '../src/modules/jobs/adapters/outbound/documents/html-text';
 
 const greenhouseStyle = {
   '@context': 'https://schema.org',
