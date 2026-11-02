@@ -37,6 +37,9 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
 
 Checks: `npm run check` runs the type check, lint, format check and tests.
 
+[Backend architecture](docs/backend-clean-architecture-plan.md) explains the structure.
+The [rewrite plan](docs/plan.md) tracks the migration steps and checks.
+
 ## Non-negotiable rules
 
 1. Never state anything absent from the resume it came from.
