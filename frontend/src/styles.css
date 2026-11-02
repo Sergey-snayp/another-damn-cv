@@ -467,4 +467,11 @@ a.ghost:hover { background: #e7f0fa; }
   .content { padding: 20px 16px 72px; }
   .brand-name { display: none; }
 }
+@media (max-width: 480px) {
+  .topbar { height: auto; flex-wrap: wrap; gap: 6px 12px; padding: 8px 16px; }
+  .topbar .brand-name { display: inline; }
+  .topbar .account { order: 1; }
+  .topbar .nav { order: 2; flex: 1 0 100%; justify-content: space-between; overflow: visible; }
+  .topbar .navlink { flex: 1; text-align: center; padding: 8px; }
+}
 .job-status .field { max-width: 320px; }

@@ -10,6 +10,7 @@ import {
 import { Popover } from '../components/Popover';
 import { DashboardIcon } from './DashboardIcon';
 import { needsReview } from './dashboardState';
+import { isInterviewJob } from '../interviews/interviewJobs';
 
 export interface ApplicationActions {
   onMove(job: JobSummary, to: JobStatus): void;
@@ -72,6 +73,12 @@ export function ApplicationMenu({
         <DashboardIcon name="file" />
         <span>View details</span>
       </Link>
+      {isInterviewJob(row) && (
+        <Link to="/interview-prep" className="dashboard-menu-item">
+          <DashboardIcon name="interview" />
+          <span>Interview Prep</span>
+        </Link>
+      )}
       {row.url && (
         <a
           href={row.url}

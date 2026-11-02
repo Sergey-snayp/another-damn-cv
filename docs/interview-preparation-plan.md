@@ -1,6 +1,7 @@
 # Interview preparation plan
 
-Status: proposal for review. Implementation has not started.
+Status: the Interview Prep collection page is built. Preparation generation and
+the growing work history remain planned.
 Product rules are in [business-logic.md](business-logic.md).
 
 ## Goal
@@ -11,8 +12,16 @@ and decide what to highlight. Everything is used before the interview.
 
 ## First version
 
-Entry point: **Prepare for interview** on a saved job. Keep Dashboard and
-Documents as the main navigation items.
+Entry point: **Interview Prep** in the main navigation, beside Dashboard and
+Documents. Active jobs in Screening or Interviewing appear automatically.
+Saved, Applied, closed, and archived jobs stay out of this collection. The page
+uses the same saved jobs as Dashboard; no separate copies are created.
+
+Available now: search, status filters, job details, original postings, and links
+to the exact application CV version. Dashboard card menus also link here for
+active interview jobs. Change application status on Dashboard to manage the list.
+
+The next step is preparation for an individual interview, described below.
 
 The user chooses:
 

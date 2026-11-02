@@ -39,6 +39,10 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   favorites. Drag cards or use their Move menu; recent moves and archives offer Undo.
 - **Documents** holds resumes, previews, editing, history and tailoring review.
   Old `/resumes` bookmarks redirect here.
+- **Interview Prep** collects active jobs in Screening or Interviewing, with
+  search, status filters, job details and the saved application CV version.
+  Jobs appear automatically from Dashboard; archived and other statuses stay out.
+  Preparation generation is still planned.
 
 Add Application saves the chosen resume version with the job. Later resume edits
 do not change that attachment. Favorites and archives are stored on your account;

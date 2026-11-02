@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/documents', label: 'Documents' },
+  { to: '/interview-prep', label: 'Interview Prep' },
 ];
 
 export function Layout() {

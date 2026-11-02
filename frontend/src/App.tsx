@@ -9,6 +9,7 @@ import { Profile } from './pages/Profile';
 import { ResumeEditor } from './pages/ResumeEditor';
 import { ResumeHistory } from './pages/ResumeHistory';
 import { TailorReview } from './pages/TailorReview';
+import { InterviewPrep } from './pages/InterviewPrep';
 
 export function App() {
   return (
@@ -43,6 +44,7 @@ function Gate() {
           <Route path="resumes" element={<Navigate to="/documents" replace />} />
           <Route path="resumes/:id/*" element={<LegacyResumeRedirect />} />
           <Route path="documents" element={<Documents />} />
+          <Route path="interview-prep" element={<InterviewPrep />} />
           <Route path="documents/:id" element={<ResumeEditor />} />
           <Route path="documents/:id/history" element={<ResumeHistory />} />
           <Route path="documents/:id/tailor" element={<TailorReview />} />
