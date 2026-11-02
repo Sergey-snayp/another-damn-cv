@@ -43,6 +43,15 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   favorites. Drag cards or use their Move menu; recent moves and archives offer Undo.
 - **Documents** holds resumes, previews, editing, history and tailoring review.
   Old `/resumes` bookmarks redirect here.
+- **Profile → Import from CV** accepts PDF/DOCX/TXT/Markdown files or a saved CV
+  from Documents. Review and correct the extracted information, then choose the
+  contact fields, summary, work experience, education and skills to save. Existing
+  contact values and previously imported sections start unchecked. Chosen career
+  sections replace that section in Profile; other sections stay unchanged.
+  Imported sections keep their file name or CV version and stay independent of
+  later CV edits. Until a section is imported, Profile still shows the primary CV.
+  File parsing uses Claude; choosing a saved CV makes no AI call. Neither action
+  changes your documents or CV versions attached to applications.
 - **Interview Prep** collects active jobs in Screening or Interviewing, with
   search, status filters, job details and the saved application CV version.
   Jobs appear automatically from Dashboard; archived and other statuses stay out.
@@ -85,7 +94,7 @@ currently filtered collection, descriptions, dates and attached resume versions.
 | Module | Routes | What it does |
 |---|---|---|
 | `auth` | `GET /api/auth/config`, `POST /api/auth/google`, `POST /api/auth/extension`, `GET /api/auth/me`, `POST /api/auth/logout` | Google ID-token sign-in, sessions in Postgres. The extension uses a bearer sync token instead |
-| `profiles` | `GET/PUT /api/profile`, `GET/POST /api/profile/sync-token`, `GET /api/profile/sync` | What application forms ask for; synced to the extension |
+| `profiles` | `GET/PUT /api/profile`, `GET /api/profile/career`, `POST /api/profile/career/import`, sync-token and sync routes | Contact/autofill data and reviewed career imports. Saves selected contacts and career sections together; rejects stale reviews. Imported roles drive current-role autofill independently of CV edits |
 | `resumes` | `POST /api/import/cv`, `GET/POST /api/resumes`, `GET /api/resumes/:id`, `POST /api/resumes/:id/save`, `POST /api/resumes/:id/rewrite`, `POST /api/jobs/:id/tailor`, `GET/DELETE /api/resumes/:id/tailoring`, history, diff, revert | CV import, versioned resumes, line rewriting and job-specific tailoring in one module. PDF/DOCX/TXT/Markdown imports return an unsaved draft. Tailoring suggests summaries and bullets for review. Changed saves add snapshots; unchanged saves add none |
 | `jobs` | `POST /api/jobs/capture` (extension token), `GET/POST /api/jobs`, `GET/PATCH/DELETE /api/jobs/:id`, `POST /api/jobs/:id/reread`, `POST /api/jobs/:id/status/undo` | Saved postings. JSON-LD first, the Claude CLI when a page has none. Status runs Saved → Applied → Screening → Interview → Offer → Accepted / Rejected / Declined, or Dismissed; every move is logged and the latest can be undone |
 | applications | `POST /api/jobs/applications`, `GET /api/jobs/applications/export`, `POST /api/jobs/applications/import`, `PATCH /api/jobs/applications/preferences`, `PATCH /api/jobs/applications/:id/resume` | Structured application entry, CSV tools, account favorites/archives and versioned resume attachments |

@@ -6,6 +6,8 @@ import { onExtensionDetected, pushProfile } from "../extensionBridge";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import { ProfileCareer } from "../profile/ProfileCareer";
 import { usePrimaryResume } from "../profile/usePrimaryResume";
+import { ImportProfileDialog } from "../profile/ImportProfileDialog";
+import { careerApi, type CareerState } from "../profile/careerApi";
 import "../profile/profile.css";
 
 type ProfileTab = "profile" | "personal" | "preferences";
@@ -28,17 +30,19 @@ export function Profile() {
   const [saving, setSaving] = useState(false);
   const [extension, setExtension] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [careerState, setCareerState] = useState<CareerState | null>(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     let current = true;
     setLoading(true);
     setLoadError("");
-    void api
-      .profile()
-      .then((row) => {
+    void Promise.all([api.profile(), careerApi.read()])
+      .then(([row, history]) => {
         if (current) {
           setProfile(row);
           setDraft({ ...row });
+          setCareerState(history);
         }
       })
       .catch((err: unknown) => {
@@ -253,10 +257,47 @@ export function Profile() {
       </aside>
 
       <div className="profile-main" role="region" aria-label="Profile details">
+        <section className="profile-panel profile-import-banner">
+          <div className="profile-panel-heading">
+            <div>
+              <h2>Build your profile from your CV</h2>
+              <p>
+                Import contact details, work experience, education and skills.
+                Review everything before saving.
+              </p>
+            </div>
+            <button
+              className="profile-button"
+              disabled={dirty || saving || !careerState}
+              onClick={() => setImporting(true)}
+            >
+              <Icon name="file" size={17} />
+              Import from CV
+            </button>
+          </div>
+          {dirty && (
+            <p>Save or discard your profile changes before importing a CV.</p>
+          )}
+          {active === "profile" && notice && (
+            <p className="profile-success" role="status">
+              {notice}
+            </p>
+          )}
+          {active === "profile" && error && (
+            <p className="profile-error" role="alert">
+              {error}
+            </p>
+          )}
+        </section>
         {active === "profile" ? (
           <ProfileCareer
             career={career}
             profile={profile}
+            imported={careerState?.data ?? {}}
+            onImport={() => {
+              if (!dirty && !saving) setImporting(true);
+            }}
+            importDisabled={dirty || saving || !careerState}
             onEditPersonal={() => setActive("personal")}
           />
         ) : (
@@ -318,7 +359,7 @@ export function Profile() {
                       <h3>
                         Current role{" "}
                         <span className="profile-muted">
-                          from your primary CV
+                          from your saved work experience
                         </span>
                       </h3>
                       <div className="profile-field-grid">
@@ -336,8 +377,8 @@ export function Profile() {
                         ))}
                       </div>
                       <p>
-                        Update the current role in your primary CV to change
-                        these values.
+                        Import work experience into Profile to update these
+                        values. Until then, they come from your primary CV.
                       </p>
                     </section>
                   )}
@@ -382,6 +423,30 @@ export function Profile() {
           </>
         )}
       </div>
+      {importing && careerState && (
+        <ImportProfileDialog
+          profile={profile}
+          career={careerState}
+          onClose={() => setImporting(false)}
+          onApplied={(state) => {
+            setImporting(false);
+            setCareerState(state);
+            setError("");
+            setNotice("Selected CV information saved to your profile.");
+            void api
+              .profile()
+              .then((next) => {
+                setProfile(next);
+                setDraft({ ...next });
+              })
+              .catch(() =>
+                setError(
+                  "The import was saved, but personal details could not refresh. Reload the page to see them.",
+                ),
+              );
+          }}
+        />
+      )}
     </div>
   );
 }

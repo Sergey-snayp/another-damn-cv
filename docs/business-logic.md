@@ -34,6 +34,15 @@ A generated CV or answer must not become evidence for a new claim.
 The profile owns the work history. A CV is a selected version of that history
 for a particular job.
 
+Available now: **Profile → Import from CV** can parse an uploaded file or read a
+saved CV. Users review and correct the text and select contact fields and career
+sections to save. Each imported section keeps its source label and import date.
+Imported work experience, education, skills and summary stay independent of later
+CV edits. Unselected sections keep their existing data; sections not imported yet
+still display the primary CV. The import never edits CVs or application attachments.
+Imported text is not automatically marked as verified evidence. Follow-up questions,
+project-level history and generating CVs directly from Profile remain planned.
+
 ## 3. Learn through useful questions
 
 1. The user adds a job opening or asks to improve their profile.

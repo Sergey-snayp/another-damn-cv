@@ -1,0 +1,2 @@
+ALTER TABLE "profiles" ADD COLUMN "career" JSONB,
+ADD COLUMN "careerRevision" INTEGER NOT NULL DEFAULT 0;

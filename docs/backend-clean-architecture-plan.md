@@ -191,7 +191,7 @@ Placement notes:
 | Area         | Home                                                                                                                                                                                   |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth         | [`modules/auth`](../backend/src/modules/auth/auth.module.ts): Google sign-in, accounts and sync tokens. Google subject identifies the account.                                         |
-| Profiles     | [`modules/profiles`](../backend/src/modules/profiles/profiles.module.ts): EnsureProfile/GetProfile/UpdateProfile and contact rules. Career data comes from resumes through a port.     |
+| Profiles     | [`modules/profiles`](../backend/src/modules/profiles/profiles.module.ts): contact rules and reviewed career imports. Profile owns imported work history, summary, education and skills. Unimported sections still use the primary CV. |
 | Jobs         | [`modules/jobs`](../backend/src/modules/jobs/jobs.module.ts): capture, reading, editing, status and undo. Domain owns URL/edit rules; adapters own storage, extraction and scheduling. |
 | Resumes      | [`modules/resumes`](../backend/src/modules/resumes/resumes.module.ts): importing, documents, snapshots, copies, editing, rewriting and job-specific tailoring. ImportCv, TailorResume and RewriteResumeLine are separate use cases inside this module. |
 | Interviews   | [`modules/interviews`](../backend/src/modules/interviews/interviews.module.ts): GetPreparation/SavePreparation, interview types, and user notes. Check job ownership through its public API; keep storage in the outbound adapter. |
@@ -199,7 +199,10 @@ Placement notes:
 
 Key connections:
 
-- Profiles reads identity from auth and career data from resumes through ports.
+- Profiles reads identity from auth and checks saved CV sources through ports.
+  `ImportProfileCareer` saves reviewed contact and career selections together;
+  revision checks prevent stale reviews from replacing newer data. Its own history
+  drives career fields, with a resume-reader fallback before experience is imported.
   Resumes needs only stored-profile access. Wire the combined profile HTTP view
   at the root, keeping stored-profile wiring independent to avoid a cycle.
 - Resumes owns tailoring, claim checks, rewriting, copies and proposals. Keep

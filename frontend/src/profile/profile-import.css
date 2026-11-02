@@ -1,0 +1,32 @@
+.profile-import-dialog { width: min(780px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 0; border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-surface); color: var(--color-text); overflow: auto; box-shadow: 0 20px 70px var(--color-shadow-strong); }
+.profile-import-dialog::backdrop { background: var(--color-overlay); }
+.profile-import-dialog *, .profile-import-dialog *::before { box-sizing: border-box; }
+.profile-import-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px; border-bottom: 1px solid var(--color-border); }
+.profile-import-header h2 { margin: 0; font-size: 24px; }
+.profile-import-dialog h3 { margin: 0 0 12px; font-size: 17px; }
+.profile-import-dialog p { color: var(--color-muted); font-size: 13px; line-height: 1.7; }
+.profile-import-header p { margin-bottom: 0; }
+.profile-import-body { padding: 24px; }
+.profile-import-source, .profile-import-section { border: 1px solid var(--color-border); border-radius: 14px; padding: 20px; margin-bottom: 20px; min-width: 0; }
+.profile-import-dialog fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.profile-import-dialog label { display: block; font-size: 13px; color: var(--color-text); line-height: 1.5; }
+.profile-import-dialog input:not([type=checkbox]):not([type=file]), .profile-import-dialog select, .profile-import-dialog textarea { display: block; width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); margin: 7px 0 12px; font: inherit; line-height: 1.6; }
+.profile-import-dialog textarea { resize: vertical; }
+.profile-import-dialog input[type=checkbox] { accent-color: var(--color-text); width: 17px; height: 17px; flex-shrink: 0; margin: 0; }
+.profile-import-dialog .profile-import-check { display: flex; align-items: center; gap: 9px; font-weight: 600; margin-bottom: 12px; }
+.profile-import-contact { padding: 16px 0; border-top: 1px solid var(--color-border); }
+.profile-import-contact small { color: var(--color-muted); overflow-wrap: anywhere; }
+.profile-import-contact .profile-import-check { margin-bottom: 4px; }
+.profile-import-contact input:not([type=checkbox]) { margin-bottom: 4px; }
+.profile-import-review-note { background: var(--color-background); border-radius: 14px; padding: 18px; margin-bottom: 20px; }
+.profile-import-review-note p { overflow-wrap: anywhere; }
+.profile-import-entry { border-top: 1px solid var(--color-border); margin-top: 15px; }
+.profile-import-entry > summary { padding: 16px 0; cursor: pointer; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.profile-import-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
+.profile-import-footer { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 18px 24px; background: var(--color-surface); border-top: 1px solid var(--color-border); }
+.profile-import-status { margin: 0; padding: 0 24px 20px; }
+.profile-import-dialog .profile-error { color: var(--color-error); }
+.profile-import-dialog :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+.profile-import-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.profile-import-banner p { margin: 0; }
+@media (max-width: 550px) { .profile-import-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); border-radius: 14px; } .profile-import-header, .profile-import-body { padding: 18px; } .profile-import-source, .profile-import-section { padding: 15px; } .profile-import-grid { grid-template-columns: minmax(0, 1fr); } .profile-import-footer { padding: 15px; } }
