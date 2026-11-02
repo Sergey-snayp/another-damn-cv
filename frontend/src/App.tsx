@@ -11,6 +11,7 @@ import { ResumeHistory } from './pages/ResumeHistory';
 import { TailorReview } from './pages/TailorReview';
 import { InterviewPrep } from './pages/InterviewPrep';
 import { InterviewWorkspace } from './pages/InterviewWorkspace';
+import { InterviewReference } from './pages/InterviewReference';
 
 export function App() {
   return (
@@ -47,6 +48,8 @@ function Gate() {
           <Route path="documents" element={<Documents />} />
           <Route path="interview-prep" element={<InterviewPrep />} />
           <Route path="interview-prep/:id" element={<InterviewWorkspace />} />
+          <Route path="interview-prep/:id/job" element={<InterviewReference kind="job" />} />
+          <Route path="interview-prep/:id/cv" element={<InterviewReference kind="cv" />} />
           <Route path="documents/:id" element={<ResumeEditor />} />
           <Route path="documents/:id/history" element={<ResumeHistory />} />
           <Route path="documents/:id/tailor" element={<TailorReview />} />

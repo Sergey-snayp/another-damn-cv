@@ -6,9 +6,11 @@ import { resumeApi, type ResumeSummary } from '../resumeApi';
 export function ApplicationResume({
   job,
   onChanged,
+  versionHref,
 }: {
   job: Job;
   onChanged(saved: Job): void;
+  versionHref?: string;
 }) {
   const [resumes, setResumes] = useState<ResumeSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,7 +65,7 @@ export function ApplicationResume({
       {job.applicationResumeId && (
         <p className="small">
           <Link
-            to={`/documents/${job.applicationResumeId}/history?snapshot=${job.applicationSnapshot}`}
+            to={versionHref ?? `/documents/${job.applicationResumeId}/history?snapshot=${job.applicationSnapshot}`}
           >
             View attached version {job.applicationSnapshot}
           </Link>

@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { jobsApi, jobName, STATUS_LABELS, type JobDetail, type Job } from '../jobsApi';
-import { resumeApi, type RenderedResume } from '../resumeApi';
 import { DashboardIcon } from '../jobs/DashboardIcon';
 import { CompanyAvatar } from '../jobs/ApplicationCard';
 import { ApplicationResume } from '../jobs/ApplicationResume';
@@ -96,6 +95,12 @@ function Workspace({ id }: { id: string }) {
             <CompanyAvatar company={job.company} />
             <div><p>{job.company || 'Company not added'} <span className={`interview-job-stage ${job.status}`}>{STATUS_LABELS[job.status]}</span></p><h1>{jobName(job)}</h1><span>Interview preparation</span></div>
           </header>
+          <nav className="interview-workspace-references" aria-label="Preparation references">
+            <Link className="interview-prep-button" to={`/interview-prep/${job.id}/job`}><DashboardIcon name="briefcase" size={17} />View job opening</Link>
+            {job.applicationResumeId && job.applicationSnapshot ? (
+              <Link className="interview-prep-button" to={`/interview-prep/${job.id}/cv`}><DashboardIcon name="file" size={17} />View application CV</Link>
+            ) : <><button className="interview-prep-button" disabled><DashboardIcon name="file" size={17} />View application CV</button><span className="interview-workspace-hint">Choose your application CV to view it here.</span></>}
+          </nav>
           {!isInterviewJob(job) && <p className="interview-workspace-context">This preparation is still available. The job appears in the Prep list while it is active and marked Screening or Interviewing.</p>}
           <div className="interview-workspace-layout">
             <div className="interview-workspace-main">
@@ -113,7 +118,7 @@ function Workspace({ id }: { id: string }) {
                   </section>
                   <section className="interview-workspace-section">
                     <h2>My preparation</h2>
-                    <p className="interview-workspace-hint">Use the job opening and your CV below to prepare your own examples.</p>
+                    <p className="interview-workspace-hint">Use the job opening and application CV buttons to review your experience and prepare examples.</p>
                     <label>My notes and examples<textarea rows={8} value={draft.notes} maxLength={12000} placeholder="What I want to highlight, projects to explain, and topics to practise" onChange={(event) => update({ ...draft, notes: event.target.value })} /></label>
                     <label>Questions to ask the company<textarea rows={4} value={draft.questions} maxLength={6000} placeholder="What I want to learn about the team, role, and product" onChange={(event) => update({ ...draft, questions: event.target.value })} /></label>
                   </section>
@@ -125,63 +130,15 @@ function Workspace({ id }: { id: string }) {
                 {error && <p className="error" role="alert">{error}</p>}
                 {notice && <p className="interview-workspace-notice" role="status">{notice}</p>}
               </form>
-              <section className="interview-workspace-section" aria-label="Saved job opening">
-                <div className="interview-workspace-section-title"><h2>Job opening</h2><Link to={`/jobs/${job.id}`}>Edit job details</Link></div>
-                <p className="interview-workspace-hint">The saved posting for this application.</p>
-                <div className="interview-workspace-fields">
-                  <label>Company<input readOnly value={job.company ?? ''} /></label>
-                  <label>Position<input readOnly value={jobName(job)} /></label>
-                  <label>Location<input readOnly value={job.location ?? (job.remote ? 'Remote' : '')} /></label>
-                  <label>Employment type<input readOnly value={job.employmentType ?? ''} /></label>
-                </div>
-                <label>Job description<textarea readOnly rows={12} value={job.description ?? ''} placeholder="Add a description in the job details." /></label>
-                {job.url && <a className="interview-workspace-source" href={job.url} target="_blank" rel="noreferrer noopener">Open original posting <DashboardIcon name="arrow" size={16} /></a>}
-              </section>
-              <ApplicationExperience job={job} />
             </div>
             <aside className="interview-workspace-sidebar" aria-label="Application context">
               <section className="interview-workspace-section"><InterviewDateEditor job={job} onSaved={updateJob} /></section>
-              <ApplicationResume job={job} onChanged={updateJob} />
+              <ApplicationResume job={job} onChanged={updateJob} versionHref={`/interview-prep/${job.id}/cv`} />
               <div className="interview-workspace-sidebar-note"><DashboardIcon name="saved" size={18} /><p>Your notes belong to this application. The schedule and CV selection save separately when you change them.</p></div>
             </aside>
           </div>
         </>
       )}
     </div>
-  );
-}
-
-function ApplicationExperience({ job }: { job: Job }) {
-  const [document, setDocument] = useState<RenderedResume | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    let active = true;
-    setDocument(null);
-    setError(null);
-    if (job.applicationResumeId && job.applicationSnapshot) {
-      void resumeApi.at(job.applicationResumeId, job.applicationSnapshot).then((row) => { if (active) setDocument(row); }, (err: Error) => { if (active) setError(err.message); });
-    }
-    return () => { active = false; };
-  }, [job.applicationResumeId, job.applicationSnapshot, attempt]);
-  return (
-    <section className="interview-workspace-section" aria-label="Experience from application CV">
-      <h2>Experience from your application CV</h2>
-      {!job.applicationResumeId || !job.applicationSnapshot ? <p className="interview-workspace-hint">Choose the CV you sent to see your experience here.</p> : error ? <><p className="error" role="alert">{error}</p><button className="interview-prep-button" onClick={() => setAttempt((value) => value + 1)}>Retry CV</button></> : !document ? <p role="status">Loading the saved CV version…</p> : (
-        <>
-          <p className="interview-workspace-hint">From saved version {document.snapshot}. Later CV edits do not change this reference.</p>
-          {(document.summaries.default || Object.values(document.summaries)[0]) && <p className="interview-workspace-cv-summary">{document.summaries.default || Object.values(document.summaries)[0]}</p>}
-          {document.experiences.length ? document.experiences.map((role, index) => (
-            <details className="interview-workspace-role" key={role.lineageId ?? index} open={index === 0}>
-              <summary>{role.company} · {role.title}</summary>
-              <p>{role.from} – {role.current ? 'Present' : role.to || 'Not specified'}{role.client ? ` · ${role.client}` : ''}</p>
-              {role.blurb && <p>{role.blurb}</p>}
-              <ul>{role.achievements.map((item, i) => <li key={item.lineageId ?? i}>{item.bullet}</li>)}</ul>
-            </details>
-          )) : <p className="interview-workspace-hint">This CV version has no work experience entries.</p>}
-          {document.skills.length > 0 && <div className="interview-workspace-skills" aria-label="Skills in this CV">{document.skills.map((skill, i) => <span key={skill.lineageId ?? i}>{skill.name}</span>)}</div>}
-        </>
-      )}
-    </section>
   );
 }
