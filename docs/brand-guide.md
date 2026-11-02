@@ -2,7 +2,7 @@
 
 Approved by Sergey on 1 November 2026. Use this guide for future site design
 and UI changes. The logo is used in the app header, sign-in page, and browser
-tab. The color palette is recorded below for future UI updates.
+tab. The app uses the color palette below.
 
 ## Logo
 
@@ -14,6 +14,12 @@ It is served at `/brand/d-stamp-logo.png`. Use this file rather than drawing a
 replacement. Keep shared public brand assets in `frontend/public/brand/`.
 
 ## Color palette
+
+The frontend source of truth is [colors.css](../frontend/src/theme/colors.css),
+loaded once in `main.tsx`. Change the nine main CSS variables there to update
+the app. Component styles and charts use `var(--color-...)`; do not add new
+hard-coded UI colors. Soft backgrounds, borders, and shadows follow the main
+colors automatically.
 
 | Role | Color | HEX | Where to use |
 | --- | --- | --- | --- |

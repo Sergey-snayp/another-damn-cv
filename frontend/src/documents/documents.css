@@ -1,12 +1,12 @@
 body:has(.documents-page) {
-  background: #fcfcfc;
+  background: var(--color-background);
 }
 .content:has(.documents-page) {
   max-width: none;
   padding: 34px 40px 80px;
 }
 .documents-page {
-  color: #202020;
+  color: var(--color-text);
 }
 .documents-page *,
 .documents-dialog * {
@@ -40,18 +40,18 @@ body:has(.documents-page) {
   height: 44px;
   min-width: 0;
   padding: 0 15px;
-  border: 1px solid #e4e4e4;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 3px 12px #00000004;
-  color: #8b8b8b;
+  background: var(--color-surface);
+  box-shadow: 0 3px 12px var(--color-shadow-soft);
+  color: var(--color-muted);
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
 }
 .documents-search:focus-within {
-  border-color: #a8a8a8;
-  box-shadow: 0 0 0 3px #00000006;
+  border-color: var(--color-border);
+  box-shadow: 0 0 0 3px var(--color-shadow-soft);
 }
 .documents-search > svg {
   flex: none;
@@ -65,10 +65,10 @@ body:has(.documents-page) {
   font: inherit;
   font-size: 15px;
   background: transparent;
-  color: #202020;
+  color: var(--color-text);
 }
 .documents-search input::placeholder {
-  color: #9b9b9b;
+  color: var(--color-muted);
   font-weight: 500;
 }
 .documents-search input::-webkit-search-cancel-button {
@@ -80,9 +80,9 @@ body:has(.documents-page) {
   justify-content: center;
   height: 44px;
   padding: 0 19px;
-  border: 1px solid #dedede;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--color-surface);
   font-size: 14px;
   font-weight: 600;
 }
@@ -96,9 +96,9 @@ body:has(.documents-page) {
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: #202020;
-  background: #fff;
-  border: 1px solid #dedede;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
@@ -108,14 +108,14 @@ body:has(.documents-page) {
 }
 .documents-control:hover,
 .documents-control.is-open {
-  background: #ededed;
+  background: var(--color-background);
 }
 .documents-control:focus-visible,
 .documents-icon-button:focus-visible,
 .documents-new-card:focus-visible,
 .documents-menu-item:focus-visible,
 .documents-pin:focus-visible {
-  outline: 2px solid #147cff;
+  outline: 2px solid var(--color-focus);
   outline-offset: 3px;
 }
 .documents-control:disabled,
@@ -125,12 +125,22 @@ body:has(.documents-page) {
   cursor: default;
 }
 .documents-control-primary {
-  color: #fff;
-  background: #202020;
-  border-color: #202020;
+  color: var(--color-text);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 .documents-control-primary:hover {
-  background: #3a3a3a;
+  background: var(--color-accent-hover);
+}
+.documents-add > .documents-control {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+.documents-add > .documents-control:hover,
+.documents-add > .documents-control.is-open {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
 }
 .documents-filter > .documents-control {
   width: 44px;
@@ -147,12 +157,12 @@ body:has(.documents-page) {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #858585;
+  color: var(--color-muted);
   cursor: pointer;
 }
 .documents-icon-button:hover {
-  background: #f0f0f0;
-  color: #202020;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .documents-popover-anchor {
@@ -167,12 +177,12 @@ body:has(.documents-page) {
   width: 236px;
   max-width: calc(100vw - 32px);
   padding: 7px;
-  background: #fff;
-  border: 1px solid #ececec;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   box-shadow:
-    0 12px 32px #0000000a,
-    0 2px 6px #00000003;
+    0 12px 32px var(--color-shadow-soft),
+    0 2px 6px var(--color-shadow-soft);
 }
 .documents-popover.is-above {
   top: auto;
@@ -187,7 +197,7 @@ body:has(.documents-page) {
   padding: 10px 11px;
   border: 0;
   border-radius: 8px;
-  color: #202020;
+  color: var(--color-text);
   background: transparent;
   text-decoration: none;
   text-align: left;
@@ -198,15 +208,15 @@ body:has(.documents-page) {
 }
 .documents-menu-item > svg {
   flex: none;
-  color: #888;
+  color: var(--color-muted);
 }
 .documents-menu-item:hover {
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 .documents-menu-divider {
   height: 1px;
   margin: 5px 7px;
-  background: #ededed;
+  background: var(--color-background);
 }
 .documents-filter .documents-popover {
   width: 240px;
@@ -223,14 +233,14 @@ body:has(.documents-page) {
   border: 0;
 }
 .documents-filter-menu fieldset + fieldset {
-  border-top: 1px solid #ededed;
+  border-top: 1px solid var(--color-border);
 }
 .documents-filter-menu legend {
   float: left;
   width: 100%;
   margin-bottom: 6px;
   padding: 0;
-  color: #999;
+  color: var(--color-muted);
   font-size: 12px;
   font-weight: 600;
 }
@@ -251,18 +261,20 @@ body:has(.documents-page) {
   width: 19px;
   height: 19px;
   margin: 0;
-  border: 1px solid #d3d3d3;
+  border: 1px solid var(--color-border);
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px #00000008;
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px var(--color-shadow-soft);
   cursor: pointer;
 }
 .documents-radio input:checked {
-  border: 6px solid #0b80ff;
+  border: 6px solid var(--color-accent);
+  background: var(--color-text);
+  outline: 1px solid var(--color-border);
   box-shadow: none;
 }
 .documents-radio input:focus-visible {
-  outline: 2px solid #147cff;
+  outline: 2px solid var(--color-focus);
   outline-offset: 3px;
 }
 
@@ -286,7 +298,7 @@ body:has(.documents-page) {
   border-radius: 1px;
 }
 .documents-preview-link:focus-visible {
-  outline: 2px solid #147cff;
+  outline: 2px solid var(--color-focus);
   outline-offset: 4px;
 }
 .documents-preview,
@@ -296,16 +308,16 @@ body:has(.documents-page) {
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #e2e2e2;
-  box-shadow: 0 4px 14px #00000004;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 14px var(--color-shadow-soft);
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
 }
 .documents-preview-link:hover .documents-preview {
-  border-color: #bcbcbc;
-  box-shadow: 0 6px 20px #00000008;
+  border-color: var(--color-border);
+  box-shadow: 0 6px 20px var(--color-shadow-soft);
 }
 .documents-preview-paper {
   position: absolute;
@@ -341,10 +353,10 @@ body:has(.documents-page) {
   gap: 12px;
   height: 100%;
   font-size: 12px;
-  color: #b2b2b2;
+  color: var(--color-muted);
 }
 .documents-preview-empty svg {
-  color: #c6c6c6;
+  color: var(--color-muted);
 }
 .documents-new-card {
   display: block;
@@ -353,13 +365,13 @@ body:has(.documents-page) {
   background: none;
   text-align: left;
   font: inherit;
-  color: #202020;
+  color: var(--color-text);
   cursor: pointer;
 }
 .documents-new-page {
   display: grid;
   place-items: center;
-  color: #929292;
+  color: var(--color-muted);
 }
 .documents-new-page svg {
   stroke-width: 1.9;
@@ -368,8 +380,8 @@ body:has(.documents-page) {
     transform 0.15s;
 }
 .documents-new-card:hover .documents-new-page {
-  border-color: #bcbcbc;
-  color: #444;
+  border-color: var(--color-border);
+  color: var(--color-text);
 }
 .documents-new-card:hover .documents-new-page svg {
   transform: scale(1.05);
@@ -391,7 +403,7 @@ body:has(.documents-page) {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-decoration: none;
-  color: #202020;
+  color: var(--color-text);
   font-size: 15px;
   line-height: 1.5;
   font-weight: 650;
@@ -407,7 +419,7 @@ a.documents-card-title:hover {
   gap: 7px;
   grid-column: 1 / -1;
   margin: 0;
-  color: #858585;
+  color: var(--color-muted);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -421,7 +433,7 @@ a.documents-card-title:hover {
 }
 .documents-card-more > .documents-control:hover,
 .documents-card-more > .documents-control.is-open {
-  background: #ededed;
+  background: var(--color-background);
 }
 .documents-card-more .documents-popover {
   width: 222px;
@@ -435,11 +447,11 @@ a.documents-card-title:hover {
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border);
   border-radius: 50%;
-  background: #fff;
-  color: #858585;
-  box-shadow: 0 2px 6px #00000008;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  box-shadow: 0 2px 6px var(--color-shadow-soft);
   opacity: 0;
   cursor: pointer;
   transition:
@@ -447,9 +459,9 @@ a.documents-card-title:hover {
     background 0.15s;
 }
 .documents-pin.is-pinned {
-  background: #202020;
-  color: #fff;
-  border-color: #202020;
+  background: var(--color-accent);
+  color: var(--color-text);
+  border-color: var(--color-accent);
   opacity: 1;
 }
 .documents-select {
@@ -460,17 +472,17 @@ a.documents-card-title:hover {
   width: 20px;
   height: 20px;
   margin: 0;
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-border);
   border-radius: 5px;
-  background: #fff;
-  box-shadow: 0 1px 3px #0000000c;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px var(--color-shadow-soft);
   opacity: 0;
   cursor: pointer;
   transition: opacity 0.15s;
 }
 .documents-select:checked {
-  background: #202020;
-  border-color: #202020;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
   opacity: 1;
 }
 .documents-select:checked::after {
@@ -480,13 +492,13 @@ a.documents-card-title:hover {
   left: 6px;
   width: 5px;
   height: 9px;
-  border: solid white;
+  border: solid var(--color-text);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
 .documents-select:focus-visible {
   opacity: 1;
-  outline: 2px solid #147cff;
+  outline: 2px solid var(--color-focus);
   outline-offset: 3px;
 }
 .documents-card:hover .documents-pin,
@@ -496,8 +508,8 @@ a.documents-card-title:hover {
   opacity: 1;
 }
 .documents-card.is-selected .documents-preview {
-  border-color: #383838;
-  box-shadow: 0 0 0 1px #383838;
+  border-color: var(--color-border);
+  box-shadow: 0 0 0 1px var(--color-shadow-strong);
 }
 .documents-selection {
   display: flex;
@@ -515,14 +527,14 @@ a.documents-card-title:hover {
   align-items: center;
   gap: 6px;
   padding: 5px 0;
-  color: #666;
+  color: var(--color-muted);
   background: none;
   border: 0;
   font: inherit;
   cursor: pointer;
 }
 .documents-selection button:hover {
-  color: #202020;
+  color: var(--color-text);
   text-decoration: underline;
 }
 
@@ -537,7 +549,7 @@ a.documents-card-title:hover {
   display: block;
   width: 100%;
   height: 3px;
-  background: #f0f0f0;
+  background: var(--color-background);
   border-radius: 2px;
   animation: documents-pulse 1.6s ease-in-out infinite;
 }
@@ -558,7 +570,7 @@ a.documents-card-title:hover {
   height: 10px;
   margin-top: 17px;
   border-radius: 3px;
-  background: #eee;
+  background: var(--color-background);
 }
 .documents-loading-label.short {
   width: 45%;
@@ -569,11 +581,11 @@ a.documents-card-title:hover {
   margin: 34px auto 0;
   padding: 18px;
   text-align: center;
-  color: #8a8a8a;
+  color: var(--color-muted);
 }
 .documents-empty h2 {
   margin: 0 0 4px;
-  color: #424242;
+  color: var(--color-text);
   font-size: 17px;
   font-weight: 600;
 }
@@ -583,7 +595,7 @@ a.documents-card-title:hover {
 }
 .documents-result-count {
   margin: 28px 0 0;
-  color: #999;
+  color: var(--color-muted);
   font-size: 12px;
 }
 .documents-error {
@@ -593,10 +605,10 @@ a.documents-card-title:hover {
   gap: 12px;
   margin: 0 0 20px;
   padding: 12px 15px;
-  border: 1px solid #f0d6d1;
+  border: 1px solid var(--color-error-border);
   border-radius: 9px;
-  background: #fff7f5;
-  color: #a43b2b;
+  background: var(--color-error-soft);
+  color: var(--color-error);
   font-size: 13px;
 }
 .documents-error button {
@@ -616,9 +628,9 @@ a.documents-card-title:hover {
   gap: 12px;
   padding: 14px 17px;
   margin: 0 0 22px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--color-surface);
   font-size: 13px;
 }
 .documents-import-status strong,
@@ -626,15 +638,15 @@ a.documents-card-title:hover {
   display: block;
 }
 .documents-import-status div > span {
-  color: #888;
+  color: var(--color-muted);
   font-size: 12px;
 }
 .documents-spinner {
   width: 19px;
   height: 19px;
   flex: none;
-  border: 2px solid #e5e5e5;
-  border-top-color: #333;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-border);
   border-radius: 50%;
   animation: documents-spin 0.8s linear infinite;
 }
@@ -645,10 +657,10 @@ a.documents-card-title:hover {
   max-width: calc(100vw - 32px);
   max-height: calc(100dvh - 40px);
   padding: 26px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 18px;
-  color: #202020;
-  box-shadow: 0 20px 80px #0000001a;
+  color: var(--color-text);
+  box-shadow: 0 20px 80px var(--color-shadow);
   font:
     14px/1.5 -apple-system,
     BlinkMacSystemFont,
@@ -657,7 +669,7 @@ a.documents-card-title:hover {
     sans-serif;
 }
 .documents-dialog::backdrop {
-  background: #0005;
+  background: var(--color-overlay);
   backdrop-filter: blur(3px);
 }
 .documents-dialog-heading {
@@ -673,7 +685,7 @@ a.documents-card-title:hover {
 }
 .documents-dialog form > p {
   margin: 8px 0 23px;
-  color: #888;
+  color: var(--color-muted);
   font-size: 13px;
 }
 .documents-dialog label {
@@ -683,7 +695,7 @@ a.documents-card-title:hover {
   font-size: 13px;
 }
 .documents-dialog label > span {
-  color: #999;
+  color: var(--color-muted);
   font-weight: 400;
 }
 .documents-dialog input {
@@ -692,17 +704,17 @@ a.documents-card-title:hover {
   height: 43px;
   padding: 0 12px;
   margin-top: 7px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  color: #202020;
-  background: #fff;
+  color: var(--color-text);
+  background: var(--color-surface);
   font: inherit;
   font-weight: 400;
 }
 .documents-dialog input:focus {
-  outline: 2px solid #cde3ff;
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
-  border-color: #929292;
+  border-color: var(--color-border);
 }
 .documents-dialog-actions {
   display: flex;

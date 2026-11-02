@@ -88,7 +88,7 @@ export function ApplicationCharts({
                 x2="605"
                 y1={190 - ratio * 145}
                 y2={190 - ratio * 145}
-                stroke="#ededed"
+                stroke="var(--color-border)"
               />
               <text x="22" y={194 - ratio * 145} textAnchor="end">
                 {Math.round(high * ratio)}
@@ -97,12 +97,12 @@ export function ApplicationCharts({
           ))}
           <path
             d={`M35 190 ${points.map((point) => `L${point.x} ${point.y}`).join(' ')} L595 190Z`}
-            fill="#e5f8fc"
+            fill="var(--color-accent-soft)"
           />
           <polyline
             points={points.map((point) => `${point.x},${point.y}`).join(' ')}
             fill="none"
-            stroke="#13a1bb"
+            stroke="var(--color-text)"
             strokeWidth="3"
           />
           {points.map((point, index) => (
@@ -111,8 +111,8 @@ export function ApplicationCharts({
                 cx={point.x}
                 cy={point.y}
                 r={hovered === index ? 6 : 4}
-                fill="#13a1bb"
-                stroke="white"
+                fill="var(--color-accent)"
+                stroke="var(--color-text)"
                 strokeWidth="2"
                 tabIndex={0}
                 onMouseEnter={() => setHovered(index)}

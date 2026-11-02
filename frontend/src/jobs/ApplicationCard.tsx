@@ -23,15 +23,6 @@ export interface ApplicationActions {
 }
 export function CompanyAvatar({ company }: { company: string | null }) {
   const name = company?.trim() || '?';
-  const hash = [...name].reduce((value, char) => value + char.charCodeAt(0), 0);
-  const colors = [
-    '#146a8c',
-    '#393347',
-    '#20352c',
-    '#775f42',
-    '#273e54',
-    '#404345',
-  ];
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -41,7 +32,6 @@ export function CompanyAvatar({ company }: { company: string | null }) {
   return (
     <span
       className="application-company-avatar"
-      style={{ background: colors[hash % colors.length] }}
       aria-hidden="true"
     >
       {initials}

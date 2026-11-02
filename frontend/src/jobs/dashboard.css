@@ -1,14 +1,13 @@
 body:has(.dashboard-page) {
-  background: #fcfcfc;
+  background: var(--color-background);
 }
 .content:has(.dashboard-page) {
   max-width: none;
   padding: 27px 40px 50px;
 }
 .dashboard-page {
-  --dashboard-accent: #12a1bb;
   --application-board-height: max(310px, calc(100dvh - 245px));
-  color: #202020;
+  color: var(--color-text);
 }
 .dashboard-page.has-review {
   --application-board-height: max(310px, calc(100dvh - 350px));
@@ -46,7 +45,7 @@ body:has(.dashboard-page) {
   gap: 0;
   padding: 0;
   border-radius: 999px;
-  background: #f1f1f1;
+  background: var(--color-background);
   flex: none;
 }
 .dashboard-segmented button {
@@ -58,7 +57,7 @@ body:has(.dashboard-page) {
   padding: 8px 15px;
   border: 1px solid transparent;
   border-radius: 999px;
-  color: #858585;
+  color: var(--color-muted);
   background: transparent;
   font: inherit;
   font-size: 14px;
@@ -68,20 +67,20 @@ body:has(.dashboard-page) {
   white-space: nowrap;
 }
 .dashboard-segmented button.is-active {
-  border-color: #ddd;
-  color: #202020;
-  background: #fff;
-  box-shadow: 0 1px 3px #00000006;
+  border-color: var(--color-accent);
+  color: var(--color-text);
+  background: var(--color-accent);
+  box-shadow: 0 1px 3px var(--color-shadow-soft);
 }
 .dashboard-segmented button:hover:not(.is-active) {
-  color: #444;
-  background: #eaeaea;
+  color: var(--color-text);
+  background: var(--color-background);
 }
 .dashboard-segmented button:focus-visible,
 .dashboard-control:focus-visible,
 .dashboard-icon-button:focus-visible,
 .dashboard-menu-item:focus-visible {
-  outline: 2px solid #1692ca;
+  outline: 2px solid var(--color-focus);
   outline-offset: 3px;
 }
 .dashboard-control {
@@ -91,21 +90,21 @@ body:has(.dashboard-page) {
   gap: 9px;
   min-height: 42px;
   padding: 8px 16px;
-  border: 1px solid #dedede;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: #fff;
-  color: #202020;
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 2px 5px #00000003;
+  box-shadow: 0 2px 5px var(--color-shadow-soft);
 }
 .dashboard-control:hover,
 .dashboard-control.is-open {
-  background: #eee;
+  background: var(--color-background);
 }
 .dashboard-control:disabled,
 .dashboard-icon-button:disabled,
@@ -114,15 +113,15 @@ body:has(.dashboard-page) {
   cursor: default;
 }
 .dashboard-primary {
-  border-color: #12a1bb;
+  border-color: var(--color-accent);
   border-radius: 11px;
-  background: #12a1bb;
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-text);
   box-shadow: none;
 }
 .dashboard-primary:hover {
-  background: #0b8da5;
-  border-color: #0b8da5;
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
 }
 .dashboard-add {
   min-height: 42px;
@@ -144,15 +143,15 @@ body:has(.dashboard-page) {
   min-width: 120px;
   height: 43px;
   padding: 0 15px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: #fff;
-  color: #8b8b8b;
-  box-shadow: 0 3px 10px #00000003;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  box-shadow: 0 3px 10px var(--color-shadow-soft);
 }
 .dashboard-search:focus-within {
-  border-color: #a7cbd2;
-  box-shadow: 0 0 0 3px #13a1bb0c;
+  border-color: var(--color-accent-border);
+  box-shadow: 0 0 0 3px var(--color-shadow-soft);
 }
 .dashboard-search svg {
   flex: none;
@@ -164,12 +163,12 @@ body:has(.dashboard-page) {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #202020;
+  color: var(--color-text);
   font: inherit;
   font-size: 15px;
 }
 .dashboard-search input::placeholder {
-  color: #a0a0a0;
+  color: var(--color-muted);
   font-weight: 500;
 }
 .dashboard-search input::-webkit-search-cancel-button {
@@ -181,7 +180,7 @@ body:has(.dashboard-page) {
 }
 .dashboard-options-arrows {
   margin-left: 1px;
-  color: #888;
+  color: var(--color-muted);
   font-size: 12px;
   line-height: 7px;
 }
@@ -195,26 +194,26 @@ body:has(.dashboard-page) {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  color: #858585;
+  color: var(--color-muted);
   background: transparent;
   font: inherit;
   cursor: pointer;
 }
 .dashboard-icon-button:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 .dashboard-menu {
   width: 258px;
   max-width: calc(100vw - 32px);
   padding: 8px;
-  border: 1px solid #e9e9e9;
+  border: 1px solid var(--color-border);
   border-radius: 13px;
-  background: #fff;
-  color: #222;
+  background: var(--color-surface);
+  color: var(--color-text);
   box-shadow:
-    0 12px 35px #0000000a,
-    0 2px 6px #00000003;
+    0 12px 35px var(--color-shadow-soft),
+    0 2px 6px var(--color-shadow-soft);
   font:
     14px/1.5 -apple-system,
     BlinkMacSystemFont,
@@ -231,14 +230,14 @@ body:has(.dashboard-page) {
   padding: 6px 2px;
 }
 .dashboard-menu-section + .dashboard-menu-section {
-  border-top: 1px solid #ededed;
+  border-top: 1px solid var(--color-border);
 }
 .dashboard-menu-section > h3 {
   margin: 0 0 5px;
   padding: 3px 10px;
   font-size: 12px;
   font-weight: 600;
-  color: #999;
+  color: var(--color-muted);
 }
 .dashboard-menu-item {
   display: flex;
@@ -250,7 +249,7 @@ body:has(.dashboard-page) {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #222;
+  color: var(--color-text);
   text-align: left;
   text-decoration: none;
   font: inherit;
@@ -259,16 +258,16 @@ body:has(.dashboard-page) {
   cursor: pointer;
 }
 .dashboard-menu-item:hover {
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 .dashboard-menu-item > svg {
   flex: none;
-  color: #888;
+  color: var(--color-muted);
 }
 .dashboard-menu-divider {
   height: 1px;
   margin: 6px 9px;
-  background: #ededed;
+  background: var(--color-background);
 }
 .dashboard-option-group > summary {
   display: flex;
@@ -286,11 +285,11 @@ body:has(.dashboard-page) {
   display: none;
 }
 .dashboard-option-group > summary:hover {
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 .dashboard-option-group > summary > svg {
   margin-left: auto;
-  color: #999;
+  color: var(--color-muted);
   transition: transform 0.12s;
 }
 .dashboard-option-group[open] > summary > svg {
@@ -303,16 +302,16 @@ body:has(.dashboard-page) {
   padding: 5px 10px;
   border: 0;
   border-radius: 7px;
-  background: #fafafa;
+  background: var(--color-background);
 }
 .dashboard-option-content > input[type='date'] {
   width: 100%;
   min-height: 36px;
   padding: 5px 6px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
-  color: #333;
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: 13px;
 }
@@ -323,7 +322,7 @@ body:has(.dashboard-page) {
   gap: 10px;
   min-height: 32px;
   padding: 5px 0;
-  color: #333;
+  color: var(--color-text);
   font-size: 13px;
   cursor: pointer;
 }
@@ -332,7 +331,7 @@ body:has(.dashboard-page) {
   width: 17px;
   height: 17px;
   margin: 0;
-  accent-color: #119fb9;
+  accent-color: var(--color-accent);
   cursor: pointer;
 }
 .dashboard-option-row {
@@ -345,14 +344,14 @@ body:has(.dashboard-page) {
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: #12a1bb;
+  background: var(--color-accent);
 }
 .dashboard-text-button {
   display: inline;
   padding: 0;
   border: 0;
   background: none;
-  color: #16879b;
+  color: var(--color-text);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -368,10 +367,10 @@ body:has(.dashboard-page) {
   gap: 13px;
   padding: 16px 18px;
   margin: 0 0 27px;
-  border: 1px solid #a4dce7;
+  border: 1px solid var(--color-accent-border);
   border-radius: 17px;
-  background: #d2f6fd;
-  box-shadow: 0 4px 13px #00000003;
+  background: var(--color-accent-soft);
+  box-shadow: 0 4px 13px var(--color-shadow-soft);
 }
 .dashboard-review-icon {
   display: grid;
@@ -380,9 +379,9 @@ body:has(.dashboard-page) {
   width: 46px;
   height: 46px;
   border-radius: 10px;
-  background: #fff;
-  color: #007e98;
-  box-shadow: 0 1px 3px #00000004;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 3px var(--color-shadow-soft);
 }
 .dashboard-review-banner strong {
   display: block;
@@ -392,7 +391,7 @@ body:has(.dashboard-page) {
 }
 .dashboard-review-banner p {
   margin: 0;
-  color: #7a8a8d;
+  color: var(--color-text);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -407,7 +406,7 @@ body:has(.dashboard-page) {
   gap: 15px;
   margin: 12px 0 14px;
   font-size: 12px;
-  color: #888;
+  color: var(--color-muted);
 }
 .dashboard-error {
   display: flex;
@@ -417,10 +416,10 @@ body:has(.dashboard-page) {
   gap: 10px;
   padding: 12px 15px;
   margin: 14px 0;
-  border: 1px solid #f0d7d1;
+  border: 1px solid var(--color-error-border);
   border-radius: 9px;
-  background: #fff7f5;
-  color: #a74636;
+  background: var(--color-error-soft);
+  color: var(--color-error);
   font-size: 13px;
 }
 .dashboard-error p {
@@ -432,11 +431,11 @@ body:has(.dashboard-page) {
 .dashboard-empty {
   padding: 28px 20px;
   text-align: center;
-  color: #999;
+  color: var(--color-muted);
 }
 .dashboard-empty h2 {
   margin: 0 0 6px;
-  color: #666;
+  color: var(--color-muted);
   font-size: 16px;
   font-weight: 600;
 }
@@ -446,7 +445,7 @@ body:has(.dashboard-page) {
 }
 .dashboard-loading {
   padding: 35px;
-  color: #999;
+  color: var(--color-muted);
   text-align: center;
 }
 
@@ -466,8 +465,8 @@ body:has(.dashboard-page) {
   transition: background 0.12s;
 }
 .application-column.is-over {
-  background: #ecfafd;
-  outline: 2px dashed #8dcbd7;
+  background: var(--color-background);
+  outline: 2px dashed var(--color-focus);
   outline-offset: 3px;
 }
 .application-column-heading {
@@ -479,24 +478,24 @@ body:has(.dashboard-page) {
   padding: 0 13px;
 }
 .application-column-heading > svg {
-  color: #888;
+  color: var(--color-muted);
 }
 .application-column-heading h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #151515;
+  color: var(--color-text);
   white-space: nowrap;
 }
 .application-column-heading > span {
   margin-left: 2px;
   font-size: 12px;
   font-weight: 500;
-  color: #999;
+  color: var(--color-muted);
 }
 .application-column-heading > button {
   margin-left: auto;
-  color: #252525;
+  color: var(--color-text);
 }
 .application-column-cards {
   display: flex;
@@ -508,7 +507,7 @@ body:has(.dashboard-page) {
   padding: 1px 6px 4px 1px;
   list-style: none;
   scrollbar-width: thin;
-  scrollbar-color: #ccc transparent;
+  scrollbar-color: var(--color-border) transparent;
 }
 .application-card-wrap {
   position: relative;
@@ -520,23 +519,23 @@ body:has(.dashboard-page) {
 .application-card {
   position: relative;
   padding: 16px;
-  border: 1px solid #e3e3e3;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 3px 10px #00000004;
+  background: var(--color-surface);
+  box-shadow: 0 3px 10px var(--color-shadow-soft);
   cursor: grab;
 }
 .application-card:hover {
-  border-color: #cdcdcd;
+  border-color: var(--color-border);
 }
 .application-card.is-lifted {
   transform: rotate(1deg);
-  box-shadow: 0 12px 30px #0000001a;
+  box-shadow: 0 12px 30px var(--color-shadow);
   cursor: grabbing;
 }
 .application-card.is-selected {
-  border-color: #159ab2;
-  box-shadow: 0 0 0 1px #159ab2;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-shadow-strong);
 }
 .application-card-company {
   display: flex;
@@ -545,6 +544,7 @@ body:has(.dashboard-page) {
   margin-bottom: 12px;
 }
 .application-company-avatar {
+  background: var(--color-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -552,7 +552,7 @@ body:has(.dashboard-page) {
   width: 33px;
   height: 33px;
   border-radius: 8px;
-  color: #fff;
+  color: var(--color-surface);
   font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.05em;
@@ -563,7 +563,7 @@ body:has(.dashboard-page) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #898989;
+  color: var(--color-muted);
   font-size: 14px;
   font-weight: 600;
 }
@@ -580,14 +580,14 @@ body:has(.dashboard-page) {
   height: 30px;
 }
 .application-favorite.is-favorite {
-  color: #0ba0b9;
+  color: var(--color-text);
 }
 .application-card-title {
   display: -webkit-box;
   overflow: hidden;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  color: #1b1b1b;
+  color: var(--color-text);
   text-decoration: none;
   font-size: 14px;
   font-weight: 700;
@@ -603,7 +603,7 @@ body:has(.dashboard-page) {
   outline: none;
 }
 .application-card-title:focus-visible::after {
-  outline: 2px solid #128fa5;
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 .application-card-location {
@@ -611,7 +611,7 @@ body:has(.dashboard-page) {
   align-items: flex-start;
   gap: 6px;
   margin: 8px 0 12px;
-  color: #929292;
+  color: var(--color-muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -632,16 +632,16 @@ body:has(.dashboard-page) {
   gap: 7px;
   margin: 0;
   padding-top: 9px;
-  border-top: 1px solid #f0f0f0;
-  color: #919191;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
   font-size: 11px;
 }
 .application-card-note {
-  color: #198697;
+  color: var(--color-text);
   font-size: 10px;
 }
 .application-card-note.needs-review {
-  color: #a67b27;
+  color: var(--color-text);
 }
 .application-column-empty {
   display: flex;
@@ -651,9 +651,9 @@ body:has(.dashboard-page) {
   gap: 5px;
   min-height: 161px;
   padding: 15px;
-  border: 1px dashed #dfdfdf;
+  border: 1px dashed var(--color-border);
   border-radius: 16px;
-  color: #999;
+  color: var(--color-muted);
   text-align: center;
 }
 .application-column-empty strong {
@@ -670,9 +670,9 @@ body:has(.dashboard-page) {
 }
 .application-board-loading span {
   height: 157px;
-  border: 1px solid #eee;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
-  background: linear-gradient(100deg, #fafafa 20%, #f0f0f0 45%, #fafafa 70%);
+  background: linear-gradient(100deg, var(--color-background) 20%, var(--color-background) 45%, var(--color-background) 70%);
   background-size: 200% 100%;
   animation: application-loading 1.7s ease infinite;
 }
@@ -682,7 +682,7 @@ body:has(.dashboard-page) {
 .application-move-field {
   display: block;
   margin: 6px 10px;
-  color: #999;
+  color: var(--color-muted);
   font-size: 12px;
 }
 .application-move-field select {
@@ -691,10 +691,10 @@ body:has(.dashboard-page) {
   min-height: 35px;
   margin-top: 4px;
   padding: 5px 7px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #fff;
-  color: #333;
+  background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: 13px;
 }
@@ -706,7 +706,7 @@ body:has(.dashboard-page) {
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: #12a1bb;
+  accent-color: var(--color-accent);
   cursor: pointer;
 }
 .dashboard-manage-bar {
@@ -716,9 +716,9 @@ body:has(.dashboard-page) {
   gap: 16px;
   padding: 10px 13px;
   margin: 12px 0;
-  border: 1px solid #cde7ed;
+  border: 1px solid var(--color-accent-border);
   border-radius: 10px;
-  background: #f3fcfd;
+  background: var(--color-background);
   font-size: 12px;
 }
 .dashboard-manage-bar label,
@@ -731,13 +731,13 @@ body:has(.dashboard-page) {
   width: 17px;
   height: 17px;
   margin: 0;
-  accent-color: #12a1bb;
+  accent-color: var(--color-accent);
 }
 .dashboard-manage-bar button {
   padding: 4px 0;
   border: 0;
   background: none;
-  color: #358190;
+  color: var(--color-text);
   font: inherit;
   cursor: pointer;
 }
@@ -747,16 +747,16 @@ body:has(.dashboard-page) {
 }
 .dashboard-manage-bar .dashboard-manage-done {
   margin-left: auto;
-  color: #333;
+  color: var(--color-text);
   font-weight: 600;
 }
 
 .application-list-scroll {
   overflow-x: auto;
   margin-top: 23px;
-  border: 1px solid #e7e7e7;
+  border: 1px solid var(--color-border);
   border-radius: 13px;
-  background: #fff;
+  background: var(--color-surface);
 }
 .application-list {
   width: 100%;
@@ -767,30 +767,30 @@ body:has(.dashboard-page) {
 }
 .application-list th {
   padding: 13px 16px;
-  border-bottom: 1px solid #e7e7e7;
-  background: #fafafa;
-  color: #999;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-muted);
   font-size: 11px;
   font-weight: 600;
 }
 .application-list td {
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  color: #888;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
 }
 .application-list tr:last-child td {
   border-bottom: 0;
 }
 .application-list tbody tr:hover,
 .application-list tr.is-selected {
-  background: #f5fcfd;
+  background: var(--color-background);
 }
 .application-list td > a {
   display: block;
   max-width: 330px;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #202020;
+  color: var(--color-text);
   text-decoration: none;
   font-size: 13px;
   font-weight: 600;
@@ -800,7 +800,7 @@ body:has(.dashboard-page) {
 }
 .application-list small {
   display: block;
-  color: #1593a8;
+  color: var(--color-text);
   font-size: 10px;
 }
 .application-list-company {
@@ -808,7 +808,7 @@ body:has(.dashboard-page) {
   align-items: center;
   gap: 8px;
   max-width: 220px;
-  color: #737373;
+  color: var(--color-muted);
   font-weight: 500;
 }
 .application-list-company > span:last-child {
@@ -829,40 +829,40 @@ body:has(.dashboard-page) {
 .application-status-select {
   max-width: 126px;
   padding: 5px 7px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #f7f7f7;
-  color: #777;
+  background: var(--color-background);
+  color: var(--color-muted);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
 .application-status-select.status-applied {
-  background: #edf9fc;
-  color: #14879c;
-  border-color: #d9edf2;
+  background: var(--color-background);
+  color: var(--color-text);
+  border-color: var(--color-border);
 }
 .application-status-select.status-interview,
 .application-status-select.status-screening {
-  background: #fff9ec;
-  color: #a0792b;
-  border-color: #f2e5c7;
+  background: var(--color-background);
+  color: var(--color-text);
+  border-color: var(--color-accent-border);
 }
 .application-status-select.status-offer,
 .application-status-select.status-accepted {
-  background: #effaf4;
-  color: #34815b;
-  border-color: #d8eddf;
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  border-color: var(--color-success-border);
 }
 .application-status-select.status-rejected {
-  background: #fff3f1;
-  color: #a45a4b;
-  border-color: #f5e0db;
+  background: var(--color-error-soft);
+  color: var(--color-error);
+  border-color: var(--color-error-border);
 }
 .application-list input[type='checkbox'] {
   width: 17px;
   height: 17px;
-  accent-color: #12a1bb;
+  accent-color: var(--color-accent);
 }
 .application-charts {
   display: grid;
@@ -873,9 +873,9 @@ body:has(.dashboard-page) {
 .application-chart-card {
   min-width: 0;
   padding: 23px;
-  border: 1px solid #e7e7e7;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
-  background: #fff;
+  background: var(--color-surface);
 }
 .application-chart-card header {
   display: flex;
@@ -890,11 +890,11 @@ body:has(.dashboard-page) {
 }
 .application-chart-card header > span {
   font-size: 11px;
-  color: #999;
+  color: var(--color-muted);
 }
 .application-chart-card > p {
   margin: 6px 0 20px;
-  color: #999;
+  color: var(--color-muted);
   font-size: 12px;
 }
 .application-status-chart {
@@ -914,29 +914,29 @@ body:has(.dashboard-page) {
   text-align: left;
   font: inherit;
   font-size: 11px;
-  color: #888;
+  color: var(--color-muted);
   cursor: pointer;
 }
 .application-status-chart > button:hover {
-  color: #168da2;
+  color: var(--color-text);
 }
 .application-status-chart strong {
   font-size: 11px;
   text-align: right;
   font-weight: 500;
-  color: #555;
+  color: var(--color-muted);
 }
 .application-chart-bar-track {
   overflow: hidden;
   height: 9px;
   border-radius: 4px;
-  background: #f5f5f5;
+  background: var(--color-background);
 }
 .application-chart-bar-track > span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #66c3d5;
+  background: var(--color-accent);
 }
 .application-trend-chart {
   display: block;
@@ -945,14 +945,14 @@ body:has(.dashboard-page) {
   overflow: visible;
 }
 .application-trend-chart text {
-  fill: #999;
+  fill: var(--color-muted);
   font:
     10px -apple-system,
     sans-serif;
 }
 .application-trend-chart circle:focus {
   outline: none;
-  stroke: #187a90;
+  stroke: var(--color-text);
   stroke-width: 3;
 }
 .application-chart-summary {
@@ -961,15 +961,15 @@ body:has(.dashboard-page) {
   gap: 28px;
   margin-top: 17px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border);
   font-size: 12px;
-  color: #999;
+  color: var(--color-muted);
 }
 .application-chart-summary strong {
   margin-right: 4px;
   font-size: 19px;
   font-weight: 650;
-  color: #333;
+  color: var(--color-text);
 }
 
 .application-drawer {
@@ -982,10 +982,10 @@ body:has(.dashboard-page) {
   margin: 0;
   padding: 0;
   border: 0;
-  border-left: 1px solid #ddd;
+  border-left: 1px solid var(--color-border);
   border-radius: 0;
-  box-shadow: -12px 0 55px #00000012;
-  color: #202020;
+  box-shadow: -12px 0 55px var(--color-shadow);
+  color: var(--color-text);
   font:
     14px/1.5 -apple-system,
     BlinkMacSystemFont,
@@ -996,7 +996,7 @@ body:has(.dashboard-page) {
 }
 .application-drawer::backdrop,
 .dashboard-dialog::backdrop {
-  background: #0007;
+  background: var(--color-overlay);
 }
 .application-drawer > form {
   display: grid;
@@ -1008,7 +1008,7 @@ body:has(.dashboard-page) {
   align-items: center;
   gap: 15px;
   padding: 20px 26px;
-  border-bottom: 1px solid #e6e6e6;
+  border-bottom: 1px solid var(--color-border);
 }
 .application-heading-icon {
   display: grid;
@@ -1017,8 +1017,8 @@ body:has(.dashboard-page) {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: #cff7fd;
-  color: #007a92;
+  background: var(--color-accent-soft);
+  color: var(--color-text);
 }
 .application-drawer-header h2 {
   margin: 0;
@@ -1029,7 +1029,7 @@ body:has(.dashboard-page) {
   margin-left: auto;
   width: 38px;
   height: 38px;
-  color: #222;
+  color: var(--color-text);
 }
 .application-drawer-body {
   min-height: 0;
@@ -1040,12 +1040,12 @@ body:has(.dashboard-page) {
   display: block;
   min-width: 0;
   margin-bottom: 22px;
-  color: #222;
+  color: var(--color-text);
   font-size: 14px;
   font-weight: 600;
 }
 .application-required {
-  color: #ed5454;
+  color: var(--color-error);
 }
 .application-field input,
 .application-field select,
@@ -1055,11 +1055,11 @@ body:has(.dashboard-page) {
   min-height: 42px;
   margin-top: 7px;
   padding: 9px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #fff;
-  box-shadow: 0 1px 3px #00000005;
-  color: #333;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px var(--color-shadow-soft);
+  color: var(--color-text);
   font: inherit;
   font-size: 14px;
   font-weight: 400;
@@ -1067,18 +1067,18 @@ body:has(.dashboard-page) {
 }
 .application-field input::placeholder,
 .application-field textarea::placeholder {
-  color: #aaa;
+  color: var(--color-muted);
 }
 .application-field input:focus,
 .application-field select:focus,
 .application-field textarea:focus {
-  border-color: #8bc9d3;
-  box-shadow: 0 0 0 3px #14a1bb0d;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-shadow-soft);
 }
 .application-field input:disabled,
 .application-field select:disabled {
-  background: #fafafa;
-  color: #999;
+  background: var(--color-background);
+  color: var(--color-muted);
 }
 .application-field textarea {
   resize: vertical;
@@ -1105,7 +1105,7 @@ body:has(.dashboard-page) {
   right: 12px;
   transform: rotate(90deg);
   pointer-events: none;
-  color: #999;
+  color: var(--color-muted);
 }
 .application-extra {
   margin-top: 9px;
@@ -1115,7 +1115,7 @@ body:has(.dashboard-page) {
   align-items: center;
   gap: 8px;
   margin-bottom: 20px;
-  color: #888;
+  color: var(--color-muted);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -1129,19 +1129,19 @@ body:has(.dashboard-page) {
 }
 .application-field-note {
   margin: -5px 0 20px;
-  color: #999;
+  color: var(--color-muted);
   font-size: 12px;
 }
 .application-field-note a {
-  color: #258a9c;
+  color: var(--color-text);
 }
 .application-drawer-footer {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   padding: 18px 40px;
-  border-top: 1px solid #e7e7e7;
-  background: #fff;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 .application-drawer-footer .dashboard-control {
   min-height: 43px;
@@ -1152,11 +1152,11 @@ body:has(.dashboard-page) {
   max-width: calc(100vw - 32px);
   max-height: calc(100dvh - 40px);
   padding: 23px;
-  border: 1px solid #e4e4e4;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
-  background: #fff;
-  color: #222;
-  box-shadow: 0 15px 65px #00000015;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 15px 65px var(--color-shadow);
   font:
     14px/1.5 -apple-system,
     BlinkMacSystemFont,
@@ -1176,7 +1176,7 @@ body:has(.dashboard-page) {
   font-weight: 650;
 }
 .dashboard-dialog > p {
-  color: #888;
+  color: var(--color-muted);
   font-size: 13px;
   margin: 13px 0 20px;
 }
@@ -1197,10 +1197,10 @@ body:has(.dashboard-page) {
   gap: 8px;
   width: 100%;
   padding: 23px;
-  border: 1px dashed #cbdde0;
+  border: 1px dashed var(--color-border);
   border-radius: 11px;
-  background: #f8fcfd;
-  color: #55909b;
+  background: var(--color-background);
+  color: var(--color-text);
   font: inherit;
   cursor: pointer;
 }
@@ -1209,7 +1209,7 @@ body:has(.dashboard-page) {
   font-weight: 600;
 }
 .application-csv-upload > span {
-  color: #999;
+  color: var(--color-muted);
   font-size: 11px;
 }
 .application-import-dialog > .application-import-count {
@@ -1218,7 +1218,7 @@ body:has(.dashboard-page) {
 }
 .application-import-preview {
   overflow-x: auto;
-  border: 1px solid #eee;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
 }
 .application-import-preview table {
@@ -1228,14 +1228,14 @@ body:has(.dashboard-page) {
   text-align: left;
 }
 .application-import-preview th {
-  background: #fafafa;
-  color: #999;
+  background: var(--color-background);
+  color: var(--color-muted);
   font-size: 11px;
 }
 .application-import-preview th,
 .application-import-preview td {
   padding: 9px 11px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border);
 }
 .application-import-preview tr:last-child td {
   border-bottom: 0;
@@ -1258,9 +1258,9 @@ body:has(.dashboard-page) {
   max-width: calc(100vw - 32px);
   padding: 12px 14px 12px 17px;
   border-radius: 10px;
-  background: #242424;
-  color: #fff;
-  box-shadow: 0 5px 25px #0000001a;
+  background: var(--color-text);
+  color: var(--color-surface);
+  box-shadow: 0 5px 25px var(--color-shadow);
   transform: translateX(-50%);
   font-size: 13px;
 }
@@ -1271,7 +1271,7 @@ body:has(.dashboard-page) {
   padding: 0;
   border: 0;
   background: none;
-  color: #8fe8f6;
+  color: var(--color-accent);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -1280,7 +1280,7 @@ body:has(.dashboard-page) {
   display: inline-flex;
   align-items: center;
   padding: 3px;
-  color: #aaa;
+  color: var(--color-muted);
 }
 @keyframes application-loading {
   to {
