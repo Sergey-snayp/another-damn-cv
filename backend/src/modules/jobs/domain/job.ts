@@ -1,3 +1,5 @@
+import type { InterviewSchedule } from './interview-schedule';
+
 export const JOB_STATUSES = [
   'saved',
   'dismissed',
@@ -45,6 +47,7 @@ export interface Job {
   appliedAt: Date | null;
   applicationResumeId: string | null;
   applicationSnapshot: number | null;
+  interview: InterviewSchedule | null;
 }
 
 export const APPLIED_STATUSES: readonly JobStatus[] = [

@@ -330,3 +330,58 @@ test('application creation and multi-row imports roll back if a status event can
   );
   assert.equal(await prisma.job.count({ where: { userId: owner.user.id } }), count);
 });
+
+test('interview schedules persist through HTTP and list reads, keep a date without a time, and can be rescheduled or removed', async () => {
+  const job = await add('Scheduled interview', { status: 'interview' });
+  assert.equal((await json<PublicJob>(`/jobs/${job.id}`)).interview, null);
+  const dateOnly = { date: '2026-11-02', time: null, timeZone: 'America/Vancouver' };
+  const saved = await json<PublicJob>(`/jobs/${job.id}`, { method: 'PATCH', body: { interview: dateOnly } });
+  assert.deepEqual(saved.interview, dateOnly);
+  assert.equal(saved.status, 'interview');
+  assert.equal(saved.history?.length, 1);
+  assert.deepEqual(
+    (await json<PublicJob[]>('/jobs?status=interview')).find((row) => row.id === job.id)?.interview,
+    dateOnly,
+  );
+  const timed = { date: '2026-11-03', time: '09:30', timeZone: 'Europe/London' };
+  await json(`/jobs/${job.id}`, { method: 'PATCH', body: { interview: timed } });
+  await json(`/jobs/${job.id}`, { method: 'PATCH', body: { location: 'Updated location' } });
+  assert.deepEqual((await json<PublicJob>(`/jobs/${job.id}`)).interview, timed);
+  const stored = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+  assert.equal(stored.interviewDate, '2026-11-03');
+  assert.equal(stored.interviewTime, '09:30');
+  const removed = await json<PublicJob>(`/jobs/${job.id}`, { method: 'PATCH', body: { interview: null } });
+  assert.equal(removed.interview, null);
+  const cleared = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+  assert.equal(cleared.interviewTimeZone, null);
+  assert.equal(cleared.interviewTime, null);
+});
+
+test('invalid dates, times, time zones and incomplete schedules are rejected without changing the previous schedule', async () => {
+  const job = await add('Interview validation');
+  const interview = { date: '2026-11-02', time: '14:30', timeZone: 'America/Vancouver' };
+  await json(`/jobs/${job.id}`, { method: 'PATCH', body: { interview } });
+  for (const value of [
+    { ...interview, date: '2026-02-30' },
+    { ...interview, time: '24:00' },
+    { ...interview, timeZone: 'Not/A_Zone' },
+    { time: '14:30', timeZone: 'UTC' },
+  ]) {
+    assert.equal(
+      (await request(`/jobs/${job.id}`, { method: 'PATCH', body: { interview: value } })).status,
+      400,
+    );
+  }
+  assert.deepEqual((await json<PublicJob>(`/jobs/${job.id}`)).interview, interview);
+});
+
+test('interview schedule changes require sign-in and ownership', async () => {
+  const job = await add('Private interview');
+  const body = { interview: { date: '2026-11-02', time: null, timeZone: 'America/Vancouver' } };
+  assert.equal((await request(`/jobs/${job.id}`, { method: 'PATCH', body, userId: null })).status, 401);
+  assert.equal(
+    (await request(`/jobs/${job.id}`, { method: 'PATCH', body, userId: other.user.id })).status,
+    404,
+  );
+  assert.equal((await json<PublicJob>(`/jobs/${job.id}`)).interview, null);
+});

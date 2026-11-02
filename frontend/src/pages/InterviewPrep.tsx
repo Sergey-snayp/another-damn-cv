@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { jobsApi, jobName, STATUS_LABELS, type JobSummary } from '../jobsApi';
 import { CompanyAvatar } from '../jobs/ApplicationCard';
 import { DashboardIcon } from '../jobs/DashboardIcon';
-import { isInterviewJob } from '../interviews/interviewJobs';
+import { isInterviewJob, compareInterviewJobs } from '../interviews/interviewJobs';
+import { InterviewDateEditor } from '../interviews/InterviewDateEditor';
 import '../interviews/interview-prep.css';
 
 type StageFilter = 'all' | 'screening' | 'interview';
@@ -22,7 +23,7 @@ export function InterviewPrep() {
       .then((results) => {
         if (!active) return;
         const unique = new Map(results.flat().filter(isInterviewJob).map((job) => [job.id, job]));
-        setJobs([...unique.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)));
+        setJobs([...unique.values()]);
       })
       .catch((err: unknown) => {
         if (active) setError(err instanceof Error ? err.message : 'Could not load your interview jobs.');
@@ -34,7 +35,7 @@ export function InterviewPrep() {
   const shown = jobs?.filter((job) =>
     (stage === 'all' || job.status === stage) &&
     [job.company, jobName(job), job.location].some((value) => value?.toLocaleLowerCase().includes(search)),
-  ) ?? [];
+  ).sort((a, b) => compareInterviewJobs(a, b)) ?? [];
   const filters: { value: StageFilter; label: string; count: number }[] = [
     { value: 'all', label: 'All interviews', count: jobs?.length ?? 0 },
     { value: 'screening', label: 'Screening', count: jobs?.filter((job) => job.status === 'screening').length ?? 0 },
@@ -90,7 +91,7 @@ export function InterviewPrep() {
               ))}
             </div>
           </div>
-          <p className="interview-prep-count" role="status">{shown.length} {shown.length === 1 ? 'interview job' : 'interview jobs'}</p>
+          <p className="interview-prep-count" role="status">{shown.length} {shown.length === 1 ? 'interview job' : 'interview jobs'} · Upcoming dates first</p>
           {shown.length === 0 ? (
             <section className="interview-prep-state">
               <h2>No matching interviews</h2>
@@ -99,7 +100,7 @@ export function InterviewPrep() {
             </section>
           ) : (
             <div className="interview-prep-grid">
-              {shown.map((job) => <InterviewJobCard key={job.id} job={job} />)}
+              {shown.map((job) => <InterviewJobCard key={job.id} job={job} onSaved={(saved) => setJobs((current) => current?.map((row) => row.id === saved.id ? { ...row, ...saved } : row) ?? null)} />)}
             </div>
           )}
         </>
@@ -108,7 +109,7 @@ export function InterviewPrep() {
   );
 }
 
-function InterviewJobCard({ job }: { job: JobSummary }) {
+function InterviewJobCard({ job, onSaved }: { job: JobSummary; onSaved(job: JobSummary): void }) {
   return (
     <article className="interview-job-card" aria-label={`${job.company || 'Company not added'} — ${jobName(job)}`}>
       <div className="interview-job-card-top">
@@ -118,6 +119,7 @@ function InterviewJobCard({ job }: { job: JobSummary }) {
       <p className="interview-job-company">{job.company || 'Company not added'}</p>
       <h2><Link to={`/jobs/${job.id}`}>{jobName(job)}</Link></h2>
       <p className="interview-job-location"><DashboardIcon name="location" size={16} />{job.location || (job.remote ? 'Remote' : 'Location not added')}</p>
+      <InterviewDateEditor job={job} onSaved={(saved) => onSaved({ ...job, ...saved })} />
       <div className="interview-job-resume">
         <DashboardIcon name="file" size={20} />
         {job.applicationResumeId && job.applicationSnapshot ? (

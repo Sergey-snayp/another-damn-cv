@@ -6,6 +6,7 @@ import {
 } from '../jobsApi';
 import { resumeApi, type ResumeSummary } from '../resumeApi';
 import { ApplicationResume } from '../jobs/ApplicationResume';
+import { InterviewDateEditor } from '../interviews/InterviewDateEditor';
 
 type Draft = {
   title: string; company: string; location: string;
@@ -140,6 +141,10 @@ export function JobDetail() {
       </section>
 
       <ApplicationResume job={job} onChanged={(next) => setJob((current) => current ? { ...current, ...next } : current)} />
+
+      <section className="card" style={{ marginTop: 16 }}>
+        <InterviewDateEditor job={job} onSaved={(next) => setJob((current) => current ? { ...current, ...next } : current)} />
+      </section>
 
       <section className="card" style={{ marginTop: 16 }}>
         <h2>Details {job.editedFields.length > 0 && <span className="muted">edited: {job.editedFields.join(', ')}</span>}</h2>

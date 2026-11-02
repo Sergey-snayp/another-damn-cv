@@ -42,6 +42,9 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
 - **Interview Prep** collects active jobs in Screening or Interviewing, with
   search, status filters, job details and the saved application CV version.
   Jobs appear automatically from Dashboard; archived and other statuses stay out.
+  Set, change or remove the next interview date, optional time and time zone from
+  an interview card or job details. Schedules save to your account; upcoming dates
+  appear first. A date without a time stays date-only.
   Preparation generation is still planned.
 
 Add Application saves the chosen resume version with the job. Later resume edits

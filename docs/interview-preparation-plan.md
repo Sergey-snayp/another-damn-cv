@@ -21,6 +21,17 @@ Available now: search, status filters, job details, original postings, and links
 to the exact application CV version. Dashboard card menus also link here for
 active interview jobs. Change application status on Dashboard to manage the list.
 
+Each job can also keep its next interview date, optional time, and time zone.
+Set, change, or remove it from Interview Prep or the job details. Dates save to
+the account and sort upcoming interviews first, then undated jobs, then past
+interviews. A date without a time does not imply a midnight appointment.
+Separate schedules and preparation for multiple rounds remain planned.
+
+Application status and interview type are separate. Screening is the initial
+screening stage and may involve a recruiter or a technical screen. Interviewing
+covers later rounds. A future interview-type field will identify the specific
+round, such as HR, coding, system design, behavioural, or hiring manager.
+
 The next step is preparation for an individual interview, described below.
 
 The user chooses:

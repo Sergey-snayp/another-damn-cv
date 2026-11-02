@@ -2,12 +2,22 @@ import type { Job as StoredJob, JobStatusEvent as StoredEvent } from '@prisma/cl
 import type { Job, JobStatus, JobStatusEvent } from '../../../domain/job';
 
 export function jobFromRow(row: StoredJob): Job {
+  const { interviewDate, interviewTime, interviewTimeZone, ...fields } = row;
   return {
-    ...row,
+    ...fields,
+    interview: interviewFromRow({ interviewDate, interviewTime, interviewTimeZone }),
     source: lower(row.source),
     status: lower(row.status),
     extraction: lower(row.extraction),
   };
+}
+
+export function interviewFromRow(
+  row: Pick<StoredJob, 'interviewDate' | 'interviewTime' | 'interviewTimeZone'>,
+) {
+  return row.interviewDate && row.interviewTimeZone
+    ? { date: row.interviewDate, time: row.interviewTime, timeZone: row.interviewTimeZone }
+    : null;
 }
 
 export function statusEventFromRow(row: StoredEvent): JobStatusEvent {

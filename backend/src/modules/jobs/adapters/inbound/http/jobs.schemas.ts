@@ -58,6 +58,15 @@ export const jobEditSchema = z.object({
   description: optionalText(CAPTURE_LIMITS.text, 'Description'),
   remote: z.boolean('remote must be true, false or null.').nullable().optional(),
   status: status.optional(),
+  interview: z
+    .object({
+      date: z.string().max(10),
+      time: z.string().max(5).nullable().default(null),
+      timeZone: z.string().trim().min(1).max(100),
+    })
+    .strict()
+    .nullable()
+    .optional(),
 });
 export type JobEditInput = z.infer<typeof jobEditSchema>;
 

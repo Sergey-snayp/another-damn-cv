@@ -1,5 +1,6 @@
 import { EDITABLE_FIELDS, type JobDetail, type JobStatus } from '../../domain/job';
-import { JobNotFoundError } from '../errors';
+import { JobInputError, JobNotFoundError } from '../errors';
+import { interviewScheduleProblem, type InterviewSchedule } from '../../domain/interview-schedule';
 import type { JobChanges, JobRepository } from '../ports/job-repository';
 
 export interface JobEdit {
@@ -11,6 +12,7 @@ export interface JobEdit {
   description?: string | null;
   remote?: boolean | null;
   status?: JobStatus;
+  interview?: InterviewSchedule | null;
 }
 
 export class UpdateJob {
@@ -19,6 +21,10 @@ export class UpdateJob {
   async execute(userId: string, id: string, edit: JobEdit): Promise<JobDetail> {
     const existing = await this.jobs.findOwned(userId, id);
     if (!existing) throw new JobNotFoundError();
+    if (edit.interview) {
+      const problem = interviewScheduleProblem(edit.interview);
+      if (problem) throw new JobInputError(problem);
+    }
     const { status, ...fields } = edit;
     const editedNow = EDITABLE_FIELDS.filter((key) => fields[key] !== undefined);
     const changes: JobChanges = {

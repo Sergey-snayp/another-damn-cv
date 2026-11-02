@@ -1,4 +1,5 @@
 const paths = {
+  calendar: 'M5 5h14a2 2 0 0 1 2 2v13H3V7a2 2 0 0 1 2-2Zm2-3v6m10-6v6M3 11h18m-13 4h2m4 0h2',
   search: 'M21 21l-4.5-4.5M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0Z',
   plus: 'M12 5v14M5 12h14',
   options:

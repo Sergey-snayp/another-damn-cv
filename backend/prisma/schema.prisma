@@ -112,6 +112,10 @@ model Job {
   appliedAt           DateTime?
   applicationResumeId String?
   applicationSnapshot Int?
+  /// Calendar date and optional wall time in the selected IANA time zone.
+  interviewDate       String?
+  interviewTime       String?
+  interviewTimeZone   String?
 
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   resumes           Resume[]

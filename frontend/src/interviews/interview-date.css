@@ -1,0 +1,23 @@
+.interview-date { padding: 17px 0; border-top: 1px solid #ededed; color: #252525; }
+.interview-date-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.interview-date h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; font-weight: 600; }
+.interview-date-edit { padding: 5px 0 5px 10px; border: 0; background: transparent; color: #087d93; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.interview-date-saved { margin-top: 7px; }
+.interview-date-saved time { font-size: 14px; font-weight: 600; }
+.interview-date-saved p, .interview-date-unset { margin: 3px 0 0; color: #747474; font-size: 12px; overflow-wrap: anywhere; }
+.interview-date form { margin-top: 13px; }
+.interview-date fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.interview-date label { display: block; min-width: 0; margin-bottom: 10px; color: #626262; font-size: 11px; font-weight: 500; }
+.interview-date label span { font-weight: 400; }
+.interview-date-fields { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px; }
+.interview-date input, .interview-date select { display: block; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 40px; margin-top: 4px; padding: 8px; border: 1px solid #dcdcdc; border-radius: 8px; background: #fff; color: #252525; font: inherit; font-size: 13px; }
+.interview-date-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.interview-date-actions button { min-height: 36px; padding: 7px 11px; border: 1px solid #ddd; border-radius: 999px; background: #fff; color: #555; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
+.interview-date-actions .interview-date-save { background: #087f96; color: #fff; border-color: #087f96; }
+.interview-date-actions .interview-date-remove { border: 0; color: #a03838; }
+.interview-date-actions button:disabled { opacity: 0.5; cursor: wait; }
+.interview-date input:focus-visible, .interview-date select:focus-visible, .interview-date button:focus-visible { outline: 2px solid #138ca5; outline-offset: 3px; }
+.interview-date-error { padding: 9px; background: #fff3f1; color: #a32c21; border-radius: 8px; font-size: 12px; }
+.interview-date-notice { margin: 9px 0 0; font-size: 11px; color: #216748; }
+.interview-date-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.card:has(> .interview-date) > .interview-date { border-top: 0; padding: 0; }

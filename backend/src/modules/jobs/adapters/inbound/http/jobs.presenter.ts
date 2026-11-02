@@ -28,6 +28,7 @@ export function presentJob(job: PublicJob) {
     appliedAt: job.appliedAt?.toISOString() ?? null,
     applicationResumeId: job.applicationResumeId ?? null,
     applicationSnapshot: job.applicationSnapshot ?? null,
+    interview: job.interview ?? null,
   };
 }
 

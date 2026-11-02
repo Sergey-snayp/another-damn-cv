@@ -48,6 +48,12 @@ export interface StatusEvent {
 }
 export type JobExtraction = 'pending' | 'structured' | 'llm' | 'manual' | 'failed';
 
+export interface InterviewSchedule {
+  date: string;
+  time: string | null;
+  timeZone: string;
+}
+
 export interface Job {
   id: string;
   source: 'extension' | 'scanner' | 'manual';
@@ -73,6 +79,7 @@ export interface Job {
   appliedAt: string | null;
   applicationResumeId: string | null;
   applicationSnapshot: number | null;
+  interview: InterviewSchedule | null;
 }
 
 /** One job with its moves, newest first. */
@@ -81,7 +88,7 @@ export type JobDetail = Job & { history: StatusEvent[] };
 export type JobSummary = Omit<Job, 'description'> & { tailoredResumeId: string | null };
 
 export type JobEdit = Partial<Pick<Job,
-  'title' | 'company' | 'location' | 'remote' | 'employmentType' | 'salary' | 'description' | 'status'>>;
+  'title' | 'company' | 'location' | 'remote' | 'employmentType' | 'salary' | 'description' | 'status' | 'interview'>>;
 
 export interface ManualJob {
   description: string;

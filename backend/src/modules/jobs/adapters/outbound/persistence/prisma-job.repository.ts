@@ -14,7 +14,7 @@ import type {
 } from '../../../application/ports/job-repository';
 import type { JobReadingRepository } from '../../../application/ports/job-reading-repository';
 import type { JobStatus } from '../../../domain/job';
-import { jobFromRow, statusEventFromRow, statusToRow } from './job.mapper';
+import { interviewFromRow, jobFromRow, statusEventFromRow, statusToRow } from './job.mapper';
 
 const newestEventFirst = [{ at: 'desc' }, { id: 'desc' }] as const;
 
@@ -39,8 +39,9 @@ export class PrismaJobRepository implements JobRepository, JobReadingRepository,
       omit: { html: true, pageText: true, structuredData: true, description: true },
       orderBy: { updatedAt: 'desc' },
     });
-    return rows.map((row) => ({
+    return rows.map(({ interviewDate, interviewTime, interviewTimeZone, ...row }) => ({
       ...row,
+      interview: interviewFromRow({ interviewDate, interviewTime, interviewTimeZone }),
       source: lower(row.source),
       status: lower(row.status),
       extraction: lower(row.extraction),
@@ -240,9 +241,14 @@ function applicationWriteError(error: unknown): unknown {
 }
 
 function changesToRow(changes: JobChanges) {
-  const { status, extraction, structuredData, ...fields } = changes;
+  const { status, extraction, structuredData, interview, ...fields } = changes;
   return {
     ...fields,
+    ...(interview !== undefined && {
+      interviewDate: interview?.date ?? null,
+      interviewTime: interview?.time ?? null,
+      interviewTimeZone: interview?.timeZone ?? null,
+    }),
     ...(status !== undefined && { status: statusToRow(status) }),
     ...(extraction !== undefined && { extraction: extractionToRow(extraction) }),
     ...(structuredData !== undefined && {
