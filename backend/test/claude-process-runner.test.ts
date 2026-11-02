@@ -135,6 +135,40 @@ test('spawn errors and synchronous launch failures keep the existing unavailable
   }
 });
 
+test('prompt-only practice restricts tools and persistence without disabling local sign-in', async (context) => {
+  const child = new FakeChild(),
+    runner = fixture(context, [child]);
+  const response = runner.complete('private candidate data', 'coach', {
+    promptOnly: true,
+    model: 'practice-model',
+  });
+  const args = runner.launches[0].args;
+  for (const flag of ['--restricted', '--disable-slash-commands', '--no-session-persistence', '--no-chrome'])
+    assert.ok(args.includes(flag));
+  assert.equal(args[args.indexOf('--tools') + 1], '');
+  assert.equal(args[args.indexOf('--permission-mode') + 1], 'dontAsk');
+  assert.equal(args[args.indexOf('--model') + 1], 'practice-model');
+  assert.ok(!args.includes('--bare'));
+  child.stdout.write('answer');
+  child.close(0);
+  assert.equal(await response, 'answer');
+});
+
+test('an oversized practice response kills only its own child and leaves another request running', async (context) => {
+  const first = new FakeChild(),
+    second = new FakeChild(),
+    runner = fixture(context, [first, second]);
+  const failure = assert.rejects(runner.complete('first', 'coach', { maxOutputChars: 10 }), /too large/);
+  const success = runner.complete('second', 'coach');
+  first.stdout.write('x'.repeat(11));
+  await failure;
+  assert.deepEqual(first.signals, ['SIGKILL']);
+  assert.deepEqual(second.signals, []);
+  second.stdout.write('ok');
+  second.close(0);
+  assert.equal(await success, 'ok');
+});
+
 test('nonzero exits retain stderr truncation/fallback and not-signed-in detection', async (context) => {
   const cases = [
     { code: 7, stdout: '', stderr: 'x'.repeat(250), message: 'x'.repeat(200) },

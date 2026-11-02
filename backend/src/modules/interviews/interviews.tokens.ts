@@ -1,0 +1,1 @@
+export const PRACTICE_GENERATOR = Symbol('PRACTICE_GENERATOR');

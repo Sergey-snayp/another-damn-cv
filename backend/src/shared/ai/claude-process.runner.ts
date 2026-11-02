@@ -33,14 +33,23 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
   ];
 
   /** `timeoutMs`: a whole-resume tailoring needs longer than reading one page. */
-  complete(prompt: string, system: string, { timeoutMs = 180_000 } = {}): Promise<string> {
+  complete(
+    prompt: string,
+    system: string,
+    {
+      timeoutMs = 180_000,
+      promptOnly = false,
+      model = config.llmModel,
+      maxOutputChars = Infinity,
+    }: { timeoutMs?: number; promptOnly?: boolean; model?: string; maxOutputChars?: number } = {},
+  ): Promise<string> {
     if (this.stopping) return Promise.reject(this.cannotRun());
     const args = [
       '-p',
       '--output-format',
       'text',
       '--model',
-      config.llmModel,
+      model,
       '--strict-mcp-config',
       '--disallowed-tools',
       ...this.deniedTools,
@@ -48,6 +57,17 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
       '--system-prompt',
       system,
     ];
+    if (promptOnly)
+      args.push(
+        '--restricted',
+        '--tools',
+        '',
+        '--disable-slash-commands',
+        '--no-session-persistence',
+        '--permission-mode',
+        'dontAsk',
+        '--no-chrome',
+      );
 
     const completion = new Promise<string>((resolve, reject) => {
       let child: ChildProcessWithoutNullStreams;
@@ -72,9 +92,14 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
 
       child.stdout.on('data', (chunk) => {
         stdout += chunk;
+        if (stdout.length > maxOutputChars) {
+          child.kill('SIGKILL');
+          clearTimeout(timer);
+          reject(new ServiceUnavailableException('The AI response was too large. Try generating again.'));
+        }
       });
       child.stderr.on('data', (chunk) => {
-        stderr += chunk;
+        stderr = (stderr + chunk).slice(0, 4000);
       });
 
       child.on('error', () => {

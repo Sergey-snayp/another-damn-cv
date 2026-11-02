@@ -2,7 +2,7 @@ import { JobNotFoundError, type JobsApi } from '../../../../jobs/contracts';
 import type { TailoringJobReader } from '../../../application/ports/tailoring';
 import { TailoringError } from '../../../application/tailoring-error';
 export class PublicTailoringJobReader implements TailoringJobReader {
-  constructor(private readonly jobs: JobsApi) {}
+  constructor(private readonly jobs: Pick<JobsApi, 'getForTailoring'>) {}
   async getForTailoring(userId: string, id: string) {
     try {
       return await this.jobs.getForTailoring(userId, id);

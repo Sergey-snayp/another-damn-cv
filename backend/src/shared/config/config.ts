@@ -42,4 +42,5 @@ export const config = {
 
   claudeBin: optional('CLAUDE_BIN', 'claude'),
   llmModel: optional('LLM_MODEL', 'claude-sonnet-5'),
+  interviewModel: optional('INTERVIEW_MODEL', optional('LLM_MODEL', 'claude-sonnet-5')),
 };

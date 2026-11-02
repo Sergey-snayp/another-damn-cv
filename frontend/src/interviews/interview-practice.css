@@ -1,0 +1,32 @@
+.interview-practice { margin-bottom: 24px; color: var(--color-text); }
+.interview-practice-heading, .interview-practice-set-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.interview-practice h2 { margin: 0 0 8px; font-size: 24px; }
+.interview-practice h3 { margin: 0 0 8px; font-size: 20px; }
+.interview-practice p { line-height: 1.6; }
+.interview-practice-heading p, .interview-practice-set-header p { color: var(--color-muted); margin: 0; }
+.interview-practice-label { flex-shrink: 0; border: 1px solid var(--color-border); border-radius: 20px; padding: 6px 12px; font-size: 12px; }
+.interview-practice-disclaimer, .interview-practice-meta, .interview-practice-empty { color: var(--color-muted); font-size: 13px; }
+.interview-practice-sets { display: grid; gap: 18px; }
+.interview-practice-set { padding: 24px; border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 20px; min-width: 0; }
+.interview-practice-set-header .interview-prep-button { flex-shrink: 0; }
+.interview-practice button:disabled { opacity: .5; cursor: not-allowed; }
+.interview-practice-message { background: var(--color-background); border: 1px solid var(--color-border); padding: 12px 16px; border-radius: 12px; font-size: 14px; }
+.interview-practice-questions { border-top: 1px solid var(--color-border); margin-top: 18px; }
+.interview-practice-question { border-bottom: 1px solid var(--color-border); }
+.interview-practice-question > summary { list-style: none; display: flex; align-items: baseline; gap: 12px; cursor: pointer; padding: 18px 0; font-weight: 600; line-height: 1.5; }
+.interview-practice-question > summary::-webkit-details-marker { display: none; }
+.interview-practice summary:focus-visible { outline: 2px solid var(--color-text); outline-offset: 3px; border-radius: 4px; }
+.interview-practice-number { color: var(--color-muted); font-size: 13px; min-width: 16px; }
+.interview-practice-expand { margin-left: auto; }
+.interview-practice-question[open] > summary .interview-practice-expand { transform: rotate(45deg); }
+.interview-practice-answer { padding: 0 0 20px 28px; font-size: 14px; }
+.interview-practice h4 { font-size: 14px; margin: 18px 0 8px; }
+.interview-practice-answer-text, .interview-practice blockquote { white-space: pre-wrap; overflow-wrap: anywhere; }
+.interview-practice-why { color: var(--color-muted); margin-top: 0; }
+.interview-practice li { padding: 4px 0; line-height: 1.6; }
+.interview-practice-missing { background: var(--color-background); padding: 1px 16px 8px; border-radius: 12px; }
+.interview-practice-sources { margin-top: 20px; color: var(--color-muted); }
+.interview-practice-sources summary { cursor: pointer; }
+.interview-practice blockquote { border-left: 2px solid var(--color-border); margin: 8px 0; padding-left: 12px; max-height: 180px; overflow: auto; }
+@media (max-width: 900px) { .interview-practice-heading, .interview-practice-set-header { flex-direction: column; gap: 14px; } .interview-practice-set { padding: 18px; } }
+@media (max-width: 480px) { .interview-practice-set-header .interview-prep-button { width: 100%; white-space: normal; } .interview-practice-answer { padding-left: 0; } }

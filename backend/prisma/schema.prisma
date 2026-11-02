@@ -31,6 +31,7 @@ model User {
   jobs                  Job[]
   profile               Profile?
   interviewPreparations InterviewPreparation[]
+  interviewPractice     InterviewPractice[]
 
   @@map("users")
 }
@@ -123,6 +124,7 @@ model Job {
   statusEvents      JobStatusEvent[]
   applicationResume Resume?               @relation("ApplicationResume", fields: [applicationResumeId], references: [id], onDelete: SetNull)
   preparation       InterviewPreparation?
+  practice          InterviewPractice[]
 
   @@unique([userId, canonicalUrl])
   @@index([userId, status, createdAt])
@@ -147,6 +149,26 @@ model InterviewPreparation {
 
   @@index([userId])
   @@map("interview_preparations")
+}
+
+/// Latest generated question set per job and kind, separate from the user's notes.
+model InterviewPractice {
+  id            String   @id @default(uuid())
+  userId        String
+  jobId         String
+  kind          String
+  inputHash     String
+  promptVersion String
+  provider      String
+  model         String
+  output        Json
+  generatedAt   DateTime
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, kind])
+  @@index([userId])
+  @@map("interview_practice")
 }
 
 /// One status change, so a move can be undone and the job page can show its

@@ -6,6 +6,7 @@ import { DashboardIcon } from '../jobs/DashboardIcon';
 import { CompanyAvatar } from '../jobs/ApplicationCard';
 import { ApplicationResume } from '../jobs/ApplicationResume';
 import { InterviewDateEditor } from '../interviews/InterviewDateEditor';
+import { InterviewPractice } from '../interviews/InterviewPractice';
 import { isInterviewJob } from '../interviews/interviewJobs';
 import { preparationApi, preparationValues, isPreparationInput, INTERVIEW_TYPE_LABELS, type Preparation, type PreparationInput, type InterviewType } from '../interviews/preparationApi';
 import '../interviews/interview-prep.css';
@@ -104,6 +105,7 @@ function Workspace({ id }: { id: string }) {
           {!isInterviewJob(job) && <p className="interview-workspace-context">This preparation is still available. The job appears in the Prep list while it is active and marked Screening or Interviewing.</p>}
           <div className="interview-workspace-layout">
             <div className="interview-workspace-main">
+              <InterviewPractice jobId={job.id} sourceVersion={`${saved.updatedAt}:${job.applicationResumeId}:${job.applicationSnapshot}:${job.updatedAt}`} unsaved={dirty || busy} />
               <form className="interview-workspace-form" onSubmit={(event) => void save(event)}>
                 <fieldset disabled={busy}>
                   <legend className="interview-date-sr-only">Preparation for {job.company || jobName(job)}</legend>

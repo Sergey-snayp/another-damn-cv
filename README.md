@@ -27,7 +27,11 @@ In a second terminal, run `nvm use` from the repository root, then
 
 The frontend proxies `/api` to the backend, so there is no CORS setup in dev.
 Sign-in is Google; set `GOOGLE_CLIENT_ID` and `SESSION_SECRET` in `backend/.env`.
-Reading job pages and tailoring use the local Claude CLI (`CLAUDE_BIN`), signed in once.
+Reading job pages, tailoring and interview questions use the local Claude CLI
+(`CLAUDE_BIN`). Sign in locally with `claude auth login`. Interview generation
+needs a CLI version supporting `--restricted`, `--tools` and `--no-session-persistence`.
+Set `INTERVIEW_MODEL` to override `LLM_MODEL` for preparation. Calls consume your
+Claude account usage. Run `npx prisma migrate deploy` in `backend` after updating.
 
 The extension is loaded separately: `chrome://extensions` → Developer mode →
 **Load unpacked** → select `extension/`. See `extension/README.md`.
@@ -49,7 +53,21 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   exact application CV experience, interview type, recruiter instructions, personal
   notes and questions to ask. Notes save to your account; unsaved browser drafts
   can be resumed or discarded.
-  Preparation generation is still planned.
+  Inside each preparation, **Generate HR questions** and **Generate technical
+  questions** create six questions with answer drafts, talking points, follow-ups
+  and source references. Attach a saved CV and save edited notes first. Results
+  stay in your account; reopening the page does not call AI. Regeneration is manual.
+  Personal answers are drafts to check, and missing facts appear as questions for you.
+  Company research is still planned.
+
+Interview prompts live in
+`backend/src/modules/interviews/adapters/outbound/ai/practice-prompts.ts`.
+The `PracticeGenerator` port keeps CLI calls separate from business logic. A future
+API adapter can replace the `PRACTICE_GENERATOR` provider; no API adapter is installed yet.
+The local runner allows no tools for practice, uses an empty working directory,
+and disables session persistence. Only the saved job, CV content without contact
+fields, and preparation notes are supplied. Avoid adding private contact details
+to free-text notes if you do not want them included.
 
 Add Application saves the chosen resume version with the job. Later resume edits
 do not change that attachment. Favorites and archives are stored on your account;
