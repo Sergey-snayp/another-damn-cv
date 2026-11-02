@@ -18,7 +18,7 @@ import { RandomSyncTokenGenerator } from '../../src/modules/auth/adapters/outbou
 import { AUTH_API, AUTH_SETTINGS } from '../../src/modules/auth/auth.tokens';
 import type { PublicUser } from '../../src/modules/auth/contracts';
 import type { RenderedResume } from '../../src/modules/resumes/contracts';
-import type { Tailoring } from '../../src/modules/tailoring/contracts';
+import type { Tailoring } from '../../src/modules/resumes/contracts';
 
 interface JobResponse {
   id: string;

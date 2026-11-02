@@ -1,7 +1,7 @@
 /** What the model is asked when tailoring a resume to a job. */
-import type { Achievement, RenderedResume } from '../../../domain/resume';
-import { byPosition, summaryVariantOf } from '../../../domain/ordering';
-import type { JobForTailoring } from '../../../domain/types';
+import type { Achievement, RenderedResume } from '../../../../domain/tailoring/resume';
+import { byPosition, summaryVariantOf } from '../../../../domain/tailoring/ordering';
+import type { JobForTailoring } from '../../../../domain/tailoring/types';
 import type { PromptIds } from './prompt-ids';
 
 export const TAILOR_SYSTEM = `You tailor a candidate's resume to one job posting.

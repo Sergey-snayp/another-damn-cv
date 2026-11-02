@@ -1,7 +1,8 @@
 import { Body, Controller, Inject, Param, Post, UseFilters, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { AuthGuard, CurrentUser } from '../../../../auth/http';
-import { ResumeOwnerGuard, ResumeErrorFilter } from '../../../../resumes/http';
+import { ResumeOwnerGuard } from './resume-owner.guard';
+import { ResumeErrorFilter } from './resume-error.filter';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { RewriteResumeLine } from '../../../application/use-cases/rewrite-resume-line';
 import type { RewriteInput } from '../../../application/use-cases/rewrite-resume-line';

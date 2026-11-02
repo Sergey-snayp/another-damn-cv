@@ -143,6 +143,32 @@ test('shared technical code has no feature imports', () => {
   assert.deepEqual(violations, []);
 });
 
+test('feature module composition has no circular imports', () => {
+  const modules = new Set(filesBelow(modulesRoot).filter((file) => file.endsWith('.module.ts')));
+  const done = new Set<string>();
+  const active = new Set<string>();
+  const stack: string[] = [];
+  const cycles: string[] = [];
+  function visit(file: string): void {
+    if (active.has(file)) {
+      cycles.push([...stack, file].map(label).join(' -> '));
+      return;
+    }
+    if (done.has(file)) return;
+    active.add(file);
+    stack.push(file);
+    for (const specifier of importsIn(file)) {
+      const resolved = target(file, specifier);
+      if (resolved && modules.has(`${resolved}.ts`)) visit(`${resolved}.ts`);
+    }
+    stack.pop();
+    active.delete(file);
+    done.add(file);
+  }
+  for (const file of modules) visit(file);
+  assert.deepEqual(cycles, []);
+});
+
 test('feature adapters and modules use shared infrastructure rather than old source folders', () => {
   const violations: string[] = [];
   for (const file of filesBelow(modulesRoot))

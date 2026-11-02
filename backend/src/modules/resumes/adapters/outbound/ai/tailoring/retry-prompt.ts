@@ -1,4 +1,4 @@
-import type { BlockedLine } from '../../../domain/retry';
+import type { BlockedLine } from '../../../../domain/tailoring/retry';
 
 export function retryPrompt(lines: BlockedLine[]): string {
   const body = lines

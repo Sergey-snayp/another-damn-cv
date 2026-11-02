@@ -1,5 +1,4 @@
 import { Logger, type Provider } from '@nestjs/common';
-import { PrismaService } from '../../shared/database/prisma.service';
 import { ClaudeProcessRunner } from '../../shared/ai/claude-process.runner';
 import type { JobRepository } from './application/ports/job-repository';
 import type { JobReadingRepository } from './application/ports/job-reading-repository';
@@ -13,7 +12,6 @@ import { CaptureJob } from './application/use-cases/capture-job';
 import { CreateManualJob } from './application/use-cases/create-manual-job';
 import { DeleteJob } from './application/use-cases/delete-job';
 import { GetJob } from './application/use-cases/get-job';
-import { GetJobForTailoring } from './application/use-cases/get-job-for-tailoring';
 import { ListJobs } from './application/use-cases/list-jobs';
 import { ReadJobPage } from './application/use-cases/read-job-page';
 import { RereadJob } from './application/use-cases/reread-job';
@@ -22,25 +20,17 @@ import { UpdateJob } from './application/use-cases/update-job';
 import { JobReadWorker } from './adapters/inbound/worker/job-read.worker';
 import { ClaudeJobPageExtractor } from './adapters/outbound/ai/claude-job-page.extractor';
 import { JsonLdJobReader } from './adapters/outbound/documents/json-ld-job.reader';
-import { PrismaJobRepository } from './adapters/outbound/persistence/prisma-job.repository';
 import { InProcessJobReadScheduler } from './adapters/outbound/scheduling/in-process-job-read.scheduler';
-import type { JobsApi } from './contracts';
 import {
   JOB_PAGE_EXTRACTOR,
   JOB_READ_SCHEDULER,
   JOB_REPOSITORY,
-  JOBS_API,
   RESUME_LINK_READER,
   STRUCTURED_JOB_READER,
 } from './jobs.tokens';
 
 export const jobsProviders: Provider[] = [
   JobReadWorker,
-  {
-    provide: JOB_REPOSITORY,
-    useFactory: (database: PrismaService) => new PrismaJobRepository(database),
-    inject: [PrismaService],
-  },
   {
     provide: STRUCTURED_JOB_READER,
     useFactory: () => new JsonLdJobReader(),
@@ -103,13 +93,5 @@ export const jobsProviders: Provider[] = [
     useFactory: (repository: JobRepository, structured: StructuredJobReader, scheduler: JobReadScheduler) =>
       new RereadJob(repository, structured, scheduler),
     inject: [JOB_REPOSITORY, STRUCTURED_JOB_READER, JOB_READ_SCHEDULER],
-  },
-  {
-    provide: JOBS_API,
-    useFactory: (repository: JobRepository): JobsApi => {
-      const get = new GetJobForTailoring(repository);
-      return { getForTailoring: (userId, id) => get.execute(userId, id) };
-    },
-    inject: [JOB_REPOSITORY],
   },
 ];

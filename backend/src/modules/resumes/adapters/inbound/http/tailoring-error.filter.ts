@@ -1,7 +1,7 @@
 import { ArgumentsHost, Catch, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
-import { ResumeError } from '../../../../resumes/contracts';
-import { TailoringError } from '../../../application/errors';
+import { ResumeError } from '../../../contracts';
+import { TailoringError } from '../../../application/tailoring-error';
 @Catch(TailoringError, ResumeError)
 export class TailoringErrorFilter implements ExceptionFilter {
   catch(error: TailoringError | ResumeError, host: ArgumentsHost): void {

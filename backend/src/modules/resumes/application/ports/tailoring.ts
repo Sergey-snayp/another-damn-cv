@@ -1,7 +1,7 @@
-import type { RenderedResume } from '../../domain/resume';
-import type { JobForTailoring, Tailoring } from '../../domain/types';
-import type { TailoringCandidate, RetryCandidate } from '../../domain/candidate';
-import type { BlockedLine } from '../../domain/retry';
+import type { RenderedResume } from '../../domain/tailoring/resume';
+import type { JobForTailoring, Tailoring } from '../../domain/tailoring/types';
+import type { TailoringCandidate, RetryCandidate } from '../../domain/tailoring/candidate';
+import type { BlockedLine } from '../../domain/tailoring/retry';
 export interface TailoringJob {
   id: string;
   title: string | null;

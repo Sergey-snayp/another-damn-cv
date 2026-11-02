@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../../shared/database/database.module';
+import { JobDirectoryModule } from './job-directory.module';
 import { AiModule } from '../../shared/ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
 import { ResumesModule } from '../resumes/resumes.module';
@@ -20,11 +20,11 @@ import type { ApplicationRepository } from './application/ports/application-repo
 import type { JobRepository } from './application/ports/job-repository';
 import { PublicResumeLinkReader } from './adapters/outbound/modules/resume-link.reader';
 import { jobsProviders } from './jobs.providers';
-import { JOBS_API, JOB_REPOSITORY, RESUME_LINK_READER } from './jobs.tokens';
+import { JOB_REPOSITORY, RESUME_LINK_READER } from './jobs.tokens';
 
 /** Registered at the composition root only when its routes replace the legacy routes. */
 @Module({
-  imports: [DatabaseModule, AiModule, AuthModule, ResumesModule],
+  imports: [JobDirectoryModule, AiModule, AuthModule, ResumesModule],
   controllers: [JobsController, ApplicationsController],
   providers: [
     ...jobsProviders,
@@ -62,6 +62,6 @@ import { JOBS_API, JOB_REPOSITORY, RESUME_LINK_READER } from './jobs.tokens';
       inject: [RESUMES_API],
     },
   ],
-  exports: [GetJob, JOBS_API],
+  exports: [GetJob, JobDirectoryModule],
 })
 export class JobsModule {}

@@ -22,9 +22,9 @@ import { ResumeError, type ResumesApi } from '../src/modules/resumes/contracts';
 import { ResumeOwnerGuard } from '../src/modules/resumes/http';
 import { ResumesController } from '../src/modules/resumes/adapters/inbound/http/resumes.controller';
 import { PrismaResumeRepository } from '../src/modules/resumes/adapters/outbound/persistence/prisma-resume.repository';
-import { TailoringModule } from '../src/modules/tailoring/tailoring.module';
-import { TailoringController } from '../src/modules/tailoring/adapters/inbound/http/tailoring.controller';
-import { TailoringErrorFilter } from '../src/modules/tailoring/adapters/inbound/http/tailoring-error.filter';
+import { TailoringController } from '../src/modules/resumes/adapters/inbound/http/tailoring.controller';
+import { TailoringErrorFilter } from '../src/modules/resumes/adapters/inbound/http/tailoring-error.filter';
+import { RewriteController } from '../src/modules/resumes/adapters/inbound/http/rewrite.controller';
 import { exampleJob, MemoryJobs, queuedJobs } from './fixtures/jobs-clean';
 
 test('full feature graph starts one database lifecycle, AI provider and job worker without external I/O', async () => {
@@ -52,7 +52,7 @@ test('full feature graph starts one database lifecycle, AI provider and job work
     complete: () => Promise.reject(new Error('Audit must never call AI.')),
   };
   const module = await Test.createTestingModule({
-    imports: [ProfilesModule, ResumesModule, JobsModule, TailoringModule],
+    imports: [ProfilesModule, ResumesModule, JobsModule],
   })
     .overrideProvider(PrismaService)
     .useValue(database)
@@ -82,9 +82,11 @@ test('full feature graph starts one database lifecycle, AI provider and job work
   assert.equal(disconnections, 1);
 });
 
-test('resume routes keep ownership guards before body pipes, including tailoring routes moved to another controller', () => {
-  const guards = (Reflect.getMetadata(GUARDS_METADATA, ResumesController) ?? []) as unknown[];
-  assert.ok(guards.includes(ResumeOwnerGuard));
+test('resume editing, rewriting and tailoring routes keep their ownership guards after merging', () => {
+  for (const controller of [ResumesController, RewriteController]) {
+    const guards = (Reflect.getMetadata(GUARDS_METADATA, controller) ?? []) as unknown[];
+    assert.ok(guards.includes(ResumeOwnerGuard));
+  }
   for (const name of ['pending', 'discard']) {
     const action = Object.getOwnPropertyDescriptor(TailoringController.prototype, name)?.value as object;
     const routeGuards = (Reflect.getMetadata(GUARDS_METADATA, action) ?? []) as unknown[];

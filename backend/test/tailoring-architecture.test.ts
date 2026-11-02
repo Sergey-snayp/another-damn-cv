@@ -2,17 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import golden from './fixtures/tailoring-golden.json';
-import { tailorPrompt, TAILOR_SYSTEM } from '../src/modules/tailoring/adapters/outbound/ai/prompt';
-import { readCandidate, readRetry } from '../src/modules/tailoring/adapters/outbound/ai/answer';
-import { planTailoring } from '../src/modules/tailoring/domain/policy';
-import { applyRetry } from '../src/modules/tailoring/domain/retry';
-import { TailorResume } from '../src/modules/tailoring/application/use-cases/tailor-resume';
-import { ClaudeTailoringGenerator } from '../src/modules/tailoring/adapters/outbound/ai/claude-tailoring.generator';
-import type {
-  ResumeWorkspace,
-  TailoringGenerator,
-} from '../src/modules/tailoring/application/ports/tailoring';
-import type { Tailoring } from '../src/modules/tailoring/domain/types';
+import { tailorPrompt, TAILOR_SYSTEM } from '../src/modules/resumes/adapters/outbound/ai/tailoring/prompt';
+import { readCandidate, readRetry } from '../src/modules/resumes/adapters/outbound/ai/tailoring/answer';
+import { planTailoring } from '../src/modules/resumes/domain/tailoring/policy';
+import { applyRetry } from '../src/modules/resumes/domain/tailoring/retry';
+import { TailorResume } from '../src/modules/resumes/application/use-cases/tailor-resume';
+import { ClaudeTailoringGenerator } from '../src/modules/resumes/adapters/outbound/ai/tailoring/claude-tailoring.generator';
+import type { ResumeWorkspace, TailoringGenerator } from '../src/modules/resumes/application/ports/tailoring';
+import type { Tailoring } from '../src/modules/resumes/domain/tailoring/types';
 import type { RenderedResume } from '../src/modules/resumes/contracts';
 import { bullet, contact, role, skill } from './fixtures/resume';
 

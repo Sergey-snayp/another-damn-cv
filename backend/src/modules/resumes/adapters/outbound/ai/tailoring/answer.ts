@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { firstJsonObject } from '../../../../../shared/ai/json';
-import { tidyLine } from '../../../domain/text';
-import type { TailoringCandidate, RetryCandidate } from '../../../domain/candidate';
+import { firstJsonObject } from '../../../../../../shared/ai/json';
+import { tidyLine } from '../../../../domain/tailoring/text';
+import type { TailoringCandidate, RetryCandidate } from '../../../../domain/tailoring/candidate';
 import type { PromptIds } from './prompt-ids';
 const answerBulletSchema = z.object({
   id: z.coerce.string(),

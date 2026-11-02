@@ -10,6 +10,7 @@ import type {
   VersionedTable,
 } from './domain/resume';
 import type { SnapshotDiff } from './domain/diff';
+import type { Tailoring } from './domain/tailoring/types';
 
 export type {
   CareerFields,
@@ -23,6 +24,7 @@ export type {
   VersionedTable,
 } from './domain/resume';
 export type { SnapshotDiff } from './domain/diff';
+export type { Tailoring } from './domain/tailoring/types';
 export { ResumeError } from './application/errors';
 export interface ResumesApi {
   assertOwned(userId: string, id: string): Promise<void>;
@@ -46,4 +48,13 @@ export interface ResumesApi {
   pending(userId: string, id: string): Promise<unknown>;
   storeProposal(userId: string, id: string, proposal: unknown): Promise<void>;
   discardProposal(userId: string, id: string): Promise<void>;
+}
+export interface TailoringApi {
+  tailorForJob(
+    userId: string,
+    jobId: string,
+    sourceResumeId?: string,
+  ): Promise<{ resumeId: string; tailoring: Tailoring }>;
+  pending(userId: string, resumeId: string): Promise<{ tailoring: Tailoring | null }>;
+  discard(userId: string, resumeId: string): Promise<void>;
 }

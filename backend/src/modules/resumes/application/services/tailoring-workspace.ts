@@ -1,8 +1,8 @@
-import { ResumeError, type ResumesApi } from '../../../../resumes/contracts';
-import type { ResumeWorkspace, TailoringJob } from '../../../application/ports/tailoring';
-import { TailoringError } from '../../../application/errors';
-import type { Tailoring } from '../../../domain/types';
-export class PublicResumeWorkspace implements ResumeWorkspace {
+import { ResumeError, type ResumesApi } from '../../contracts';
+import type { ResumeWorkspace, TailoringJob } from '../ports/tailoring';
+import { TailoringError } from '../tailoring-error';
+import type { Tailoring } from '../../domain/tailoring/types';
+export class ResumeTailoringWorkspace implements ResumeWorkspace {
   constructor(private readonly resumes: ResumesApi) {}
   async forJob(userId: string, job: TailoringJob, sourceResumeId?: string) {
     return this.call(() => this.resumes.workspaceForJob(userId, job, sourceResumeId));

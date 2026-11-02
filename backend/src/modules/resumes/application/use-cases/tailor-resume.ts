@@ -1,8 +1,8 @@
 import type { ResumeWorkspace, TailoringGenerator, TailoringJobReader } from '../ports/tailoring';
-import { TailoringError } from '../errors';
-import { planTailoring } from '../../domain/policy';
-import { applyRetry, blockedLines } from '../../domain/retry';
-import type { Tailoring } from '../../domain/types';
+import { TailoringError } from '../tailoring-error';
+import { planTailoring } from '../../domain/tailoring/policy';
+import { applyRetry, blockedLines } from '../../domain/tailoring/retry';
+import type { Tailoring } from '../../domain/tailoring/types';
 
 export class TailorResume {
   constructor(

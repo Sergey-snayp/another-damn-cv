@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { numbersIn, techTerms, unsupportedClaims } from '../src/modules/tailoring/domain/claims';
-import { blockedLines, applyRetry as retryPlan } from '../src/modules/tailoring/domain/retry';
-import { planTailoring } from '../src/modules/tailoring/domain/policy';
-import { tailorPrompt } from '../src/modules/tailoring/adapters/outbound/ai/prompt';
-import { retryPrompt } from '../src/modules/tailoring/adapters/outbound/ai/retry-prompt';
-import { readCandidate, readRetry } from '../src/modules/tailoring/adapters/outbound/ai/answer';
-import type { PromptIds } from '../src/modules/tailoring/adapters/outbound/ai/prompt-ids';
-import type { JobForTailoring, Tailoring } from '../src/modules/tailoring/domain/types';
+import { numbersIn, techTerms, unsupportedClaims } from '../src/modules/resumes/domain/tailoring/claims';
+import { blockedLines, applyRetry as retryPlan } from '../src/modules/resumes/domain/tailoring/retry';
+import { planTailoring } from '../src/modules/resumes/domain/tailoring/policy';
+import { tailorPrompt } from '../src/modules/resumes/adapters/outbound/ai/tailoring/prompt';
+import { retryPrompt } from '../src/modules/resumes/adapters/outbound/ai/tailoring/retry-prompt';
+import { readCandidate, readRetry } from '../src/modules/resumes/adapters/outbound/ai/tailoring/answer';
+import type { PromptIds } from '../src/modules/resumes/adapters/outbound/ai/tailoring/prompt-ids';
+import type { JobForTailoring, Tailoring } from '../src/modules/resumes/domain/tailoring/types';
 import type { RenderedResume } from '../src/modules/resumes/contracts';
 import { bullet, contact, role, skill } from './fixtures/resume';
 

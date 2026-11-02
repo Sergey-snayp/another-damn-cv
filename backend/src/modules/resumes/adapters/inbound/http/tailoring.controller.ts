@@ -12,10 +12,10 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { AuthGuard, CurrentUser } from '../../../../auth/http';
-import { ResumeOwnerGuard } from '../../../../resumes/http';
+import { ResumeOwnerGuard } from './resume-owner.guard';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import type { TailoringApi } from '../../../contracts';
-import { TAILORING_API } from '../../../tailoring.tokens';
+import { TAILORING_API } from '../../../resumes.tokens';
 import { TailoringErrorFilter } from './tailoring-error.filter';
 const tailorSchema = z.object({ sourceResumeId: z.string().min(1).optional() });
 type TailorInput = z.infer<typeof tailorSchema>;

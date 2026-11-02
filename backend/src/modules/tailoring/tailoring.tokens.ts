@@ -1,2 +1,0 @@
-export const TAILORING_API = Symbol('TAILORING_API');
-export const TAILORING_GENERATOR = Symbol('TAILORING_GENERATOR');

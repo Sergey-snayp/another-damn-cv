@@ -193,9 +193,7 @@ Placement notes:
 | Auth         | [`modules/auth`](../backend/src/modules/auth/auth.module.ts): Google sign-in, accounts and sync tokens. Google subject identifies the account.                                         |
 | Profiles     | [`modules/profiles`](../backend/src/modules/profiles/profiles.module.ts): EnsureProfile/GetProfile/UpdateProfile and contact rules. Career data comes from resumes through a port.     |
 | Jobs         | [`modules/jobs`](../backend/src/modules/jobs/jobs.module.ts): capture, reading, editing, status and undo. Domain owns URL/edit rules; adapters own storage, extraction and scheduling. |
-| Resumes      | [`modules/resumes`](../backend/src/modules/resumes/resumes.module.ts): documents, snapshots, save/history/revert, copies and proposals. Prisma queries stay in persistence.            |
-| Tailoring    | [`modules/tailoring`](../backend/src/modules/tailoring/tailoring.module.ts): generation steps and claim/suggestion/retry rules. Prompts and model parsing stay in AI adapters.         |
-| Line rewrite | [`modules/resume-rewrite`](../backend/src/modules/resume-rewrite/resume-rewrite.module.ts): check access and return a suggestion for review.                                           |
+| Resumes      | [`modules/resumes`](../backend/src/modules/resumes/resumes.module.ts): documents, snapshots, copies, editing, rewriting and job-specific tailoring. TailorResume and RewriteResumeLine are separate use cases inside this module. |
 | CV import    | [`modules/cv-import`](../backend/src/modules/cv-import/cv-import.module.ts): read/transcribe a document and return an unsaved draft.                                                   |
 | Interviews   | [`modules/interviews`](../backend/src/modules/interviews/interviews.module.ts): GetPreparation/SavePreparation, interview types, and user notes. Check job ownership through its public API; keep storage in the outbound adapter. |
 | Shared       | [`shared/ai`](../backend/src/shared/ai/ai.module.ts), [`shared/database`](../backend/src/shared/database/database.module.ts), config and HTTP helpers. No feature rules.               |
@@ -205,9 +203,13 @@ Key connections:
 - Profiles reads identity from auth and career data from resumes through ports.
   Resumes needs only stored-profile access. Wire the combined profile HTTP view
   at the root, keeping stored-profile wiring independent to avoid a cycle.
-- Tailoring uses public job/resume operations. Resumes owns copies and pending
-  proposal storage; tailoring owns generation and checking. Keep `Resume.tailoring`
-  storage initially. Jobs reads associated resume IDs through a resume query.
+- Resumes owns tailoring, claim checks, rewriting, copies and proposals. Keep
+  tailoring rules in `domain/tailoring/` and prompts in `adapters/outbound/ai/`.
+  Request job information through a port and the public jobs API.
+- `JobDirectoryModule` wires job storage and its public query without importing
+  resumes or starting workers. Both Jobs and Resumes use it, avoiding circular
+  imports. The full Jobs module owns controllers and its single reader worker;
+  it reads associated resume IDs and attachments through the public resumes API.
 - Domain rules decide changes; adapters apply them. Resume assembly and conversion
   are plain application helpers. Generate IDs outside pure copy rules.
 - Route names stay the same while their handlers live in the new feature modules.

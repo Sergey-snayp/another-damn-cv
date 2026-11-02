@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { RewriteResumeLine } from '../src/modules/resume-rewrite/application/use-cases/rewrite-resume-line';
-import { ClaudeLineRewriter } from '../src/modules/resume-rewrite/adapters/outbound/ai/claude-line.rewriter';
+import { RewriteResumeLine } from '../src/modules/resumes/application/use-cases/rewrite-resume-line';
+import { ClaudeLineRewriter } from '../src/modules/resumes/adapters/outbound/ai/claude-line.rewriter';
 
 test('line rewrite checks ownership before AI and has no write dependency', async () => {
   const calls: string[] = [];
