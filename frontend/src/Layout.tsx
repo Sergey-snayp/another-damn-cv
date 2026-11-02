@@ -1,7 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { HeaderActions, type HeaderAction } from "./components/HeaderActions";
+import {
+  AccountDialog,
+  type AccountDialogKind,
+} from "./components/AccountDialog";
+import { DashboardIcon } from "./jobs/DashboardIcon";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", end: true },
@@ -13,6 +18,33 @@ export function Layout() {
   const { user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeAction, setActiveAction] = useState<HeaderAction | null>(null);
+  const [accountDialog, setAccountDialog] = useState<AccountDialogKind | null>(
+    null,
+  );
+  const [feedback, setFeedback] = useState("");
+  const accountButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function escape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        accountButton.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [menuOpen]);
+
+  function openAccountDialog(kind: AccountDialogKind) {
+    setMenuOpen(false);
+    setAccountDialog(kind);
+  }
+
+  function closeAccountDialog() {
+    setAccountDialog(null);
+    requestAnimationFrame(() => accountButton.current?.focus());
+  }
 
   return (
     <div className="app">
@@ -52,7 +84,10 @@ export function Layout() {
           />
           <div className="account">
             <button
+              ref={accountButton}
+              type="button"
               className="avatar"
+              aria-label="Account menu"
               onClick={() => {
                 setActiveAction(null);
                 setMenuOpen((open) => !open);
@@ -72,7 +107,11 @@ export function Layout() {
               <>
                 {/* Click anywhere to dismiss, rather than trapping the menu open. */}
                 <div className="scrim" onClick={() => setMenuOpen(false)} />
-                <div className="menu">
+                <div
+                  className="menu account-menu"
+                  role="group"
+                  aria-label="Account options"
+                >
                   <div className="menu-head">
                     <div className="menu-name">{user?.name}</div>
                     <div className="menu-email">{user?.email}</div>
@@ -82,12 +121,50 @@ export function Layout() {
                     className="menu-item"
                     onClick={() => setMenuOpen(false)}
                   >
+                    <DashboardIcon name="user" />
                     Profile
                   </NavLink>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onClick={() => openAccountDialog("settings")}
+                  >
+                    <DashboardIcon name="settings" />
+                    Settings
+                  </button>
+                  <div className="account-menu-divider" />
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onClick={() => openAccountDialog("feedback")}
+                  >
+                    <DashboardIcon name="flag" />
+                    Give feedback
+                  </button>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setActiveAction("help");
+                      requestAnimationFrame(() =>
+                        document
+                          .querySelector<HTMLButtonElement>(
+                            '.header-action-button[aria-label="Help"]',
+                          )
+                          ?.focus(),
+                      );
+                    }}
+                  >
+                    <DashboardIcon name="help" />
+                    Help &amp; support
+                  </button>
+                  <div className="account-menu-divider" />
                   <button
                     className="menu-item danger"
                     onClick={() => void signOut()}
                   >
+                    <DashboardIcon name="signOut" />
                     Sign out
                   </button>
                 </div>
@@ -100,6 +177,14 @@ export function Layout() {
       <main className="content">
         <Outlet />
       </main>
+      {accountDialog && (
+        <AccountDialog
+          kind={accountDialog}
+          feedback={feedback}
+          onFeedbackChange={setFeedback}
+          onClose={closeAccountDialog}
+        />
+      )}
     </div>
   );
 }

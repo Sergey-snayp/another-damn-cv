@@ -1,0 +1,39 @@
+.account .account-menu { width: 286px; max-width: calc(100vw - 32px); min-width: 0; padding: 12px; border-radius: 17px; }
+.account-menu, .account-menu * { box-sizing: border-box; }
+.account-menu .menu-head { padding: 9px 10px 18px; margin-bottom: 8px; }
+.account-menu .menu-name { font-size: 15px; }
+.account-menu .menu-email { margin-top: 3px; overflow-wrap: anywhere; }
+.account-menu .menu-item { display: flex; align-items: center; gap: 13px; min-height: 43px; padding: 10px; border-radius: 9px; font-size: 14px; }
+.account-menu .menu-item svg { color: var(--color-muted); flex: none; }
+.account-menu .menu-item:hover { background: var(--color-accent-soft); }
+.account-menu .menu-item.danger svg { color: var(--color-error); }
+.account-menu .menu-item.danger:hover { background: var(--color-error-soft); }
+.account-menu-divider { height: 1px; margin: 8px 10px; background: var(--color-border); }
+.account .avatar[aria-expanded='true'] { background: var(--color-background); border-color: var(--color-border); }
+.account .avatar[aria-expanded='true'] .chevron { transform: rotate(180deg); }
+.account-dialog { box-sizing: border-box; width: min(470px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 26px; border: 1px solid var(--color-border); border-radius: 18px; background: var(--color-surface); color: var(--color-text); box-shadow: 0 16px 60px var(--color-shadow-strong); }
+.account-dialog * { box-sizing: border-box; }
+.account-dialog::backdrop { background: var(--color-overlay); }
+.account-dialog > header { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 22px; }
+.account-dialog h2 { margin: 0; font-size: 21px; }
+.account-dialog h3 { margin: 0 0 9px; font-size: 14px; }
+.account-dialog section + section { border-top: 1px solid var(--color-border); margin-top: 20px; padding-top: 20px; }
+.account-dialog p { color: var(--color-muted); font-size: 13px; line-height: 1.7; }
+.account-dialog-close { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--color-muted); cursor: pointer; }
+.account-dialog-close:hover { background: var(--color-background); color: var(--color-text); }
+.account-dialog dl { margin: 0; }
+.account-dialog dl > div { margin: 12px 0; }
+.account-dialog dt { color: var(--color-muted); font-size: 12px; }
+.account-dialog dd { margin: 3px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.account-dialog-link { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 5px; }
+.account-dialog label { display: block; margin-top: 18px; font-size: 13px; font-weight: 550; }
+.account-dialog textarea { display: block; width: 100%; min-height: 135px; margin-top: 7px; padding: 11px; border: 1px solid var(--color-border); border-radius: 10px; font: inherit; font-weight: 400; font-size: 13px; line-height: 1.7; background: var(--color-surface); color: var(--color-text); resize: vertical; }
+.account-dialog .account-dialog-hint { font-size: 11px; }
+.account-dialog .account-dialog-success { color: var(--color-success); }
+.account-dialog .account-dialog-error { color: var(--color-error); }
+.account-dialog footer { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+.account-dialog-button { min-height: 40px; padding: 9px 16px; border: 1px solid var(--color-accent); border-radius: 10px; background: var(--color-accent); color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.account-dialog-button:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+.account-dialog-button.is-secondary { background: var(--color-surface); border-color: var(--color-border); }
+.account-dialog-button:disabled { opacity: .5; cursor: default; }
+@media (max-width: 480px) { .account-dialog { padding: 21px; } }

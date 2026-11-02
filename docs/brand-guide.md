@@ -14,6 +14,15 @@ Next to the profile, show four outline icons: browser extension, updates, help,
 and notifications. Use dark icons, soft yellow on hover, and yellow when open.
 Notifications remain a placeholder until the feature is built.
 
+The account menu contains Profile, Settings, Give feedback, Help & support, and
+Sign out. Settings opens an account overview; feedback can be drafted and copied,
+with no automatic submission.
+
+Profile uses the supplied career-hub layout with a left sidebar and section
+cards. Personal Info and Job Preferences save the existing autofill fields.
+Experience, education, and skills currently come from the primary CV; edit them
+in that CV. Unsupported sections are marked as coming soon.
+
 ## Logo
 
 Use the supplied **D!** logo: a tilted acid-yellow badge with a thick dark
