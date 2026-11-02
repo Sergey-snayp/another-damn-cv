@@ -64,6 +64,10 @@ The interview strategy explains which experience to highlight, which examples
 to practise, which topics to study, and how to discuss gaps honestly. STAR means
 Situation, Task, Action, and Result.
 
+Show preparation as short hint cards with links to the relevant CV experience
+and research sources. Company/product research can include web and Reddit
+findings; community reports stay labelled separately from company facts.
+
 ## 5. Accuracy rules
 
 - Never invent responsibilities, ownership, results, numbers, or technologies.

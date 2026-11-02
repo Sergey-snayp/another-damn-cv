@@ -1,95 +1,113 @@
 # Interview preparation plan
 
-Status: the Interview Prep collection and filled preparation workspace are built.
-Preparation generation and the growing work history remain planned.
+Status: the workspace is built. Company research and AI hint cards are planned.
 Product rules are in [business-logic.md](business-logic.md).
 
-## Goal
+## 1. Available now
 
-Add preparation inside the app for a selected job and interview stage. Help the
-user explain relevant experience, identify what needs clarification or practice,
-and decide what to highlight. Everything is used before the interview.
+**Interview Prep** lists active Screening and Interviewing jobs. Each opens its
+saved posting, schedule, attached CV version, and preparation form. Users save
+the interview type, interviewer, instructions, notes, and questions. Unsaved
+changes stay as browser drafts.
 
-## First version
+Application status and interview type are separate. Screening can involve HR or
+a technical screen; users choose the specific type. Multiple rounds remain planned.
 
-Entry point: **Interview Prep** in the main navigation, beside Dashboard and
-Documents. Active jobs in Screening or Interviewing appear automatically.
-Saved, Applied, closed, and archived jobs stay out of this collection. The page
-uses the same saved jobs as Dashboard; no separate copies are created.
+## 2. Two new actions in the workspace
 
-Available now: search, status filters, original postings, and links to the exact
-application CV version. Open a card to enter its preparation workspace. Dashboard
-card menus also open that workspace for active interview jobs. Change application
-status on Dashboard to manage the list.
+| Action | Inputs | Result |
+| --- | --- | --- |
+| **Research company** | Company, public job context, optional company website | Short company/product cards and relevant web or Reddit findings, with sources and research date |
+| **Generate my hints** | Saved job description, interview type, attached CV version, saved instructions and notes; existing research if available | Short prompts about what to highlight, examples to prepare, topics to review, and questions to ask |
 
-Each job can also keep its next interview date, optional time, and time zone.
-Set, change, or remove it from Interview Prep or the job details. Dates save to
-the account and sort upcoming interviews first, then undated jobs, then past
-interviews. A date without a time does not imply a midnight appointment.
-Separate schedules and preparation for multiple rounds remain planned.
+Hints also work without research. Select a CV and interview type, and save edited
+notes before generation. Browser drafts are not used as saved inputs.
 
-The workspace is filled with the saved job opening, schedule, application CV,
-and previous preparation. It shows experience from the exact attached CV version.
-Set the interview type and interviewer, then save recruiter instructions, personal
-notes, and questions to ask. Preparation saves to the account. Unsaved changes
-stay as a browser draft until saved or discarded; they do not update Profile.
+Use at most three cards per section and one to three short bullets per card.
+Keep source details expandable. Use speaking prompts rather than long reports
+or answer scripts.
 
-Application status and interview type are separate. Screening is the initial
-screening stage and may involve a recruiter or a technical screen. Interviewing
-covers later rounds. Choose the specific type in the workspace; it is not guessed
-from application status.
+Example hint card structure:
 
-The next step is generated preparation guidance inside this workspace:
+- **Highlight:** payment reliability, if the opening asks for it.
+- **Your evidence:** the relevant CV bullet, with its company, role, and version.
+- **Talking cues:** the problem, your own contribution, and the supported result.
+- **Clarify:** a focused question about details the CV does not explain yet.
 
-- A short introduction outline and a strategy for this role and stage.
-- Relevant strengths, linked to the user's actual experience.
-- Missing information and user-confirmed gaps, shown separately.
-- Likely questions with speaking outlines and relevant examples to prepare.
-- Questions to ask the company and an ordered practice checklist.
-- A few follow-up questions that help explain the user's work in more detail.
+## 3. Company and project research
 
-For system design, include practice prompts for requirements, scale, architecture,
-data, failures, and trade-offs. Suggested study topics are not work experience.
+- Match the company using the job's product, role, location, and website. Ask for
+  clarification when the company is ambiguous.
+- Start with the posting, official company pages, product information, and public
+  technical material. Explain what the product does and why it matters to this role.
+- Label Reddit and other community accounts as personal reports, with links and
+  dates where available. One post does not establish the company's interview process.
+- Keep source links with each finding. Show missing or uncertain information
+  clearly; do not invent findings or links when research fails.
+- Turn unknown internal project, architecture, or team details into questions.
+- Research uses public company/job context. Keep CV details and personal work
+  notes out of web search queries.
 
-## Build order
+## 4. Personal hints
 
-1. **Workspace (done):** filled job context, schedule, CV reference, interview
-   type, and account-saved notes, with browser draft recovery.
-2. **Preparation guidance (planned):** generate and save a report for the chosen
-   interview type. Preserve the exact CV version and source material used.
-3. **Work history in Profile:** save user-written notes under company, role, and
-   project. Let the user review follow-up answers before adding them. Support
-   editing and removal; keep these notes independent of a particular job.
-4. **Improve preparation:** use confirmed answers in the next report, avoid
-   repeated questions, and show when inputs changed since generation.
+| Section | What to show |
+| --- | --- |
+| What to highlight | A job requirement matched to an actual CV achievement, plus a short speaking prompt |
+| Examples to prepare | Likely questions and brief answer outlines, using the user's own projects |
+| Topics to review | Relevant topics to practise and missing details to clarify |
+| Questions to ask | Questions about the company, product, team, and role |
 
-Use the existing AI connection. For the first version, company context comes
-from the job posting and user-supplied notes. Automatic company research and
-GitHub/Jira imports can be planned separately.
+Adapt hints to the interview type. For HR, focus on a short introduction,
+motivation, and relevant experience. For technical or system design rounds,
+focus on decisions, requirements, scale, data, failures, and trade-offs.
 
-## Code and data ownership
+Never invent technologies, metrics, ownership, or results, or move achievements
+between employers. Missing information is not a confirmed weakness. Keep CV
+statements, user notes, company facts, and community reports distinguishable.
+Predicted interview questions are practice suggestions, not inside information.
 
-- `interviews` owns preparation use cases, reports, and saved interview inputs.
-- `experience` owns user-confirmed work notes and their sources, shown in Profile.
-- Read jobs and CV versions through their public module interfaces. Follow the
-  existing [backend architecture](backend-clean-architecture-plan.md).
-- Generated text stays separate from confirmed experience. Regenerating a report
-  does not edit a CV or add facts to Profile automatically.
+Follow-up answers stay in preparation notes until the future work-history feature
+allows reviewed additions to Profile. AI output is never evidence for new claims.
+All support is used before the interview.
 
-## Done when
+## 5. Claude CLI now, API later
 
-- A user can prepare for a saved job and reopen the report after refreshing.
-- Stage selection changes the preparation; missing experience leads to questions.
-- Each experience example shows its source and stays with the correct role.
-- A reviewed answer becomes a Profile note and helps future preparation.
-- Failed generation keeps the previous report and the user's entered answers.
-- Users can access only their own jobs, CVs, notes, and reports.
-- Backend checks and desktop/mobile browser checks pass.
+Reuse the existing Claude CLI connection through replaceable research and hint
+interfaces in `interviews`. CLI code belongs in outbound adapters.
 
-## First example to review
+The current runner disables web tools. Add a research mode limited to web search
+and page reading; keep file, shell, and MCP tools disabled. Hint generation uses
+only supplied context. Existing CV operations keep their current settings.
 
-Badge — Software Engineer, Product (Fullstack), LinkedIn job `4449681804`.
-Added to Dashboard as Interviewing; the user said the interview is tomorrow
-(November 2, 2026, America/Vancouver). Interview time and stage are not specified.
-Use the supplied posting to review whether the proposed preparation is useful;
-do not assume Badge's interview format.
+Use the signed-in Claude account locally. Calls consume account usage; API-key
+authentication can use separate API billing. See [Anthropic's authentication guidance](https://support.claude.com/en/articles/12304248-manage-api-key-environment-variables-in-claude-code).
+Add an API adapter later behind the same interfaces. [Claude CLI supports non-interactive execution](https://code.claude.com/docs/en/headless).
+
+## 6. Keep usage small
+
+- Run AI only when the user clicks an action, never on page load or every edit.
+- Save research separately from personal hints. Changing a CV should not repeat
+  company research. Reopening a preparation reuses saved results.
+- Send only relevant context, limit search steps and output size, and return
+  structured cards instead of long prose.
+- Save the research date, source links, CV version, and input identity with results.
+  If inputs change, mark hints as needing an update; regeneration stays manual.
+- Failed calls keep previous results and user notes. Prevent duplicate running
+  requests for the same action and job.
+
+## 7. Build and check
+
+- [x] Interview collection, workspace, schedule, CV reference, and manual notes.
+- [ ] Add provider interfaces and separate CLI modes; check login, model, and web
+      tool availability with clear errors for missing access or usage limits.
+- [ ] Add sourced company research, compact personal hints, and independent caches.
+- [ ] Add the two workspace actions, hint cards, source details, and update states.
+- [ ] Verify structured output, valid source references, ownership, cache reuse,
+      changed CV/notes, failed searches, and desktop/mobile behaviour using fakes.
+- [ ] Later: reviewed work history in Profile, GitHub/Jira imports, multiple
+      interview rounds, and an API provider.
+
+`interviews` owns these use cases and saved outputs. Read jobs and CV versions
+through public interfaces and follow [the architecture guide](backend-clean-architecture-plan.md).
+Generation must not edit the CV or Profile. Badge job `4449681804` can be used to
+review the proposed experience without assuming its interview format.
