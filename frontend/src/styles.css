@@ -165,7 +165,8 @@ button.remove:hover { background: var(--color-error-soft); }
   background: var(--color-surface); border-bottom: 1px solid var(--color-border);
 }
 
-.topbar .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; }
+.topbar .brand { display: flex; align-items: center; justify-content: center; flex: none; border-radius: 8px; }
+.topbar .brand:hover { background: var(--color-background); }
 
 .nav { display: flex; gap: 2px; }
 
@@ -459,19 +460,16 @@ a.ghost:hover { background: var(--color-background); }
 .board-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .board-place { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-/* Header on narrow screens: brand on one line, nav scrolls, the name hides. */
-.topbar .brand { white-space: nowrap; }
+/* Header on narrow screens: the logo stays visible and navigation wraps. */
 @media (max-width: 720px) {
   .topbar { gap: 12px; padding: 0 16px; }
   .nav { overflow-x: auto; scrollbar-width: none; }
   .navlink { padding: 7px 10px; white-space: nowrap; }
   .avatar .who, .avatar .chevron { display: none; }
   .content { padding: 20px 16px 72px; }
-  .brand-name { display: none; }
 }
 @media (max-width: 480px) {
   .topbar { height: auto; flex-wrap: wrap; gap: 6px 12px; padding: 8px 16px; }
-  .topbar .brand-name { display: inline; }
   .topbar .account { order: 1; }
   .topbar .nav { order: 2; flex: 1 0 100%; justify-content: space-between; overflow: visible; }
   .topbar .navlink { flex: 1; text-align: center; padding: 8px; }

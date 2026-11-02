@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { Login } from './Login';
 import { Layout } from './Layout';
 import { Dashboard } from './pages/Dashboard';
+import { Home } from './pages/Home';
 import { Documents } from './pages/Documents';
 import { JobDetail } from './pages/JobDetail';
 import { Profile } from './pages/Profile';
@@ -42,7 +43,9 @@ function Gate() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Home />} />
+          <Route path="home" element={<Navigate to="/" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="resumes" element={<Navigate to="/documents" replace />} />
           <Route path="resumes/:id/*" element={<LegacyResumeRedirect />} />
           <Route path="documents" element={<Documents />} />
@@ -53,9 +56,9 @@ function Gate() {
           <Route path="documents/:id" element={<ResumeEditor />} />
           <Route path="documents/:id/history" element={<ResumeHistory />} />
           <Route path="documents/:id/tailor" element={<TailorReview />} />
-          <Route path="jobs" element={<Navigate to="/" replace />} />
+          <Route path="jobs" element={<Navigate to="/dashboard" replace />} />
           <Route path="jobs/:id" element={<JobDetail />} />
-          <Route path="tracker" element={<Navigate to="/" replace />} />
+          <Route path="tracker" element={<Navigate to="/dashboard" replace />} />
           <Route path="profile" element={<Profile />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

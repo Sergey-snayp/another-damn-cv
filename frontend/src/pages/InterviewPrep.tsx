@@ -49,7 +49,7 @@ export function InterviewPrep() {
           <h1>Interview preparation</h1>
           <p>Keep your interview jobs and application CVs close at hand.</p>
         </div>
-        <Link className="interview-prep-button" to="/">
+        <Link className="interview-prep-button" to="/dashboard">
           Manage on Dashboard <DashboardIcon name="arrow" size={17} />
         </Link>
       </header>
@@ -74,7 +74,7 @@ export function InterviewPrep() {
           <DashboardIcon name="interview" size={36} />
           <h2>Your next interview starts here</h2>
           <p>When you have an interview, move the job to Screening or Interviewing on Dashboard. It will appear here.</p>
-          <Link className="interview-prep-button is-primary" to="/">Go to Dashboard <DashboardIcon name="arrow" size={17} /></Link>
+          <Link className="interview-prep-button is-primary" to="/dashboard">Go to Dashboard <DashboardIcon name="arrow" size={17} /></Link>
         </section>
       ) : (
         <>

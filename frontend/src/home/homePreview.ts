@@ -1,0 +1,22 @@
+/** Reference-screen data only. Replace this when Home is connected to real statistics. */
+export const HOME_PREVIEW = {
+  streak: 0,
+  streakGoal: 7,
+  onboardingDone: 3,
+  onboardingTotal: 6,
+  credits: 20,
+  inProgress: 0,
+  submittedThisWeek: 0,
+  submittedAllTime: 0,
+  profilePercent: 100,
+  hoursSaved: 33,
+  applicationsThisWeek: 30,
+  interviewsThisWeek: 0,
+  savedThisWeek: 41,
+  week: "26 Oct – 1 Nov 2026",
+  applicationsAllTime: 137,
+  interviewsAllTime: 2,
+  savedAllTime: 58,
+  referrals: 0,
+  accessEnds: "November 13, 2026",
+};

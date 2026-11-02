@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useAuth } from './AuthContext';
 
 const NAV = [
-  { to: '/', label: 'Dashboard', end: true },
+  { to: '/dashboard', label: 'Dashboard', end: true },
   { to: '/documents', label: 'Documents' },
   { to: '/interview-prep', label: 'Interview Prep' },
 ];
@@ -15,10 +15,9 @@ export function Layout() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
+        <NavLink to="/" className="brand" aria-label="Home" end>
           <img className="brand-logo" src="/brand/d-stamp-logo.png" alt="D! logo" width={40} height={40} />
-          <span className="brand-name">CV Platform</span>
-        </div>
+        </NavLink>
 
         <nav className="nav">
           {NAV.map((item) => (

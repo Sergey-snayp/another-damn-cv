@@ -84,7 +84,7 @@ export function JobDetail() {
     }
   }
 
-  if (error && !job) return <><h1>Job</h1><p className="error">{error}</p><Link to="/">← Dashboard</Link></>;
+  if (error && !job) return <><h1>Job</h1><p className="error">{error}</p><Link to="/dashboard">← Dashboard</Link></>;
   if (!job || !draft) return <p className="muted">Loading…</p>;
 
   const set = (key: keyof Draft) => (event: { target: { value: string } }) =>
@@ -95,7 +95,7 @@ export function JobDetail() {
 
   return (
     <>
-      <p className="crumb"><Link to="/">← Dashboard</Link></p>
+      <p className="crumb"><Link to="/dashboard">← Dashboard</Link></p>
       <h1>{jobName(job)}</h1>
 
       <p className="muted small job-meta">
@@ -210,7 +210,7 @@ export function JobDetail() {
             disabled={busy}
             onClick={() => {
               if (confirm(`Delete "${jobName(job)}"? This cannot be undone.`)) {
-                void run(async () => { await jobsApi.remove(job.id); navigate('/'); });
+                void run(async () => { await jobsApi.remove(job.id); navigate('/dashboard'); });
               }
             }}
           >

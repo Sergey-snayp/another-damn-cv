@@ -4,6 +4,12 @@ Approved by Sergey on 1 November 2026. Use this guide for future site design
 and UI changes. The logo is used in the app header, sign-in page, and browser
 tab. The app uses the color palette below.
 
+The header shows only the logo. Clicking it opens Home (`/`); Dashboard remains
+at `/dashboard`. Home copies the supplied reference layout using this palette.
+Its statistics and service cards are clearly marked as sample content. Preview
+goals and email choices do not update account settings or send emails. The
+sample values live in `frontend/src/home/homePreview.ts` until we connect real data.
+
 ## Logo
 
 Use the supplied **D!** logo: a tilted acid-yellow badge with a thick dark
