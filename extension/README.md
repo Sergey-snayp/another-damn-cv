@@ -19,6 +19,14 @@ The D! logo is packaged in `assets/brand/d-stamp-logo.png` so the extension work
 on its own. It is an unchanged copy of the approved artwork in
 `../frontend/public/brand/d-stamp-logo.png`. Chrome scales it for its icon sizes.
 
+## Colors
+
+The extension uses the main app's palette from `frontend/src/theme/colors.css`.
+The web app's `npm run dev` and `npm run build` copy it into the extension.
+To sync colors directly, run `node extension/scripts/sync-theme.cjs` from the
+project root, then reload the extension. The generated copy in
+`extension/assets/theme/colors.css` is packaged for standalone use; do not edit it.
+
 ## Use it
 
 Open any application page on a supported board, for example:

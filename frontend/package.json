@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node ../extension/scripts/sync-theme.cjs",
     "dev": "vite",
+    "prebuild": "node ../extension/scripts/sync-theme.cjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json"

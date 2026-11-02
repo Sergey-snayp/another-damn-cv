@@ -43,6 +43,11 @@ the app. Component styles and charts use `var(--color-...)`; do not add new
 hard-coded UI colors. Soft backgrounds, borders, and shadows follow the main
 colors automatically.
 
+The Chrome extension uses the same variables through a generated copy in
+`extension/assets/theme/colors.css`. Web app dev/build commands sync it, or run
+`node extension/scripts/sync-theme.cjs` from the project root before reloading
+the extension. Edit the frontend palette rather than the generated copy.
+
 | Role | Color | HEX | Where to use |
 | --- | --- | --- | --- |
 | Primary accent | Acid yellow | `#E6FF00` | Main buttons, selected states, highlights |
