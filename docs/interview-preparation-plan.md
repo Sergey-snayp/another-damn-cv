@@ -7,7 +7,8 @@ Product rules are in [business-logic.md](business-logic.md).
 
 **Interview Prep** lists active Screening and Interviewing jobs. Click or tap a
 card to open preparation. Cards show the company, role, status, location, date,
-and whether a CV is attached. **Original posting** stays a separate link. Users
+and whether a CV is attached. Remote, Hybrid, and On-site appear as tags when
+stated in the saved job. **Original posting** stays a separate link. Users
 change the schedule and CV inside preparation. **View job opening** and **View
 application CV** open separate reference pages, each with **Back to preparation**.
 The CV page shows the exact attached version. Users save

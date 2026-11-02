@@ -109,6 +109,7 @@ export function InterviewPrep() {
 }
 
 function InterviewJobCard({ job }: { job: JobSummary }) {
+  const { place, tags } = workLocation(job);
   return (
     <article className="interview-job-card" aria-label={`${job.company || 'Company not added'} — ${jobName(job)}`}>
       <div className="interview-job-card-top">
@@ -117,7 +118,10 @@ function InterviewJobCard({ job }: { job: JobSummary }) {
       </div>
       <p className="interview-job-company">{job.company || 'Company not added'}</p>
       <h2><Link to={`/interview-prep/${job.id}`} aria-label={`Prepare for ${jobName(job)} at ${job.company || 'Company not added'}`}>{jobName(job)}</Link></h2>
-      <p className="interview-job-location"><DashboardIcon name="location" size={16} />{job.location || (job.remote ? 'Remote' : 'Location not added')}</p>
+      <div className="interview-job-location-details">
+        {(place || !tags.length) && <p className="interview-job-location"><DashboardIcon name="location" size={16} />{place || 'Location not added'}</p>}
+        {tags.length > 0 && <div className="interview-job-work-tags" aria-label="Work arrangement">{tags.map(tag => <span key={tag}>{tag}</span>)}</div>}
+      </div>
       <div className="interview-job-date">
         <DashboardIcon name="calendar" size={17} />
         {job.interview ? <div><time dateTime={job.interview.date}>{new Date(`${job.interview.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time><span>{job.interview.time ? `${job.interview.time} · ${job.interview.timeZone.replaceAll('_', ' ')}` : 'Time not set'}</span></div> : <span>Interview date not set</span>}
@@ -128,4 +132,17 @@ function InterviewJobCard({ job }: { job: JobSummary }) {
       </footer>
     </article>
   );
+}
+
+/** Present explicit work arrangements separately; "not remote" does not establish on-site. */
+function workLocation(job: Pick<JobSummary, 'location' | 'remote'>) {
+  const value = job.location?.trim() ?? '';
+  const tags = new Set<string>();
+  const mode = /\b(?:hybrid|remote|on[-\s]?site)\b/gi;
+  const place = value.replace(/\b(?:not|non)[-\s]+remote\b/gi, '').replace(mode, match => {
+    tags.add(/^hybrid$/i.test(match) ? 'Hybrid' : /^remote$/i.test(match) ? 'Remote' : 'On-site');
+    return '';
+  }).replace(/\([\s,·•|/–—-]*\)|\[[\s,·•|/–—-]*\]/g, '').replace(/^[\s,·•|/–—-]+|[\s,·•|/–—-]+$/g, '').replace(/^in\s+/i, '').trim();
+  if (!tags.size && job.remote === true) tags.add('Remote');
+  return { place, tags: [...tags] };
 }
