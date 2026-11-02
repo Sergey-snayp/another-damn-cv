@@ -1,17 +1,17 @@
 # Brand guide
 
 Approved by Sergey on 1 November 2026. Use this guide for future site design
-and UI changes. These choices are recorded here; the current UI has not yet
-been updated to match.
+and UI changes. The logo is used in the app header, sign-in page, and browser
+tab. The color palette is recorded below for future UI updates.
 
 ## Logo
 
 Use the supplied **D!** logo: a tilted acid-yellow badge with a thick dark
 border and dark lettering. Keep its shape, proportions, and angle.
 
-The reference is the image Sergey shared with this palette. The original image
-file still needs to be added to the project before using it in the interface.
-Use that artwork rather than drawing a replacement.
+The original artwork is [d-stamp-logo.png](../frontend/public/brand/d-stamp-logo.png).
+It is served at `/brand/d-stamp-logo.png`. Use this file rather than drawing a
+replacement. Keep shared public brand assets in `frontend/public/brand/`.
 
 ## Color palette
 

@@ -29,6 +29,8 @@ code { background: #eef1f4; padding: 1px 5px; border-radius: 4px; font-size: 13p
 .centred { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 
 .login { max-width: 380px; text-align: center; }
+.brand-logo { display: block; object-fit: contain; flex-shrink: 0; }
+.login .brand-logo { margin: 0 auto 16px; }
 .login h1 { margin-bottom: 8px; }
 .login .muted { margin-bottom: 26px; }
 .google-button { display: flex; justify-content: center; min-height: 44px; }
@@ -160,10 +162,6 @@ button.remove:hover { background: #fef3f2; }
 }
 
 .topbar .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; }
-.topbar .brand .mark {
-  width: 20px; height: 20px; border-radius: 6px;
-  background: linear-gradient(135deg, #2d6fb0, #1a3a5c);
-}
 
 .nav { display: flex; gap: 2px; }
 

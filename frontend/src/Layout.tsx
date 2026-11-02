@@ -16,7 +16,7 @@ export function Layout() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="mark" />
+          <img className="brand-logo" src="/brand/d-stamp-logo.png" alt="D! logo" width={40} height={40} />
           <span className="brand-name">CV Platform</span>
         </div>
 

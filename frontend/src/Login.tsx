@@ -36,6 +36,7 @@ export function Login() {
 
   return (
     <div className="login">
+      <img className="brand-logo" src="/brand/d-stamp-logo.png" alt="D! logo" width={96} height={96} />
       <h1>CV Platform</h1>
       <p className="muted">
         An evidence-backed job application system. Every claim traces to a
