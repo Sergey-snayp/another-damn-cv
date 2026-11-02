@@ -38,7 +38,7 @@ export function TailorReview() {
       <>
         <h1>Review suggestions</h1>
         <p className="muted">There are no suggestions waiting for this resume.</p>
-        <p><Link to={`/resumes/${id}`}>Open the resume</Link></p>
+        <p><Link to={`/documents/${id}`}>Open the resume</Link></p>
       </>
     );
   }
@@ -55,7 +55,7 @@ export function TailorReview() {
     try {
       await resumeApi.save(id, applyTailoring(resume!, t, accepted, reorder), `Tailored for ${t.jobTitle}`);
       await resumeApi.discardTailoring(id);
-      navigate(`/resumes/${id}`);
+      navigate(`/documents/${id}`);
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -65,7 +65,7 @@ export function TailorReview() {
   async function discard() {
     if (!confirm('Drop all suggestions? The resume stays as it is.')) return;
     await resumeApi.discardTailoring(id);
-    navigate(`/resumes/${id}`);
+    navigate(`/documents/${id}`);
   }
 
   const changedCount = t.bullets.filter((b) => b.after !== b.before).length;

@@ -32,7 +32,7 @@ export const STATUS_LABELS: Record<JobStatus, string> = {
   saved: 'Saved',
   applied: 'Applied',
   screening: 'Screening',
-  interview: 'Interview',
+  interview: 'Interviewing',
   offer: 'Offer',
   accepted: 'Accepted',
   rejected: 'Rejected',
@@ -68,6 +68,11 @@ export interface Job {
   capturedAt: string;
   createdAt: string;
   updatedAt: string;
+  isFavorite: boolean;
+  archivedAt: string | null;
+  appliedAt: string | null;
+  applicationResumeId: string | null;
+  applicationSnapshot: number | null;
 }
 
 /** One job with its moves, newest first. */
@@ -86,7 +91,29 @@ export interface ManualJob {
   url?: string;
 }
 
+export interface ApplicationInput {
+  title: string;
+  company: string;
+  location?: string;
+  employmentType?: string;
+  status?: JobStatus;
+  resumeId?: string;
+  resumeSnapshot?: number;
+  url?: string;
+  salary?: string;
+  description?: string;
+  addedAt?: string;
+  appliedAt?: string;
+  favorite?: boolean;
+  archived?: boolean;
+}
+
 export const jobsApi = {
+  attachResume: (id: string, resumeId: string | null) => request<Job>(`/jobs/applications/${id}/resume`, { method: 'PATCH', body: JSON.stringify({ resumeId }) }),
+  addApplication: (application: ApplicationInput) => request<Job>('/jobs/applications', { method: 'POST', body: JSON.stringify(application) }),
+  importApplications: (rows: ApplicationInput[]) => request<{ imported: number; skipped: number }>('/jobs/applications/import', { method: 'POST', body: JSON.stringify({ rows }) }),
+  exportApplications: () => request<Job[]>('/jobs/applications/export'),
+  preferences: (ids: string[], edit: { favorite?: boolean; archived?: boolean }) => request<Job[]>('/jobs/applications/preferences', { method: 'PATCH', body: JSON.stringify({ ids, ...edit }) }),
   list: (status?: JobStatus) => request<JobSummary[]>(`/jobs${status ? `?status=${status}` : ''}`),
   get: (id: string) => request<JobDetail>(`/jobs/${id}`),
   create: (job: ManualJob) => request<Job>('/jobs', { method: 'POST', body: JSON.stringify(job) }),

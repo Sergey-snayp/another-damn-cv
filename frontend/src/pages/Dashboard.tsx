@@ -1,366 +1,742 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { resumeApi } from '../resumeApi';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CLOSED, EXTRACTION_LABELS, PIPELINE, SOURCE_LABELS, STATUS_LABELS, jobName, jobsApi,
-  type JobStatus, type JobSummary,
+  ALL_STATUSES,
+  STATUS_LABELS,
+  jobName,
+  jobsApi,
+  type ApplicationInput,
+  type JobStatus,
+  type JobSummary,
 } from '../jobsApi';
+import { resumeApi, type ResumeSummary } from '../resumeApi';
+import { useAuth } from '../AuthContext';
 import { Board } from '../jobs/Board';
+import { ApplicationList } from '../jobs/ApplicationList';
+import { ApplicationCharts } from '../jobs/ApplicationCharts';
+import { AddApplicationDrawer } from '../jobs/AddApplicationDrawer';
+import { ImportApplicationsDialog } from '../jobs/ImportApplicationsDialog';
+import { DashboardOptions } from '../jobs/DashboardOptions';
+import { DashboardIcon } from '../jobs/DashboardIcon';
+import type { ApplicationActions } from '../jobs/ApplicationCard';
+import {
+  jobType,
+  needsReview,
+  readDashboardPreferences,
+  visibleApplications,
+  type DashboardPreferences,
+  type DashboardScope,
+  type DashboardView,
+} from '../jobs/dashboardState';
+import { downloadApplications } from '../jobs/csv';
+import '../jobs/dashboard.css';
 
-type View = 'board' | 'list';
-type ListFilter = 'active' | 'closed' | 'dismissed' | 'all';
+type Notice = {
+  text: string;
+  undo?:
+    | { kind: 'move'; id: string; eventId: string }
+    | { kind: 'archive'; ids: string[]; archived: boolean };
+};
 
-const LIST_FILTERS: { value: ListFilter; label: string }[] = [
-  { value: 'active', label: 'Active' },
-  { value: 'closed', label: 'Closed' },
-  { value: 'dismissed', label: 'Dismissed' },
-  { value: 'all', label: 'All' },
-];
-
-function inFilter(status: JobStatus, filter: ListFilter): boolean {
-  if (filter === 'all') return true;
-  if (filter === 'active') return PIPELINE.includes(status);
-  if (filter === 'closed') return CLOSED.includes(status);
-  return status === 'dismissed';
-}
-
-/** While a job is being read in the background, the page checks back this often. */
-const POLL_MS = 3000;
-const UNDO_MS = 8000;
-
-/** Applied or further along: it went out. */
-const SENT: JobStatus[] = ['applied', 'screening', 'interview', 'offer', ...CLOSED];
-
-/** Per-browser preferences. Storage can be unavailable; the page works without it. */
-function remembered<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
-  try {
-    const value = localStorage.getItem(key) as T | null;
-    return value && allowed.includes(value) ? value : fallback;
-  } catch {
-    return fallback;
-  }
-}
-function remember(key: string, value: string) {
-  try { localStorage.setItem(key, value); } catch { /* not kept, that's fine */ }
-}
-
-interface Moved { jobId: string; eventId: string; name: string; to: JobStatus }
-
-/**
- * The home page: every job you might apply to, as a board or a list, with the
- * numbers on top.
- *
- * Most jobs arrive from the extension's "Send this job to the app"; "+ Add job"
- * opens a form for postings you only have as text.
- */
 export function Dashboard() {
-  const navigate = useNavigate();
-  const [view, setViewState] = useState<View>(() => remembered('jobs.view', 'board', ['board', 'list']));
-  const [showClosed, setShowClosedState] = useState(() => remembered('jobs.closed', 'no', ['yes', 'no']) === 'yes');
-  const [filter, setFilter] = useState<ListFilter>('active');
-  const [rows, setRows] = useState<JobSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [moved, setMoved] = useState<Moved | null>(null);
-  const [resumeCount, setResumeCount] = useState<number | undefined>(undefined);
-  const [adding, setAdding] = useState(false);
-
-  const setView = (next: View) => { setViewState(next); remember('jobs.view', next); };
-  const setShowClosed = (next: boolean) => { setShowClosedState(next); remember('jobs.closed', next ? 'yes' : 'no'); };
-
-  const anyPending = rows?.some((job) => job.extraction === 'pending') ?? false;
-
-  useEffect(() => {
-    resumeApi.list().then((list) => setResumeCount(list.length), () => undefined);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    jobsApi.list().then((jobs) => {
-      if (!cancelled) { setRows(jobs); setError(null); }
-    }, (err: Error) => { if (!cancelled) setError(err.message); });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Check back while a page is still being read.
-  useEffect(() => {
-    if (!anyPending) return;
-    const timer = setTimeout(() => {
-      jobsApi.list().then(setRows, () => undefined);
-    }, POLL_MS);
-    return () => clearTimeout(timer);
-  }, [anyPending, rows]);
-
-  // The undo offer goes away on its own.
-  useEffect(() => {
-    if (!moved) return;
-    const timer = setTimeout(() => setMoved(null), UNDO_MS);
-    return () => clearTimeout(timer);
-  }, [moved]);
-
-  function replace(id: string, patch: Partial<JobSummary>) {
-    setRows((current) => current?.map((row) => (row.id === id ? { ...row, ...patch } : row)) ?? current);
-  }
-
-  /** Shown at once; put back if the server refuses. */
-  async function move(row: JobSummary, to: JobStatus) {
-    setError(null);
-    replace(row.id, { status: to, updatedAt: new Date().toISOString() });
-    try {
-      const saved = await jobsApi.update(row.id, { status: to });
-      replace(row.id, { status: saved.status, updatedAt: saved.updatedAt });
-      const event = saved.history[0];
-      if (event && event.to === to) setMoved({ jobId: row.id, eventId: event.id, name: jobName(row), to });
-    } catch (err) {
-      replace(row.id, { status: row.status, updatedAt: row.updatedAt });
-      setError(`Could not move "${jobName(row)}": ${(err as Error).message}`);
-    }
-  }
-
-  async function undo() {
-    if (!moved) return;
-    const { jobId, eventId } = moved;
-    setMoved(null);
-    try {
-      const saved = await jobsApi.undoStatus(jobId, eventId);
-      replace(jobId, { status: saved.status, updatedAt: saved.updatedAt });
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
-  const columns = showClosed ? [...PIPELINE, ...CLOSED] : PIPELINE;
-  const dismissed = rows?.filter((row) => row.status === 'dismissed').length ?? 0;
-  const closedCount = rows?.filter((row) => CLOSED.includes(row.status)).length ?? 0;
-  const listed = rows?.filter((row) => inFilter(row.status, filter)) ?? [];
-
-  return (
-    <div className={view === 'board' ? 'jobs-page wide' : 'jobs-page'}>
-      <div className="jobs-head">
-        <h1>Dashboard</h1>
-        <div className="jobs-actions">
-          <div className="filters" role="tablist" aria-label="View">
-            <button role="tab" aria-selected={view === 'board'} className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>Board</button>
-            <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>List</button>
-          </div>
-          <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>
-        </div>
-      </div>
-
-      <section className="grid stats-row">
-        <Stat label="Active jobs" value={rows?.filter((j) => PIPELINE.includes(j.status)).length} />
-        <Stat label="Applied" value={rows?.filter((j) => SENT.includes(j.status)).length} />
-        <Stat label="Interviewing" value={rows?.filter((j) => j.status === 'interview').length} />
-        <Stat label="Offers" value={rows?.filter((j) => j.status === 'offer' || j.status === 'accepted').length} />
-        <Stat label="Resumes" value={resumeCount} link="/resumes" />
-      </section>
-
-      <p className="muted small">
-        On any job page, press <b>Send this job to the app</b> in the extension&rsquo;s side panel.
-        {view === 'board' && ' Drag a card to move it, or use its Move menu.'}
-      </p>
-
-      {error && <p className="error">{error}</p>}
-
-      {view === 'board' && rows && (
-        <>
-          <div className="board-options muted small">
-            <label>
-              <input type="checkbox" checked={showClosed} onChange={() => setShowClosed(!showClosed)} />
-              Show closed{closedCount > 0 ? ` (${closedCount})` : ''}
-            </label>
-            {dismissed > 0 && (
-              <button className="linklike" onClick={() => { setView('list'); setFilter('dismissed'); }}>
-                {dismissed} dismissed
-              </button>
-            )}
-          </div>
-          {rows.length === 0
-            ? <GettingStarted />
-            : <Board rows={rows} columns={columns} onMove={(row, to) => void move(row, to)} />}
-        </>
-      )}
-
-      {view === 'list' && (
-        <section className="card">
-          <div className="filters" role="tablist">
-            {LIST_FILTERS.map((item) => (
-              <button
-                key={item.value}
-                role="tab"
-                aria-selected={filter === item.value}
-                className={filter === item.value ? 'on' : ''}
-                onClick={() => setFilter(item.value)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {rows && listed.length === 0 && (
-            <p className="empty">
-              {filter === 'active' || filter === 'all'
-                ? 'No jobs yet. Open a posting and send it from the extension, or press + Add job to paste one.'
-                : `No ${filter} jobs.`}
-            </p>
-          )}
-
-          {listed.length > 0 && (
-            <ul className="resumes jobs">
-              {listed.map((job) => (
-                <li key={job.id}>
-                  <Link to={`/jobs/${job.id}`}>
-                    <div>
-                      <div className="role">
-                        {jobName(job)}
-                        {job.extraction === 'pending' && <span className="badge interviewing">reading…</span>}
-                        {job.extraction === 'failed' && <span className="badge rejected">check details</span>}
-                        <span className={`badge ${job.status}`}>{STATUS_LABELS[job.status]}</span>
-                      </div>
-                      <div className="muted tiny">
-                        {[job.company, job.location, job.remote ? 'Remote' : null].filter(Boolean).join(' · ') || 'Company not read yet'}
-                      </div>
-                      <div className="muted tiny">
-                        {SOURCE_LABELS[job.source]} · {new Date(job.capturedAt).toLocaleDateString('en-CA')}
-                        {job.extraction !== 'pending' && job.extraction !== 'failed' && ` · ${EXTRACTION_LABELS[job.extraction]}`}
-                      </div>
-                    </div>
-                    <span className="chev">›</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      <AddJobDialog open={adding} onClose={() => setAdding(false)} onCreated={(id) => navigate(`/jobs/${id}`)} />
-
-      {moved && (
-        <div className="toast" role="status">
-          <span>Moved <b>{moved.name}</b> to {STATUS_LABELS[moved.to]}.</span>
-          <button onClick={() => void undo()}>Undo</button>
-        </div>
-      )}
-    </div>
+  const { user } = useAuth();
+  const storageKey = `application-dashboard:${user?.id ?? 'local'}`;
+  const [preferences, setPreferences] = useState(() =>
+    readDashboardPreferences(storageKey),
   );
-}
-
-/**
- * A posting you only have as text, in a pop-up. A native <dialog>: Esc,
- * focus and the backdrop come with it.
- */
-function AddJobDialog({ open, onClose, onCreated }: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (id: string) => void;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
-
-  const [description, setDescription] = useState('');
-  const [title, setTitle] = useState('');
-  const [company, setCompany] = useState('');
-  const [url, setUrl] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [scope, setScope] = useState<DashboardScope>('active');
+  const [rows, setRows] = useState<JobSummary[] | null>(null);
+  const [resumes, setResumes] = useState<ResumeSummary[] | null>(null);
+  const [query, setQuery] = useState('');
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
+  const inFlight = useRef(new Set<string>());
+  const [exporting, setExporting] = useState(false);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const archiveDialog = useRef<HTMLDialogElement>(null);
 
-  async function add() {
-    setBusy(true);
+  const refresh = useCallback(async () => {
+    const jobs = await jobsApi.list();
+    setRows((current) =>
+      jobs.map((job) =>
+        inFlight.current.has(job.id)
+          ? (current?.find((row) => row.id === job.id) ?? job)
+          : job,
+      ),
+    );
     setError(null);
-    try {
-      const job = await jobsApi.create({
-        description,
-        title: title.trim() || undefined,
-        company: company.trim() || undefined,
-        url: url.trim() || undefined,
+  }, []);
+  useEffect(() => {
+    let active = true;
+    jobsApi
+      .list()
+      .then((jobs) => {
+        if (active) setRows(jobs);
+      })
+      .catch((err: Error) => {
+        if (active) setError(err.message);
       });
-      onCreated(job.id);
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    resumeApi
+      .list()
+      .then((list) => {
+        if (active) setResumes(list);
+      })
+      .catch(() => {
+        if (active) setResumes([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(preferences));
+    } catch {
+      /* Preferences are optional. */
+    }
+  }, [storageKey, preferences]);
+  const pending = rows?.some((job) => job.extraction === 'pending') ?? false;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setTimeout(() => {
+      void refresh().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [pending, rows, refresh]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
+    const dialog = archiveDialog.current;
+    if (confirmAll) dialog?.showModal();
+    else dialog?.close();
+  }, [confirmAll]);
+
+  const change = (patch: Partial<DashboardPreferences>) =>
+    setPreferences((current) => ({ ...current, ...patch }));
+  const visible = useMemo(
+    () =>
+      visibleApplications(rows ?? [], scope, query, preferences, reviewOnly),
+    [rows, scope, query, preferences, reviewOnly],
+  );
+  const scoped = (rows ?? []).filter(
+    (job) => (scope === 'archived') === Boolean(job.archivedAt),
+  );
+  const activeCount = rows?.filter((job) => !job.archivedAt).length;
+  const archivedCount = rows?.filter((job) => job.archivedAt).length;
+  const reviewCount = (rows ?? []).filter(
+    (job) => !job.archivedAt && needsReview(job),
+  ).length;
+  const types = [
+    ...new Set([
+      'Full-Time',
+      'Part-Time',
+      'Contract',
+      'Temporary',
+      'Internship',
+      'Freelance',
+      ...(rows ?? []).map((job) => jobType(job.employmentType)),
+    ]),
+  ];
+  const columns = ALL_STATUSES.filter(
+    (status) =>
+      preferences.columns.includes(status) ||
+      (!preferences.customColumns &&
+        scoped.some((job) => job.status === status)),
+  );
+  const companies = [
+    ...new Set(
+      (rows ?? [])
+        .map((job) => job.company)
+        .filter((company): company is string => Boolean(company)),
+    ),
+  ].sort();
+  const activeFilters =
+    preferences.favoritesOnly ||
+    preferences.statuses.length > 0 ||
+    preferences.types.length > 0 ||
+    Boolean(preferences.appliedFrom || preferences.appliedUntil) ||
+    reviewOnly;
+
+  function lock(ids: string[]) {
+    ids.forEach((id) => inFlight.current.add(id));
+    setBusyIds(new Set(inFlight.current));
+  }
+  function unlock(ids: string[]) {
+    ids.forEach((id) => inFlight.current.delete(id));
+    setBusyIds(new Set(inFlight.current));
+  }
+  function replace(id: string, patch: Partial<JobSummary>) {
+    setRows(
+      (current) =>
+        current?.map((row) => (row.id === id ? { ...row, ...patch } : row)) ??
+        current,
+    );
+  }
+  async function move(job: JobSummary, status: JobStatus) {
+    if (job.status === status || inFlight.current.has(job.id)) return;
+    lock([job.id]);
+    setError(null);
+    replace(job.id, { status });
+    try {
+      const saved = await jobsApi.update(job.id, { status });
+      replace(job.id, saved);
+      const event = saved.history[0];
+      setNotice({
+        text: `Moved ${jobName(job)} to ${STATUS_LABELS[status]}.`,
+        ...(event && event.to === status
+          ? { undo: { kind: 'move' as const, id: job.id, eventId: event.id } }
+          : {}),
+      });
     } catch (err) {
-      setError((err as Error).message);
-      setBusy(false);
+      replace(job.id, job);
+      setError(
+        err instanceof Error ? err.message : 'Could not move this application.',
+      );
+    } finally {
+      unlock([job.id]);
     }
   }
+  async function updatePreferences(
+    ids: string[],
+    edit: { favorite?: boolean; archived?: boolean },
+    offerUndo = true,
+  ) {
+    if (!ids.length || ids.some((id) => inFlight.current.has(id))) return;
+    lock(ids);
+    setError(null);
+    try {
+      for (let offset = 0; offset < ids.length; offset += 1000) {
+        const saved = await jobsApi.preferences(
+          ids.slice(offset, offset + 1000),
+          edit,
+        );
+        const patches = new Map(saved.map((job) => [job.id, job]));
+        setRows(
+          (current) =>
+            current?.map((job) =>
+              patches.has(job.id) ? { ...job, ...patches.get(job.id)! } : job,
+            ) ?? current,
+        );
+      }
+      setSelected(new Set());
+      if (edit.archived !== undefined && offerUndo)
+        setNotice({
+          text: `${ids.length === 1 ? 'Application' : `${ids.length} applications`} ${edit.archived ? 'archived' : 'restored'}.`,
+          undo: { kind: 'archive', ids, archived: !edit.archived },
+        });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not update the applications.',
+      );
+      await refresh().catch(() => {});
+    } finally {
+      unlock(ids);
+    }
+  }
+  async function undo() {
+    const action = notice?.undo;
+    if (!action) return;
+    setNotice(null);
+    if (action.kind === 'archive') {
+      await updatePreferences(action.ids, { archived: action.archived }, false);
+      return;
+    }
+    lock([action.id]);
+    try {
+      const saved = await jobsApi.undoStatus(action.id, action.eventId);
+      replace(action.id, saved);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not undo this move.',
+      );
+      await refresh().catch(() => {});
+    } finally {
+      unlock([action.id]);
+    }
+  }
+  const actions: ApplicationActions = {
+    onMove: (job, status) => void move(job, status),
+    onFavorite: (job) =>
+      void updatePreferences([job.id], { favorite: !job.isFavorite }),
+    onArchive: (job) =>
+      void updatePreferences([job.id], { archived: !job.archivedAt }),
+    busyIds,
+    managing,
+    selected,
+    onSelect: (id) =>
+      setSelected((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+  };
+  function setView(view: DashboardView) {
+    change({ view });
+    setOptionsOpen(false);
+  }
+  function setTab(next: DashboardScope) {
+    setScope(next);
+    setReviewOnly(false);
+    setSelected(new Set());
+    setOptionsOpen(false);
+  }
+  async function add(input: ApplicationInput) {
+    const saved = await jobsApi.addApplication(input);
+    setRows((current) => [
+      { ...saved, tailoredResumeId: null },
+      ...(current ?? []),
+    ]);
+    setAdding(false);
+    setScope(input.archived ? 'archived' : 'active');
+    setQuery('');
+    setReviewOnly(false);
+    change({
+      favoritesOnly: false,
+      statuses: [],
+      types: [],
+      appliedFrom: '',
+      appliedUntil: '',
+      columns: [...new Set([...columns, saved.status])],
+    });
+    setNotice({ text: `${jobName(saved)} added.` });
+    addButton.current?.focus();
+  }
+  async function importRows(input: ApplicationInput[]) {
+    const result = await jobsApi.importApplications(input);
+    await refresh();
+    setImporting(false);
+    setNotice({
+      text: `Imported ${result.imported} ${result.imported === 1 ? 'application' : 'applications'}${result.skipped ? `; skipped ${result.skipped} existing job ${result.skipped === 1 ? 'link' : 'links'}` : ''}.`,
+    });
+  }
+  async function exportRows() {
+    setOptionsOpen(false);
+    if (!visible.length) {
+      setNotice({ text: 'No matching applications to export.' });
+      return;
+    }
+    setExporting(true);
+    setError(null);
+    try {
+      const ids = new Set(visible.map((job) => job.id));
+      const exported = (await jobsApi.exportApplications()).filter((job) =>
+        ids.has(job.id),
+      );
+      downloadApplications(exported);
+      setNotice({ text: `Exported ${exported.length} applications.` });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not export the applications.',
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+  function clearFilters() {
+    setQuery('');
+    setReviewOnly(false);
+    change({
+      favoritesOnly: false,
+      statuses: [],
+      types: [],
+      appliedFrom: '',
+      appliedUntil: '',
+    });
+  }
+  const selectedCount = selected.size;
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="modal"
-      aria-labelledby="add-job-title"
-      onClose={onClose}
-      // Not while saving: the job would still be created, behind your back.
-      onCancel={(e) => { if (busy) e.preventDefault(); }}
-      // The content sits in an inner box, so a click on the dialog itself is the backdrop.
-      onClick={(e) => { if (e.target === e.currentTarget && !busy) dialogRef.current?.close(); }}
+    <section
+      className={`dashboard-page${reviewCount && scope === 'active' ? ' has-review' : ''}`}
+      aria-label="Dashboard"
     >
-      <div className="modal-body">
-        <h2 id="add-job-title">Add a job</h2>
-        <p className="muted small">
-          For a posting you only have as text. Leave title or company empty and they are read from the description.
-        </p>
-
-        <div className="fieldgrid">
-          <label className="field half">
-            <span>Title</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </label>
-          <label className="field half">
-            <span>Company</span>
-            <input value={company} onChange={(e) => setCompany(e.target.value)} />
-          </label>
-        </div>
-        <label className="field">
-          <span>Link (optional)</span>
-          <input value={url} placeholder="https://…" onChange={(e) => setUrl(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Job description</span>
-          <textarea
-            rows={8}
-            value={description}
-            placeholder="Paste the posting here…"
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </label>
-
-        {error && <p className="error">{error}</p>}
-
-        <div className="modal-actions">
-          <button className="ghost" disabled={busy} onClick={() => dialogRef.current?.close()}>Cancel</button>
-          <button className="primary" disabled={busy || !description.trim()} onClick={() => void add()}>
-            {busy ? 'Saving…' : 'Save job'}
+      <h1 className="dashboard-sr-only">Dashboard</h1>
+      <div className="dashboard-top-row">
+        <div
+          className="dashboard-segmented dashboard-scopes"
+          role="group"
+          aria-label="Application collection"
+        >
+          <button
+            type="button"
+            className={scope === 'active' ? 'is-active' : ''}
+            aria-pressed={scope === 'active'}
+            onClick={() => setTab('active')}
+          >
+            Active <span>({activeCount ?? '—'})</span>
+          </button>
+          <button
+            type="button"
+            className={scope === 'archived' ? 'is-active' : ''}
+            aria-pressed={scope === 'archived'}
+            onClick={() => setTab('archived')}
+          >
+            Archived <span>({archivedCount ?? '—'})</span>
           </button>
         </div>
+        <button
+          type="button"
+          className="dashboard-control dashboard-primary dashboard-add"
+          ref={addButton}
+          onClick={() => setAdding(true)}
+        >
+          <DashboardIcon name="plus" />
+          <span>Add application</span>
+        </button>
       </div>
-    </dialog>
-  );
-}
-
-function Stat({ label, value, link }: { label: string; value?: number; link?: string }) {
-  const body = (
-    <>
-      <div className="value">{value ?? '—'}</div>
-      <div className="label">{label}</div>
-    </>
-  );
-  return link ? <Link to={link} className="stat">{body}</Link> : <div className="stat">{body}</div>;
-}
-
-/** Shown until the first job arrives. */
-function GettingStarted() {
-  return (
-    <section className="card">
-      <h2>What to do next</h2>
-      <ul className="next">
-        <li><Link to="/resumes">Start from a CV</Link> — fills a resume in one go</li>
-        <li>Open a job posting and press <b>Send this job to the app</b> in the extension — or press <b>+ Add job</b> to paste one</li>
-        <li>Tailor your resume from the job&rsquo;s page, then move the job along the board as you apply</li>
-      </ul>
+      <div className="dashboard-toolbar">
+        <label className="dashboard-search">
+          <DashboardIcon name="search" size={21} />
+          <span className="dashboard-sr-only">
+            Search for roles or companies
+          </span>
+          <input
+            type="search"
+            placeholder="Search for roles or companies"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {query && (
+            <button
+              type="button"
+              className="dashboard-icon-button"
+              aria-label="Clear search"
+              onClick={() => setQuery('')}
+            >
+              <DashboardIcon name="close" size={16} />
+            </button>
+          )}
+        </label>
+        <div
+          className="dashboard-segmented dashboard-views"
+          role="group"
+          aria-label="Dashboard view"
+        >
+          {(['board', 'list', 'chart'] as const).map((view) => (
+            <button
+              type="button"
+              key={view}
+              className={preferences.view === view ? 'is-active' : ''}
+              aria-pressed={preferences.view === view}
+              onClick={() => setView(view)}
+            >
+              <DashboardIcon name={view} />
+              <span>{view.charAt(0).toUpperCase() + view.slice(1)}</span>
+            </button>
+          ))}
+        </div>
+        <DashboardOptions
+          open={optionsOpen}
+          onToggle={() => setOptionsOpen(!optionsOpen)}
+          onClose={() => setOptionsOpen(false)}
+          preferences={preferences}
+          onChange={change}
+          types={types}
+          columns={columns}
+          archived={scope === 'archived'}
+          busy={busyIds.size > 0}
+          exporting={exporting}
+          onManage={() => {
+            if (!managing && preferences.view === 'chart')
+              change({ view: 'list' });
+            setManaging(!managing);
+            setSelected(new Set());
+            setOptionsOpen(false);
+          }}
+          onImport={() => {
+            setOptionsOpen(false);
+            setImporting(true);
+          }}
+          onExport={() => void exportRows()}
+          onArchiveAll={() => {
+            setOptionsOpen(false);
+            if (scoped.length) setConfirmAll(true);
+            else setNotice({ text: `No ${scope} applications.` });
+          }}
+        />
+      </div>
+      {reviewCount > 0 && scope === 'active' && (
+        <div className="dashboard-review-banner">
+          <span className="dashboard-review-icon">
+            <DashboardIcon name="briefcase" size={24} />
+          </span>
+          <div>
+            <strong>
+              {reviewCount}{' '}
+              {reviewCount === 1 ? 'application needs' : 'applications need'}{' '}
+              review
+            </strong>
+            <p>
+              Some captured applications are missing details. Add the missing
+              information or archive them.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="dashboard-control"
+            onClick={() => {
+              setReviewOnly(true);
+              change({
+                view: 'list',
+                statuses: [],
+                types: [],
+                favoritesOnly: false,
+                appliedFrom: '',
+                appliedUntil: '',
+              });
+              setQuery('');
+            }}
+          >
+            Review {reviewCount}{' '}
+            {reviewCount === 1 ? 'application' : 'applications'}
+            <DashboardIcon name="arrow" />
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className="dashboard-error" role="alert">
+          <span>{error}</span>
+          <button
+            type="button"
+            className="dashboard-text-button"
+            onClick={() =>
+              void refresh().catch((err: Error) => setError(err.message))
+            }
+          >
+            Try again
+          </button>
+        </div>
+      )}
+      {activeFilters || query ? (
+        <div className="dashboard-filter-summary">
+          <span>
+            {visible.length} matching{' '}
+            {visible.length === 1 ? 'application' : 'applications'}
+            {reviewOnly ? ' · Needs review' : ''}
+            {preferences.favoritesOnly ? ' · Favorites' : ''}
+          </span>
+          <button
+            type="button"
+            className="dashboard-text-button"
+            onClick={clearFilters}
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : null}
+      {managing && (
+        <div className="dashboard-manage-bar">
+          <label>
+            <input
+              type="checkbox"
+              aria-label="Select all visible applications"
+              checked={
+                visible.length > 0 &&
+                visible.every((job) => selected.has(job.id))
+              }
+              onChange={() =>
+                setSelected(
+                  visible.length > 0 &&
+                    visible.every((job) => selected.has(job.id))
+                    ? new Set()
+                    : new Set(visible.map((job) => job.id)),
+                )
+              }
+            />
+            {selectedCount} selected
+          </label>
+          <button
+            type="button"
+            disabled={!selectedCount || busyIds.size > 0}
+            onClick={() =>
+              void updatePreferences([...selected], { favorite: true })
+            }
+          >
+            <DashboardIcon name="heart" size={17} />
+            Favorite selected
+          </button>
+          <button
+            type="button"
+            disabled={!selectedCount || busyIds.size > 0}
+            onClick={() =>
+              void updatePreferences([...selected], {
+                archived: scope !== 'archived',
+              })
+            }
+          >
+            <DashboardIcon
+              name={scope === 'archived' ? 'restore' : 'archive'}
+              size={17}
+            />
+            {scope === 'archived' ? 'Restore selected' : 'Archive selected'}
+          </button>
+          <button
+            type="button"
+            className="dashboard-manage-done"
+            onClick={() => {
+              setManaging(false);
+              setSelected(new Set());
+            }}
+          >
+            Done
+          </button>
+        </div>
+      )}
+      {preferences.view === 'board' && (
+        <Board
+          rows={visible}
+          columns={columns}
+          loading={rows === null && !error}
+          actions={actions}
+          onHide={(status) =>
+            change({
+              columns: columns.filter((value) => value !== status),
+              customColumns: true,
+            })
+          }
+        />
+      )}
+      {preferences.view === 'list' && rows && (
+        <ApplicationList rows={visible} actions={actions} />
+      )}
+      {preferences.view === 'chart' && rows && (
+        <ApplicationCharts
+          rows={visible}
+          onStatus={(status) => {
+            change({ statuses: [status], view: 'list' });
+            setReviewOnly(false);
+          }}
+        />
+      )}
+      {preferences.view !== 'board' && !rows && !error && (
+        <div className="dashboard-loading" role="status">
+          Loading applications…
+        </div>
+      )}
+      {rows && visible.length === 0 && (
+        <div className="dashboard-empty" role="status">
+          <h2>
+            {scope === 'archived' && !archivedCount
+              ? 'No archived applications'
+              : activeFilters || query
+                ? 'No matching applications'
+                : 'Your next opportunity starts here.'}
+          </h2>
+          <p>
+            {scope === 'archived' && !archivedCount
+              ? 'Applications you archive will appear here. You can restore them at any time.'
+              : activeFilters || query
+                ? 'Try a different search or clear your filters.'
+                : 'Add an application, import a CSV, or send a job from the extension.'}
+          </p>
+        </div>
+      )}
+      {adding && (
+        <AddApplicationDrawer
+          resumes={resumes}
+          companies={companies}
+          onClose={() => {
+            setAdding(false);
+            requestAnimationFrame(() => addButton.current?.focus());
+          }}
+          onAdd={add}
+        />
+      )}
+      {importing && (
+        <ImportApplicationsDialog
+          onClose={() => setImporting(false)}
+          onImport={importRows}
+        />
+      )}
+      <dialog
+        className="dashboard-dialog"
+        ref={archiveDialog}
+        aria-labelledby="archive-all-title"
+        onCancel={(event) => {
+          event.preventDefault();
+          setConfirmAll(false);
+        }}
+      >
+        <header>
+          <h2 id="archive-all-title">
+            {scope === 'archived' ? 'Restore' : 'Archive'} all applications?
+          </h2>
+          <button
+            type="button"
+            className="dashboard-icon-button"
+            aria-label="Close archive confirmation"
+            onClick={() => setConfirmAll(false)}
+          >
+            <DashboardIcon name="close" />
+          </button>
+        </header>
+        <p>
+          {scope === 'archived'
+            ? `Restore all ${scoped.length} archived applications to Active? Their statuses will stay the same.`
+            : `Move all ${scoped.length} active applications to Archived? Their statuses will stay the same, and you can restore them later.`}
+        </p>
+        <footer>
+          <button
+            type="button"
+            className="dashboard-control"
+            onClick={() => setConfirmAll(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="dashboard-control dashboard-primary"
+            onClick={() => {
+              setConfirmAll(false);
+              void updatePreferences(
+                scoped.map((job) => job.id),
+                { archived: scope !== 'archived' },
+              );
+            }}
+          >
+            {scope === 'archived' ? 'Restore all' : 'Archive all'}
+          </button>
+        </footer>
+      </dialog>
+      {notice && (
+        <div className="dashboard-toast" role="status">
+          <span>{notice.text}</span>
+          {notice.undo && (
+            <button type="button" onClick={() => void undo()}>
+              Undo
+            </button>
+          )}
+          <button
+            type="button"
+            className="dashboard-toast-close"
+            aria-label="Dismiss notification"
+            onClick={() => setNotice(null)}
+          >
+            <DashboardIcon name="close" size={16} />
+          </button>
+        </div>
+      )}
     </section>
   );
 }

@@ -7,16 +7,55 @@ import type { ResumesApi } from '../resumes/contracts';
 import { RESUMES_API } from '../resumes/resumes.tokens';
 import { GetJob } from './application/use-cases/get-job';
 import { JobsController } from './adapters/inbound/http/jobs.controller';
+import { ApplicationsController } from './adapters/inbound/http/applications.controller';
+import { PublicApplicationResumeReader } from './adapters/outbound/modules/application-resume.reader';
+import {
+  AddApplication,
+  ExportApplications,
+  ImportApplications,
+  SetApplicationResume,
+  UpdateApplicationPreferences,
+} from './application/use-cases/manage-applications';
+import type { ApplicationRepository } from './application/ports/application-repository';
+import type { JobRepository } from './application/ports/job-repository';
 import { PublicResumeLinkReader } from './adapters/outbound/modules/resume-link.reader';
 import { jobsProviders } from './jobs.providers';
-import { JOBS_API, RESUME_LINK_READER } from './jobs.tokens';
+import { JOBS_API, JOB_REPOSITORY, RESUME_LINK_READER } from './jobs.tokens';
 
 /** Registered at the composition root only when its routes replace the legacy routes. */
 @Module({
   imports: [DatabaseModule, AiModule, AuthModule, ResumesModule],
-  controllers: [JobsController],
+  controllers: [JobsController, ApplicationsController],
   providers: [
     ...jobsProviders,
+    {
+      provide: AddApplication,
+      inject: [JOB_REPOSITORY, RESUMES_API],
+      useFactory: (jobs: ApplicationRepository, resumes: ResumesApi) =>
+        new AddApplication(jobs, new PublicApplicationResumeReader(resumes)),
+    },
+    {
+      provide: ImportApplications,
+      inject: [JOB_REPOSITORY, RESUMES_API],
+      useFactory: (jobs: ApplicationRepository, resumes: ResumesApi) =>
+        new ImportApplications(jobs, new PublicApplicationResumeReader(resumes)),
+    },
+    {
+      provide: UpdateApplicationPreferences,
+      inject: [JOB_REPOSITORY],
+      useFactory: (jobs: ApplicationRepository) => new UpdateApplicationPreferences(jobs),
+    },
+    {
+      provide: ExportApplications,
+      inject: [JOB_REPOSITORY],
+      useFactory: (jobs: ApplicationRepository) => new ExportApplications(jobs),
+    },
+    {
+      provide: SetApplicationResume,
+      inject: [JOB_REPOSITORY, RESUMES_API],
+      useFactory: (jobs: JobRepository, resumes: ResumesApi) =>
+        new SetApplicationResume(jobs, new PublicApplicationResumeReader(resumes)),
+    },
     {
       provide: RESUME_LINK_READER,
       useFactory: (api: ResumesApi) => new PublicResumeLinkReader(api),

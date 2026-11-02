@@ -107,13 +107,21 @@ model Job {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  resumes      Resume[]
-  statusEvents JobStatusEvent[]
+  isFavorite          Boolean   @default(false)
+  archivedAt          DateTime?
+  appliedAt           DateTime?
+  applicationResumeId String?
+  applicationSnapshot Int?
+
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumes           Resume[]
+  statusEvents      JobStatusEvent[]
+  applicationResume Resume?          @relation("ApplicationResume", fields: [applicationResumeId], references: [id], onDelete: SetNull)
 
   @@unique([userId, canonicalUrl])
   @@index([userId, status, createdAt])
   @@index([extraction])
+  @@index([userId, archivedAt])
   @@map("jobs")
 }
 
@@ -221,15 +229,16 @@ model Resume {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile      Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  job          Job?                 @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  snapshots    Snapshot[]
-  contacts     ContactInformation[]
-  experiences  ExperienceEntry[]
-  achievements Achievement[]
-  educations   EducationEntry[]
-  skills       SkillEntry[]
-  summaries    SummaryVariant[]
+  profile         Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  job             Job?                 @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  snapshots       Snapshot[]
+  contacts        ContactInformation[]
+  experiences     ExperienceEntry[]
+  achievements    Achievement[]
+  educations      EducationEntry[]
+  skills          SkillEntry[]
+  summaries       SummaryVariant[]
+  applicationJobs Job[]                @relation("ApplicationResume")
 
   @@index([profileId])
   @@index([jobId])

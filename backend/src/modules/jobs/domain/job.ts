@@ -40,7 +40,22 @@ export interface Job {
   capturedAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  isFavorite: boolean;
+  archivedAt: Date | null;
+  appliedAt: Date | null;
+  applicationResumeId: string | null;
+  applicationSnapshot: number | null;
 }
+
+export const APPLIED_STATUSES: readonly JobStatus[] = [
+  'applied',
+  'screening',
+  'interview',
+  'offer',
+  'accepted',
+  'rejected',
+  'declined',
+];
 
 export interface JobStatusEvent {
   id: string;

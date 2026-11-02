@@ -195,7 +195,7 @@ export function Documents() {
 
   async function create(name: string, targetRole?: string) {
     const created = await resumeApi.create(name, targetRole);
-    navigate(`/resumes/${created.id}`);
+    navigate(`/documents/${created.id}`);
   }
 
   async function upload(file: File) {
@@ -214,7 +214,7 @@ export function Documents() {
         `resume-draft:${created.id}`,
         JSON.stringify(draft),
       );
-      navigate(`/resumes/${created.id}`);
+      navigate(`/documents/${created.id}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Could not import this CV.',
@@ -420,7 +420,7 @@ export function Documents() {
             >
               <Link
                 className="documents-preview-link"
-                to={`/resumes/${row.id}`}
+                to={`/documents/${row.id}`}
                 aria-label={`Open ${row.name}`}
               >
                 <DocumentPreview row={row} />
@@ -452,7 +452,7 @@ export function Documents() {
               <div className="documents-card-info">
                 <Link
                   className="documents-card-title"
-                  to={`/resumes/${row.id}`}
+                  to={`/documents/${row.id}`}
                   title={row.name}
                 >
                   {row.name}
@@ -467,14 +467,14 @@ export function Documents() {
                 >
                   <Link
                     className="documents-menu-item"
-                    to={`/resumes/${row.id}`}
+                    to={`/documents/${row.id}`}
                   >
                     <DocumentIcon name="file" />
                     <span>Edit resume</span>
                   </Link>
                   <Link
                     className="documents-menu-item"
-                    to={`/resumes/${row.id}/history`}
+                    to={`/documents/${row.id}/history`}
                   >
                     <DocumentIcon name="history" />
                     <span>Version history</span>
@@ -482,7 +482,7 @@ export function Documents() {
                   {row.hasTailoring && (
                     <Link
                       className="documents-menu-item"
-                      to={`/resumes/${row.id}/tailor`}
+                      to={`/documents/${row.id}/tailor`}
                     >
                       <DocumentIcon name="arrow" />
                       <span>Review suggestions</span>

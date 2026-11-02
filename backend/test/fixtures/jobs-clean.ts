@@ -36,6 +36,11 @@ export function exampleJob(changes: Partial<Job> = {}): Job {
     capturedAt: jobTime,
     createdAt: jobTime,
     updatedAt: jobTime,
+    isFavorite: false,
+    archivedAt: null,
+    appliedAt: null,
+    applicationResumeId: null,
+    applicationSnapshot: null,
     ...changes,
   };
 }

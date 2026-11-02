@@ -23,6 +23,11 @@ export function presentJob(job: PublicJob) {
     capturedAt: job.capturedAt.toISOString(),
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
+    isFavorite: job.isFavorite ?? false,
+    archivedAt: job.archivedAt?.toISOString() ?? null,
+    appliedAt: job.appliedAt?.toISOString() ?? null,
+    applicationResumeId: job.applicationResumeId ?? null,
+    applicationSnapshot: job.applicationSnapshot ?? null,
   };
 }
 

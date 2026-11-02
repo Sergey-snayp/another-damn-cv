@@ -640,6 +640,7 @@ a.documents-card-title:hover {
 }
 
 .documents-dialog {
+  box-sizing: border-box;
   width: 430px;
   max-width: calc(100vw - 32px);
   max-height: calc(100dvh - 40px);

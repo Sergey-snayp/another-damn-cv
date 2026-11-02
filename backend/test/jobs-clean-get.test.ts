@@ -33,6 +33,11 @@ const row: StoredJob = {
   capturedAt: at,
   createdAt: at,
   updatedAt: at,
+  isFavorite: false,
+  archivedAt: null,
+  appliedAt: null,
+  applicationResumeId: null,
+  applicationSnapshot: null,
 };
 
 const history: JobStatusEvent[] = [
@@ -82,6 +87,11 @@ test('clean GetJob keeps the current detail response and scopes job and history 
     capturedAt: '2026-10-01T12:34:56.000Z',
     createdAt: '2026-10-01T12:34:56.000Z',
     updatedAt: '2026-10-01T12:34:56.000Z',
+    isFavorite: false,
+    archivedAt: null,
+    appliedAt: null,
+    applicationResumeId: null,
+    applicationSnapshot: null,
     history: [
       { id: 'event-2', from: 'applied', to: 'interview', at: '2026-10-01T12:34:56.000Z' },
       { id: 'event-1', from: 'saved', to: 'applied', at: '2026-10-01T12:34:56.000Z' },

@@ -41,7 +41,11 @@ function failingJobWrite() {
       prisma.$transaction((transaction) =>
         work({
           jobStatusEvent: transaction.jobStatusEvent,
-          job: { update: () => Promise.reject(new Error('Injected job write failure.')) },
+          job: {
+            findUniqueOrThrow: (args: Prisma.JobFindUniqueOrThrowArgs) =>
+              transaction.job.findUniqueOrThrow(args),
+            update: () => Promise.reject(new Error('Injected job write failure.')),
+          },
         } as unknown as Prisma.TransactionClient),
       ),
   } as unknown as PrismaClient;
@@ -77,6 +81,11 @@ test('clean job detail matches the recorded response fields and history', async 
     capturedAt: row.capturedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    isFavorite: false,
+    archivedAt: null,
+    appliedAt: row.appliedAt?.toISOString() ?? null,
+    applicationResumeId: null,
+    applicationSnapshot: null,
     history: [{ id: events[0].id, from: 'saved', to: 'interview', at: events[0].at.toISOString() }],
   };
   assert.deepEqual(presentJobDetail(await new GetJob(jobs).execute(owner.user.id, job.id)), expected);
@@ -119,6 +128,11 @@ test('capture maps JSON/nulls correctly and recapture preserves fields while pen
     capturedAt: row.capturedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    isFavorite: false,
+    archivedAt: null,
+    appliedAt: null,
+    applicationResumeId: null,
+    applicationSnapshot: null,
   });
 });
 

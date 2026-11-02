@@ -32,6 +32,25 @@ Reading job pages and tailoring use the local Claude CLI (`CLAUDE_BIN`), signed 
 The extension is loaded separately: `chrome://extensions` → Developer mode →
 **Load unpacked** → select `extension/`. See `extension/README.md`.
 
+## Workspace
+
+- **Dashboard** tracks active and archived applications in Board, List or Chart
+  view. Search by role/company; filter by applied dates, job type, status and
+  favorites. Drag cards or use their Move menu; recent moves and archives offer Undo.
+- **Documents** holds resumes, previews, editing, history and tailoring review.
+  Old `/resumes` bookmarks redirect here.
+
+Add Application saves the chosen resume version with the job. Later resume edits
+do not change that attachment. Favorites and archives are stored on your account;
+view/filter choices stay in the browser.
+
+For older jobs, applied dates use the first recorded status move, or the capture
+date when there is no move history.
+
+CSV import accepts up to 500 rows / 2 MB, with Position Title and Company columns.
+It previews rows before saving and skips existing job URLs. Export includes the
+currently filtered collection, descriptions, dates and attached resume versions.
+
 ## Backend
 
 | Module | Routes | What it does |
@@ -42,6 +61,7 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
 | `resumes`, `resume-rewrite` | `GET/POST /api/resumes`, `GET /api/resumes/:id`, `POST /api/resumes/:id/save`, history, diff, revert, rewrite | Versioned resumes: changed saves add snapshots; unchanged saves add none |
 | `jobs` | `POST /api/jobs/capture` (extension token), `GET/POST /api/jobs`, `GET/PATCH/DELETE /api/jobs/:id`, `POST /api/jobs/:id/reread`, `POST /api/jobs/:id/status/undo` | Saved postings. JSON-LD first, the Claude CLI when a page has none. Status runs Saved → Applied → Screening → Interview → Offer → Accepted / Rejected / Declined, or Dismissed; every move is logged and the latest can be undone |
 | tailoring | `POST /api/jobs/:id/tailor`, `GET/DELETE /api/resumes/:id/tailoring` | Copies a resume per job and suggests a summary and bullets in the posting's words. A word-level check discards any number or technology a role does not contain; every line is reviewed before saving |
+| applications | `POST /api/jobs/applications`, `GET /api/jobs/applications/export`, `POST /api/jobs/applications/import`, `PATCH /api/jobs/applications/preferences`, `PATCH /api/jobs/applications/:id/resume` | Structured application entry, CSV tools, account favorites/archives and versioned resume attachments |
 
 From `backend/`, `npm run check` runs types, lint, formatting and unit/architecture
 tests. `npm run test:http` checks routes with fake dependencies. `npm run build`

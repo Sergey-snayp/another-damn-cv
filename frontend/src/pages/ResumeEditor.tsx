@@ -106,7 +106,7 @@ export function ResumeEditor() {
         <h1>Resume</h1>
         <div className="who">
           <span className="badge">version {draft.snapshot}</span>
-          <Link className="ghost" to={`/resumes/${id}/history`}>History</Link>
+          <Link className="ghost" to={`/documents/${id}/history`}>History</Link>
           <button className="ghost" onClick={() => window.print()}>Print / PDF</button>
         </div>
       </div>

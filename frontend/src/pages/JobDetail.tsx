@@ -5,6 +5,7 @@ import {
   type Job, type JobDetail as JobWithHistory, type JobEdit, type JobStatus,
 } from '../jobsApi';
 import { resumeApi, type ResumeSummary } from '../resumeApi';
+import { ApplicationResume } from '../jobs/ApplicationResume';
 
 type Draft = {
   title: string; company: string; location: string;
@@ -138,6 +139,8 @@ export function JobDetail() {
         )}
       </section>
 
+      <ApplicationResume job={job} onChanged={(next) => setJob((current) => current ? { ...current, ...next } : current)} />
+
       <section className="card" style={{ marginTop: 16 }}>
         <h2>Details {job.editedFields.length > 0 && <span className="muted">edited: {job.editedFields.join(', ')}</span>}</h2>
 
@@ -250,7 +253,7 @@ function TailorCard({ job }: { job: Job }) {
     setError(null);
     try {
       const { resumeId } = await jobsApi.tailor(job.id, copy ? undefined : source || undefined);
-      navigate(`/resumes/${resumeId}/tailor`);
+      navigate(`/documents/${resumeId}/tailor`);
     } catch (err) {
       setError((err as Error).message);
       setRunning(false);
@@ -263,8 +266,8 @@ function TailorCard({ job }: { job: Job }) {
 
       {copy ? (
         <p className="muted small">
-          <Link to={`/resumes/${copy.id}`}>{copy.name}</Link> is your copy for this job.
-          {copy.hasTailoring && <> Suggestions are waiting: <Link to={`/resumes/${copy.id}/tailor`}>review them</Link>.</>}
+          <Link to={`/documents/${copy.id}`}>{copy.name}</Link> is your copy for this job.
+          {copy.hasTailoring && <> Suggestions are waiting: <Link to={`/documents/${copy.id}/tailor`}>review them</Link>.</>}
         </p>
       ) : (
         <p className="muted small">

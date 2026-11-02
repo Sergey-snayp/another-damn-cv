@@ -20,7 +20,7 @@ export function ResumeHistory() {
 
   return table && lineageId
     ? <EntryHistory id={id} table={table} lineageId={lineageId} />
-    : <SnapshotHistory id={id} navigate={navigate} />;
+    : <SnapshotHistory id={id} navigate={navigate} requested={Number(params.get('snapshot')) || undefined} />;
 }
 
 /** Every version of one entry — "this bullet has been reworded four times". */
@@ -38,7 +38,7 @@ function EntryHistory({ id, table, lineageId }: { id: string; table: string; lin
     <>
       <div className="bar">
         <h1>History of one entry</h1>
-        <Link className="ghost" to={`/resumes/${id}/history`}>All versions</Link>
+        <Link className="ghost" to={`/documents/${id}/history`}>All versions</Link>
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -70,7 +70,7 @@ function EntryHistory({ id, table, lineageId }: { id: string; table: string; lin
 }
 
 /** The list of saves, with the resume as it stood at whichever you pick. */
-function SnapshotHistory({ id, navigate }: { id: string; navigate: (to: string) => void }) {
+function SnapshotHistory({ id, navigate, requested }: { id: string; navigate: (to: string) => void; requested?: number }) {
   const [snapshots, setSnapshots] = useState<Snapshot[] | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [resume, setResume] = useState<RenderedResume | null>(null);
@@ -91,10 +91,11 @@ function SnapshotHistory({ id, navigate }: { id: string; navigate: (to: string) 
     resumeApi.snapshots(id)
       .then((rows) => {
         setSnapshots(rows);
-        if (rows[0]) void show(rows[0].number);
+        const snapshot = rows.find((row) => row.number === requested) ?? rows[0];
+        if (snapshot) void show(snapshot.number);
       })
       .catch((err: Error) => setError(err.message));
-  }, [id]);
+  }, [id, requested]);
 
   async function show(number: number) {
     setSelected(number);
@@ -119,7 +120,7 @@ function SnapshotHistory({ id, navigate }: { id: string; navigate: (to: string) 
     setReverting(true);
     try {
       const result = await resumeApi.revert(id, selected);
-      navigate(`/resumes/${id}`);
+      navigate(`/documents/${id}`);
       alert(`Restored version ${selected} as version ${result.snapshot}.`);
     } catch (err) {
       setError((err as Error).message);
@@ -134,7 +135,7 @@ function SnapshotHistory({ id, navigate }: { id: string; navigate: (to: string) 
     <>
       <div className="bar">
         <h1>History</h1>
-        <Link className="ghost" to={`/resumes/${id}`}>Back to editing</Link>
+        <Link className="ghost" to={`/documents/${id}`}>Back to editing</Link>
       </div>
 
       {error && <p className="error">{error}</p>}
