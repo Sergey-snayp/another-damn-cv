@@ -10,6 +10,10 @@ Its statistics and service cards are clearly marked as sample content. Preview
 goals and email choices do not update account settings or send emails. The
 sample values live in `frontend/src/home/homePreview.ts` until we connect real data.
 
+Next to the profile, show four outline icons: browser extension, updates, help,
+and notifications. Use dark icons, soft yellow on hover, and yellow when open.
+Notifications remain a placeholder until the feature is built.
+
 ## Logo
 
 Use the supplied **D!** logo: a tilted acid-yellow badge with a thick dark

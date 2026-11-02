@@ -1,22 +1,30 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { useState } from 'react';
-import { useAuth } from './AuthContext';
+import { NavLink, Outlet } from "react-router-dom";
+import { useState } from "react";
+import { useAuth } from "./AuthContext";
+import { HeaderActions, type HeaderAction } from "./components/HeaderActions";
 
 const NAV = [
-  { to: '/dashboard', label: 'Dashboard', end: true },
-  { to: '/documents', label: 'Documents' },
-  { to: '/interview-prep', label: 'Interview Prep' },
+  { to: "/dashboard", label: "Dashboard", end: true },
+  { to: "/documents", label: "Documents" },
+  { to: "/interview-prep", label: "Interview Prep" },
 ];
 
 export function Layout() {
   const { user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeAction, setActiveAction] = useState<HeaderAction | null>(null);
 
   return (
     <div className="app">
       <header className="topbar">
         <NavLink to="/" className="brand" aria-label="Home" end>
-          <img className="brand-logo" src="/brand/d-stamp-logo.png" alt="D! logo" width={40} height={40} />
+          <img
+            className="brand-logo"
+            src="/brand/d-stamp-logo.png"
+            alt="D! logo"
+            width={40}
+            height={40}
+          />
         </NavLink>
 
         <nav className="nav">
@@ -25,44 +33,67 @@ export function Layout() {
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => (isActive ? 'navlink active' : 'navlink')}
+              className={({ isActive }) =>
+                isActive ? "navlink active" : "navlink"
+              }
             >
               {item.label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="account">
-          <button
-            className="avatar"
-            onClick={() => setMenuOpen((open) => !open)}
-            aria-expanded={menuOpen}
-          >
-            {user?.avatarUrl
-              ? <img src={user.avatarUrl} alt="" />
-              : <span className="initials">{user?.name?.[0] ?? '?'}</span>}
-            <span className="who">{user?.name}</span>
-            <span className="chevron">▾</span>
-          </button>
+        <div className="header-account">
+          <HeaderActions
+            active={activeAction}
+            onChange={(action) => {
+              setActiveAction(action);
+              if (action) setMenuOpen(false);
+            }}
+          />
+          <div className="account">
+            <button
+              className="avatar"
+              onClick={() => {
+                setActiveAction(null);
+                setMenuOpen((open) => !open);
+              }}
+              aria-expanded={menuOpen}
+            >
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" />
+              ) : (
+                <span className="initials">{user?.name?.[0] ?? "?"}</span>
+              )}
+              <span className="who">{user?.name}</span>
+              <span className="chevron">▾</span>
+            </button>
 
-          {menuOpen && (
-            <>
-              {/* Click anywhere to dismiss, rather than trapping the menu open. */}
-              <div className="scrim" onClick={() => setMenuOpen(false)} />
-              <div className="menu">
-                <div className="menu-head">
-                  <div className="menu-name">{user?.name}</div>
-                  <div className="menu-email">{user?.email}</div>
+            {menuOpen && (
+              <>
+                {/* Click anywhere to dismiss, rather than trapping the menu open. */}
+                <div className="scrim" onClick={() => setMenuOpen(false)} />
+                <div className="menu">
+                  <div className="menu-head">
+                    <div className="menu-name">{user?.name}</div>
+                    <div className="menu-email">{user?.email}</div>
+                  </div>
+                  <NavLink
+                    to="/profile"
+                    className="menu-item"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Profile
+                  </NavLink>
+                  <button
+                    className="menu-item danger"
+                    onClick={() => void signOut()}
+                  >
+                    Sign out
+                  </button>
                 </div>
-                <NavLink to="/profile" className="menu-item" onClick={() => setMenuOpen(false)}>
-                  Profile
-                </NavLink>
-                <button className="menu-item danger" onClick={() => void signOut()}>
-                  Sign out
-                </button>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </header>
 
