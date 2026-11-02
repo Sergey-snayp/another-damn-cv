@@ -78,6 +78,8 @@ docker compose exec postgres psql -U cv -d postgres -c 'CREATE DATABASE cv_test;
 The integration runner applies migrations and adds unique synthetic data. It
 does not reset the database. CI runs these checks on a separate test database.
 
+[Product business logic](docs/business-logic.md) describes the growing experience
+profile and planned application and interview preparation features.
 [Backend architecture](docs/backend-clean-architecture-plan.md) explains the structure.
 The [rewrite plan](docs/plan.md) tracks the migration steps and checks.
 
