@@ -6,12 +6,12 @@ import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import { AuthGuard } from '../../src/modules/auth/http';
-import { CvImportController } from '../../src/modules/cv-import/adapters/inbound/http/cv-import.controller';
-import { ClaudeCvTranscriber } from '../../src/modules/cv-import/adapters/outbound/ai/claude-cv.transcriber';
-import { CvDocumentTextExtractor } from '../../src/modules/cv-import/adapters/outbound/documents/document-text.extractor';
-import { ImportCv } from '../../src/modules/cv-import/application/use-cases/import-cv';
-import type { ImportProposal } from '../../src/modules/cv-import/contracts';
-import { IMPORT_CV } from '../../src/modules/cv-import/cv-import.tokens';
+import { CvImportController } from '../../src/modules/resumes/adapters/inbound/http/cv-import.controller';
+import { ClaudeCvTranscriber } from '../../src/modules/resumes/adapters/outbound/ai/import/claude-cv.transcriber';
+import { CvDocumentTextExtractor } from '../../src/modules/resumes/adapters/outbound/documents/document-text.extractor';
+import { ImportCv } from '../../src/modules/resumes/application/use-cases/import-cv';
+import type { ImportProposal } from '../../src/modules/resumes/contracts';
+import { IMPORT_CV } from '../../src/modules/resumes/resumes.tokens';
 import { textDocx, textPdf } from '../fixtures/cv-import';
 
 let reply = '{}';

@@ -1,5 +1,5 @@
-import { CvImportError } from '../../../application/errors';
-import type { ImportedProfile } from '../../../domain/proposal';
+import { CvImportError } from '../../../../application/cv-import-error';
+import type { ImportedProfile } from '../../../../domain/import-proposal';
 
 /** Retain the legacy parser and its three distinct user-facing errors. */
 export function parseTranscription(text: string): ImportedProfile {

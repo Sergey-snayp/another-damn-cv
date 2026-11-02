@@ -193,8 +193,7 @@ Placement notes:
 | Auth         | [`modules/auth`](../backend/src/modules/auth/auth.module.ts): Google sign-in, accounts and sync tokens. Google subject identifies the account.                                         |
 | Profiles     | [`modules/profiles`](../backend/src/modules/profiles/profiles.module.ts): EnsureProfile/GetProfile/UpdateProfile and contact rules. Career data comes from resumes through a port.     |
 | Jobs         | [`modules/jobs`](../backend/src/modules/jobs/jobs.module.ts): capture, reading, editing, status and undo. Domain owns URL/edit rules; adapters own storage, extraction and scheduling. |
-| Resumes      | [`modules/resumes`](../backend/src/modules/resumes/resumes.module.ts): documents, snapshots, copies, editing, rewriting and job-specific tailoring. TailorResume and RewriteResumeLine are separate use cases inside this module. |
-| CV import    | [`modules/cv-import`](../backend/src/modules/cv-import/cv-import.module.ts): read/transcribe a document and return an unsaved draft.                                                   |
+| Resumes      | [`modules/resumes`](../backend/src/modules/resumes/resumes.module.ts): importing, documents, snapshots, copies, editing, rewriting and job-specific tailoring. ImportCv, TailorResume and RewriteResumeLine are separate use cases inside this module. |
 | Interviews   | [`modules/interviews`](../backend/src/modules/interviews/interviews.module.ts): GetPreparation/SavePreparation, interview types, and user notes. Check job ownership through its public API; keep storage in the outbound adapter. |
 | Shared       | [`shared/ai`](../backend/src/shared/ai/ai.module.ts), [`shared/database`](../backend/src/shared/database/database.module.ts), config and HTTP helpers. No feature rules.               |
 
@@ -206,6 +205,9 @@ Key connections:
 - Resumes owns tailoring, claim checks, rewriting, copies and proposals. Keep
   tailoring rules in `domain/tailoring/` and prompts in `adapters/outbound/ai/`.
   Request job information through a port and the public jobs API.
+- ImportCv also belongs to Resumes. File readers live in `adapters/outbound/documents/`
+  and transcription in `adapters/outbound/ai/import/`. Import returns a proposal
+  for review and does not write CV or Profile content.
 - `JobDirectoryModule` wires job storage and its public query without importing
   resumes or starting workers. Both Jobs and Resumes use it, avoiding circular
   imports. The full Jobs module owns controllers and its single reader worker;

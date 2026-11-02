@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { ServiceUnavailableException } from '@nestjs/common';
-import { ImportCv } from '../src/modules/cv-import/application/use-cases/import-cv';
-import { CvImportError } from '../src/modules/cv-import/application/errors';
-import { ClaudeCvTranscriber } from '../src/modules/cv-import/adapters/outbound/ai/claude-cv.transcriber';
-import { parseTranscription } from '../src/modules/cv-import/adapters/outbound/ai/transcription.parser';
-import { CvDocumentTextExtractor } from '../src/modules/cv-import/adapters/outbound/documents/document-text.extractor';
+import { ImportCv } from '../src/modules/resumes/application/use-cases/import-cv';
+import { CvImportError } from '../src/modules/resumes/application/cv-import-error';
+import { ClaudeCvTranscriber } from '../src/modules/resumes/adapters/outbound/ai/import/claude-cv.transcriber';
+import { parseTranscription } from '../src/modules/resumes/adapters/outbound/ai/import/transcription.parser';
+import { CvDocumentTextExtractor } from '../src/modules/resumes/adapters/outbound/documents/document-text.extractor';
 import { IMPORT_PROMPT_BASELINE, READABLE_PDF_TEXT, textDocx, textPdf } from './fixtures/cv-import';
 
 test('ImportCv returns a proposal and reports missing fields without a persistence dependency', async () => {

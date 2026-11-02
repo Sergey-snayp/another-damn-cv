@@ -25,6 +25,12 @@ export type {
 } from './domain/resume';
 export type { SnapshotDiff } from './domain/diff';
 export type { Tailoring } from './domain/tailoring/types';
+export type {
+  ImportProposal,
+  ImportedProfile,
+  ImportedExperience,
+  ImportedEducation,
+} from './domain/import-proposal';
 export { ResumeError } from './application/errors';
 export interface ResumesApi {
   assertOwned(userId: string, id: string): Promise<void>;

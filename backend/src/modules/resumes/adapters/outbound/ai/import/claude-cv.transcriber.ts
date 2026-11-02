@@ -1,5 +1,5 @@
-import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
-import type { CvTranscriber } from '../../../application/ports/cv-import';
+import type { ClaudeProcessRunner } from '../../../../../../shared/ai/claude-process.runner';
+import type { CvTranscriber } from '../../../../application/ports/cv-import';
 import { parseTranscription } from './transcription.parser';
 import { transcriptionPrompt, TRANSCRIPTION_SYSTEM } from './transcription.prompt';
 

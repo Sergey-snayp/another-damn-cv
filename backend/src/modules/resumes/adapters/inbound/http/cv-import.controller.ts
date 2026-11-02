@@ -11,7 +11,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '../../../../auth/http';
 import type { ImportCv } from '../../../application/use-cases/import-cv';
-import { IMPORT_CV } from '../../../cv-import.tokens';
+import { IMPORT_CV } from '../../../resumes.tokens';
 import { CvImportErrorFilter } from './cv-import-error.filter';
 
 @Controller('import')

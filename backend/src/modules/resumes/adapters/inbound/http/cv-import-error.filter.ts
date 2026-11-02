@@ -1,6 +1,6 @@
 import { BadRequestException, Catch, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
-import { CvImportError } from '../../../application/errors';
+import { CvImportError } from '../../../application/cv-import-error';
 
 @Catch(CvImportError)
 export class CvImportErrorFilter implements ExceptionFilter {

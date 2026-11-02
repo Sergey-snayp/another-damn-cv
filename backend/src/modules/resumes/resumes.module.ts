@@ -17,6 +17,10 @@ import { PrismaResumeRepository } from './adapters/outbound/persistence/prisma-r
 import { ResumesController } from './adapters/inbound/http/resumes.controller';
 import { TailoringController } from './adapters/inbound/http/tailoring.controller';
 import { RewriteController } from './adapters/inbound/http/rewrite.controller';
+import { CvImportController } from './adapters/inbound/http/cv-import.controller';
+import { ImportCv } from './application/use-cases/import-cv';
+import { CvDocumentTextExtractor } from './adapters/outbound/documents/document-text.extractor';
+import { ClaudeCvTranscriber } from './adapters/outbound/ai/import/claude-cv.transcriber';
 import { TailorResume, GetPendingTailoring, DiscardTailoring } from './application/use-cases/tailor-resume';
 import { RewriteResumeLine } from './application/use-cases/rewrite-resume-line';
 import { ResumeTailoringWorkspace } from './application/services/tailoring-workspace';
@@ -25,10 +29,16 @@ import { ClaudeTailoringGenerator } from './adapters/outbound/ai/tailoring/claud
 import { ClaudeLineRewriter } from './adapters/outbound/ai/claude-line.rewriter';
 import type { TailoringGenerator } from './application/ports/tailoring';
 import type { ResumesApi, TailoringApi } from './contracts';
-import { RESUMES_API, RESUME_REPOSITORY, TAILORING_API, TAILORING_GENERATOR } from './resumes.tokens';
+import {
+  RESUMES_API,
+  RESUME_REPOSITORY,
+  TAILORING_API,
+  TAILORING_GENERATOR,
+  IMPORT_CV,
+} from './resumes.tokens';
 @Module({
   imports: [DatabaseModule, ProfileDirectoryModule, AuthModule, AiModule, JobDirectoryModule],
-  controllers: [ResumesController, TailoringController, RewriteController],
+  controllers: [ResumesController, TailoringController, RewriteController, CvImportController],
   providers: [
     {
       provide: RESUME_REPOSITORY,
@@ -66,6 +76,12 @@ import { RESUMES_API, RESUME_REPOSITORY, TAILORING_API, TAILORING_GENERATOR } fr
       inject: [RESUMES_API, ClaudeProcessRunner],
       useFactory: (resumes: ResumesApi, runner: ClaudeProcessRunner) =>
         new RewriteResumeLine(resumes, new ClaudeLineRewriter(runner)),
+    },
+    {
+      provide: IMPORT_CV,
+      inject: [ClaudeProcessRunner],
+      useFactory: (runner: ClaudeProcessRunner) =>
+        new ImportCv(new CvDocumentTextExtractor(), new ClaudeCvTranscriber(runner), { next: randomUUID }),
     },
   ],
   exports: [RESUMES_API],

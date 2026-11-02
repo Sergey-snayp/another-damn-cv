@@ -1,4 +1,4 @@
-import type { ImportedProfile } from '../../domain/proposal';
+import type { ImportedProfile } from '../../domain/import-proposal';
 
 export interface DocumentTextExtractor {
   extract(bytes: Uint8Array, filename: string): Promise<string>;

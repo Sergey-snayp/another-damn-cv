@@ -1,4 +1,4 @@
-import { missingFields, type ImportProposal } from '../../domain/proposal';
+import { missingFields, type ImportProposal } from '../../domain/import-proposal';
 import type { CvTranscriber, DocumentTextExtractor, ProposalIdGenerator } from '../ports/cv-import';
 
 /** Returns a draft for review. Import never writes profile or resume content. */

@@ -1,6 +1,6 @@
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
-import { CvImportError } from '../../../application/errors';
+import { CvImportError } from '../../../application/cv-import-error';
 import type { DocumentTextExtractor } from '../../../application/ports/cv-import';
 
 export class CvDocumentTextExtractor implements DocumentTextExtractor {
