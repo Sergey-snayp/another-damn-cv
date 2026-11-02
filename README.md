@@ -92,6 +92,7 @@ does not reset the database. CI runs these checks on a separate test database.
 profile and planned application and interview preparation features.
 [Backend architecture](docs/backend-clean-architecture-plan.md) explains the structure.
 The [rewrite plan](docs/plan.md) tracks the migration steps and checks.
+The [brand guide](docs/brand-guide.md) records the approved logo and site colors.
 
 ## Non-negotiable rules
 
