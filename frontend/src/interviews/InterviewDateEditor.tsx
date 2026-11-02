@@ -58,7 +58,7 @@ export function InterviewDateEditor({ job, onSaved }: { job: Pick<Job, 'id' | 'c
         job.interview ? (
           <div className="interview-date-saved">
             <time dateTime={job.interview.date}>{new Date(`${job.interview.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time>
-            <p>{job.interview.time ?? 'Time not set'} · {job.interview.timeZone.replaceAll('_', ' ')}</p>
+            {job.interview.time && <p>{job.interview.time} · {job.interview.timeZone.replaceAll('_', ' ')}</p>}
           </div>
         ) : <p className="interview-date-unset">No date set yet.</p>
       ) : (

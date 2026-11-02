@@ -124,7 +124,7 @@ function InterviewJobCard({ job }: { job: JobSummary }) {
       </div>
       <div className="interview-job-date">
         <DashboardIcon name="calendar" size={17} />
-        {job.interview ? <div><time dateTime={job.interview.date}>{new Date(`${job.interview.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time><span>{job.interview.time ? `${job.interview.time} · ${job.interview.timeZone.replaceAll('_', ' ')}` : 'Time not set'}</span></div> : <span>Interview date not set</span>}
+        {job.interview ? <div><time dateTime={job.interview.date}>{new Date(`${job.interview.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time>{job.interview.time && <span>{job.interview.time} · {job.interview.timeZone.replaceAll('_', ' ')}</span>}</div> : <span>Interview date not set</span>}
       </div>
       <p className="interview-job-resume"><DashboardIcon name="file" size={16} />{job.applicationResumeId && job.applicationSnapshot ? 'Application CV attached' : 'No application CV selected'}</p>
       <footer>
