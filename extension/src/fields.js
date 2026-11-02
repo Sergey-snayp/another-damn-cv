@@ -130,7 +130,9 @@ function categorise(signals) {
 function isFillable(element) {
   if (element.disabled || element.readOnly) return false;
   if (element.type === 'hidden') return false;
-  if (element.type === 'file') return true;
+  if (['password', 'submit', 'button', 'reset', 'image'].includes(element.type)) return false;
+  if (element.closest('[hidden], [aria-hidden="true"]')) return false;
+  if (element.type === 'file') return element.offsetParent !== null || !!element.closest('form')?.getClientRects().length;
   return element.offsetParent !== null;
 }
 

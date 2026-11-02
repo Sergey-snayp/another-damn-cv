@@ -13,7 +13,26 @@ Nothing leaves your machine. There is no server, no account, no telemetry.
 4. Pin the icon, click it, fill in your details, attach your resume PDF, **Save**
 
 After updating the extension files, click **Reload** on its card in
-`chrome://extensions`, then close and reopen the side panel to see the new logo.
+`chrome://extensions`, then reload the pages you had open.
+
+## The panel
+
+The panel opens inside the page, on its right edge, over the page content.
+Open it with the D! button on the page edge or the toolbar icon; collapse it with
+its `>` button or Esc. The D! button's × offers **Hide until next visit**, **Disable
+on this domain** or **Disable on all pages**; Settings in the panel turns the
+last two back on. Collapsing the panel always brings the D! button back on
+that page, even where it was hidden. It reopens after you move to another page in the same tab.
+
+- On supported job boards it is always available.
+- On any other site, the toolbar icon adds it to that tab only (Chrome's
+  temporary "active tab" access). Moving to a different site in that tab ends
+  that access, so the panel cannot reopen there until you click the icon again.
+- Chrome pages (`chrome://`, the Web Store) cannot show it.
+
+The panel is `src/sidepanel.html` in an iframe. The page cannot read inside it,
+and page styles do not reach it. Sites can tell the extension is installed by
+probing that file; they cannot see your data.
 
 The D! logo is packaged in `assets/brand/d-stamp-logo.png` so the extension works
 on its own. It is an unchanged copy of the approved artwork in
@@ -45,7 +64,7 @@ before submitting.
 
 ## Send a job to the app
 
-On any job page — LinkedIn, Indeed, a company's careers page — open the side
+On any job page — LinkedIn, Indeed, a company's careers page — open the
 panel and press **Send this job to the app**. Sign in on the Profile tab first.
 
 - The first time on a site, Chrome asks to let the extension read it. It reads
@@ -68,8 +87,11 @@ panel and press **Send this job to the app**. Sign in on the Profile tab first.
 ```
 fields.js    finds inputs and guesses what each one is
 filler.js    writes values in a way React accepts
-content.js   the panel, and the manual fill action
-popup.js     stores your profile in chrome.storage.local
+content.js     answers the panel's scan and fill requests
+launcher.js    the D! button on the page edge
+panel-host.js  puts the panel frame into the page; opens and closes it
+background.js  toolbar icon, adding the panel to other sites, reopening after loads
+sidepanel.js   the panel itself; stores your profile in chrome.storage.local
 ```
 
 **Field detection** gathers every signal an input carries — its `<label>`,
@@ -106,8 +128,8 @@ render after load and change as you scroll.
 
 ## Adding a field
 
-Add to `CATEGORIES` in `src/fields.js`, add an input to `src/popup.html` with a
-matching `name`, and it works. No other changes.
+Add to `CATEGORIES` in `src/fields.js`, add its label and group in
+`src/sidepanel.js` (`FIELD_LABELS`, `PROFILE_GROUPS`), and it works.
 
 ## Development
 
@@ -117,7 +139,9 @@ Plain JavaScript, no build step, so edits are immediate:
 2. Press reload on the extension card in `chrome://extensions`
 3. Refresh the application page
 
-Content script errors appear in the **page's** console, not the extension's.
+Content script errors appear in the **page's** console. Panel errors appear when
+you right-click inside the panel → **Inspect**. Toolbar and reopen errors are in
+the service worker's console (`chrome://extensions` → **service worker**).
 
 TypeScript would need a bundler emitting to `dist/`; worth it once this grows,
 unnecessary now.

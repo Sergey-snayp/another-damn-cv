@@ -1,89 +1,58 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>CV Autofill</title>
-<link rel="icon" type="image/png" href="../assets/brand/d-stamp-logo.png">
-<link rel="stylesheet" href="../assets/theme/colors.css">
-<link rel="stylesheet" href="sidepanel.css">
-
-<header>
-  <div class="brand"><img src="../assets/brand/d-stamp-logo.png" alt="D! logo" width="34" height="34">CV Autofill</div>
-  <button class="gear" id="reload" title="Rescan this page">&#8635;</button>
-</header>
-
-<div class="send-job">
-  <button class="primary" id="send-job">Send this job to the app</button>
-  <div class="send-status" id="send-status" aria-live="polite"></div>
-</div>
-
-<div class="tabs" role="tablist">
-  <button class="tab" role="tab" data-panel="autofill" aria-selected="true">Autofill</button>
-  <button class="tab" role="tab" data-panel="resume" aria-selected="false">Resume</button>
-  <button class="tab" role="tab" data-panel="profile" aria-selected="false">Profile</button>
-</div>
-
-<main>
-  <section class="panel" id="panel-autofill"></section>
-
-  <section class="panel" id="panel-resume" hidden>
-    <div class="card">
-      <h2>Resume <span class="muted" id="resume-state"></span></h2>
-      <label class="field">
-        <span>PDF to attach</span>
-        <input type="file" id="resume-file" accept="application/pdf">
-      </label>
-      <button class="ghost" id="save-resume">Save resume</button>
-      <div class="status" id="resume-status"></div>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CV Autofill</title>
+  <link rel="icon" type="image/png" href="../assets/brand/d-stamp-logo.png">
+  <link rel="stylesheet" href="../assets/theme/colors.css">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="panel-header">
+    <button class="brand" id="open-app" title="Open Another Damn CV" aria-label="Open Another Damn CV"><img src="../assets/brand/d-stamp-logo.png" alt="D! logo" width="44" height="44"></button>
+    <div class="header-actions">
+      <button class="report-button" id="report"><span data-icon="flag"></span>Report</button>
+      <button class="icon-button" id="settings" title="Settings" aria-label="Settings"><span data-icon="settings"></span></button>
+      <button class="icon-button" id="close-panel" title="Collapse panel (Esc)" aria-label="Collapse panel"><span data-icon="chevron"></span></button>
     </div>
-  </section>
-
-  <section class="panel" id="panel-profile" hidden>
-    <div class="card">
-      <h2>Account <span class="muted" id="sync-state">never synced</span></h2>
-
-      <div id="signed-out">
-        <p class="hint" style="text-align:left;margin:0 0 10px">
-          Sign in to pull your details from the server.
-        </p>
-        <button class="primary" id="sign-in">Sign in with Google</button>
-
-        <details class="redirect">
-          <summary>Redirect URI for Google Console</summary>
-          <code id="redirect-uri"></code>
-          <button class="ghost" id="copy-redirect">Copy</button>
-          <p class="hint" style="text-align:left">
-            Paste this into your OAuth client under <b>Authorised redirect URIs</b>
-            — not JavaScript origins. It must match character for character,
-            including the trailing slash.
-          </p>
-        </details>
+  </header>
+  <div class="tabs" role="tablist" aria-label="Autofill tools">
+    <button class="tab" id="tab-autofill" role="tab" data-panel="autofill" aria-controls="panel-autofill" aria-selected="true"><span data-icon="edit"></span>Autofill</button>
+    <button class="tab" id="tab-resume" role="tab" data-panel="resume" aria-controls="panel-resume" aria-selected="false" tabindex="-1"><span data-icon="file"></span>Resume</button>
+    <button class="tab" id="tab-profile" role="tab" data-panel="profile" aria-controls="panel-profile" aria-selected="false" tabindex="-1"><span data-icon="user"></span>Profile</button>
+  </div>
+  <main>
+    <section class="panel" id="panel-autofill" role="tabpanel" aria-labelledby="tab-autofill"><p role="status">Looking for an application form…</p></section>
+    <section class="panel" id="panel-resume" role="tabpanel" aria-labelledby="tab-resume" hidden>
+      <div class="card">
+        <h2><span data-icon="file"></span>Application resume</h2>
+        <div class="document-selection"><div><strong id="resume-state">No PDF attached</strong><p>Used when this page asks for a resume file.</p></div><button class="icon-button" id="preview-resume" title="Preview PDF" aria-label="Preview PDF" hidden><span data-icon="eye"></span></button></div>
+        <label class="field upload-field"><span>Choose a resume PDF</span><input type="file" id="resume-file" accept="application/pdf,.pdf"></label>
+        <button class="primary" id="save-resume">Save resume</button>
+        <div class="status" id="resume-status" role="status"></div>
       </div>
-
-      <div id="signed-in" hidden>
-        <div class="account">
-          <img id="account-avatar" alt="">
-          <div>
-            <div id="account-name"></div>
-            <div class="muted" id="account-email"></div>
-          </div>
+      <div class="card soft-card"><h2>Keep your CV ready</h2><p>Attach the PDF you want to use for this application. Manage and tailor your saved CVs in Documents.</p><button class="ghost" id="open-documents">Open Documents<span data-icon="chevron"></span></button></div>
+    </section>
+    <section class="panel" id="panel-profile" role="tabpanel" aria-labelledby="tab-profile" hidden>
+      <div class="notice copy-hint"><span data-icon="copy"></span><div><strong>Click a detail to copy it</strong><p>Keep your information nearby while you apply.</p></div></div>
+      <div id="profile-overview"></div>
+      <div class="status" id="copy-status" role="status"></div>
+      <details class="card account-card"><summary><span data-icon="user"></span>Account &amp; sync<span class="muted" id="sync-state">Never synced</span></summary>
+        <div id="signed-out"><p>Sign in to pull your saved profile from the app.</p><button class="primary" id="sign-in">Sign in with Google</button>
+          <details class="redirect"><summary>Sign-in setup</summary><p>For local development, register this redirect URI in your Google OAuth client.</p><code id="redirect-uri"></code><button class="ghost" id="copy-redirect">Copy redirect URI</button></details>
         </div>
-        <div class="actions">
-          <button class="ghost" id="pull-now">Pull latest</button>
-          <button class="ghost" id="sign-out">Sign out</button>
-        </div>
-      </div>
-
-      <div class="status" id="auth-status"></div>
-    </div>
-
-    <div class="card">
-      <h2>Your details <span class="muted">local only</span></h2>
-      <form id="profile-form"></form>
-      <button class="primary" id="save-profile">Save</button>
-      <div class="status" id="profile-status"></div>
-    </div>
-  </section>
-</main>
-
-<footer>Stored in this browser. Nothing is uploaded.</footer>
-
-<script type="module" src="sidepanel.js"></script>
+        <div id="signed-in" hidden><div class="account"><img id="account-avatar" alt="" hidden><div><strong id="account-name"></strong><div class="muted" id="account-email"></div></div></div><div class="actions"><button class="ghost" id="pull-now">Pull latest</button><button class="ghost" id="sign-out">Sign out</button></div></div>
+        <div class="status" id="auth-status" role="status"></div>
+      </details>
+      <details class="card" id="local-details"><summary><span data-icon="edit"></span>Local autofill details</summary><p>These overrides are saved in this browser. Use Edit Profile to update your account.</p><form id="profile-form"></form><button class="primary" id="save-profile">Save local details</button><div class="status" id="profile-status" role="status"></div></details>
+      <div class="sticky-action"><button class="primary" id="edit-profile"><span data-icon="edit"></span>Edit Profile</button></div>
+    </section>
+    <section class="card capture-card" aria-label="Save this job"><div class="capture-heading"><span data-icon="briefcase"></span><div><h2>Keep this job in your dashboard</h2><p>Save the posting and prepare for your next step.</p></div></div><button class="ghost" id="send-job">Send this job to the app<span data-icon="chevron"></span></button><div class="send-status" id="send-status" aria-live="polite"></div></section>
+  </main>
+  <footer><span data-icon="check" data-size="15"></span>Autofill never submits your application.</footer>
+  <dialog id="settings-dialog" aria-labelledby="settings-heading"><div class="dialog-heading"><h2 id="settings-heading">Settings</h2><button class="icon-button" data-close-dialog aria-label="Close settings"><span data-icon="close"></span></button></div><label class="toggle-row"><span>Show floating Autofill button<small>On application forms and pages where you used the panel</small></span><input type="checkbox" id="launcher-enabled"></label><button class="ghost" id="reload"><span data-icon="refresh"></span>Rescan this page</button><div id="disabled-sites" hidden><p class="group">Turned off on these sites</p><ul class="site-list" id="disabled-sites-list"></ul></div><p class="muted">Drag the floating button up or down. Its × button hides it on one page, one site or everywhere.</p></dialog>
+  <dialog id="report-dialog" aria-labelledby="report-heading"><div class="dialog-heading"><h2 id="report-heading">Report a problem</h2><button class="icon-button" data-close-dialog aria-label="Close report"><span data-icon="close"></span></button></div><p>Copy these details to include with your feedback. Your profile values and resume are excluded.</p><textarea id="report-text" rows="7" readonly aria-label="Page diagnostics"></textarea><button class="primary" id="copy-report"><span data-icon="copy"></span>Copy report</button><p class="status" id="report-status" role="status"></p></dialog>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

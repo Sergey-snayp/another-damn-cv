@@ -1,7 +1,7 @@
 /**
- * No UI here — the side panel owns that.
+ * Detect application fields and expose the page-edge launcher.
  *
- * A side panel is a separate page with no access to the tab's DOM, so it asks
+ * The panel is an extension frame with no access to the page's DOM, so it asks
  * this script to look at the form and to fill it. Everything below answers one
  * of those two questions.
  */
@@ -32,6 +32,10 @@ function scan() {
     host: location.hostname,
     site: site?.name ?? null,
     ruleCount,
+    context: {
+      title: (document.querySelector('h1')?.innerText || document.title || 'Application form').trim().slice(0, 180),
+      company: (document.querySelector('.company-name, [data-testid="company-name"]')?.textContent || '').trim().slice(0, 100),
+    },
     fields: unique.map((field) => ({
       key: field.key,
       kind: field.kind,
@@ -43,7 +47,7 @@ function scan() {
 }
 
 async function fill(profile) {
-  if (lastScan.found.length === 0) scan();
+  scan(); // Forms can replace controls between the preview and a click.
 
   let filled = 0;
   const failures = [];
@@ -76,3 +80,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return false;
 });
+
+function updateLauncher() {
+  const result = scan();
+  const site = Boolean(result.site) || location.protocol === 'file:';
+  const fields = lastScan.found.filter(field => field.key !== 'coverLetter' && !field.element.closest('form')?.querySelector('input[type="password"]'));
+  const application = fields.some(field => field.key === 'resume') || fields.length >= 2;
+  window.CVAutofillLauncher?.update(site && application);
+}
+let scanTimer;
+const scheduleScan = () => { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, 140); };
+const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel']);
+new MutationObserver(records => {
+  const changed = records.some(record => {
+    if (OWN_NODES.has(record.target.id)) return false;
+    if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(node => OWN_NODES.has(node.id))) return false;
+    return true;
+  });
+  if (changed) scheduleScan();
+}).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'disabled', 'readonly', 'type', 'class', 'style'] });
+addEventListener('resize', scheduleScan);
+addEventListener('popstate', scheduleScan);
+addEventListener('hashchange', scheduleScan);
+updateLauncher();

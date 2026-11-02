@@ -7,7 +7,7 @@
  *   text    the job as the browser renders it — what a reader needs
  *   html    the same part, stripped down — kept so it can be re-read later
  *
- * Defines globalThis.__cvCapture; the side panel calls it right after.
+ * Defines globalThis.__cvCapture; the panel calls it right after.
  */
 (() => {
   const MAX_HTML = 1_400_000;

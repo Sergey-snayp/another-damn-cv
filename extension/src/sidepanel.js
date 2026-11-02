@@ -1,459 +1,208 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
-import {
-  captureTab, jobUrl, NotSignedInError, requestSiteAccess, sendCapture, unsendableReason,
-} from './jobs.js';
-
-/**
- * The side panel.
- *
- * It cannot touch the page, so every question about the form goes to the
- * content script by message. If that script is not there — an unsupported site —
- * the send fails, and that failure is what tells us to show "not supported".
- */
+import { captureTab, jobUrl, NotSignedInError, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
+import { icon, escapeHtml as esc } from './icons.js';
 
 const FIELD_LABELS = {
-  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name',
-  preferredName: 'Preferred name', fullName: 'Full name', email: 'Email',
-  phone: 'Phone', pronouns: 'Pronouns',
-  location: 'Location', city: 'City', state: 'State / province',
-  country: 'Country', postalCode: 'Postal code', addressLine: 'Address',
-  linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio',
-  website: 'Website', twitter: 'Twitter / X',
-  resume: 'Resume', coverLetter: 'Cover letter',
-  currentCompany: 'Current company', currentTitle: 'Current title',
-  yearsExperience: 'Years of experience',
-  workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship',
-  salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
+  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
 };
-
-/**
- * Mirrors the server's contact fields exactly.
- *
- * Anything not in this list is either not synced or not fillable, and showing
- * it here would imply otherwise.
- */
 const PROFILE_GROUPS = [
   { title: 'Personal', keys: ['fullName', 'firstName', 'lastName', 'preferredName', 'email', 'phone'] },
   { title: 'Location', keys: ['location', 'city', 'state', 'country', 'postalCode'] },
   { title: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website'] },
   { title: 'Eligibility', keys: ['workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod'] },
 ];
-
-/** Computed by the server from your experience list — shown, never edited. */
 const DERIVED_KEYS = ['currentCompany', 'currentTitle', 'yearsExperience'];
-
-const PROFILE_FIELDS = PROFILE_GROUPS.flatMap((group) => group.keys);
-
-let profile = {};
-let scan = null;
-
-const $ = (id) => document.getElementById(id);
-
-// --- talking to the page ------------------------------------------------------
-
-async function activeTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tab;
+const $ = id => document.getElementById(id);
+let profile = {}, scan = null, currentTab = null, sending = false, filling = false, localDirty = false, refreshId = 0;
+let copyValues = [];
+function status(id, text, kind = '') { const node = $(id); if (node) { node.textContent = text; node.className = `status ${kind}`; } }
+function openApp(path = '/') { return chrome.tabs.create({ url: `${APP_URL}${path}` }); }
+// The panel lives inside one page, so it always works with that page's tab.
+let ownTabId = null;
+async function ownTab() {
+  if (ownTabId === null) ownTabId = (await chrome.runtime.sendMessage({ type: 'panel-tab' }))?.tabId ?? null;
+  return ownTabId === null ? null : chrome.tabs.get(ownTabId);
 }
-
-async function askPage(message) {
-  const tab = await activeTab();
+function closePanel() { if (ownTabId !== null) void chrome.tabs.sendMessage(ownTabId, { type: 'panel-close' }, { frameId: 0 }).catch(() => {}); }
+async function askPage(message, tab = currentTab) {
   if (!tab?.id) return null;
-
-  try {
-    return await chrome.tabs.sendMessage(tab.id, message);
-  } catch {
-    // No content script on this tab: the site is not one we support.
-    return null;
-  }
+  try { return await chrome.tabs.sendMessage(tab.id, message, { frameId: 0 }); } catch { return null; }
 }
-
-// --- autofill panel -----------------------------------------------------------
-
-function valueFor(key) {
-  if (key === 'resume') return profile.resumeFileName ?? '';
-  if (key === 'coverLetter') return '';
-  return profile[key] ?? '';
+function valueFor(key) { if (key === 'resume') return profile.resumeDataUrl ? profile.resumeFileName || 'Resume.pdf' : ''; if (key === 'coverLetter') return ''; return profile[key] ?? ''; }
+function pageCard() {
+  if (!scan) return '';
+  const title = scan.context?.title || 'Application form';
+  const company = scan.context?.company || scan.host;
+  const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+  return `<div class="card page-card"><div class="company-avatar" aria-hidden="true">${esc(initials)}</div><div><h2>${esc(title)}</h2><p>${esc(company)}</p><p class="page-site">${esc(scan.host)}</p></div></div>`;
 }
-
 function renderAutofill() {
   const host = $('panel-autofill');
-
-  if (!scan) {
-    host.innerHTML = `
-      <div class="notice">
-        <span class="icon">!</span>
-        <div>
-          <strong>Autofill isn't supported on this site</strong>
-          <span>Open an application on Greenhouse, Lever or Ashby.</span>
-        </div>
-      </div>`;
+  if (!scan || !scan.fields?.length) {
+    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p><button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
+    $('rescan-empty').addEventListener('click', refresh);
     return;
   }
-
-  if (scan.fields.length === 0) {
-    host.innerHTML = `
-      <div class="notice">
-        <span class="icon">!</span>
-        <div>
-          <strong>No form found yet</strong>
-          <span>Open the application form, then press rescan.</span>
-        </div>
-      </div>`;
-    return;
-  }
-
-  const ready = scan.fields.filter((f) => valueFor(f.key)).length;
-
-  // Grouped the way the form itself groups them, so the panel reads like the
-  // page it is describing.
-  const byGroup = new Map();
-  for (const field of scan.fields) {
-    if (!byGroup.has(field.group)) byGroup.set(field.group, []);
-    byGroup.get(field.group).push(field);
-  }
-
-  const rows = [...byGroup].map(([group, fields]) => {
-    const items = fields.map((field) => {
-      const value = valueFor(field.key);
-      const right = value
-        ? `<span class="val">${value}</span>`
-        : '<span class="missing">no value</span>';
-      // A dot marks a field matched by an exact site rule rather than guessed.
-      const mark = field.source === 'site' ? '<span class="exact" title="matched by site rule">•</span>' : '';
-      return `<li><span class="key">${mark}${FIELD_LABELS[field.key] ?? field.key}</span>${right}</li>`;
-    }).join('');
-
-    return `<p class="group">${group}</p><ul class="fields">${items}</ul>`;
-  }).join('');
-
-  // Says plainly when a site is running on the heuristic alone, so it is
-  // obvious where adding rules would pay off.
-  const siteNote = scan.site && scan.ruleCount === 0
-    ? `<p class="hint" style="text-align:left">No site rules for <b>${scan.site}</b> yet — these were matched by labels alone. See sites.js to add exact ones.</p>`
-    : '';
-
-  const sensitive = scan.skippedSensitive > 0
-    ? `<p class="hint" style="text-align:left">${scan.skippedSensitive} demographic question(s) left alone on purpose — those are voluntary, and a wrong guess is worse than a blank.</p>`
-    : '';
-
-  host.innerHTML = `
-    <div class="card">
-      <h2>Detected fields <span class="muted">${ready} of ${scan.fields.length} ready</span></h2>
-      ${rows}
-      ${siteNote}
-      ${sensitive}
-    </div>
-    <button class="primary" id="fill">Autofill this form</button>
-    <div class="status" id="fill-status"></div>
-    <p class="hint">Nothing is submitted. Check every field before you apply.</p>`;
-
+  const ready = scan.fields.filter(field => valueFor(field.key)).length;
+  const groups = new Map();
+  for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
+  const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
+  host.innerHTML = `${pageCard()}
+    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status" id="fill-status" role="status"></div><p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
+    <details class="card" open><summary>${icon('file')}Resume</summary><div class="document-selection"><div><strong>${esc(profile.resumeDataUrl ? profile.resumeFileName || 'Resume.pdf' : 'No PDF attached')}</strong><p>${profile.resumeDataUrl ? 'Your local PDF is ready to attach.' : 'Choose the PDF you want to send with this application.'}</p></div>${profile.resumeDataUrl ? `<button class="icon-button" id="autofill-preview" aria-label="Preview attached resume">${icon('eye')}</button>` : ''}</div><button class="ghost" id="choose-resume">${profile.resumeDataUrl ? 'Change resume' : 'Attach resume PDF'}${icon('chevron', 17)}</button></details>
+    <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
+  $('choose-resume').addEventListener('click', () => selectTab('resume'));
+  $('autofill-preview')?.addEventListener('click', previewResume);
+  $('add-details')?.addEventListener('click', () => { selectTab('profile'); $('local-details').open = true; });
 }
-
 async function runFill() {
-  const status = $('fill-status');
-  status.textContent = 'Filling…';
-
-  const result = await askPage({ type: 'fill', profile });
-
-  if (!result) {
-    status.textContent = 'Lost contact with the page — reload it and try again.';
-    return;
-  }
-
-  status.textContent = result.failures.length
-    ? `Filled ${result.filled}. Failed: ${result.failures.join('; ')}`
-    : `Filled ${result.filled} field${result.filled === 1 ? '' : 's'}.`;
+  if (filling) return;
+  filling = true; const button = $('fill'); button.disabled = true;
+  status('fill-status', 'Filling…');
+  const target = currentTab;
+  try {
+    const result = await askPage({ type: 'fill', profile }, target);
+    if (!result) throw new Error('Lost contact with the page. Reload it and try again.');
+    status('fill-status', result.failures.length ? `Filled ${result.filled}. Could not fill: ${result.failures.join('; ')}` : `Filled ${result.filled} field${result.filled === 1 ? '' : 's'}. Review the form before submitting.`, result.failures.length ? 'error' : 'success');
+  } catch (error) { status('fill-status', error.message, 'error'); }
+  finally { filling = false; if (button.isConnected) button.disabled = false; }
 }
 
-// --- send this job --------------------------------------------------------------
-
-/** Kept current by refresh(), so a click can ask for access before any await. */
-let currentTab = null;
-let sending = false;
-
+// Saving job postings stays an explicit, permission-controlled action.
 function renderSendButton() {
-  const reason = unsendableReason(currentTab);
-  const button = $('send-job');
-  button.disabled = sending || Boolean(reason);
-  button.title = reason ?? '';
+  const reason = unsendableReason(currentTab), button = $('send-job');
+  button.disabled = sending || !!reason; button.title = reason || '';
   if (!sending && reason && currentTab?.url) $('send-status').textContent = reason;
 }
-
 function showSendResult({ job, created }) {
   const name = [job.title, job.company].filter(Boolean).join(' at ') || job.pageTitle || 'This job';
-  const verb = created ? 'Saved' : 'Already saved, updated';
-
-  const note = job.extraction === 'pending'
-    ? 'Reading the page. Title and company will appear in the app in a minute.'
-    : job.extraction === 'failed'
-      ? (job.extractionError ?? 'Could not read the job details. Fix them in the app.')
-      : '';
-
-  const status = $('send-status');
-  status.replaceChildren();
-
-  const line = document.createElement('div');
-  line.textContent = `${verb}: ${name}`;
-  const open = document.createElement('a');
-  open.href = jobUrl(job.id);
-  open.textContent = 'Open in app';
-  open.addEventListener('click', (event) => {
-    event.preventDefault();
-    void chrome.tabs.create({ url: jobUrl(job.id) });
-  });
-
-  status.append(line);
-  if (note) {
-    const hint = document.createElement('div');
-    hint.className = 'muted';
-    hint.textContent = note;
-    status.append(hint);
-  }
-  status.append(open);
+  const result = $('send-status'); result.replaceChildren();
+  const line = document.createElement('div'); line.textContent = `${created ? 'Saved' : 'Already saved, updated'}: ${name}`; result.append(line);
+  const note = job.extraction === 'pending' ? 'Reading the posting. The details will appear in your dashboard.' : job.extraction === 'failed' ? job.extractionError || 'Review the job details in the app.' : '';
+  if (note) { const p = document.createElement('div'); p.className = 'muted'; p.textContent = note; result.append(p); }
+  const link = document.createElement('a'); link.href = jobUrl(job.id); link.textContent = 'Open in app'; link.addEventListener('click', event => { event.preventDefault(); void chrome.tabs.create({ url: jobUrl(job.id) }); }); result.append(link);
 }
-
 function sendJob() {
-  const tab = currentTab;
-  if (sending || !tab?.id || unsendableReason(tab)) return;
-
-  // Called synchronously from the click: Chrome only prompts during the gesture.
-  const access = requestSiteAccess(tab);
-
-  sending = true;
-  renderSendButton();
-  $('send-status').textContent = 'Reading the page…';
-
+  const tab = currentTab; if (sending || !tab?.id || unsendableReason(tab)) return;
+  const access = requestSiteAccess(tab); // Must start in the click's user gesture.
+  sending = true; renderSendButton(); $('send-status').textContent = 'Reading the page…';
   void (async () => {
     try {
-      if (!(await access)) {
-        $('send-status').textContent = 'Access to this site was not allowed, so nothing was sent.';
-        return;
-      }
-
-      const capture = await captureTab(tab.id);
-      $('send-status').textContent = `Sending (${capture.matched})…`;
-      showSendResult(await sendCapture(capture));
-    } catch (err) {
-      if (err instanceof NotSignedInError) selectTab('profile');
-      $('send-status').textContent = /Cannot access|cannot be scripted|Frame with ID/i.test(err.message)
-        ? 'Chrome does not let extensions read this page.'
-        : err.message;
-    } finally {
-      sending = false;
-      renderSendButton();
-    }
+      if (!await access) { $('send-status').textContent = 'Access was not allowed, so nothing was sent.'; return; }
+      const capture = await captureTab(tab.id); $('send-status').textContent = 'Saving this job…'; showSendResult(await sendCapture(capture));
+    } catch (error) { if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; } $('send-status').textContent = /Cannot access|cannot be scripted|Frame with ID/i.test(error.message) ? 'Chrome does not let extensions read this page.' : error.message; }
+    finally { sending = false; renderSendButton(); }
   })();
 }
 
-// --- profile panel ------------------------------------------------------------
-
-function renderProfile() {
-  const editable = PROFILE_GROUPS.map((group) => `
-    <p class="group">${group.title}</p>
-    ${group.keys.map((key) => `
-      <label class="field">
-        <span>${FIELD_LABELS[key]}</span>
-        <input type="text" name="${key}" value="${escapeAttr(profile[key])}">
-      </label>`).join('')}`).join('');
-
-  const derived = DERIVED_KEYS.some((key) => profile[key])
-    ? `<p class="group">Current role <span class="muted">from your experience</span></p>
-       ${DERIVED_KEYS.map((key) => `
-         <label class="field">
-           <span>${FIELD_LABELS[key]}</span>
-           <input type="text" value="${escapeAttr(profile[key])}" disabled>
-         </label>`).join('')}
-       <p class="hint" style="text-align:left">Edit these in the web app by ticking
-       <b>I work here now</b> on a role.</p>`
-    : '';
-
-  $('profile-form').innerHTML = editable + derived;
+// Profile cards copy values; they never submit anything to the website.
+function renderProfileOverview() {
+  copyValues = [];
+  const copy = (value, label, heading = false) => {
+    if (!value) return ''; const index = copyValues.push(String(value)) - 1;
+    return `<button class="copy-value${heading ? ' is-heading' : ''}" data-copy="${index}" aria-label="Copy ${esc(label)}" title="Copy ${esc(label)}">${esc(value)}</button>`;
+  };
+  const name = profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  const initials = (name || '?').split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+  let html = `<div class="card"><div class="profile-card-heading"><h2>${name ? esc(name) : 'Your profile'}</h2><button class="icon-button edit-app-profile" aria-label="Edit contact information in app">${icon('edit')}</button></div><div class="profile-contact"><div class="profile-initials">${esc(initials)}</div><div>${copy(name, 'name')}${copy(profile.location || profile.city, 'location', true)}${copy(profile.email, 'email')}${copy(profile.phone, 'phone')}${!name && !profile.email ? '<p>Sync your profile or add local details below.</p>' : ''}</div></div></div>`;
+  if (DERIVED_KEYS.some(key => profile[key])) html += `<div class="card"><div class="profile-card-heading"><h2>${icon('briefcase')} Experience</h2><button class="icon-button edit-app-profile" aria-label="Edit experience in app">${icon('edit')}</button></div>${copy(profile.currentTitle, 'current title', true)}${copy(profile.currentCompany, 'current company')}${copy(profile.yearsExperience ? `${profile.yearsExperience} years of experience` : '', 'years of experience')}<p>Current role from your saved app profile.</p></div>`;
+  const links = ['linkedin', 'github', 'portfolio', 'website'].filter(key => profile[key]);
+  if (links.length) html += `<div class="card"><h2>${icon('link')} Links</h2>${links.map(key => `<small class="muted">${FIELD_LABELS[key]}</small>${copy(profile[key], FIELD_LABELS[key])}`).join('')}</div>`;
+  $('profile-overview').innerHTML = html;
+  $('profile-overview').querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(copyValues[Number(button.dataset.copy)]); status('copy-status', 'Copied.', 'success'); }
+    catch { status('copy-status', 'Could not copy. Select the value and copy it manually.', 'error'); }
+  }));
+  $('profile-overview').querySelectorAll('.edit-app-profile').forEach(button => button.addEventListener('click', () => void openApp('/profile')));
 }
-
-/** Values land inside an HTML attribute; a stray quote would break the form. */
-function escapeAttr(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+function renderProfileForm() {
+  if (localDirty) return;
+  $('profile-form').innerHTML = PROFILE_GROUPS.map(group => `<p class="group">${group.title}</p>${group.keys.map(key => `<label class="field"><span>${FIELD_LABELS[key]}</span><input type="text" name="${key}" value="${esc(profile[key])}"></label>`).join('')}`).join('') + (DERIVED_KEYS.some(key => profile[key]) ? `<p class="group">Current role · from your profile</p>${DERIVED_KEYS.map(key => `<label class="field"><span>${FIELD_LABELS[key]}</span><input type="text" value="${esc(profile[key])}" disabled></label>`).join('')}<p class="hint">Update work experience in your app Profile to change these values.</p>` : '');
 }
-
 async function saveProfile() {
-  for (const input of $('profile-form').elements) {
-    // Derived inputs carry no name, so they cannot be written back here.
-    if (input.name) profile[input.name] = input.value.trim();
-  }
-
-  await chrome.storage.local.set({ profile });
-  $('profile-status').textContent = 'Saved.';
-  renderAutofill();
+  const next = { ...profile };
+  for (const input of $('profile-form').elements) if (input.name) next[input.name] = input.value.trim();
+  try { await chrome.storage.local.set({ profile: next }); profile = next; localDirty = false; renderProfileOverview(); renderProfileForm(); renderAutofill(); status('profile-status', 'Saved in this browser.', 'success'); }
+  catch { status('profile-status', 'Could not save. Your edits are still here.', 'error'); }
 }
 
-// --- resume panel -------------------------------------------------------------
-
-function readAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+function renderResume() { $('resume-state').textContent = profile.resumeFileName || 'No PDF attached'; $('preview-resume').hidden = !profile.resumeDataUrl; }
+async function saveResume() {
+  const file = $('resume-file').files?.[0]; if (!file) { status('resume-status', 'Choose a PDF first.'); return; }
+  $('save-resume').disabled = true;
+  try {
+    if (!/\.pdf$/i.test(file.name) || await file.slice(0, 5).text() !== '%PDF-') throw new Error('Choose a valid PDF file.');
+    if (file.size > 7 * 1024 * 1024) throw new Error('Choose a PDF smaller than 7 MB.');
+    const data = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Could not read this PDF.')); reader.readAsDataURL(new Blob([file], { type: 'application/pdf' })); });
+    const stored = await chrome.storage.local.get('profile');
+    const next = { ...stored.profile, resumeDataUrl: data, resumeFileName: file.name };
+    await chrome.storage.local.set({ profile: next }); profile = next; $('resume-file').value = ''; renderResume(); renderAutofill(); status('resume-status', 'Resume saved in this browser.', 'success');
+  } catch (error) { status('resume-status', error.message || 'Could not save this PDF.', 'error'); }
+  finally { $('save-resume').disabled = false; }
 }
-
-function renderResume() {
-  $('resume-state').textContent = profile.resumeFileName ?? 'none saved';
-}
-
-// --- account -----------------------------------------------------------------
+function previewResume() { void chrome.tabs.create({ url: chrome.runtime.getURL('src/resume-preview.html') }); }
 
 async function renderAccount() {
-  // Shown so it can be copied verbatim. Building it by hand from the extension
-  // id is where the trailing slash usually goes missing.
-  const uri = redirectUri();
-  $('redirect-uri').textContent = uri;
-
-  const user = await currentUser();
-
-  $('signed-out').hidden = Boolean(user);
-  $('signed-in').hidden = !user;
-
-  if (user) {
-    $('account-name').textContent = user.name;
-    $('account-email').textContent = user.email;
-    $('account-avatar').src = user.avatarUrl ?? '';
-  }
+  $('redirect-uri').textContent = redirectUri();
+  const user = await currentUser(); $('signed-out').hidden = !!user; $('signed-in').hidden = !user;
+  if (user) { $('account-name').textContent = user.name; $('account-email').textContent = user.email; const avatar = $('account-avatar'); avatar.hidden = !user.avatarUrl; if (user.avatarUrl) avatar.src = user.avatarUrl; else avatar.removeAttribute('src'); }
 }
-
 async function doSignIn() {
-  const status = $('auth-status');
-  status.textContent = 'Opening Google…';
-
-  try {
-    const user = await signIn();
-    status.textContent = `Signed in as ${user.email}.`;
-    await pullProfile();
-    await refresh();
-  } catch (err) {
-    // The redirect URI must be registered in Google Console, and the message
-    // says so rather than leaving a bare OAuth error.
-    // redirect_uri_mismatch is by far the most common failure here, and the
-    // fix is always the same: register the URI shown below the button.
-    status.textContent = /redirect_uri|mismatch|400/i.test(err.message)
-      ? 'Google rejected the redirect URI. Open "Redirect URI for Google Console" below and register it.'
-      : err.message;
-  }
+  status('auth-status', 'Opening Google…');
+  try { await signIn(); await pullProfile(); await refresh(); status('auth-status', 'Signed in and profile synced.', 'success'); }
+  catch (error) { status('auth-status', /redirect_uri|mismatch|400/i.test(error.message) ? 'Check the redirect URI in Sign-in setup below.' : error.message, 'error'); }
 }
-
-async function doPull() {
-  const status = $('auth-status');
-  status.textContent = 'Pulling…';
-
-  try {
-    await pullProfile();
-    await refresh();
-    status.textContent = 'Up to date.';
-  } catch (err) {
-    status.textContent = err.message;
-  }
-}
-
-async function doSignOut() {
-  await signOut();
-  await renderAccount();
-  $('auth-status').textContent = 'Signed out. Your details stay on this device.';
-}
-
-async function renderSyncState() {
-  const { sync } = await chrome.storage.local.get('sync');
-  const el = $('sync-state');
-  if (!el) return;
-
-  el.textContent = sync?.lastSyncedAt
-    ? new Date(sync.lastSyncedAt).toLocaleString('en-CA')
-    : 'never';
-}
-
-/**
- * The web app writes straight into storage via the bridge content script, so
- * the panel has to notice changes it did not make itself.
- */
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local') return;
-  if (changes.profile) profile = changes.profile.newValue ?? {};
-  void refresh();
-});
-
-async function saveResume() {
-  const file = $('resume-file').files?.[0];
-
-  if (!file) {
-    $('resume-status').textContent = 'Choose a PDF first.';
-    return;
-  }
-
-  profile.resumeDataUrl = await readAsDataUrl(file);
-  profile.resumeFileName = file.name;
-
-  await chrome.storage.local.set({ profile });
-
-  $('resume-status').textContent = 'Saved.';
-  renderResume();
-  renderAutofill();
-}
-
-// --- tabs ---------------------------------------------------------------------
-
+async function doPull() { status('auth-status', 'Syncing…'); try { await pullProfile(); await refresh(); status('auth-status', 'Profile up to date.', 'success'); } catch (error) { status('auth-status', error.message, 'error'); } }
+async function doSignOut() { await signOut(); await renderAccount(); status('auth-status', 'Signed out. Your local details and PDF remain on this device.'); }
+async function renderSyncState() { const { sync } = await chrome.storage.local.get('sync'); $('sync-state').textContent = sync?.lastSyncedAt ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}` : 'Never synced'; }
 function selectTab(name) {
-  for (const tab of document.querySelectorAll('.tab')) {
-    tab.setAttribute('aria-selected', String(tab.dataset.panel === name));
-  }
-  for (const panel of document.querySelectorAll('.panel')) {
-    panel.hidden = panel.id !== `panel-${name}`;
-  }
+  for (const tab of document.querySelectorAll('.tab')) { const selected = tab.dataset.panel === name; tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1; }
+  for (const panel of document.querySelectorAll('.panel')) panel.hidden = panel.id !== `panel-${name}`;
+  document.querySelector('main').scrollTop = 0;
 }
-
-// --- boot ---------------------------------------------------------------------
-
 async function refresh() {
-  const stored = await chrome.storage.local.get('profile');
-  profile = stored.profile ?? {};
-
-  const tab = await activeTab();
-  // A new page clears the last send's result; a refresh of the same one keeps it.
-  if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
-  currentTab = tab ?? null;
-  renderSendButton();
-
-  scan = await askPage({ type: 'scan' });
-
-  renderAutofill();
-  renderProfile();
-  renderResume();
-  void renderSyncState();
-  void renderAccount();
+  const sequence = ++refreshId;
+  if (!filling && $('fill')) $('fill').disabled = true;
+  try {
+    const stored = await chrome.storage.local.get('profile'); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
+    if (sequence !== refreshId) return;
+    if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
+    profile = stored.profile || {}; currentTab = tab || null; scan = nextScan;
+    renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
+    await Promise.all([renderSyncState(), renderAccount()]);
+  } catch { status('auth-status', 'Could not refresh. Reload the extension to reconnect.', 'error'); }
 }
-
-document.querySelectorAll('.tab').forEach((tab) => {
+function initIcons() { document.querySelectorAll('[data-icon]').forEach(node => { node.innerHTML = icon(node.dataset.icon, Number(node.dataset.size) || 20); }); }
+initIcons();
+for (const tab of document.querySelectorAll('.tab')) {
   tab.addEventListener('click', () => selectTab(tab.dataset.panel));
-});
-
-$('reload').addEventListener('click', refresh);
+  tab.addEventListener('keydown', event => { const tabs = [...document.querySelectorAll('.tab')]; const i = tabs.indexOf(tab); const next = event.key === 'ArrowRight' ? tabs[(i + 1) % tabs.length] : event.key === 'ArrowLeft' ? tabs[(i + tabs.length - 1) % tabs.length] : event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : null; if (next) { event.preventDefault(); selectTab(next.dataset.panel); next.focus(); } });
+}
+$('profile-form').addEventListener('input', () => { localDirty = true; status('profile-status', 'Unsaved local changes.'); });
+$('profile-form').addEventListener('submit', event => { event.preventDefault(); void saveProfile(); });
+$('reload').addEventListener('click', () => { $('settings-dialog').close(); void refresh(); });
 $('send-job').addEventListener('click', sendJob);
-$('sign-in').addEventListener('click', () => void doSignIn());
-$('sign-out').addEventListener('click', () => void doSignOut());
-$('pull-now').addEventListener('click', () => void doPull());
-$('copy-redirect').addEventListener('click', async () => {
-  await navigator.clipboard.writeText(redirectUri());
-  $('copy-redirect').textContent = 'Copied';
-  setTimeout(() => { $('copy-redirect').textContent = 'Copy'; }, 1500);
+$('sign-in').addEventListener('click', () => void doSignIn()); $('sign-out').addEventListener('click', () => void doSignOut()); $('pull-now').addEventListener('click', () => void doPull());
+$('save-profile').addEventListener('click', () => void saveProfile()); $('save-resume').addEventListener('click', () => void saveResume()); $('preview-resume').addEventListener('click', previewResume);
+$('open-app').addEventListener('click', () => void openApp()); $('edit-profile').addEventListener('click', () => void openApp('/profile')); $('open-documents').addEventListener('click', () => void openApp('/documents'));
+$('copy-redirect').addEventListener('click', async () => { try { await navigator.clipboard.writeText(redirectUri()); $('copy-redirect').textContent = 'Copied'; } catch { status('auth-status', 'Select the redirect URI to copy it manually.', 'error'); } });
+function renderDisabledSites(hosts) {
+  $('disabled-sites').hidden = !hosts.length;
+  $('disabled-sites-list').innerHTML = hosts.map(host => `<li><span>${esc(host)}</span><button data-enable-host="${esc(host)}">Turn back on</button></li>`).join('');
+}
+$('disabled-sites-list').addEventListener('click', async event => {
+  const host = event.target.closest('[data-enable-host]')?.dataset.enableHost; if (!host) return;
+  try { const { launcherDisabledHosts = [] } = await chrome.storage.local.get('launcherDisabledHosts'); const next = launcherDisabledHosts.filter(h => h !== host); await chrome.storage.local.set({ launcherDisabledHosts: next }); renderDisabledSites(next); }
+  catch { status('auth-status', 'Could not update extension settings.', 'error'); }
 });
-$('save-profile').addEventListener('click', saveProfile);
-$('save-resume').addEventListener('click', saveResume);
-
-// Following the user between job pages, so the panel is never stale.
-chrome.tabs.onActivated.addListener(refresh);
-chrome.tabs.onUpdated.addListener((_id, info) => {
-  if (info.status === 'complete') refresh();
-});
-
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts']); $('launcher-enabled').checked = settings.launcherEnabled !== false; renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
+for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
+$('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });
+$('copy-report').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('report-text').value); status('report-status', 'Copied. You can paste this into your feedback.', 'success'); } catch { $('report-text').select(); status('report-status', 'Select and copy the report manually.', 'error'); } });
+$('close-panel').addEventListener('click', closePanel);
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !document.querySelector('dialog[open]')) closePanel(); });
+chrome.storage.onChanged.addListener((_changes, area) => { if (area === 'local') void refresh(); });
+chrome.tabs.onUpdated.addListener((id, info) => { if (id === currentTab?.id && (info.status === 'complete' || info.url)) void refresh(); });
 void refresh();

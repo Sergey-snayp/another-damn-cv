@@ -6,7 +6,7 @@ and tailor a resume to each one without ever claiming something you have not don
 ```
 backend/     NestJS API + Postgres (Prisma)
 frontend/    React + Vite web app
-extension/   Chrome side panel: autofills applications, sends jobs to the app
+extension/   Chrome extension: in-page panel that autofills applications, sends jobs to the app
 ```
 
 ## Run it
