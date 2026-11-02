@@ -32,6 +32,9 @@ The original artwork is [d-stamp-logo.png](../frontend/public/brand/d-stamp-logo
 It is served at `/brand/d-stamp-logo.png`. Use this file rather than drawing a
 replacement. Keep shared public brand assets in `frontend/public/brand/`.
 
+The Chrome extension packages an unchanged copy in `extension/assets/brand/`.
+Its toolbar icon, extension-list icon, and side-panel header use this artwork.
+
 ## Color palette
 
 The frontend source of truth is [colors.css](../frontend/src/theme/colors.css),

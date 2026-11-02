@@ -4,6 +4,12 @@
   "version": "0.8.0",
   "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "114",
+  "icons": {
+    "16": "assets/brand/d-stamp-logo.png",
+    "32": "assets/brand/d-stamp-logo.png",
+    "48": "assets/brand/d-stamp-logo.png",
+    "128": "assets/brand/d-stamp-logo.png"
+  },
   "permissions": [
     "storage",
     "sidePanel",
@@ -32,7 +38,8 @@
     "http://*/*"
   ],
   "action": {
-    "default_title": "CV Autofill"
+    "default_title": "CV Autofill",
+    "default_icon": "assets/brand/d-stamp-logo.png"
   },
   "side_panel": {
     "default_path": "src/sidepanel.html"

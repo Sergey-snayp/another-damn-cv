@@ -12,6 +12,13 @@ Nothing leaves your machine. There is no server, no account, no telemetry.
 3. **Load unpacked** → select this `extension/` folder
 4. Pin the icon, click it, fill in your details, attach your resume PDF, **Save**
 
+After updating the extension files, click **Reload** on its card in
+`chrome://extensions`, then close and reopen the side panel to see the new logo.
+
+The D! logo is packaged in `assets/brand/d-stamp-logo.png` so the extension works
+on its own. It is an unchanged copy of the approved artwork in
+`../frontend/public/brand/d-stamp-logo.png`. Chrome scales it for its icon sizes.
+
 ## Use it
 
 Open any application page on a supported board, for example:
