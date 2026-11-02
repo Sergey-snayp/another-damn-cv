@@ -175,8 +175,10 @@ export interface ResumeSummary {
   targetRole: string | null;
   isPrimary: boolean;
   currentSnapshotId: string | null;
+  createdAt: Date;
   updatedAt: Date;
   jobId: string | null;
+  sourceResumeId: string | null;
   hasTailoring: boolean;
 }
 export interface Snapshot {

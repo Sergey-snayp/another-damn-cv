@@ -98,9 +98,12 @@ export interface ResumeSummary {
   targetRole: string | null;
   isPrimary: boolean;
   currentSnapshotId: string | null;
+  createdAt: string;
   updatedAt: string;
   /** Set on a copy made by "Tailor resume for this job". */
   jobId: string | null;
+  /** Keeps generated copies identifiable after their job is deleted. */
+  sourceResumeId: string | null;
   /** Tailoring suggestions are waiting for review. */
   hasTailoring: boolean;
 }

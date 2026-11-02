@@ -108,6 +108,29 @@ test('new application ownership checks protect reads, saves and proposal operati
     await assert.rejects(call(), /No such resume/);
 });
 
+test('resume lists expose independent creation and edit dates for the document gallery without content or foreign rows', async () => {
+  const older = await resumes.create(owner.user.id, 'Older document');
+  const newer = await resumes.create(owner.user.id, 'Newer document');
+  const foreign = await resumes.create(other.user.id, 'Foreign document');
+  const createdAt = new Date('2025-01-01T00:00:00.000Z');
+  const editedAt = new Date('2026-09-01T00:00:00.000Z');
+  await prisma.resume.update({ where: { id: older.id }, data: { createdAt, updatedAt: editedAt } });
+  await prisma.resume.update({
+    where: { id: newer.id },
+    data: {
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-02-01T00:00:00.000Z'),
+    },
+  });
+  const list = await resumes.list(owner.user.id);
+  const published = list.find((row) => row.id === older.id)!;
+  assert.deepEqual(published.createdAt, createdAt);
+  assert.deepEqual(published.updatedAt, editedAt);
+  assert.ok(list.findIndex((row) => row.id === older.id) < list.findIndex((row) => row.id === newer.id));
+  assert.ok(!list.some((row) => row.id === foreign.id));
+  assert.ok(!('current' in published));
+});
+
 test('workspace copying refreshes lineage, reuses the latest copy and proposal discard leaves content unchanged', async () => {
   const source = await resumes.create(owner.user.id, 'Copy source');
   const original = await resumes.save(owner.user.id, source.id, content());
@@ -145,6 +168,9 @@ test('workspace copying refreshes lineage, reuses the latest copy and proposal d
   assert.deepEqual(await resumes.current(owner.user.id, source.id), original);
   await prisma.job.delete({ where: { id: job.id } });
   assert.deepEqual(await resumes.current(owner.user.id, workspace.id), workspace.document);
+  const retained = (await resumes.list(owner.user.id)).find((row) => row.id === workspace.id)!;
+  assert.equal(retained.jobId, null);
+  assert.equal(retained.sourceResumeId, source.id);
 });
 
 test('new save transaction rolls back a failed projection without closing live rows', async () => {
