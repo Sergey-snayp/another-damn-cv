@@ -119,6 +119,8 @@ does not reset the database. CI runs these checks on a separate test database.
 profile and planned application and interview preparation features.
 [Backend architecture](docs/backend-clean-architecture-plan.md) explains the structure.
 The [rewrite plan](docs/plan.md) tracks the migration steps and checks.
+[Data backups](docs/data-backups.md) records the verified local snapshot and how
+to restore saved app data later. The private backup files stay outside Git.
 The [brand guide](docs/brand-guide.md) records the approved logo and site colors.
 
 ## Non-negotiable rules
