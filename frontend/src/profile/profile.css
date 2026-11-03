@@ -47,16 +47,6 @@
 .profile-strength progress::-moz-progress-bar { background: var(--color-accent); }
 .profile-strength > div > strong { font-size: 13px; }
 .profile-strength small { color: var(--color-muted); font-size: 10px; }
-.profile-promos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.profile-promo { min-width: 0; padding: 23px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-background); }
-.profile-promo-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
-.profile-promo-heading h3 { flex: 1; font-size: 14px; }
-.profile-promo-heading > svg { flex: none; }
-.profile-promo p { display: flex; align-items: center; gap: 9px; font-size: 12px; }
-.profile-promo p svg { flex: none; }
-.profile-promo .profile-button { margin-top: 9px; }
-.profile-switch { flex: none; width: 39px; height: 23px; padding: 3px; border: 0; border-radius: 999px; background: var(--color-border); opacity: .65; }
-.profile-switch span { display: block; width: 17px; height: 17px; border-radius: 50%; background: var(--color-surface); }
 .profile-document-row { display: flex; align-items: center; gap: 19px; min-width: 0; }
 .profile-document-row > div { flex: 1; min-width: 0; }
 .profile-document-row h3 { overflow-wrap: anywhere; }
@@ -98,7 +88,7 @@
 .profile-savebar > span { color: var(--color-muted); font-size: 11px; }
 .profile-panel .profile-error { color: var(--color-error); }
 .profile-panel .profile-success { color: var(--color-success); }
-@media (max-width: 1200px) { .profile-page { grid-template-columns: 260px minmax(0, 1fr); } .profile-panel { padding: 24px; } .profile-promos { grid-template-columns: minmax(0, 1fr); } .profile-document-row { flex-wrap: wrap; } .profile-document-row > .profile-button { margin-left: 74px; } }
+@media (max-width: 1200px) { .profile-page { grid-template-columns: 260px minmax(0, 1fr); } .profile-panel { padding: 24px; } .profile-document-row { flex-wrap: wrap; } .profile-document-row > .profile-button { margin-left: 74px; } }
 @media (max-width: 900px) { .content:has(.profile-page) { padding: 24px 20px 60px; } .profile-page { grid-template-columns: 235px minmax(0, 1fr); gap: 18px; } .profile-panel { padding: 21px; } .profile-links-grid { grid-template-columns: minmax(0, 1fr); } .profile-career-entry { gap: 13px; } .profile-feature-icon { width: 43px; height: 47px; } .profile-document-row > .profile-button { margin-left: 62px; } }
 @media (max-width: 700px) { .profile-page { grid-template-columns: minmax(0, 1fr); } .profile-sidebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } .profile-identity { grid-column: 1 / -1; } .profile-hub-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .profile-hub-nav h2 { grid-column: 1 / -1; margin: 0; } .profile-hub-nav button { flex-direction: column; align-items: flex-start; margin: 0; gap: 8px; padding: 12px; } .profile-hub-nav button > svg:last-child { display: none; } .profile-hub-nav button span > span { font-size: 10px; } .profile-hub-nav button strong { font-size: 12px; } .profile-sidebar .profile-subscription { order: 3; grid-column: 1 / -1; } .profile-strength { grid-column: 1 / -1; } .profile-field-grid { gap: 13px; } }
 @media (max-width: 480px) { .content:has(.profile-page) { padding: 18px 16px 50px; } .profile-panel { padding: 21px; border-radius: 15px; } .profile-panel h2 { font-size: 18px; } .profile-panel-heading { gap: 10px; margin-bottom: 20px; flex-wrap: wrap; } .profile-identity { padding-top: 42px; } .profile-career-entry > .profile-feature-icon { display: none; } .profile-career-heading h3 { font-size: 16px; } .profile-document-row { gap: 13px; } .profile-document-row > .profile-button { margin-left: 0; } .profile-document-row h3 { font-size: 14px; } .profile-feature-icon { width: 42px; height: 46px; } .profile-links-grid { gap: 22px; } .profile-field-grid { grid-template-columns: minmax(0, 1fr); } .profile-field-grid label.is-half { grid-column: 1; } .profile-hub-nav { grid-template-columns: minmax(0, 1fr); } .profile-hub-nav button { flex-direction: row; align-items: center; } .profile-hub-nav button > svg:last-child { display: block; } }

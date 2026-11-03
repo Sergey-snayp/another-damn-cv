@@ -54,48 +54,6 @@ export function ProfileCareer({
   );
   return (
     <>
-      <section className="profile-panel profile-autofill">
-        <div className="profile-promos">
-          <div className="profile-promo">
-            <div className="profile-promo-heading">
-              <Icon name="bolt" />
-              <h3>Show Profile to Recruiters</h3>
-              <button
-                className="profile-switch"
-                role="switch"
-                aria-label="Show profile to recruiters (coming soon)"
-                aria-checked={false}
-                disabled
-              >
-                <span />
-              </button>
-            </div>
-            <span className="profile-tag">Coming soon</span>
-            <p>
-              <Icon name="search" size={17} />
-              Get discovered by companies.
-            </p>
-            <p>
-              <Icon name="eyeOff" size={17} />
-              Visibility controls will be added later.
-            </p>
-          </div>
-          <div className="profile-promo">
-            <div className="profile-promo-heading">
-              <Icon name="user" />
-              <h3>Update my connections!</h3>
-            </div>
-            <p>
-              Build your network for referrals and introductions for your job
-              applications.
-            </p>
-            <button className="profile-button" disabled>
-              Manage network · Coming soon
-            </button>
-          </div>
-        </div>
-      </section>
-
       <section
         className="profile-panel"
         aria-labelledby="profile-resume-heading"
