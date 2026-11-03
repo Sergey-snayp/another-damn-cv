@@ -124,7 +124,9 @@ textarea.editable { display: block; width: 100%; resize: none; overflow: hidden;
 @media print {
   @page { size: A4; margin: 0; }
   html body { background: #fff; }
-  .topbar, .stylepanel, .savebar, .doc-add, .doc-remove, .doc-bulletmeta { display: none !important; }
+  /* .no-print: page chrome around the CV (title bar, messages). The Chrome
+     extension also saves this page as the PDF it uploads to applications. */
+  .topbar, .stylepanel, .savebar, .doc-add, .doc-remove, .doc-bulletmeta, .no-print { display: none !important; }
   .content { max-width: none; padding: 0; }
   .docwrap { display: block; }
   .page { width: auto; min-height: 0; border: 0; box-shadow: none; border-radius: 0; }

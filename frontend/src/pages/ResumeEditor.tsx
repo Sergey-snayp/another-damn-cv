@@ -102,7 +102,7 @@ export function ResumeEditor() {
 
   return (
     <>
-      <div className="bar">
+      <div className="bar no-print">
         <h1>Resume</h1>
         <div className="who">
           <span className="badge">version {draft.snapshot}</span>
@@ -111,10 +111,10 @@ export function ResumeEditor() {
         </div>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error no-print">{error}</p>}
 
       {draft.experiences.length === 0 && draft.snapshot === 0 && (
-        <section className="card">
+        <section className="card no-print">
           <h2>Start from a CV</h2>
           <p className="muted small">
             Reads a PDF or DOCX and fills the document below. You read it before
