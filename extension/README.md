@@ -252,9 +252,28 @@ a time and only on your click, or when you press Autofill with Settings →
   "why us" drafts leave `[add your reason]`.
 - Choice questions get one of the form's options, number fields a number, and
   text stays within the field's character limit.
-- A draft goes into an empty field with a dashed outline and an "AI draft"
-  tooltip until you edit it. A field you already filled is left alone; copy
+- A draft goes into an empty field with a yellow "AI draft" icon until you
+  edit it. A field you already filled is left alone; copy
   the draft instead. **Save as answer** keeps a good draft for next time.
+
+## Fill status icons
+
+After Autofill, a small icon sits at the edge of each field it touched or
+checked (`src/marks.js`). Hover for the reason.
+
+- **✓ green**: filled from your profile, diversity answers or an exact saved
+  answer, or your CV attached.
+- **! yellow**: filled, but check it: an AI draft, a similar saved answer, an
+  address with no suggestion picked, an upload still finishing.
+- **× red**: required and still empty (the same list as "Still empty and
+  required"), or not filled, with the reason.
+
+Icons are drawn in a shadow root over the page, so the site's layout is
+untouched, and follow their fields on scroll and resize. Green and yellow icons
+go when you edit that field (Autofill's own changes do not count); red ones go
+once the field has a value. All clear on reload. Settings → **Show fill status
+icons** (on by default) turns them off. `test/marks.html` covers them and
+leaves the icons visible for a screenshot.
 
 ## Multi-step forms
 

@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — fill status icons</title>
+<!--
+  Fills a small form and checks the icons beside its fields: green for profile
+  values, yellow for things to check, red for required fields still empty, and
+  none when Settings → "Show fill status icons" is off. The icons stay on the
+  page afterwards, so a screenshot shows how they look.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=10000 \
+      --dump-dom "file://$PWD/test/marks.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const settings = { fillMarks: true };
+  window.chrome = { storage: { local: { get: async () => settings }, onChanged: { addListener() {} } } };
+</script>
+<style>
+  body { font: 14px system-ui, sans-serif; max-width: 460px; margin: 24px; }
+  label { display: block; margin: 14px 0 4px; } input, select, textarea { width: 100%; box-sizing: border-box; padding: 8px; }
+  fieldset label { display: inline; margin-right: 12px; } fieldset input { width: auto; }
+</style>
+<body>
+<form>
+  <label for="first">First name *</label><input id="first" name="first_name">
+  <label for="email">Email *</label><input id="email" type="email" name="email">
+  <label for="city">Location</label><input id="city" name="location" role="combobox" aria-autocomplete="list" aria-controls="none">
+  <label for="telegram">Your Telegram</label><input id="telegram" name="q1">
+  <fieldset><legend>Are you open to relocation?</legend><label><input type="radio" name="relocate" value="y"> Yes</label><label><input type="radio" name="relocate" value="n"> No</label></fieldset>
+  <label for="fintech">Fintech Experience *</label><textarea id="fintech" name="q2" required></textarea>
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script src="../src/marks.js"></script>
+<script>
+addEventListener('DOMContentLoaded', async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const Marks = window.CVAutofillMarks;
+
+  // Switched off: nothing is drawn.
+  settings.fillMarks = false;
+  await Marks.show([{ element: $('first'), status: 'ok', reason: 'x' }]);
+  expect(Marks.count() === 0, 'draws nothing when the setting is off');
+  settings.fillMarks = true;
+
+  const { found } = window.CVAutofillFields.detectFields();
+  const { marks } = await window.CVAutofillFiller.fillAll(found, { firstName: 'Ada', email: 'ada@example.com', location: 'Toronto, ON' });
+  // A similar saved answer and a radio answer, as content.js marks them.
+  await window.CVAutofillFiller.fillAnswer($('telegram'), 'text', '@ada');
+  const radio = await window.CVAutofillFiller.fillAnswer(document.querySelector('[name="relocate"]'), 'radio', 'No');
+  await Marks.show([
+    ...marks,
+    { element: $('telegram'), status: 'check', reason: 'From your answer to "Telegram account". Check it fits.' },
+    { element: radio.element, status: 'ok', reason: 'From your saved answers' },
+  ]);
+  await Marks.showMissing(window.CVAutofillFields.findMissingRequired(found));
+
+  expect(Marks.statusOf($('first')) === 'ok' && Marks.reasonOf($('first')) === 'From your profile', 'green for a profile value, with the reason on hover');
+  expect(Marks.statusOf($('city')) === 'check' && /pick the matching suggestion/.test(Marks.reasonOf($('city'))), `yellow for an address with no suggestion picked (${Marks.reasonOf($('city'))})`);
+  expect(Marks.statusOf($('telegram')) === 'check', 'yellow for a similar saved answer');
+  expect(Marks.statusOf(document.querySelector('[name="relocate"][value="n"]')) === 'ok', 'green on the chosen radio option');
+  expect(Marks.statusOf($('fintech')) === 'missing' && Marks.reasonOf($('fintech')) === 'Required, still empty', 'red for a required field still empty');
+
+  // Autofill's own events are not the person's edits: the green icon stays.
+  window.CVAutofillFiller.fillText($('first'), 'Ada');
+  expect(Marks.statusOf($('first')) === 'ok', 'filling by the extension does not clear icons');
+
+  // A red icon goes once its field has a value.
+  $('fintech').value = 'Built payment retries at Acme.';
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  expect(Marks.statusOf($('fintech')) === null, 'a red icon clears once the field is filled');
+  $('fintech').value = '';
+  await Marks.showMissing(window.CVAutofillFields.findMissingRequired(found));
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.append(out);
+});
+</script>
+</body>

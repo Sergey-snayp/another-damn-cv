@@ -37,6 +37,7 @@
 <script src="../src/sites.js"></script>
 <script src="../src/fields.js"></script>
 <script src="../src/filler.js"></script>
+<script src="../src/marks.js"></script>
 <script src="../src/job-form.js"></script>
 <script src="../src/content.js"></script>
 <script>
@@ -51,6 +52,7 @@ setTimeout(() => {
   setTimeout(() => {
     expect($('phone').value === '+1 416 555 0100' && $('city').value === 'Toronto', `step 2 fills when it appears (phone="${$('phone').value}")`);
     expect($('last').value === '', 'a field the person cleared on step 1 is not refilled');
+    expect(window.CVAutofillMarks.statusOf($('phone')) === 'ok', 'a later step gets fill status icons too');
     expect(requests.filter((type) => type === 'step-request').length === 2, `one data request per step (got ${requests.join(',')})`);
     const out = document.createElement('pre');
     out.id = 'result';

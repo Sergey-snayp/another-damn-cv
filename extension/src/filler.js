@@ -298,9 +298,21 @@ function valueFor(field, profile) {
  * Fills every detected field that has a value. One upload per file: a form
  * that shows its CV box twice gets the PDF once.
  */
+/** Icon status and hover text for one field Autofill touched (see marks.js). */
+function markFor(field, result, profile) {
+  if (!result.filled) return result.note ? { status: 'missing', reason: `Not filled: ${result.note}` } : null;
+  if (field.key === 'resume') {
+    return result.note === 'uploaded' || !result.note
+      ? { status: 'ok', reason: `Your CV attached: ${profile.resumeFileName ?? 'Resume.pdf'}` }
+      : { status: 'check', reason: `Your CV: ${result.note}` };
+  }
+  if (result.note) return { status: 'check', reason: `Check this: ${result.note}` };
+  return { status: 'ok', reason: field.diversity ? 'From your diversity answers' : 'From your profile' };
+}
+
 async function fillAll(found, profile) {
   let filled = 0;
-  const failures = [], notes = [];
+  const failures = [], notes = [], marks = [];
   let uploaded = false;
   for (const field of found) {
     const value = valueFor(field, profile);
@@ -312,11 +324,15 @@ async function fillAll(found, profile) {
       if (result.filled) filled++;
       if (field.key === 'resume' && result.filled) uploaded = true;
       if (result.note) notes.push(`${label}: ${result.note}`);
+      const mark = markFor(field, result, profile);
+      if (mark) marks.push({ element: field.element, ...mark });
     } catch (err) {
       failures.push(`${label}: ${err.message}`);
+      marks.push({ element: field.element, status: 'missing', reason: `Not filled: ${err.message}` });
     }
   }
-  return { filled, failures, notes };
+  // `marks` holds page elements: the page script keeps it and never sends it on.
+  return { filled, failures, notes, marks };
 }
 
 /**
@@ -331,7 +347,7 @@ async function fillAnswer(element, kind, value) {
     const option = radios.find((radio) => normal(window.CVAutofillFields.labelOf(radio.labels?.[0] ?? radio)) === normal(value));
     if (!option) return { filled: false };
     option.click();
-    return { filled: true };
+    return { filled: true, element: option };
   }
   if (kind === 'checkbox') {
     if (element.checked || !/^(yes|true|1)$/i.test(String(value).trim())) return { filled: false };

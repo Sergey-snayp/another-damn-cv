@@ -58,24 +58,42 @@ function scan() {
   };
 }
 
-async function fill(profile, answers = []) {
-  scan(); // Forms can replace controls between the preview and a click.
-  const result = await Filler.fillAll(lastScan.found, profile);
-  // Saved answers, matched by the panel to the ids from a "questions" request.
-  let fromAnswers = 0;
+const Marks = window.CVAutofillMarks;
+
+/** Fills saved answers by question id; returns how many, plus icons for them. */
+async function fillAnswers(answers, failures) {
+  let filled = 0;
+  const marks = [];
   for (const item of answers) {
     const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
     if (!element) continue;
-    try { if ((await Filler.fillAnswer(element, item.kind, item.value)).filled) fromAnswers++; }
-    catch (err) { result.failures.push(`${Fields.labelOf(element)}: ${err.message}`); }
+    try {
+      const result = await Filler.fillAnswer(element, item.kind, item.value);
+      if (!result.filled) continue;
+      filled++;
+      marks.push(item.match === 'similar'
+        ? { element: result.element ?? element, status: 'check', reason: `From your answer to "${item.savedQuestion ?? 'a similar question'}". Check it fits.` }
+        : { element: result.element ?? element, status: 'ok', reason: 'From your saved answers' });
+    } catch (err) { failures.push(`${Fields.labelOf(element)}: ${err.message}`); }
   }
-  result.filled += fromAnswers;
-  result.fromAnswers = fromAnswers;
+  return { filled, marks };
+}
+
+async function fill(profile, answers = []) {
+  scan(); // Forms can replace controls between the preview and a click.
+  const { marks, ...result } = await Filler.fillAll(lastScan.found, profile);
+  // Saved answers, matched by the panel to the ids from a "questions" request.
+  const fromAnswers = await fillAnswers(answers, result.failures);
+  result.filled += fromAnswers.filled;
+  result.fromAnswers = fromAnswers.filled;
   rememberStep();
+  const missing = Fields.findMissingRequired(Fields.detectFields().found);
+  await Marks?.show([...marks, ...fromAnswers.marks]);
+  await Marks?.showMissing(missing);
   return {
     ...result,
     skippedSensitive: lastScan.skipped.filter((item) => item.reason === 'sensitive').length,
-    missing: Fields.findMissingRequired(Fields.detectFields().found),
+    missing,
   };
 }
 
@@ -90,14 +108,6 @@ function focusField(id) {
   target.style.outline = '3px solid #e6ff00';
   setTimeout(() => { target.style.outline = before; }, 1800);
   return true;
-}
-
-/** A dashed outline and tooltip on an AI-drafted field, removed when the person edits it. */
-function markDraft(element) {
-  const before = { outline: element.style.outline, title: element.title };
-  element.style.outline = '2px dashed #b8cc00';
-  element.title = 'AI draft: review before submitting';
-  element.addEventListener('input', () => { element.style.outline = before.outline; element.title = before.title; }, { once: true });
 }
 
 // ─── Next steps of a multi-step form ────────────────────────────────────
@@ -141,11 +151,11 @@ async function fillNextStep() {
   try {
     const reply = await chrome.runtime.sendMessage({ type: 'step-request', questions });
     if (!reply?.armed) { stepsArmed = false; return; }
-    const result = await Filler.fillAll(fresh, reply.profile);
-    for (const item of reply.answers ?? []) {
-      const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
-      if (element && (await Filler.fillAnswer(element, item.kind, item.value)).filled) result.filled++;
-    }
+    const { marks, ...result } = await Filler.fillAll(fresh, reply.profile);
+    const fromAnswers = await fillAnswers(reply.answers ?? [], result.failures);
+    result.filled += fromAnswers.filled;
+    await Marks?.show([...marks, ...fromAnswers.marks]);
+    await Marks?.showMissing(Fields.findMissingRequired(Fields.detectFields().found));
     if (result.filled) void chrome.runtime.sendMessage({ type: 'step-filled', filled: result.filled, notes: result.notes }).catch(() => {});
   } catch { /* extension reloaded or background unavailable: leave the step for the person */ }
   finally { stepBusy = false; }
@@ -182,14 +192,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // An AI draft the person asked for with "Draft with AI". Marked until they edit it.
     const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(message.id))}"]`);
     if (!element) { sendResponse({ filled: false }); return false; }
-    Filler.fillAnswer(element, message.kind, message.value).then((result) => {
-      if (result.filled) markDraft(element);
-      sendResponse(result);
+    Filler.fillAnswer(element, message.kind, message.value).then(async (result) => {
+      if (result.filled) await Marks?.show([{ element: result.element ?? element, status: 'check', reason: 'AI draft: review it before submitting' }]);
+      sendResponse({ filled: result.filled });
     }, () => sendResponse({ filled: false }));
     return true;
   }
   if (message.type === 'check-required') {
-    sendResponse({ missing: Fields.findMissingRequired(Fields.detectFields().found) });
+    const missing = Fields.findMissingRequired(Fields.detectFields().found);
+    void Marks?.showMissing(missing);
+    sendResponse({ missing });
     return false;
   }
   if (message.type === 'focus-field') {
@@ -221,7 +233,7 @@ function updateLauncher() {
 }
 let scanTimer;
 const scheduleScan = () => { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, KNOWN_BOARD ? 140 : 600); };
-const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel']);
+const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel', 'adcv-fill-marks']);
 new MutationObserver(records => {
   const changed = records.some(record => {
     if (OWN_NODES.has(record.target.id)) return false;

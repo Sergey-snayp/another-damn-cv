@@ -182,7 +182,7 @@ async function savedAnswersFor(tab) {
       ...matches.filter(match => match.match === 'similar').map(match => `${byId.get(match.id)?.question}: from your answer to "${match.savedQuestion}", check it`),
       ...skipped.filter(item => item.reason === 'names-another-company').map(item => `${byId.get(item.id)?.question}: your saved answer names another company, so it was not used`),
     ];
-    return { answers: matches.map(match => ({ id: match.id, value: match.value, kind: byId.get(match.id)?.kind })), notes };
+    return { answers: matches.map(match => ({ id: match.id, value: match.value, match: match.match, savedQuestion: match.savedQuestion, kind: byId.get(match.id)?.kind })), notes };
   } catch (error) {
     return { answers: [], notes: [error instanceof NotSignedInError ? 'Sign in to use saved answers.' : `Saved answers not used: ${error.message}`] };
   }
@@ -621,6 +621,7 @@ $('save-diversity').addEventListener('click', async () => {
   try { await chrome.storage.local.set({ diversityAnswers: next }); diversityAnswers = next; status('diversity-status', 'Saved in this browser.', 'success'); }
   catch { status('diversity-status', 'Could not save. Try again.', 'error'); }
 });
+$('fill-marks').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ fillMarks: box.checked }); } catch { box.checked = !box.checked; } });
 $('continue-steps').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ continueSteps: box.checked }); continueSteps = box.checked; } catch { box.checked = !box.checked; } });
 // A later step of an armed form was filled by the page script.
 chrome.runtime.onMessage.addListener((message, sender) => {
@@ -635,7 +636,7 @@ $('fill-groups').addEventListener('change', async event => {
   try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
 });
 $('ai-draft-auto').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ aiDraftAuto: box.checked }); aiDraftAuto = box.checked; } catch { box.checked = !box.checked; } });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto', 'continueSteps', 'diversityAnswers']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto', 'continueSteps', 'diversityAnswers', 'fillMarks']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('fill-marks').checked = settings.fillMarks !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });
