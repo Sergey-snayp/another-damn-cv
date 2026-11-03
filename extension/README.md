@@ -89,10 +89,10 @@ anything.** Opening the panel, rescanning and page loads only read the form.
 
 ## CVs
 
-The **Resume** tab lists the CVs from the app's Documents (sign in on the
-Profile tab first). Choose one, and **Autofill This Page** uploads it as
-`<CV name>.pdf`. Your primary CV is chosen until you pick another. The Autofill
-tab's Resume card switches CVs without leaving the tab. Text fields still come
+The **Resume** tab shows the CV that **Autofill This Page** uploads, as
+`<CV name>.pdf` (sign in on the Profile tab first). **Change** opens the list
+of CVs from the app's Documents to pick another. Your primary CV is chosen
+until you pick another. The Autofill tab's Resume card has the same switcher. Text fields still come
 from your profile, not from the CV.
 
 The app makes PDFs only through the browser's print, so the extension does the

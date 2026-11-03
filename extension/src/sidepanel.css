@@ -135,5 +135,7 @@ dialog textarea { resize: vertical; margin-bottom: 15px; }
 .resume-switch > span { flex: 1; min-width: 0; }
 .resume-switch strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
 .resume-switch small { display: block; font-size: 11px; color: var(--color-muted); margin-top: 3px; }
-.resume-switch[aria-expanded=true] svg { transform: rotate(90deg); }
 .resume-current .icon-button { align-self: stretch; height: auto; width: 46px; }
+.switch-label { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 12px; font-weight: 600; color: var(--color-muted); }
+.resume-switch[aria-expanded=true] .switch-label svg { transform: rotate(90deg); }
+.resume-switch strong .badge { margin-left: 6px; vertical-align: 1px; }

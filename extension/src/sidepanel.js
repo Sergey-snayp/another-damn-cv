@@ -33,7 +33,7 @@ addEventListener('unhandledrejection', event => { if (isStaleError(event.reason)
 document.addEventListener('click', event => { if (!alive() && !event.target.closest('#close-panel')) { event.stopImmediatePropagation(); event.preventDefault(); showStale(); } }, true);
 let profile = {}, scan = null, currentTab = null, sending = false, filling = false, localDirty = false, refreshId = 0;
 let copyValues = [];
-let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, switcherOpen = false, pageDisconnected = false;
+let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, pickerOpen = { autofill: false, resume: false }, pageDisconnected = false;
 function status(id, text, kind = '') { const node = $(id); if (node) { node.textContent = text; node.className = `status ${kind}`; } }
 function openApp(path = '/') { return chrome.tabs.create({ url: `${APP_URL}${path}` }); }
 // The panel lives inside one page, so it always works with that page's tab.
@@ -84,7 +84,6 @@ function renderAutofill() {
     ${resumeCard()}
     <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
-  $('choose-resume').addEventListener('click', () => selectTab('resume'));
   $('add-details')?.addEventListener('click', () => { selectTab('profile'); $('local-details').open = true; });
 }
 async function runFill() {
@@ -175,10 +174,10 @@ async function saveProfile() {
 function cvDetails(item) {
   return [item.targetRole, item.tailoredForJob ? 'Tailored for a job' : '', `edited ${new Date(item.updatedAt).toLocaleDateString()}`].filter(Boolean).join(' · ');
 }
-function resumeRows({ compact = false } = {}) {
+function resumeRows() {
   return resumes.items.map(item => {
     const chosen = item.id === resumes.chosen?.id;
-    return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong>${esc(item.name)}</strong><small>${esc(cvDetails(item))}</small></span>${item.isPrimary ? '<span class="badge">Primary</span>' : ''}</button>${compact ? '' : `<button class="icon-button" data-open-cv="${esc(item.id)}" title="Open in app" aria-label="Open ${esc(item.name)} in the app">${icon('link', 18)}</button>`}</li>`;
+    return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong>${esc(item.name)}</strong><small>${esc(cvDetails(item))}</small></span>${item.isPrimary ? '<span class="badge">Primary</span>' : ''}</button></li>`;
   }).join('');
 }
 function resumeEmpty() {
@@ -187,18 +186,20 @@ function resumeEmpty() {
   if (loadingResumes) return '<div class="resume-empty"><p>Loading your CVs…</p></div>';
   return `<div class="resume-empty"><p>No CVs in Documents yet.</p><button class="ghost" data-open-documents>Open Documents</button></div>`;
 }
-function resumeCard() {
+/** The chosen CV, with a button that opens the list to switch. Used on both tabs. */
+function cvPicker(where) {
   const chosen = resumes.chosen;
-  if (!chosen) return `<details class="card" open><summary>${icon('file')}Resume</summary>${resumeEmpty()}</details>`;
-  const many = resumes.items.length > 1;
-  const note = preparingPdf ? 'Making the PDF…' : 'Autofill uploads this CV';
-  return `<details class="card" open><summary>${icon('file')}Resume</summary>
-    <div class="document-selection resume-current"><button class="resume-switch" id="resume-switch" ${many ? `aria-expanded="${switcherOpen}" aria-controls="resume-switch-list"` : 'disabled'} title="${many ? 'Switch CV' : 'Add more CVs in the app to switch'}"><span><strong>${esc(chosen.name)}</strong><small>${note}</small></span>${many ? icon('chevron', 17) : ''}</button><button class="icon-button" data-open-cv="${esc(chosen.id)}" title="Open in app" aria-label="Open ${esc(chosen.name)} in the app">${icon('link', 18)}</button></div>
-    ${many && switcherOpen ? `<ul class="resume-list" id="resume-switch-list" aria-label="Switch CV">${resumeRows({ compact: true })}</ul>` : ''}
-    <button class="ghost" id="choose-resume">All CVs${icon('chevron', 17)}</button></details>`;
+  if (!chosen) return resumeEmpty();
+  const many = resumes.items.length > 1, open = many && pickerOpen[where];
+  const note = preparingPdf ? 'Making the PDF…' : where === 'autofill' ? 'Autofill uploads this CV' : cvDetails(chosen);
+  return `<div class="document-selection resume-current"><button class="resume-switch" data-toggle-picker="${where}" ${many ? `aria-expanded="${open}" aria-controls="picker-${where}"` : 'disabled'} title="${many ? 'Change CV' : 'Add more CVs in the app to switch'}"><span><strong>${esc(chosen.name)}${chosen.isPrimary ? ' <span class="badge">Primary</span>' : ''}</strong><small>${esc(note)}</small></span>${many ? `<span class="switch-label">Change${icon('chevron', 15)}</span>` : ''}</button><button class="icon-button" data-open-cv="${esc(chosen.id)}" title="Open in app" aria-label="Open ${esc(chosen.name)} in the app">${icon('link', 18)}</button></div>
+    ${open ? `<ul class="resume-list" id="picker-${where}" aria-label="Choose a CV">${resumeRows()}</ul>` : ''}`;
+}
+function resumeCard() {
+  return `<details class="card" open><summary>${icon('file')}Resume</summary>${cvPicker('autofill')}</details>`;
 }
 function renderResume() {
-  $('resume-list').innerHTML = resumes.items.length ? resumeRows() : `<li>${resumeEmpty()}</li>`;
+  $('resume-picker').innerHTML = cvPicker('resume');
   $('refresh-cvs').disabled = loadingResumes;
 }
 function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); }
@@ -220,16 +221,21 @@ async function preparePdf() {
   finally { preparingPdf = false; rerenderResumes(); }
 }
 document.addEventListener('click', event => {
-  const target = event.target.closest('[data-pick],[data-open-cv],[data-refresh-cvs],[data-go-sign-in],[data-open-documents],#resume-switch');
+  const target = event.target.closest('[data-pick],[data-open-cv],[data-refresh-cvs],[data-go-sign-in],[data-open-documents],[data-toggle-picker]');
   if (!target) return;
-  if (target.id === 'resume-switch') { switcherOpen = !switcherOpen; renderAutofill(); $('resume-switch')?.focus(); return; }
+  if (target.dataset.togglePicker) {
+    const where = target.dataset.togglePicker;
+    pickerOpen[where] = !pickerOpen[where]; rerenderResumes();
+    document.querySelector(`[data-toggle-picker="${where}"]`)?.focus();
+    return;
+  }
   if (target.dataset.openCv) { void chrome.tabs.create({ url: cvUrl(target.dataset.openCv) }); return; }
   if ('refreshCvs' in target.dataset) { void loadResumes(); return; }
   if ('openDocuments' in target.dataset) { void openApp('/documents'); return; }
   if ('goSignIn' in target.dataset) { selectTab('profile'); document.querySelector('.account-card').open = true; return; }
   void (async () => {
     try {
-      switcherOpen = false;
+      pickerOpen = { autofill: false, resume: false };
       await chooseResume(target.dataset.pick);
       resumes = await cachedResumes(); rerenderResumes();
       await preparePdf();
