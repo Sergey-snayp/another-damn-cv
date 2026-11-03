@@ -98,6 +98,53 @@ const CONSENT = /consent|i agree|agree to|privacy (policy|notice)|terms (of|and)
 
 const CATEGORY_BY_KEY = new Map(CATEGORIES.map((c) => [c.key, c]));
 
+// ─── Eligibility questions ────────────────────────────────────────────────
+
+/**
+ * Sponsorship and work-authorization answers depend on the country a
+ * question is about ("…to work legally for Box in Poland"). The first
+ * country it names, by its usual forms; null when it names none.
+ */
+const COUNTRY_NAMES = {
+  'United States': ['united states', 'usa', 'u.s.', 'us', 'america'], Canada: ['canada'], 'United Kingdom': ['united kingdom', 'uk', 'u.k.', 'great britain', 'britain', 'england'],
+  Ireland: ['ireland'], Germany: ['germany'], France: ['france'], Netherlands: ['netherlands', 'holland'], Belgium: ['belgium'], Spain: ['spain'], Portugal: ['portugal'],
+  Italy: ['italy'], Poland: ['poland'], 'Czech Republic': ['czech republic', 'czechia'], Austria: ['austria'], Switzerland: ['switzerland'], Sweden: ['sweden'],
+  Norway: ['norway'], Denmark: ['denmark'], Finland: ['finland'], Estonia: ['estonia'], Latvia: ['latvia'], Lithuania: ['lithuania'], Romania: ['romania'],
+  Bulgaria: ['bulgaria'], Hungary: ['hungary'], Greece: ['greece'], Ukraine: ['ukraine'], Israel: ['israel'], 'United Arab Emirates': ['united arab emirates', 'uae'],
+  India: ['india'], Singapore: ['singapore'], Japan: ['japan'], 'South Korea': ['south korea', 'korea'], China: ['china'], Australia: ['australia'],
+  'New Zealand': ['new zealand'], Mexico: ['mexico'], Brazil: ['brazil'], Argentina: ['argentina'], 'European Union': ['european union', 'eu'],
+};
+function countryIn(text) {
+  const lower = ` ${String(text ?? '').toLowerCase().replace(/[^a-z.\s]/g, ' ')} `;
+  let found = null, at = Infinity;
+  for (const [country, names] of Object.entries(COUNTRY_NAMES)) {
+    for (const name of names) {
+      // Short forms ("us", "uk", "eu") count only as words: "us" in "tell us" is not a country.
+      const pattern = new RegExp(`[^a-z]${name.replace(/\./g, '\\.')}[^a-z]`);
+      const match = pattern.exec(lower);
+      if (!match || match.index >= at) continue;
+      if (name === 'us' && !/\b(in|the|for|within)\s+us\b/.test(lower)) continue;
+      found = country; at = match.index;
+    }
+  }
+  return found;
+}
+
+/** "Have you ever worked at Box…", "Were you previously employed by us?" */
+const WORKED_BEFORE = [
+  /\b(ever|previously|formerly|before|in the past|prior)\b.{0,60}\b(worked|been employed|employed|been an? (employee|contractor|intern|consultant))\b/,
+  /\b(worked|been employed|employed)\b.{0,80}\b(previously|formerly|before|in the past)\b/,
+];
+
+// ─── Required acknowledgements (opt-in) ───────────────────────────────────
+
+const ACKNOWLEDGE = /\b(acknowledg\w*|agree\w*|accept\w*|consent\w*|understand\w*|have read|confirm\w*|certif\w*)\b/i;
+/** Never answered for the person, even worded as an acknowledgement. */
+const NOT_ROUTINE = /\b(authori[sz]\w* to work|work authori[sz]ation|eligib\w*|sponsor\w*|visa|citizen\w*|residen\w*|relocat\w*|veteran|disabilit\w*|felon\w*|convict\w*|criminal|background check|drug|non-?compete|conflicts? of interest|previously (worked|employed)|salary|compensation|wage|marketing|newsletter|promotion\w*|text messages?|sms|future (job )?opportunit\w*|talent (pool|community)|contact me)\b/i;
+const DECLINES = /\b(no|not|don.?t|do not|decline|disagree|reject|withdraw)\b/i;
+/** An option that acknowledges: "I acknowledge", "Yes, I agree". Never a refusal. */
+const acknowledges = (text) => (ACKNOWLEDGE.test(text) || /^\s*yes\b/i.test(text)) && !DECLINES.test(text);
+
 /** Text of the element(s) named by aria-labelledby, which may list several ids. */
 function labelledByText(element) {
   const ids = element.getAttribute('aria-labelledby');
@@ -176,6 +223,10 @@ const ADDRESS_PARTS = [['city', 'town'], ['state', 'province', 'region'], ['coun
 function categorise(signals) {
   if (NEVER_FILL.some((term) => mentions(signals, term))) {
     return { key: null, sensitive: true };
+  }
+  // Before the general rules: "employed" would otherwise read as the current employer.
+  if (WORKED_BEFORE.some((pattern) => pattern.test(signals))) {
+    return { key: 'workedHereBefore', sensitive: false };
   }
   if (ADDRESS_PARTS.filter((words) => words.some((word) => mentions(signals, word))).length >= 2) {
     return { key: 'location', sensitive: false, compound: true };
@@ -272,6 +323,7 @@ function detectFields() {
     }
 
     if (key) {
+      const country = key === 'requiresSponsorship' || key === 'workAuthorization' ? countryIn(rawLabel(element) || signals) : null;
       found.push({
         key,
         element,
@@ -279,6 +331,7 @@ function detectFields() {
         signals,
         source: fromSite ? 'site' : 'heuristic',
         ...(compound && !fromSite && { compound: true }),
+        ...(country && { country }),
       });
     }
   }
@@ -458,6 +511,40 @@ function detectQuestions(found = detectFields().found) {
   return questions;
 }
 
+/**
+ * Required, still-empty acknowledgements in the application form: privacy
+ * notices and terms ("Privacy Notice Acknowledgement", "I have read the
+ * privacy policy"). Filled only when the person switched it on in Settings.
+ * Anything that also touches eligibility, background, salary or marketing is
+ * left out, whatever its wording.
+ */
+function detectAcknowledgements(found = detectFields().found) {
+  const scopes = [...new Set(found.map((field) => field.element.closest('form') ?? document.body))];
+  if (!scopes.length) scopes.push(document.body);
+  const items = [], seen = new Set();
+  for (const scope of scopes) {
+    for (const element of scope.querySelectorAll('input[type="checkbox"], input[type="radio"], select, input[role="combobox"], input[aria-autocomplete]')) {
+      if (element.disabled || isHelperInput(element)) continue;
+      const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length;
+      if (!visible || !isRequired(element) || !isEmpty(element)) continue;
+      const kind = kindOf(element);
+      const group = kind === 'radio' ? element.name : null;
+      if (group && seen.has(group)) continue;
+      if (group) seen.add(group);
+      const question = (groupQuestion(element) || labelOf(element) || '').trim();
+      const own = kind === 'checkbox' ? (element.closest('label')?.textContent ?? labelOf(element)) : '';
+      const options = kind === 'select' ? [...element.options].map((option) => option.textContent) : kind === 'radio'
+        ? [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)].map((radio) => labelOf(radio.labels?.[0] ?? radio)) : [];
+      const text = `${question} ${own} ${options.join(' ')}`;
+      if (!(CONSENT.test(text) || ACKNOWLEDGE.test(question) || ACKNOWLEDGE.test(own)) || NOT_ROUTINE.test(text)) continue;
+      if (kind === 'checkbox' && !ACKNOWLEDGE.test(own || question)) continue;
+      if ((kind === 'select' || kind === 'radio') && !options.some(acknowledges)) continue;
+      items.push({ element, kind, question: question || own });
+    }
+  }
+  return items;
+}
+
 function groupOf(key) {
   if (key.startsWith('eeo')) return 'Diversity';
   return CATEGORY_BY_KEY.get(key)?.group ?? 'Other';
@@ -468,6 +555,9 @@ window.CVAutofillFields = {
   detectFields,
   findMissingRequired,
   detectQuestions,
+  detectAcknowledgements,
+  acknowledges,
+  countryIn,
   isEmpty,
   controlFor,
   comboboxValue,

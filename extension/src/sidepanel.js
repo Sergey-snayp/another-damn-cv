@@ -6,7 +6,7 @@ import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv 
 import { draftAnswer, matchAnswers, saveAnswers } from './answers.js';
 
 const FIELD_LABELS = {
-  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
+  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
 };
 const PROFILE_GROUPS = [
   { title: 'Personal', keys: ['fullName', 'firstName', 'lastName', 'preferredName', 'email', 'phone'] },
@@ -21,7 +21,7 @@ const FILL_GROUPS = [
   { id: 'location', label: 'Location', keys: ['location', 'city', 'state', 'country', 'postalCode', 'addressLine'] },
   { id: 'links', label: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website', 'twitter', 'telegram'] },
   { id: 'documents', label: 'CV and cover letter', keys: ['resume', 'coverLetter'] },
-  { id: 'experience', label: 'Experience and education', keys: ['currentCompany', 'currentTitle', 'yearsExperience', 'school', 'degree', 'fieldOfStudy', 'graduationYear'] },
+  { id: 'experience', label: 'Experience and education', keys: ['currentCompany', 'currentTitle', 'yearsExperience', 'school', 'degree', 'fieldOfStudy', 'graduationYear', 'workedHereBefore'] },
   { id: 'workAuthorization', label: 'Work authorization', keys: ['workAuthorization', 'requiresSponsorship'] },
   { id: 'salary', label: 'Salary and availability', keys: ['salaryExpectation', 'noticePeriod'] },
   // The company's own questions, from answers saved in the app. Not a profile field group.
@@ -37,7 +37,61 @@ const DIVERSITY_CHOICES = {
   eeoVeteran: { label: 'Veteran status', choices: ['Prefer not to answer', 'I am not a protected veteran', 'I am a protected veteran'] },
   eeoDisability: { label: 'Disability', choices: ['Prefer not to answer', 'No', 'Yes'] },
 };
-let diversityAnswers = {}, continueSteps = false;
+let diversityAnswers = {}, continueSteps = false, eligibility = {}, acknowledgeRequired = false;
+
+// ─── Eligibility, asked once per country ─────────────────────────────────
+// "Do you require sponsorship to work in Poland?" can have a different answer
+// from the same question about the person's own country. Answers are kept in
+// this browser, per question type and country (eligibility).
+const ELIGIBILITY_KEYS = ['requiresSponsorship', 'workAuthorization'];
+const eligibilityKey = (field) => (field.country ? `${field.key}:${field.country}` : field.key);
+function hasEligibilityAnswer(field) {
+  if (eligibility[eligibilityKey(field)]) return true;
+  const home = String(profile.country ?? '').trim().toLowerCase();
+  return (!field.country || field.country.toLowerCase() === home) && Boolean(eligibility[field.key] || profile[field.key]);
+}
+function eligibilityQuestion(field) {
+  const where = field.country ? ` in ${field.country}` : '';
+  return field.key === 'requiresSponsorship' ? `Will you need visa sponsorship to work${where}?` : `Are you legally allowed to work${where}?`;
+}
+function eligibilityCard() {
+  const open = (scan?.fields ?? []).filter(field => ELIGIBILITY_KEYS.includes(field.key) && groupOn(field.key) && !hasEligibilityAnswer(field));
+  if (!open.length) return '';
+  return `<div class="card eligibility-card"><h2>${icon('check')}Answer once</h2><p>This form asks about eligibility. Your answer is kept in this browser and used on later forms.</p><ul class="eligibility-list">${open.map(field => `<li><span>${esc(eligibilityQuestion(field))}</span><span class="eligibility-buttons"><button class="ghost small" data-eligibility="${esc(eligibilityKey(field))}" data-answer="Yes">Yes</button><button class="ghost small" data-eligibility="${esc(eligibilityKey(field))}" data-answer="No">No</button></span></li>`).join('')}</ul></div>`;
+}
+document.addEventListener('click', async event => {
+  const button = event.target.closest('[data-eligibility]');
+  if (!button) return;
+  const next = { ...eligibility, [button.dataset.eligibility]: button.dataset.answer };
+  try { await chrome.storage.local.set({ eligibility: next }); eligibility = next; renderAutofill(); } catch { /* storage unavailable */ }
+});
+function renderEligibilityAnswers() {
+  const entries = Object.entries(eligibility);
+  $('eligibility-answers').hidden = !entries.length;
+  $('eligibility-answers-list').innerHTML = entries.map(([key, answer]) => {
+    const [type, country] = key.split(':');
+    return `<li><span>${type === 'requiresSponsorship' ? 'Sponsorship' : 'Work authorization'}${country ? ` · ${esc(country)}` : ''}: <strong>${esc(answer)}</strong></span><button data-remove-eligibility="${esc(key)}">Remove</button></li>`;
+  }).join('');
+}
+
+/**
+ * "Have you worked at <company> before?": Yes when the chosen CV lists that
+ * company as an employer (a line of its own in the CV text), otherwise No.
+ * Always marked "check it": a CV may leave employers out.
+ */
+async function workedHereBefore() {
+  const company = String(scan?.context?.company ?? '').trim();
+  if (!company || !resumes.chosen || !scan?.fields?.some(field => field.key === 'workedHereBefore')) return {};
+  try {
+    const text = (await cvTexts(resumes.items))[resumes.chosen.id];
+    if (!text) return {};
+    const name = company.toLowerCase();
+    const listed = text.split('\n').some(line => { const value = line.trim().toLowerCase(); return value === name || value.startsWith(`${name} (`); });
+    return listed
+      ? { workedHereBefore: 'Yes', workedHereBeforeReason: `Your CV lists ${company} as an employer, so "Yes". Check it.` }
+      : { workedHereBefore: 'No', workedHereBeforeReason: `${company} is not among the employers in your CV, so "No". Check it.` };
+  } catch { return {}; }
+}
 const diversityValue = key => diversityAnswers[key] ?? 'Prefer not to answer';
 const GROUP_OF_KEY = new Map(FILL_GROUPS.flatMap(group => group.keys.map(key => [key, group.id])));
 let fillGroups = {};
@@ -167,6 +221,7 @@ function renderAutofill() {
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
   host.innerHTML = `${pageCard()}${matchCard()}
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
+    ${eligibilityCard()}
     ${questionsCard()}
     ${answersCard()}
     ${resumeCard()}
@@ -195,7 +250,7 @@ async function runFill() {
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
-    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName };
+    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, eligibility, acknowledgeRequired, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}) };
     // Each frame holding the form fills in turn; their results add up to one report.
     let result = null;
     for (const frameId of formFrames.length ? formFrames : [0]) {
@@ -628,7 +683,7 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps', 'eligibility', 'acknowledgeRequired']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
@@ -639,6 +694,8 @@ async function refresh() {
     aiDraftAuto = stored.aiDraftAuto === true;
     diversityAnswers = stored.diversityAnswers ?? {};
     continueSteps = stored.continueSteps === true;
+    eligibility = stored.eligibility ?? {};
+    acknowledgeRequired = stored.acknowledgeRequired === true;
     await loadQuestions().catch(() => { formQuestions = []; });
     renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
     await Promise.all([renderSyncState(), renderAccount()]);
@@ -686,6 +743,12 @@ $('save-diversity').addEventListener('click', async () => {
   try { await chrome.storage.local.set({ diversityAnswers: next }); diversityAnswers = next; status('diversity-status', 'Saved in this browser.', 'success'); }
   catch { status('diversity-status', 'Could not save. Try again.', 'error'); }
 });
+$('acknowledge-required').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ acknowledgeRequired: box.checked }); acknowledgeRequired = box.checked; } catch { box.checked = !box.checked; } });
+$('eligibility-answers-list').addEventListener('click', async event => {
+  const key = event.target.closest('[data-remove-eligibility]')?.dataset.removeEligibility; if (!key) return;
+  const next = { ...eligibility }; delete next[key];
+  try { await chrome.storage.local.set({ eligibility: next }); eligibility = next; renderEligibilityAnswers(); } catch { /* storage unavailable */ }
+});
 $('animate-fill').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ animateFill: box.checked }); } catch { box.checked = !box.checked; } });
 $('fill-marks').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ fillMarks: box.checked }); } catch { box.checked = !box.checked; } });
 $('continue-steps').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ continueSteps: box.checked }); continueSteps = box.checked; } catch { box.checked = !box.checked; } });
@@ -702,7 +765,7 @@ $('fill-groups').addEventListener('change', async event => {
   try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
 });
 $('ai-draft-auto').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ aiDraftAuto: box.checked }); aiDraftAuto = box.checked; } catch { box.checked = !box.checked; } });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill', 'acknowledgeRequired', 'eligibility']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('acknowledge-required').checked = settings.acknowledgeRequired === true; eligibility = settings.eligibility ?? {}; renderEligibilityAnswers(); $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });

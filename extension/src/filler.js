@@ -422,9 +422,28 @@ async function fillDiversity(field, choice) {
 
 const LOCATION_KEYS = new Set(['location', 'city', 'addressLine']);
 
+const ELIGIBILITY = new Set(['requiresSponsorship', 'workAuthorization']);
+
+/**
+ * Sponsorship and work authorization depend on the country asked about. A
+ * per-country answer wins; the profile's general answer is used only for
+ * questions about the profile's own country, or naming none.
+ */
+function eligibilityValue(field, profile) {
+  const answers = profile.eligibility ?? {};
+  if (field.country) {
+    const own = answers[`${field.key}:${field.country}`];
+    if (own) return own;
+    const home = String(profile.country ?? '').trim().toLowerCase();
+    return home && home === field.country.toLowerCase() ? answers[field.key] || profile[field.key] : '';
+  }
+  return answers[field.key] || profile[field.key];
+}
+
 /** The value for one field from the profile the panel sent. */
 function valueFor(field, profile) {
   if (field.key === 'resume') return profile.resumeDataUrl;
+  if (ELIGIBILITY.has(field.key)) return eligibilityValue(field, profile);
   // Address pickers search by place: "Toronto, Canada" finds a suggestion where
   // a full street address often does not.
   if (field.kind === 'combobox' && LOCATION_KEYS.has(field.key)) {
@@ -450,7 +469,9 @@ function markFor(field, result, profile) {
       : { status: 'check', reason: `Your CV: ${result.note}` };
   }
   if (result.note) return { status: 'check', reason: `Check this: ${result.note}` };
-  return { status: 'ok', reason: field.diversity ? 'From your diversity answers' : 'From your profile' };
+  // Worked here before: answered from the CV's employers, which may be incomplete.
+  if (field.key === 'workedHereBefore') return { status: 'check', reason: profile.workedHereBeforeReason || 'From your CV. Check it.' };
+  return { status: 'ok', reason: field.diversity ? 'From your diversity answers' : ELIGIBILITY.has(field.key) && field.country ? `Your answer for ${field.country}` : 'From your profile' };
 }
 
 const pageOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
@@ -515,4 +536,40 @@ async function fillAnswer(element, kind, value) {
   return { filled: fillText(element, value) };
 }
 
-window.CVAutofillFiller = { isTyping, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+/**
+ * A required acknowledgement (Settings → "Acknowledge required privacy
+ * notices"): tick it, or pick the option that acknowledges. Never a refusal.
+ */
+async function fillAcknowledgement(item) {
+  const { element, kind } = item;
+  const acknowledges = window.CVAutofillFields.acknowledges;
+  if (kind === 'checkbox') {
+    if (element.checked) return { filled: false };
+    element.click();
+    return { filled: element.checked };
+  }
+  if (kind === 'radio') {
+    const radios = [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+    const option = radios.find((radio) => acknowledges(window.CVAutofillFields.labelOf(radio.labels?.[0] ?? radio)));
+    if (!option) return { filled: false };
+    option.click();
+    return { filled: option.checked, element: option };
+  }
+  if (kind === 'select') {
+    const option = [...element.options].find((item) => item.value !== '' && acknowledges(item.textContent));
+    if (!option) return { filled: false };
+    element.focus({ preventScroll: true }); setValue(element, option.value); element.blur();
+    return { filled: true };
+  }
+  if (kind === 'combobox') {
+    element.focus({ preventScroll: true });
+    element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+    press(element);
+    const option = (await settledOptions(element, 3000)).find((item) => acknowledges(item.textContent));
+    if (!option) return { filled: false, note: 'no acknowledging option found' };
+    return { filled: await pickOption(element, option) };
+  }
+  return { filled: false };
+}
+
+window.CVAutofillFiller = { isTyping, fillAcknowledgement, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };

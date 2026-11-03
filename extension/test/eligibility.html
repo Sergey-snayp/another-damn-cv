@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — eligibility, worked here before, acknowledgements</title>
+<!--
+  Shaped like the end of Box's Greenhouse form. Checks per-country
+  sponsorship and work-authorization answers, "worked here before" from the
+  CV, and the opt-in for required acknowledgements: privacy notices are
+  ticked, marketing and eligibility-worded acknowledgements never are.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/eligibility.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>window.chrome = { storage: { local: { get: async () => ({}) }, onChanged: { addListener() {} } } };</script>
+<body>
+<form>
+  <label for="sponsor">Do you now, or will you in the future, require sponsorship for employment visa status (e.g., work permit, stay permit etc.) to work legally for Box in Poland?*</label>
+  <select id="sponsor" required><option value="">Select...</option><option>Yes</option><option>No</option></select>
+  <label for="authorized">Are you legally authorized to work in Canada?*</label>
+  <select id="authorized" required><option value="">Select...</option><option>Yes</option><option>No</option></select>
+  <label for="before">Have you ever been employed at Box, including working as a contractor, intern, grad, or full-time employee?*</label>
+  <select id="before" required><option value="">Select...</option><option>Yes</option><option>No</option></select>
+  <label for="privacy">Privacy Notice Acknowledgement*</label>
+  <select id="privacy" required><option value="">Select...</option><option>I acknowledge</option></select>
+  <label for="consent">Consent To Process*</label>
+  <select id="consent" required><option value="">Select...</option><option>Yes</option><option>No</option></select>
+  <label><input type="checkbox" id="policy" required> I have read and agree to the privacy policy.*</label>
+  <label><input type="checkbox" id="marketing" required> I agree that Box can contact me about future job opportunities.*</label>
+  <fieldset><legend>I acknowledge that I am authorized to work in the US*</legend>
+    <label><input type="radio" name="usauth" value="y" required> Yes</label><label><input type="radio" name="usauth" value="n"> No</label></fieldset>
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script>
+addEventListener('DOMContentLoaded', async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const F = window.CVAutofillFields, Filler = window.CVAutofillFiller;
+  const text = (id) => $(id).selectedOptions[0]?.textContent ?? '';
+
+  expect(F.countryIn('Tell us about yourself') === null && F.countryIn('to work in the US?') === 'United States' && F.countryIn('legally for Box in Poland') === 'Poland', 'finds the country a question names, not "us" in "tell us"');
+  const { found } = F.detectFields();
+  const byId = (id) => found.find((f) => f.element.id === id);
+  expect(byId('sponsor')?.key === 'requiresSponsorship' && byId('sponsor').country === 'Poland', `sponsorship question about Poland (got ${byId('sponsor')?.key}/${byId('sponsor')?.country})`);
+  expect(byId('authorized')?.key === 'workAuthorization' && byId('authorized').country === 'Canada', 'work authorization question about Canada');
+  expect(byId('before')?.key === 'workedHereBefore', `"have you ever been employed at Box" is a worked-here-before question (got ${byId('before')?.key})`);
+
+  // Without an answer for Poland, the general "No" (for Canada, home) is not used.
+  await Filler.fillAll(found, { country: 'Canada', requiresSponsorship: 'No', workAuthorization: 'Yes' });
+  expect(!$('sponsor').value && text('authorized') === 'Yes', 'the home answer fills the Canada question but not the Poland one');
+
+  document.querySelector('form').reset();
+  const { marks } = await Filler.fillAll(found, { country: 'Canada', requiresSponsorship: 'No', workAuthorization: 'Yes', eligibility: { 'requiresSponsorship:Poland': 'Yes' }, workedHereBefore: 'No', workedHereBeforeReason: 'Box is not among the employers in your CV, so "No". Check it.' });
+  expect(text('sponsor') === 'Yes', 'the per-country answer fills the Poland question');
+  expect(text('before') === 'No', 'worked here before: No');
+  const beforeMark = marks.find((m) => m.element.id === 'before');
+  expect(beforeMark?.status === 'check' && /not among the employers/.test(beforeMark.reason), 'worked-here-before is always "check it", with the reason');
+
+  // Acknowledgements: privacy and terms only.
+  const acks = F.detectAcknowledgements(found).map((a) => a.element.id || a.element.name);
+  expect(JSON.stringify(acks) === JSON.stringify(['privacy', 'consent', 'policy']), `finds required privacy acknowledgements only (got ${JSON.stringify(acks)})`);
+  for (const item of F.detectAcknowledgements(found)) await Filler.fillAcknowledgement(item);
+  expect(text('privacy') === 'I acknowledge' && text('consent') === 'Yes' && $('policy').checked, 'ticks the privacy notice, consent to process and the privacy policy box');
+  expect(!$('marketing').checked && !document.querySelector('[name="usauth"]:checked'), 'never ticks marketing or an eligibility-worded acknowledgement');
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+});
+</script>
+</body>

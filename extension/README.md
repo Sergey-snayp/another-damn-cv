@@ -240,7 +240,23 @@ render after load and change as you scroll.
   links, CV and cover letter, experience and education, work authorization,
   salary and availability.
 
-Consent checkboxes ("I agree", privacy policy, terms) are never ticked.
+- **Eligibility per country.** Sponsorship and work-authorization questions
+  note the country they name ("…to work legally for Box in Poland"). A
+  per-country answer is used; the profile's general answer only for the
+  profile's own country or a question naming none. Missing answers appear in
+  the Autofill tab as **Answer once** (Yes/No), kept in this browser and
+  listed in Settings with Remove.
+- **Worked here before.** "Have you ever been employed at Box…" is answered
+  from the chosen CV: Yes when that company is one of its employers, otherwise
+  No, always with a yellow "check it" icon.
+- **Required acknowledgements** (Settings → *Acknowledge required privacy
+  notices*, off by default): required privacy-notice, terms and
+  consent-to-process acknowledgements are ticked or answered with the
+  acknowledging option, with a yellow icon to read them. Never marketing
+  opt-ins, refusals, or anything that also mentions eligibility, background
+  or salary. `test/eligibility.html` covers these three.
+
+Otherwise consent checkboxes ("I agree", privacy policy, terms) are never ticked.
 Diversity questions are filled only when you opt in (below); sexual
 orientation, date of birth and age are never filled.
 

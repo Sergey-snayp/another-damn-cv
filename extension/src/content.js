@@ -30,8 +30,8 @@ function companyName() {
 function scan() {
   lastScan = Fields.detectFields();
 
-  // One entry per category: a form may repeat a field across steps.
-  const unique = [...new Map(lastScan.found.map((f) => [f.key, f])).values()];
+  // One entry per category (and country, for eligibility): a form may repeat a field across steps.
+  const unique = [...new Map(lastScan.found.map((f) => [`${f.key}|${f.country ?? ''}`, f])).values()];
 
   const site = Sites.siteForPage();
   const ruleCount = Object.keys(site?.byId ?? {}).length + Object.keys(site?.byName ?? {}).length;
@@ -47,6 +47,7 @@ function scan() {
     },
     fields: unique.map((field) => ({
       key: field.key,
+      ...(field.country && { country: field.country }),
       kind: field.kind,
       group: Fields.groupOf(field.key),
       source: field.source,
@@ -87,6 +88,30 @@ async function fillAnswers(answers, failures, hooks = null) {
   return { filled, marks };
 }
 
+/**
+ * Required acknowledgements, when the person switched it on (Settings →
+ * "Acknowledge required privacy notices"). Each gets a yellow icon: read it.
+ */
+async function fillAcknowledgements(found, hooks) {
+  const marks = [];
+  let filled = 0;
+  for (const item of Fields.detectAcknowledgements(found)) {
+    const field = { element: item.element, kind: item.kind };
+    const token = await hooks?.before?.(field);
+    let mark = null;
+    try {
+      const result = await Filler.fillAcknowledgement(item);
+      if (result.filled) {
+        filled++;
+        mark = { element: result.element ?? item.element, status: 'check', reason: 'Acknowledged for you (Settings). Read it before submitting.' };
+        marks.push(mark);
+      }
+    } catch { /* left for the person: it stays in the still-empty list */ }
+    await hooks?.after?.(field, mark, token);
+  }
+  return { filled, marks };
+}
+
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
   // Settings → "Animate filling": the page follows each field as it fills.
@@ -94,13 +119,16 @@ async function fill(profile, answers = []) {
   const { marks, ...result } = await Filler.fillAll(lastScan.found, profile, hooks);
   // Saved answers, matched by the panel to the ids from a "questions" request.
   const fromAnswers = await fillAnswers(answers, result.failures, hooks);
+  const acknowledged = profile.acknowledgeRequired ? await fillAcknowledgements(lastScan.found, hooks) : { filled: 0, marks: [] };
+  result.filled += acknowledged.filled;
+  if (acknowledged.filled) result.notes.push(`${acknowledged.filled} required acknowledgement${acknowledged.filled === 1 ? '' : 's'} ticked for you: read ${acknowledged.filled === 1 ? 'it' : 'them'} before submitting`);
   await hooks?.finish?.(lastScan.found);
   hooks?.end();
   result.filled += fromAnswers.filled;
   result.fromAnswers = fromAnswers.filled;
   rememberStep();
   const missing = Fields.findMissingRequired(Fields.detectFields().found);
-  await Marks?.show([...marks, ...fromAnswers.marks]);
+  await Marks?.show([...marks, ...fromAnswers.marks, ...acknowledged.marks]);
   await Marks?.showMissing(missing);
   return {
     ...result,
@@ -166,6 +194,7 @@ async function fillNextStep() {
     const hooks = Marks?.fillHooks(await Marks.animationMode());
     const { marks, ...result } = await Filler.fillAll(fresh, reply.profile, hooks);
     const fromAnswers = await fillAnswers(reply.answers ?? [], result.failures, hooks);
+    if (reply.profile?.acknowledgeRequired) result.filled += (await fillAcknowledgements(fresh, hooks)).filled;
     await hooks?.finish?.(fresh);
     hooks?.end();
     result.filled += fromAnswers.filled;

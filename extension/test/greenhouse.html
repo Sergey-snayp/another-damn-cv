@@ -103,9 +103,11 @@ addEventListener('DOMContentLoaded', async () => {
   const residence = found.find((f) => f.element.id === 'residence');
   expect(residence?.key === 'location' && residence.compound, `a City/State/Country/Zip question is a full-address question (got ${residence?.key})`);
   const asked = F.detectQuestions(found).map((q) => q.question);
-  expect(JSON.stringify(asked) === JSON.stringify(['Have you ever been employed at Box?']), `consent dropdowns are never offered as questions to answer (got ${JSON.stringify(asked)})`);
+  // "Employed at Box" is a worked-here-before question now; consent never counts as a question.
+  expect(JSON.stringify(asked) === '[]', `consent dropdowns are never offered as questions to answer (got ${JSON.stringify(asked)})`);
+  expect(found.find((f) => f.element.id === 'employed')?.key === 'workedHereBefore', '"Have you ever been employed at Box?" is a worked-here-before question');
 
-  const { marks } = await window.CVAutofillFiller.fillAll(found, { firstName: 'Serhii', city: 'Vancouver', state: 'British Columbia', country: 'Canada', postalCode: 'V5K 0A1', requiresSponsorship: 'No' });
+  const { marks } = await window.CVAutofillFiller.fillAll(found, { firstName: 'Serhii', city: 'Vancouver', state: 'British Columbia', country: 'Canada', postalCode: 'V5K 0A1', requiresSponsorship: 'No', eligibility: { 'requiresSponsorship:Poland': 'No' } });
   await window.CVAutofillMarks.show(marks);
   const missing = F.findMissingRequired(found);
   await window.CVAutofillMarks.showMissing(missing);
