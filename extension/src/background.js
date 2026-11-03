@@ -1,3 +1,5 @@
+import { matchAnswers } from './answers.js';
+
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
  *
@@ -8,6 +10,25 @@
  * Tabs with the panel open are remembered in session storage, so the panel
  * reopens after the page in that tab changes.
  */
+
+// ─── Next steps of a multi-step form ──────────────────────────────────────
+// Settings → "Keep filling the next steps". The panel arms a tab after the
+// person presses Autofill; the page script asks for the same data when a new
+// step appears. Stored in session storage, for this site only, for 30 minutes.
+const STEP_MINUTES = 30;
+const stepKey = (tabId) => `steps:${tabId}`;
+async function armedSteps(tabId, url) {
+  const { [stepKey(tabId)]: armed } = await chrome.storage.session.get(stepKey(tabId));
+  if (!armed) return null;
+  let host = '';
+  try { host = new URL(url).host; } catch { /* no address */ }
+  const { continueSteps } = await chrome.storage.local.get('continueSteps');
+  if (armed.expires < Date.now() || armed.host !== host || continueSteps !== true) {
+    await chrome.storage.session.remove(stepKey(tabId));
+    return null;
+  }
+  return armed;
+}
 
 const PAGE_SCRIPTS = ['src/sites.js', 'src/fields.js', 'src/filler.js', 'src/launcher.js', 'src/panel-host.js', 'src/job-form.js', 'src/content.js'];
 const PANEL_URL = chrome.runtime.getURL('src/sidepanel.html');
@@ -82,11 +103,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ tabId });
     return false;
   }
+  if (message?.type === 'arm-steps' && fromPanel) {
+    const armed = { host: message.host, company: message.company ?? '', profile: message.profile, useAnswers: message.useAnswers === true, expires: Date.now() + STEP_MINUTES * 60_000 };
+    chrome.storage.session.set({ [stepKey(tabId)]: armed })
+      .then(() => chrome.tabs.sendMessage(tabId, { type: 'steps-armed' }, { frameId: 0 }).catch(() => {}))
+      .then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
+    return true;
+  }
   if (message?.type === 'make-cv-pdf' && fromPanel) {
     makeCvPdf(String(message.url ?? '')).then((dataUrl) => sendResponse({ dataUrl }), (error) => sendResponse({ error: error.message }));
     return true;
   }
   if (!fromPage) { sendResponse({ ok: false }); return false; }
+  if (message?.type === 'steps-state') {
+    armedSteps(tabId, sender.url).then((armed) => sendResponse({ armed: Boolean(armed) }), () => sendResponse({ armed: false }));
+    return true;
+  }
+  if (message?.type === 'step-request') {
+    void (async () => {
+      const armed = await armedSteps(tabId, sender.url);
+      if (!armed) return sendResponse({ armed: false });
+      const questions = Array.isArray(message.questions) ? message.questions : [];
+      let answers = [];
+      if (armed.useAnswers && questions.length) {
+        try {
+          const { matches } = await matchAnswers(armed.company, questions);
+          answers = matches.map((match) => ({ id: match.id, value: match.value, kind: questions.find((question) => question.id === match.id)?.kind }));
+        } catch { /* signed out or offline: profile fields still fill */ }
+      }
+      sendResponse({ armed: true, profile: armed.profile, answers });
+    })().catch(() => sendResponse({ armed: false }));
+    return true;
+  }
   if (message?.type === 'panel-state') {
     openTabs().then((tabs) => sendResponse({ open: tabs.has(tabId) }), () => sendResponse({ open: false }));
     return true;
@@ -107,7 +155,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (hasManifestScripts(tab.url)) return; // The page's own host reopens the panel.
   if (!(await injectPanel(tabId))) await setTabOpen(tabId, false);
 });
-chrome.tabs.onRemoved.addListener((tabId) => void setTabOpen(tabId, false));
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void setTabOpen(tabId, false);
+  void chrome.storage.session.remove(stepKey(tabId)).catch(() => {});
+});
 
 /**
  * PDFs added by hand before 0.13.0 are removed: the Resume tab now uses the

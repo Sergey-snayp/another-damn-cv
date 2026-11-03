@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — next steps of a multi-step form</title>
+<!--
+  Runs the real page script (content.js) with a stand-in for Chrome's
+  extension APIs, as if this tab was armed by "Keep filling the next steps".
+  Step 1 fills on load, step 2 fills when it replaces step 1, and a field the
+  person cleared is never refilled.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/steps.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const requests = [];
+  window.chrome = {
+    runtime: {
+      id: 'test', getURL: (path) => path,
+      onMessage: { addListener() {} },
+      sendMessage: async (message) => {
+        requests.push(message.type);
+        if (message.type === 'steps-state') return { armed: true };
+        if (message.type === 'step-request') return { armed: true, profile: { firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', phone: '+1 416 555 0100', city: 'Toronto' }, answers: [] };
+        return {};
+      },
+    },
+    storage: { local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } },
+  };
+</script>
+<body>
+<form id="wizard">
+  <h2>Step 1 of 2: about you</h2>
+  <label for="first">First name</label><input id="first" name="first_name">
+  <label for="last">Last name</label><input id="last" name="last_name">
+  <label for="email">Email</label><input id="email" type="email" name="email">
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script src="../src/job-form.js"></script>
+<script src="../src/content.js"></script>
+<script>
+const problems = [];
+const expect = (ok, what) => { if (!ok) problems.push(what); };
+const $ = (id) => document.getElementById(id);
+setTimeout(() => {
+  expect($('first').value === 'Ada' && $('email').value === 'ada@example.com', `step 1 fills on load of an armed page (first="${$('first').value}")`);
+  // The person clears a field, then the form moves to step 2 in place.
+  $('last').value = '';
+  $('wizard').insertAdjacentHTML('beforeend', '<div id="step2"><h2>Step 2 of 2: contact</h2><label for="phone">Phone</label><input id="phone" type="tel" name="phone"><label for="city">City</label><input id="city" name="city"></div>');
+  setTimeout(() => {
+    expect($('phone').value === '+1 416 555 0100' && $('city').value === 'Toronto', `step 2 fills when it appears (phone="${$('phone').value}")`);
+    expect($('last').value === '', 'a field the person cleared on step 1 is not refilled');
+    expect(requests.filter((type) => type === 'step-request').length === 2, `one data request per step (got ${requests.join(',')})`);
+    const out = document.createElement('pre');
+    out.id = 'result';
+    out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+    document.body.append(out);
+  }, 3000);
+}, 3000);
+</script>
+</body>

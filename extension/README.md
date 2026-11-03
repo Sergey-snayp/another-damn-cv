@@ -204,8 +204,9 @@ render after load and change as you scroll.
   links, CV and cover letter, experience and education, work authorization,
   salary and availability.
 
-Consent checkboxes ("I agree", privacy policy, terms) are never ticked, and
-demographic questions are never filled.
+Consent checkboxes ("I agree", privacy policy, terms) are never ticked.
+Diversity questions are filled only when you opt in (below); sexual
+orientation, date of birth and age are never filled.
 
 `test/teamtailor.html` runs the real detection and filling code against a
 Teamtailor-shaped form with stand-in widgets:
@@ -255,8 +256,29 @@ a time and only on your click, or when you press Autofill with Settings →
   tooltip until you edit it. A field you already filled is left alone; copy
   the draft instead. **Save as answer** keeps a good draft for next time.
 
+## Multi-step forms
+
+Settings → **Keep filling the next steps** (off by default). After you press
+**Autofill This Page**, the panel arms that tab in the background script for 30
+minutes on that site. Fields that appear later, on the next step or the next
+page, fill from the same profile, CV and saved answers. Fields already seen are
+never touched again, so anything you cleared or changed stays as you left it.
+Switching the setting off stops it at once. `test/steps.html` runs the real page
+script against a stand-in for Chrome's APIs.
+
+## Diversity questions
+
+Voluntary self-identification (gender, Hispanic/Latino, race or ethnicity,
+veteran status, disability) is filled only when **Diversity questions** is
+ticked under Settings → Fields to fill (off by default). **Edit my diversity
+answers** sets each answer; all start as "Prefer not to answer". The answers are
+kept in this browser only (`diversityAnswers` in `chrome.storage.local`) and are
+never sent to the app or to Claude. Each choice matches the form's own wording
+("Decline to self-identify", "Female", "No, I do not have a disability"), and a
+race question listing "Hispanic or Latino" stays the race question.
+`test/diversity.html` covers this.
+
 ## What it does not do yet
-- **Multi-step forms** fill one step per press of Autofill.
 - **Workday.** Multi-step, iframes, shadow DOM. Disproportionate effort.
 - **Forms inside iframes** from another site (a Greenhouse form embedded on a
   company page).

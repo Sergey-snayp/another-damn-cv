@@ -214,6 +214,73 @@ async function fillField(field, value, resumeFileName) {
   }
 }
 
+// ─── Diversity questions (opt-in) ─────────────────────────────────────────
+
+const DECLINE = /decline|prefer not|don.?t wish|do not wish|rather not|choose not|not to (answer|disclose|say|self)|not specified|do not want|don.?t want/;
+
+/**
+ * Whether a form's option says the same as the person's saved choice. Forms
+ * word these differently ("Decline to self-identify", "I don't wish to
+ * answer"), so each choice is a pattern, not exact text.
+ */
+function diversityOptionMatches(key, choice, optionText) {
+  const text = normal(optionText);
+  if (!text) return false;
+  if (choice === 'Prefer not to answer') return DECLINE.test(text);
+  if (DECLINE.test(text)) return false;
+  const yes = /^yes\b/.test(text), no = /^no\b/.test(text);
+  switch (`${key}:${choice}`) {
+    case 'eeoGender:Woman': return /\b(female|woman|women)\b/.test(text);
+    case 'eeoGender:Man': return /\b(male|man|men)\b/.test(text) && !/female|woman|women/.test(text);
+    case 'eeoGender:Non-binary': return /non.?binary|genderqueer|gender queer/.test(text);
+    case 'eeoHispanic:Yes': return yes;
+    case 'eeoHispanic:No': return no;
+    case 'eeoVeteran:I am not a protected veteran': return no || (/\bnot\b/.test(text) && /veteran/.test(text));
+    case 'eeoVeteran:I am a protected veteran': return yes || (/veteran/.test(text) && !/\bnot\b/.test(text));
+    case 'eeoDisability:No': return no || /do not have|don.?t have/.test(text);
+    case 'eeoDisability:Yes': return yes || (/have a disability/.test(text) && !/do not|don.?t/.test(text));
+    case 'eeoRace:Asian': return /\basian\b/.test(text);
+    case 'eeoRace:Black or African American': return /black|african/.test(text);
+    case 'eeoRace:White': return /\bwhite\b/.test(text);
+    case 'eeoRace:Hispanic or Latino': return /hispanic|latin/.test(text);
+    case 'eeoRace:American Indian or Alaska Native': return /american indian|alaska/.test(text);
+    case 'eeoRace:Native Hawaiian or Other Pacific Islander': return /hawaiian|pacific/.test(text);
+    case 'eeoRace:Two or more races': return /two or more|multi/.test(text);
+    default: return text === normal(choice);
+  }
+}
+
+/** Fills one diversity question with the person's saved choice, whatever the control. */
+async function fillDiversity(field, choice) {
+  const { element, key, kind } = field;
+  const matches = (text) => diversityOptionMatches(key, choice, text);
+  const labelText = (input) => window.CVAutofillFields.labelOf(input.labels?.[0] ?? input);
+  if (kind === 'select') {
+    const option = [...element.options].find((item) => item.value !== '' && matches(item.textContent));
+    if (!option) return { filled: false, note: 'no option matched your answer' };
+    element.focus(); setValue(element, option.value); element.blur();
+    return { filled: true };
+  }
+  if (kind === 'radio' || kind === 'checkbox') {
+    // Each option is its own field: only the matching one is clicked.
+    if (!matches(labelText(element)) || element.checked) return { filled: false };
+    element.click();
+    return { filled: true };
+  }
+  if (kind === 'combobox') {
+    element.focus();
+    element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+    press(element);
+    for (let waited = 0; waited < 3000; waited += 150) {
+      await wait(150);
+      const option = optionsFor(element).find((item) => matches(item.textContent));
+      if (option) { press(option); return { filled: true }; }
+    }
+    return { filled: false, note: 'no option matched your answer' };
+  }
+  return { filled: false };
+}
+
 const LOCATION_KEYS = new Set(['location', 'city', 'addressLine']);
 
 /** The value for one field from the profile the panel sent. */
@@ -241,7 +308,7 @@ async function fillAll(found, profile) {
     if (field.key === 'resume' && uploaded) continue;
     const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
     try {
-      const result = await fillField(field, value, profile.resumeFileName);
+      const result = field.diversity ? await fillDiversity(field, value) : await fillField(field, value, profile.resumeFileName);
       if (result.filled) filled++;
       if (field.key === 'resume' && result.filled) uploaded = true;
       if (result.note) notes.push(`${label}: ${result.note}`);
@@ -278,4 +345,4 @@ async function fillAnswer(element, kind, value) {
   return { filled: fillText(element, value) };
 }
 
-window.CVAutofillFiller = { fillField, fillAll, fillAnswer, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+window.CVAutofillFiller = { fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };

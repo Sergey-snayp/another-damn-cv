@@ -192,3 +192,4 @@ dialog textarea { resize: vertical; margin-bottom: 15px; }
 .draft-needs { margin: 8px 0 0; padding-left: 18px; font-size: 12px; }
 .draft-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .questions-card > .ghost { width: auto; }
+.field select { display: block; width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); font-size: 13px; }

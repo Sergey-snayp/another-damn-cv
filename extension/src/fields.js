@@ -67,17 +67,28 @@ const CATEGORIES = [
   { key: 'noticePeriod', group: 'Compensation', match: ['notice period', 'availability', 'start date', 'when can you start'] },
 ];
 
+/** Never filled, whatever the settings. */
+const ALWAYS_SKIP = ['sexual orientation', 'date of birth', 'age'];
+
 /**
- * Never guessed at.
- *
- * Demographic questions are voluntary and legally sensitive, and a wrong
- * autofilled answer is worse than a blank one. We recognise them so they can be
- * reported as deliberately skipped, rather than silently ignored.
+ * Voluntary self-identification ("diversity") questions. Legally sensitive and
+ * always optional, so they are filled only when the person switched them on in
+ * Settings, from answers kept in this browser. Hispanic/Latino comes first: a
+ * race question that lists "Hispanic or Latino" as an option is still race.
  */
-const NEVER_FILL = [
-  'gender', 'race', 'ethnicity', 'veteran', 'disability',
-  'sexual orientation', 'date of birth', 'age', 'hispanic', 'latino',
+const DIVERSITY = [
+  { key: 'eeoHispanic', match: ['hispanic', 'latino', 'latinx'] },
+  { key: 'eeoRace', match: ['race', 'racial', 'ethnicity', 'ethnic'] },
+  { key: 'eeoGender', match: ['gender'] },
+  { key: 'eeoVeteran', match: ['veteran'] },
+  { key: 'eeoDisability', match: ['disability', 'disabled'] },
 ];
+
+/**
+ * Never guessed at by the general rules: demographic questions are reported
+ * and left alone unless they are diversity questions the person opted into.
+ */
+const NEVER_FILL = [...ALWAYS_SKIP, ...DIVERSITY.flatMap((item) => item.match)];
 
 /**
  * Consent and legal acknowledgements. Always left for the person to tick:
@@ -147,6 +158,12 @@ function mentions(signals, phrase) {
     phrasePatterns.set(phrase, pattern);
   }
   return pattern.test(signals);
+}
+
+/** The diversity question this is, judged by its question text (for radios, not each option's label). */
+function diversityKey(text) {
+  if (ALWAYS_SKIP.some((term) => mentions(text, term))) return null;
+  return DIVERSITY.find((item) => item.match.some((term) => mentions(text, term)))?.key ?? null;
 }
 
 function categorise(signals) {
@@ -237,7 +254,10 @@ function detectFields() {
     const key = fromSite ?? guessed;
 
     if (sensitive) {
-      skipped.push({ signals: signals.slice(0, 60), reason: 'sensitive' });
+      const question = (groupQuestion(element) ?? '').toLowerCase().replace(/\s+/g, ' ') || signals;
+      const eeo = diversityKey(question);
+      if (eeo) found.push({ key: eeo, element, kind: kindOf(element), signals, source: 'heuristic', diversity: true });
+      else skipped.push({ signals: signals.slice(0, 60), reason: 'sensitive' });
       continue;
     }
 
@@ -382,6 +402,7 @@ function detectQuestions(found = detectFields().found) {
 }
 
 function groupOf(key) {
+  if (key.startsWith('eeo')) return 'Diversity';
   return CATEGORY_BY_KEY.get(key)?.group ?? 'Other';
 }
 

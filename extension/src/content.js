@@ -71,6 +71,7 @@ async function fill(profile, answers = []) {
   }
   result.filled += fromAnswers;
   result.fromAnswers = fromAnswers;
+  rememberStep();
   return {
     ...result,
     skippedSensitive: lastScan.skipped.filter((item) => item.reason === 'sensitive').length,
@@ -99,9 +100,65 @@ function markDraft(element) {
   element.addEventListener('input', () => { element.style.outline = before.outline; element.title = before.title; }, { once: true });
 }
 
+// ─── Next steps of a multi-step form ────────────────────────────────────
+// Settings → "Keep filling the next steps" (off by default). After the person
+// presses Autofill, the panel arms this tab in the background script for 30
+// minutes on this site. Fields that appear later (the next step, or the next
+// page) are filled from that same data. Fields already seen are never touched
+// again, so anything the person cleared or changed stays as they left it.
+const seenFields = new WeakSet(), seenQuestions = new Set();
+let stepsArmed = false, stepBusy = false, stepTimer;
+
+function rememberStep() {
+  for (const field of Fields.detectFields().found) seenFields.add(field.element);
+  for (const question of Fields.detectQuestions()) seenQuestions.add(question.id);
+}
+
+function isBlank(field) {
+  const element = field.element;
+  if (field.kind === 'drop') return !Fields.zoneDone(element);
+  if (field.kind === 'file') return !element.files?.length;
+  if (field.kind === 'radio') return !document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
+  if (field.kind === 'checkbox') return !element.checked;
+  return !String(element.value ?? '').trim();
+}
+
+function scheduleStep() {
+  if (!stepsArmed) return;
+  clearTimeout(stepTimer);
+  stepTimer = setTimeout(() => void fillNextStep(), 900);
+}
+
+async function fillNextStep() {
+  if (stepBusy || !chrome.runtime?.id) return;
+  const found = Fields.detectFields().found.filter((field) => !seenFields.has(field.element));
+  const questions = Fields.detectQuestions().filter((question) => !seenQuestions.has(question.id) && !question.value);
+  found.forEach((field) => seenFields.add(field.element));
+  questions.forEach((question) => seenQuestions.add(question.id));
+  const fresh = found.filter(isBlank);
+  if (!fresh.length && !questions.length) return;
+  stepBusy = true;
+  try {
+    const reply = await chrome.runtime.sendMessage({ type: 'step-request', questions });
+    if (!reply?.armed) { stepsArmed = false; return; }
+    const result = await Filler.fillAll(fresh, reply.profile);
+    for (const item of reply.answers ?? []) {
+      const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
+      if (element && (await Filler.fillAnswer(element, item.kind, item.value)).filled) result.filled++;
+    }
+    if (result.filled) void chrome.runtime.sendMessage({ type: 'step-filled', filled: result.filled, notes: result.notes }).catch(() => {});
+  } catch { /* extension reloaded or background unavailable: leave the step for the person */ }
+  finally { stepBusy = false; }
+}
+
 const fromPanel = (sender) => Boolean(sender.url?.startsWith(chrome.runtime.getURL('src/sidepanel.html')));
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // The background script, after the panel armed this tab for next steps.
+  if (message.type === 'steps-armed' && sender.id === chrome.runtime.id && !sender.tab) {
+    stepsArmed = true;
+    return false;
+  }
   if (message.type === 'scan') {
     sendResponse(scan());
     return false;
@@ -155,6 +212,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 const KNOWN_BOARD = Boolean(Sites.siteFor(location.hostname)) || location.protocol === 'file:';
 let lastVerdict = null;
 function updateLauncher() {
+  scheduleStep();
   if (!document.querySelector('input, textarea, select')) { window.CVAutofillLauncher?.update(false); return; }
   scan();
   // Teamtailor and other boards on company domains are known by page structure.
@@ -182,3 +240,8 @@ addEventListener('resize', scheduleScan);
 addEventListener('popstate', scheduleScan);
 addEventListener('hashchange', scheduleScan);
 updateLauncher();
+
+// A new page of an armed multi-step form fills once its fields are on screen.
+try {
+  chrome.runtime.sendMessage({ type: 'steps-state' }).then((state) => { if (state?.armed) { stepsArmed = true; scheduleStep(); } }).catch(() => {});
+} catch { /* extension reloaded */ }

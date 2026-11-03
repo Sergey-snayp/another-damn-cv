@@ -6,7 +6,7 @@ import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv 
 import { draftAnswer, matchAnswers, saveAnswers } from './answers.js';
 
 const FIELD_LABELS = {
-  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
+  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
 };
 const PROFILE_GROUPS = [
   { title: 'Personal', keys: ['fullName', 'firstName', 'lastName', 'preferredName', 'email', 'phone'] },
@@ -26,10 +26,23 @@ const FILL_GROUPS = [
   { id: 'salary', label: 'Salary and availability', keys: ['salaryExpectation', 'noticePeriod'] },
   // The company's own questions, from answers saved in the app. Not a profile field group.
   { id: 'answers', label: 'Saved answers', keys: [] },
+  // Off unless switched on: answers live only in this browser (diversityAnswers).
+  { id: 'diversity', label: 'Diversity questions', keys: ['eeoGender', 'eeoHispanic', 'eeoRace', 'eeoVeteran', 'eeoDisability'] },
 ];
+/** Choices per diversity question. Each starts as "Prefer not to answer". */
+const DIVERSITY_CHOICES = {
+  eeoGender: { label: 'Gender', choices: ['Prefer not to answer', 'Woman', 'Man', 'Non-binary'] },
+  eeoHispanic: { label: 'Hispanic or Latino', choices: ['Prefer not to answer', 'Yes', 'No'] },
+  eeoRace: { label: 'Race or ethnicity', choices: ['Prefer not to answer', 'American Indian or Alaska Native', 'Asian', 'Black or African American', 'Hispanic or Latino', 'Native Hawaiian or Other Pacific Islander', 'White', 'Two or more races'] },
+  eeoVeteran: { label: 'Veteran status', choices: ['Prefer not to answer', 'I am not a protected veteran', 'I am a protected veteran'] },
+  eeoDisability: { label: 'Disability', choices: ['Prefer not to answer', 'No', 'Yes'] },
+};
+let diversityAnswers = {}, continueSteps = false;
+const diversityValue = key => diversityAnswers[key] ?? 'Prefer not to answer';
 const GROUP_OF_KEY = new Map(FILL_GROUPS.flatMap(group => group.keys.map(key => [key, group.id])));
 let fillGroups = {};
-const groupOn = key => fillGroups[GROUP_OF_KEY.get(key)] !== false;
+// Every group starts on, except diversity questions, which start off.
+const groupOn = key => { const group = GROUP_OF_KEY.get(key); return group === 'diversity' ? fillGroups.diversity === true : fillGroups[group] !== false; };
 const $ = id => document.getElementById(id);
 
 // After the extension is reloaded or updated, Chrome leaves this panel in the page
@@ -75,7 +88,7 @@ async function askPage(message, tab = currentTab) {
     return null;
   }
 }
-function valueFor(key) { if (!groupOn(key)) return ''; if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; return profile[key] ?? ''; }
+function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; return profile[key] ?? ''; }
 function pageCard() {
   if (!scan) return '';
   const title = scan.context?.title || 'Application form';
@@ -129,8 +142,14 @@ async function runFill() {
     }
     // Fields in groups switched off in Settings are sent empty, so they stay as they are.
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
+    for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
-    const result = await askPage({ type: 'fill', profile: { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName }, answers }, target);
+    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName };
+    const result = await askPage({ type: 'fill', profile: payload, answers }, target);
+    // Settings → "Keep filling the next steps": later steps of this form, on this site, for 30 minutes.
+    if (result && continueSteps && target?.url) {
+      void chrome.runtime.sendMessage({ type: 'arm-steps', host: new URL(target.url).host, company: scan?.context?.company ?? '', profile: payload, useAnswers: fillGroups.answers !== false }).catch(() => {});
+    }
     if (cvProblem && result) result.failures.push(cvProblem);
     if (!result) throw new Error(pageDisconnected ? 'The extension was updated. Reload this page, then try again.' : 'Lost contact with the page. Reload it and try again.');
     fillReport = {
@@ -544,7 +563,7 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
@@ -553,6 +572,8 @@ async function refresh() {
     fillGroups = stored.autofillGroups ?? {};
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
     aiDraftAuto = stored.aiDraftAuto === true;
+    diversityAnswers = stored.diversityAnswers ?? {};
+    continueSteps = stored.continueSteps === true;
     await loadQuestions().catch(() => { formQuestions = []; });
     renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
     await Promise.all([renderSyncState(), renderAccount()]);
@@ -583,15 +604,38 @@ $('disabled-sites-list').addEventListener('click', async event => {
   catch { status('auth-status', 'Could not update extension settings.', 'error'); }
 });
 function renderFillGroups() {
-  $('fill-groups').innerHTML = FILL_GROUPS.map(group => `<label class="toggle-row compact"><span>${esc(group.label)}</span><input type="checkbox" data-fill-group="${group.id}" ${fillGroups[group.id] !== false ? 'checked' : ''}></label>`).join('');
+  $('fill-groups').innerHTML = FILL_GROUPS.map(group => {
+    const on = group.id === 'diversity' ? fillGroups.diversity === true : fillGroups[group.id] !== false;
+    const row = `<label class="toggle-row compact"><span>${esc(group.label)}${group.id === 'diversity' ? '<small>Off by default. Your answers stay in this browser.</small>' : ''}</span><input type="checkbox" data-fill-group="${group.id}" ${on ? 'checked' : ''}></label>`;
+    return group.id === 'diversity' ? `${row}<button type="button" class="ghost small" id="edit-diversity">Edit my diversity answers</button>` : row;
+  }).join('');
 }
+function openDiversity() {
+  $('diversity-form').innerHTML = Object.entries(DIVERSITY_CHOICES).map(([key, item]) => `<label class="field"><span>${esc(item.label)}</span><select name="${key}">${item.choices.map(choice => `<option ${diversityValue(key) === choice ? 'selected' : ''}>${esc(choice)}</option>`).join('')}</select></label>`).join('');
+  status('diversity-status', '');
+  $('diversity-dialog').showModal();
+}
+$('fill-groups').addEventListener('click', event => { if (event.target.closest('#edit-diversity')) openDiversity(); });
+$('save-diversity').addEventListener('click', async () => {
+  const next = Object.fromEntries([...$('diversity-form').querySelectorAll('select')].map(select => [select.name, select.value]));
+  try { await chrome.storage.local.set({ diversityAnswers: next }); diversityAnswers = next; status('diversity-status', 'Saved in this browser.', 'success'); }
+  catch { status('diversity-status', 'Could not save. Try again.', 'error'); }
+});
+$('continue-steps').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ continueSteps: box.checked }); continueSteps = box.checked; } catch { box.checked = !box.checked; } });
+// A later step of an armed form was filled by the page script.
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type !== 'step-filled' || sender.tab?.id !== ownTabId) return false;
+  if (fillReport) fillReport.notes = [...fillReport.notes, `Next step: filled ${message.filled} field${message.filled === 1 ? '' : 's'}`, ...(message.notes ?? [])];
+  void refresh();
+  return false;
+});
 $('fill-groups').addEventListener('change', async event => {
   const box = event.target.closest('[data-fill-group]'); if (!box) return;
   const next = { ...fillGroups, [box.dataset.fillGroup]: box.checked };
   try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
 });
 $('ai-draft-auto').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ aiDraftAuto: box.checked }); aiDraftAuto = box.checked; } catch { box.checked = !box.checked; } });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto', 'continueSteps', 'diversityAnswers']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });

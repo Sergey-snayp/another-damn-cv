@@ -1,0 +1,92 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — diversity questions</title>
+<!--
+  Greenhouse-style voluntary self-identification. Checks that these questions
+  are found but filled only when answers are sent (the Settings switch), that
+  differently worded options are matched, and that sexual orientation and date
+  of birth are never touched.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=10000 \
+      --dump-dom "file://$PWD/test/diversity.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<body>
+<form>
+  <label for="name">First name</label><input id="name" name="first_name">
+  <label for="gender">Gender</label>
+  <select id="gender" name="gender"><option value="">Please select</option><option value="1">Male</option><option value="2">Female</option><option value="3">Decline To Self Identify</option></select>
+  <label for="hispanic">Are you Hispanic/Latino?</label>
+  <select id="hispanic" name="hispanic_ethnicity"><option value="">Please select</option><option value="Y">Yes</option><option value="N">No</option><option value="D">Decline To Self Identify</option></select>
+  <fieldset><legend>Please identify your race</legend>
+    <label><input type="radio" name="race" value="a"> Asian</label>
+    <label><input type="radio" name="race" value="h"> Hispanic or Latino</label>
+    <label><input type="radio" name="race" value="w"> White</label>
+    <label><input type="radio" name="race" value="d"> I don't wish to answer</label>
+  </fieldset>
+  <fieldset><legend>Veteran Status</legend>
+    <label><input type="radio" name="veteran" value="1"> I am not a protected veteran</label>
+    <label><input type="radio" name="veteran" value="2"> I identify as one or more of the classifications of protected veteran</label>
+    <label><input type="radio" name="veteran" value="3"> I don't wish to answer</label>
+  </fieldset>
+  <fieldset><legend>Disability Status</legend>
+    <label><input type="radio" name="disability" value="y"> Yes, I have a disability (or previously had a disability)</label>
+    <label><input type="radio" name="disability" value="n"> No, I do not have a disability and have not had one in the past</label>
+    <label><input type="radio" name="disability" value="x"> I do not want to answer</label>
+  </fieldset>
+  <label for="orientation">Sexual orientation</label>
+  <select id="orientation" name="sexual_orientation"><option value="">Please select</option><option>Heterosexual</option><option>I don't wish to answer</option></select>
+  <label for="dob">Date of birth</label><input id="dob" name="dob">
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script>
+addEventListener('DOMContentLoaded', async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const checked = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value ?? '';
+  const reset = () => { document.querySelector('form').reset(); };
+
+  const { found, skipped } = window.CVAutofillFields.detectFields();
+  const keys = [...new Set(found.map((f) => f.key))];
+  expect(JSON.stringify(keys) === JSON.stringify(['firstName', 'eeoGender', 'eeoHispanic', 'eeoRace', 'eeoVeteran', 'eeoDisability']),
+    `finds the diversity questions as their own fields (got ${JSON.stringify(keys)})`);
+  expect(found.filter((f) => f.key === 'eeoRace').length === 4 && found.every((f) => f.key !== 'eeoHispanic' || f.element.id === 'hispanic'),
+    'a race question listing "Hispanic or Latino" as an option is still the race question');
+  expect(skipped.filter((s) => s.reason === 'sensitive').length === 2, 'sexual orientation and date of birth stay skipped');
+
+  // Switched off: the panel sends no diversity answers, so nothing is touched.
+  await window.CVAutofillFiller.fillAll(found, { firstName: 'Ada' });
+  expect($('name').value === 'Ada' && !$('gender').value && !$('hispanic').value && !checked('race') && !checked('veteran') && !checked('disability'),
+    'fills nothing in diversity questions while the setting is off');
+
+  reset();
+  await window.CVAutofillFiller.fillAll(found, {
+    eeoGender: 'Prefer not to answer', eeoHispanic: 'Prefer not to answer', eeoRace: 'Prefer not to answer',
+    eeoVeteran: 'Prefer not to answer', eeoDisability: 'Prefer not to answer',
+  });
+  expect($('gender').value === '3' && $('hispanic').value === 'D' && checked('race') === 'd' && checked('veteran') === '3' && checked('disability') === 'x',
+    `"Prefer not to answer" picks each form's own wording (gender=${$('gender').value} hispanic=${$('hispanic').value} race=${checked('race')} veteran=${checked('veteran')} disability=${checked('disability')})`);
+
+  reset();
+  await window.CVAutofillFiller.fillAll(found, {
+    eeoGender: 'Woman', eeoHispanic: 'No', eeoRace: 'White', eeoVeteran: 'I am not a protected veteran', eeoDisability: 'No',
+  });
+  expect($('gender').value === '2', `"Woman" picks Female, not Male (got ${$('gender').value})`);
+  expect($('hispanic').value === 'N' && checked('race') === 'w', 'Hispanic No and race White');
+  expect(checked('veteran') === '1' && checked('disability') === 'n', `not a veteran, no disability (veteran=${checked('veteran')} disability=${checked('disability')})`);
+  expect(!$('orientation').value && !$('dob').value, 'never touches sexual orientation or date of birth');
+
+  reset();
+  await window.CVAutofillFiller.fillAll(found, { eeoGender: 'Man', eeoVeteran: 'I am a protected veteran', eeoDisability: 'Yes' });
+  expect($('gender').value === '1' && checked('veteran') === '2' && checked('disability') === 'y', 'Man, protected veteran, disability yes');
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.append(out);
+});
+</script>
+</body>
