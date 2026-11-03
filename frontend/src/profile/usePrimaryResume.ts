@@ -8,6 +8,7 @@ import {
 /** Profile currently reads career history from the primary CV. It does not copy or edit it. */
 export function usePrimaryResume() {
   const [primary, setPrimary] = useState<ResumeSummary | null>(null);
+  const [resumes, setResumes] = useState<ResumeSummary[]>([]);
   const [document, setDocument] = useState<RenderedResume | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -23,6 +24,7 @@ export function usePrimaryResume() {
       const rows = await resumeApi.list();
       const row = rows.find((item) => item.isPrimary) ?? null;
       if (!active) return;
+      setResumes(rows);
       setPrimary(row);
       if (row?.currentSnapshotId) {
         const cv = await resumeApi.read(row.id);
@@ -47,6 +49,8 @@ export function usePrimaryResume() {
 
   return {
     primary,
+    /** Every CV, for Profile's Change list. */
+    resumes,
     document,
     loading,
     error,

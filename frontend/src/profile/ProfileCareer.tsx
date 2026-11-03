@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { ContactFields } from "../api";
 import {
@@ -16,6 +17,7 @@ export function ProfileCareer({
   onEditPersonal,
   imported,
   onImport,
+  onImportCv,
   importDisabled,
 }: {
   career: Career;
@@ -23,9 +25,12 @@ export function ProfileCareer({
   onEditPersonal(): void;
   imported: CareerData;
   onImport(): void;
+  /** Opens the import review for one saved CV. */
+  onImportCv(resumeId: string): void;
   importDisabled: boolean;
 }) {
-  const { primary, document, loading, error, retry } = career;
+  const { primary, resumes, document, loading, error, retry } = career;
+  const [showAll, setShowAll] = useState(false);
   const editHref = primary ? `/documents/${primary.id}` : "/documents";
   const experiences: Experience[] = imported.experiences
     ? imported.experiences.value.map((role) => ({
@@ -98,6 +103,57 @@ export function ProfileCareer({
             <Link className="profile-button" to="/documents">
               Choose a resume
             </Link>
+          </div>
+        )}
+        {!loading && !error && resumes.length > 0 && (
+          <div className="profile-cv-change">
+            <button
+              type="button"
+              className="profile-button is-secondary"
+              aria-expanded={showAll}
+              aria-controls="profile-cv-list"
+              onClick={() => setShowAll((open) => !open)}
+            >
+              {showAll ? "Hide CVs" : `Change · ${resumes.length} CV${resumes.length === 1 ? "" : "s"}`}
+            </button>
+            {showAll && (
+              <ul className="profile-cv-list" id="profile-cv-list">
+                {resumes.map((cv) => (
+                  <li key={cv.id}>
+                    <div>
+                      <h3 title={cv.name}>
+                        {cv.name}
+                        {cv.isPrimary && <span className="profile-tag">Default</span>}
+                        {cv.jobId && <span className="profile-tag">Tailored</span>}
+                      </h3>
+                      <p>
+                        {cv.currentSnapshotId
+                          ? `Last updated: ${new Date(cv.updatedAt).toLocaleString()}`
+                          : "No saved version yet"}
+                      </p>
+                    </div>
+                    <Link className="profile-button is-secondary" to={`/documents/${cv.id}`}>
+                      Preview
+                    </Link>
+                    <button
+                      type="button"
+                      className="profile-button"
+                      disabled={importDisabled || !cv.currentSnapshotId}
+                      title={
+                        !cv.currentSnapshotId
+                          ? "Save this CV once before importing it."
+                          : importDisabled
+                            ? "Save or discard your profile changes first."
+                            : "Review this CV's information and choose what to save to your Profile."
+                      }
+                      onClick={() => onImportCv(cv.id)}
+                    >
+                      Import to Profile
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </section>

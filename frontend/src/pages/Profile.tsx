@@ -31,7 +31,8 @@ export function Profile() {
   const [extension, setExtension] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [careerState, setCareerState] = useState<CareerState | null>(null);
-  const [importing, setImporting] = useState(false);
+  // false, or the import dialog's options: a saved CV to start from.
+  const [importing, setImporting] = useState<false | { resumeId?: string }>(false);
 
   useEffect(() => {
     let current = true;
@@ -269,7 +270,7 @@ export function Profile() {
             <button
               className="profile-button"
               disabled={dirty || saving || !careerState}
-              onClick={() => setImporting(true)}
+              onClick={() => setImporting({})}
             >
               <Icon name="file" size={17} />
               Import from CV
@@ -295,7 +296,10 @@ export function Profile() {
             profile={profile}
             imported={careerState?.data ?? {}}
             onImport={() => {
-              if (!dirty && !saving) setImporting(true);
+              if (!dirty && !saving) setImporting({});
+            }}
+            onImportCv={(resumeId) => {
+              if (!dirty && !saving) setImporting({ resumeId });
             }}
             importDisabled={dirty || saving || !careerState}
             onEditPersonal={() => setActive("personal")}
@@ -427,6 +431,7 @@ export function Profile() {
         <ImportProfileDialog
           profile={profile}
           career={careerState}
+          initialResumeId={importing.resumeId}
           onClose={() => setImporting(false)}
           onApplied={(state) => {
             setImporting(false);

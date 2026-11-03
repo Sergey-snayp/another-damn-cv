@@ -44,7 +44,9 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
 - **Documents** holds resumes, previews, editing, history and tailoring review.
   Old `/resumes` bookmarks redirect here.
 - **Profile → Import from CV** accepts PDF/DOCX/TXT/Markdown files or a saved CV
-  from Documents. Review and correct the extracted information, then choose the
+  from Documents. The Resume section's **Change** list shows every CV with
+  **Preview** and **Import to Profile**, which opens this review for that CV.
+  Review and correct the extracted information, then choose the
   contact fields, summary, work experience, education and skills to save. Existing
   contact values and previously imported sections start unchecked. Chosen career
   sections replace that section in Profile; other sections stay unchanged.

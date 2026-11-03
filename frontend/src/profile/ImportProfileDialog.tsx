@@ -19,11 +19,14 @@ import "./profile-import.css";
 export function ImportProfileDialog({
   profile,
   career,
+  initialResumeId,
   onClose,
   onApplied,
 }: {
   profile: ContactFields;
   career: CareerState;
+  /** A saved CV to read straight away, from Profile's CV list. */
+  initialResumeId?: string;
   onClose(): void;
   onApplied(state: CareerState): void;
 }) {
@@ -39,7 +42,8 @@ export function ImportProfileDialog({
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState("");
   const [listAttempt, setListAttempt] = useState(0);
-  const [resumeId, setResumeId] = useState("");
+  const [resumeId, setResumeId] = useState(initialResumeId ?? "");
+  const autoRead = useRef(false);
   const [draft, setDraft] = useState<ProfileImportDraft | null>(null);
   const [selectedContact, setSelectedContact] = useState<ImportContactKey[]>(
     [],
@@ -103,6 +107,14 @@ export function ImportProfileDialog({
       active = false;
     };
   }, [listAttempt]);
+
+  // Opened for one CV: read it once the latest profile has loaded, so the
+  // review compares against current values.
+  useEffect(() => {
+    if (!initialResumeId || autoRead.current || baseLoading || baseError) return;
+    autoRead.current = true;
+    void read();
+  });
 
   function review(next: ProfileImportDraft) {
     setDraft(next);
