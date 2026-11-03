@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — page rebuilds its document</title>
+<!--
+  Greenhouse's job boards (React/Remix) replace the whole <html> element while
+  starting, which removed the D! button and left the page watcher on a
+  detached copy. This page does the same after the button appears, then checks
+  the button comes back and that later changes are still noticed.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/rebuild.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  window.chrome = {
+    runtime: { id: 'test', getURL: (path) => (path.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} }, sendMessage: async () => ({}) },
+    storage: { local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } },
+  };
+</script>
+<body>
+<form>
+  <label for="first">First name</label><input id="first" name="first_name">
+  <label for="last">Last name</label><input id="last" name="last_name">
+  <label for="email">Email</label><input id="email" type="email" name="email">
+  <label for="resume">Resume/CV</label><input id="resume" type="file" name="resume">
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script src="../src/marks.js"></script>
+<script src="../src/launcher.js"></script>
+<script src="../src/job-form.js"></script>
+<script src="../src/content.js"></script>
+<script>
+const problems = [];
+const expect = (ok, what) => { if (!ok) problems.push(what); };
+const button = () => document.getElementById('adcv-autofill-launcher');
+setTimeout(() => {
+  expect(Boolean(button()?.isConnected), 'the D! button appears on the job form');
+  // As React does after a hydration error: a fresh <html> without anything it did not render.
+  const fresh = document.documentElement.cloneNode(true);
+  fresh.querySelectorAll('[id^="adcv-"]').forEach((node) => node.remove());
+  document.replaceChild(fresh, document.documentElement);
+  expect(!button(), 'the rebuild removed the button (as on Greenhouse)');
+  setTimeout(() => {
+    expect(Boolean(button()?.isConnected), 'the D! button comes back after the page rebuilds its document');
+    // Later changes on the new <html> are still noticed: a step adds a field.
+    document.querySelector('form').insertAdjacentHTML('beforeend', '<label for="phone">Phone</label><input id="phone" type="tel" name="phone">');
+    setTimeout(() => {
+      const keys = window.CVAutofillFields.detectFields().found.map((f) => f.key);
+      expect(keys.includes('phone') && document.querySelectorAll('#adcv-autofill-launcher').length === 1, 'the page is still watched after the rebuild, with one button');
+      const out = document.createElement('pre');
+      out.id = 'result';
+      out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+      document.body.append(out);
+    }, 1500);
+  }, 1500);
+}, 2000);
+</script>
+</body>

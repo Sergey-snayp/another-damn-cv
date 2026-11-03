@@ -121,6 +121,8 @@
   addEventListener('resize', renderVisibility);
   window.CVAutofillLauncher = {
     update(value) { available = value; renderVisibility(); },
+    /** Puts the button back after a page rebuilt its document and dropped it. */
+    reattach() { if (!host.isConnected) renderVisibility(); },
     panelChanged(open) { panelOpen = open; if (open) keepAfterPanel = true; renderVisibility(); },
   };
 })();

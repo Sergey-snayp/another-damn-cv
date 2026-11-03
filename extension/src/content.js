@@ -222,26 +222,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // (src/job-form.js). This script runs on every site, so it stays cheap: pages
 // without inputs are skipped, and ordinary sites rescan less often.
 const KNOWN_BOARD = Boolean(Sites.siteFor(location.hostname)) || location.protocol === 'file:';
-let lastVerdict = null;
 function updateLauncher() {
   scheduleStep();
   if (!document.querySelector('input, textarea, select')) { window.CVAutofillLauncher?.update(false); return; }
   scan();
   // Teamtailor and other boards on company domains are known by page structure.
   const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });
-  if (verdict.show !== lastVerdict) { lastVerdict = verdict.show; window.CVAutofillLauncher?.update(verdict.show); }
+  // Always passed on: update() also puts the button back if the page removed it.
+  window.CVAutofillLauncher?.update(verdict.show);
+}
+
+/**
+ * React and Remix pages (Greenhouse's job boards) can throw away the whole
+ * <html> element while starting up, taking the D! button, panel and icons with
+ * it. After any change, each puts itself back if it should be on the page.
+ */
+function reattachOwnElements() {
+  window.CVAutofillLauncher?.reattach?.();
+  window.CVAutofillPanel?.reattach?.();
+  window.CVAutofillMarks?.reattach?.();
 }
 let scanTimer;
 const scheduleScan = () => { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, KNOWN_BOARD ? 140 : 600); };
 const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel', 'adcv-fill-marks']);
 new MutationObserver(records => {
+  reattachOwnElements();
   const changed = records.some(record => {
     if (OWN_NODES.has(record.target.id)) return false;
     if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(node => OWN_NODES.has(node.id))) return false;
     return true;
   });
   if (changed) scheduleScan();
-}).observe(document.documentElement, {
+// The document, not <html>: a page that replaces its <html> element would
+// otherwise leave this watching a detached copy.
+}).observe(document, {
   childList: true,
   subtree: true,
   attributes: true,

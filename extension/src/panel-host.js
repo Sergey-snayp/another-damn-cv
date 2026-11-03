@@ -83,7 +83,12 @@
     if (iframe && event.source === iframe.contentWindow && event.origin.startsWith('chrome-extension://') && event.data?.type === 'adcv-panel-close') close();
   });
 
-  window.CVAutofillPanel = { open, close, toggle: () => (isOpen ? close() : open()), isOpen: () => isOpen };
+  /** An open panel goes back on the page if the page rebuilt its document. */
+  function reattach() {
+    if (isOpen && !host.isConnected) document.documentElement.append(host);
+  }
+
+  window.CVAutofillPanel = { open, close, reattach, toggle: () => (isOpen ? close() : open()), isOpen: () => isOpen };
 
   // Reopen after a page load if this tab had the panel open.
   try {

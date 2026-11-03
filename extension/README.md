@@ -43,6 +43,11 @@ application form:
   CV, resume, вакансія, резюме… in the address, title, headings or buttons;
 - on the known job boards in `src/sites.js`, a resume field or any 2 fields.
 
+Some pages (Greenhouse's job boards, built with React/Remix) replace their
+whole `<html>` element while starting, which removed the D! button. The page
+watcher observes the document itself, and the button, panel and icons put
+themselves back after any change. `test/rebuild.html` covers this.
+
 Forms with a password, card fields or a search box never count. Ordinary sites
 are rescanned less often than job boards, and pages without inputs are skipped.
 `test/job-form.html` checks these rules against sample pages:

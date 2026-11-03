@@ -87,6 +87,7 @@
     // Layout shifts and fields filled later: follow the fields, and drop red
     // icons once their field has a value, however it got one.
     ticker = setInterval(() => {
+      reattach();
       for (const [element, mark] of marks) {
         if (!element.isConnected || (mark.status === 'missing' && !isEmpty(element))) remove(element);
       }
@@ -150,5 +151,10 @@
     chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.fillMarks?.newValue === false) clear(); });
   } catch { /* extension reloaded */ }
 
-  window.CVAutofillMarks = { show, showMissing, clear, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.node.title ?? null };
+  /** Icons go back on the page if the page rebuilt its document. */
+  function reattach() {
+    if (marks.size && !host.isConnected) { document.documentElement.append(host); reposition(); }
+  }
+
+  window.CVAutofillMarks = { show, showMissing, clear, reattach, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.node.title ?? null };
 })();
