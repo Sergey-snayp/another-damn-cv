@@ -29,6 +29,8 @@
   <label for="phone">Phone</label><input id="phone" type="tel" name="phone">
   <div class="gap"></div>
   <label for="city">City</label><input id="city" name="city">
+  <div class="gap"></div>
+  <button type="submit" id="submit">Submit application</button>
 </form>
 <script src="../src/sites.js"></script>
 <script src="../src/fields.js"></script>
@@ -50,7 +52,9 @@ addEventListener('DOMContentLoaded', async () => {
     const record = (event) => { log.push({ id: event.target.id, y: Math.round(scrollY), inView: inView(event.target), glowing: Marks.glowing() }); onFill?.(log.length); };
     document.addEventListener('input', record, true);
     const hooks = Marks.fillHooks(await Marks.animationMode());
-    await Filler.fillAll(window.CVAutofillFields.detectFields().found, profile, hooks);
+    const { found } = window.CVAutofillFields.detectFields();
+    await Filler.fillAll(found, profile, hooks);
+    await hooks?.finish(found);
     hooks?.end();
     document.removeEventListener('input', record, true);
     return log;
@@ -62,12 +66,13 @@ addEventListener('DOMContentLoaded', async () => {
   expect(log.every((e) => e.inView), `each field is on screen when it fills (${JSON.stringify(log)})`);
   expect(log.at(-1).y > 1500, 'the page moved down the form');
   expect(log.slice(1).some((e) => e.glowing > 0), 'filled fields glow');
-  expect(inView($('city')), 'ends on the last filled field');
+  expect(inView($('submit')), 'ends at the Submit button, below the last field');
+  expect(Marks.glowing() > 0, 'rings the Submit button');
   expect(window.CVAutofillMarks.statusOf($('first')) === 'ok', 'each field gets its icon as it fills');
 
   // 2. Autofill's own key presses (dropdowns send ArrowDown and Enter) do not stop it.
   log = await run({ onFill: (n) => { if (n === 1) document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })); } });
-  expect(log.every((e) => e.inView) && inView($('city')), `follows to the end despite its own key presses (${JSON.stringify(log)})`);
+  expect(log.every((e) => e.inView) && inView($('submit')), `follows to the end despite its own key presses (${JSON.stringify(log)})`);
   // A person's scroll does stop it. A test cannot send a trusted (person's) event, so it
   // calls what a trusted wheel, touch or scroll key triggers.
   log = await run({ onFill: (n) => { if (n === 1) Marks.stopFollowing(); } });

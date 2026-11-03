@@ -31,7 +31,7 @@
     .glow { position: absolute; pointer-events: none; border-radius: 10px; border: 2px solid var(--c);
       box-shadow: 0 0 0 5px color-mix(in srgb, var(--c) 22%, transparent), 0 0 18px color-mix(in srgb, var(--c) 35%, transparent);
       animation: glow-fade .9s ease-out forwards; }
-    .glow.ok { --c: #16a34a; } .glow.check, .glow.pending { --c: #d97706; } .glow.missing { --c: #dc2626; }
+    .glow.ok { --c: #16a34a; } .glow.check, .glow.pending { --c: #d97706; } .glow.missing { --c: #dc2626; } .glow.submit { --c: #2563eb; }
     .glow.pulse { animation: glow-pulse 1s ease-in-out infinite; }
     .glow.still { animation: none; }
     @keyframes glow-fade { 0% { opacity: 0; transform: scale(.98); } 15% { opacity: 1; transform: none; } 70% { opacity: 1; } 100% { opacity: 0; } }
@@ -245,12 +245,13 @@
     });
   }
 
+  const onScreen = (box) => box.top >= 60 && box.bottom <= innerHeight - 60;
+
   async function follow(element) {
     if (motion.mode !== 'full' || motion.tookOver) return;
     const anchor = anchorFor(element);
     const rect = anchor.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
-    const onScreen = (box) => box.top >= 60 && box.bottom <= innerHeight - 60;
     if (onScreen(rect)) return; // Already on screen: no jump.
     anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await scrolled();
@@ -293,6 +294,29 @@
         glow(mark.element ?? field.element, mark.status);
         await show([{ element: mark.element ?? field.element, status: mark.status, reason: mark.reason }]);
         if (motion.mode === 'full' && !motion.tookOver) await wait(180);
+      },
+      /**
+       * The end of a fill: scroll on to the form's Submit button (or Next /
+       * Continue on a step without one) and ring it in blue. It is only shown,
+       * never pressed. Only buttons inside the form that holds the fields count,
+       * so a page's "Apply" button at the top is not chosen.
+       */
+      async finish(fields) {
+        if (motion.mode !== 'full' || motion.tookOver) return;
+        const form = fields.map((field) => field.element.closest('form')).find(Boolean);
+        const buttons = [...(form ?? document).querySelectorAll('button, input[type="submit"], [role="button"]')]
+          .filter((button) => button.getClientRects().length && !button.disabled);
+        const text = (button) => (button.value || button.textContent || button.getAttribute('aria-label') || '').trim();
+        const target = buttons.filter((button) => button.type === 'submit' || /\b(submit|send application|apply now|finish)\b/i.test(text(button))).at(-1)
+          ?? buttons.filter((button) => /\b(next|continue|review)\b/i.test(text(button))).at(-1);
+        if (!target) return;
+        await wait(250);
+        if (!onScreen(target.getBoundingClientRect())) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await scrolled();
+          if (!motion.tookOver && !onScreen(target.getBoundingClientRect())) target.scrollIntoView({ block: 'center', behavior: 'instant' });
+        }
+        if (!motion.tookOver) glow(target, 'submit');
       },
       end() {
         for (const type of ['wheel', 'touchmove', 'keydown']) removeEventListener(type, takeOver, { capture: true });

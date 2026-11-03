@@ -94,6 +94,7 @@ async function fill(profile, answers = []) {
   const { marks, ...result } = await Filler.fillAll(lastScan.found, profile, hooks);
   // Saved answers, matched by the panel to the ids from a "questions" request.
   const fromAnswers = await fillAnswers(answers, result.failures, hooks);
+  await hooks?.finish?.(lastScan.found);
   hooks?.end();
   result.filled += fromAnswers.filled;
   result.fromAnswers = fromAnswers.filled;
@@ -165,6 +166,7 @@ async function fillNextStep() {
     const hooks = Marks?.fillHooks(await Marks.animationMode());
     const { marks, ...result } = await Filler.fillAll(fresh, reply.profile, hooks);
     const fromAnswers = await fillAnswers(reply.answers ?? [], result.failures, hooks);
+    await hooks?.finish?.(fresh);
     hooks?.end();
     result.filled += fromAnswers.filled;
     await Marks?.show([...marks, ...fromAnswers.marks]);
