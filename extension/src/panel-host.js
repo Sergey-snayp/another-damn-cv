@@ -27,11 +27,18 @@
   const frameBox = shadow.querySelector('.frame');
   let iframe = null, isOpen = false, closeTimer;
 
+  const alive = () => Boolean(chrome.runtime?.id);
+
   function notify(type) {
+    if (!alive()) return;
     try { void chrome.runtime.sendMessage({ type }).catch(() => {}); } catch { /* extension reloaded */ }
   }
 
+  /** Returns false when the panel cannot open because the extension was reloaded. */
   function open() {
+    // A reloaded extension cannot load a new panel here. An existing panel stays
+    // usable: it shows its own "reload this page" notice.
+    if (!iframe && !alive()) return false;
     clearTimeout(closeTimer);
     if (!host.isConnected) document.documentElement.append(host);
     if (!iframe) {
@@ -47,6 +54,7 @@
     isOpen = true;
     window.CVAutofillLauncher?.panelChanged(true);
     notify('panel-opened');
+    return true;
   }
 
   function close() {
@@ -59,12 +67,20 @@
     notify('panel-closed');
   }
 
-  chrome.runtime.onMessage.addListener((message, sender) => {
-    if (sender.id !== chrome.runtime.id) return false;
-    if (message?.type === 'panel-toggle') isOpen ? close() : open();
-    else if (message?.type === 'panel-open') open();
-    else if (message?.type === 'panel-close') close();
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!alive() || sender.id !== chrome.runtime.id) return false;
+    const actions = { 'panel-toggle': () => (isOpen ? close() : open()), 'panel-open': open, 'panel-close': close };
+    if (!actions[message?.type]) return false;
+    actions[message.type]();
+    // Answer, or the sender sees a closed channel and treats it as a failure.
+    sendResponse({ ok: true, open: isOpen });
     return false;
+  });
+
+  // The panel's collapse button posts here directly. Unlike chrome.* messaging,
+  // this still works after the extension is reloaded. Only our own frame counts.
+  addEventListener('message', event => {
+    if (iframe && event.source === iframe.contentWindow && event.origin.startsWith('chrome-extension://') && event.data?.type === 'adcv-panel-close') close();
   });
 
   window.CVAutofillPanel = { open, close, toggle: () => (isOpen ? close() : open()), isOpen: () => isOpen };

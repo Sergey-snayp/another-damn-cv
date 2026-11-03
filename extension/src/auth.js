@@ -111,7 +111,7 @@ export async function pullProfile() {
 
   const incoming = await response.json();
 
-  // Merge: the resume PDF lives only here and must survive a pull.
+  // Merge: local-only details edited in the panel must survive a pull.
   const { profile: existing = {} } = await chrome.storage.local.get('profile');
   const profile = { ...existing, ...incoming };
 

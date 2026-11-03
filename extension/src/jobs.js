@@ -3,9 +3,9 @@ import { API_URL, signOut } from './auth.js';
 /**
  * "Send this job to the app".
  *
- * The extension has no standing access to most sites. Pressing the button asks
- * Chrome for access to that one site — a prompt the first time, silent after —
- * then injects the capture script once and posts what it found.
+ * The extension may read any site (manifest host_permissions), so the access
+ * request below normally resolves at once. Pressing the button injects the
+ * capture script once and posts what it found.
  */
 
 export const APP_URL = 'http://localhost:5173';

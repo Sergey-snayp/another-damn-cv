@@ -24,8 +24,8 @@ function announce() {
 }
 
 async function storeProfile(incoming) {
-  // Merge rather than replace: the resume PDF lives only in the extension and
-  // must survive a sync.
+  // Merge rather than replace: local-only details edited in the panel must
+  // survive a sync. CV PDFs are stored separately (src/resumes.js).
   const { profile: existing = {} } = await chrome.storage.local.get('profile');
   const profile = { ...existing, ...incoming };
 

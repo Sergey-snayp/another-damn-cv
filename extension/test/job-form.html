@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Job form recognition test</title>
+<!--
+  Runs src/job-form.js against sample pages: which ones should show the D! button.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=3000 \
+      --dump-dom "file://$PWD/test/job-form.html"
+
+  The result is written into #result as JSON: { passed, failed: [...] }.
+-->
+<template data-case="CV upload with name and email" data-show="true" data-text="Acme careers">
+  <form><label>First name <input name="first_name"></label><label>Email <input type="email" name="email"></label>
+  <label>Resume/CV <input type="file" name="resume"></label><button>Submit application</button></form>
+</template>
+<template data-case="dou.eu-style application without upload" data-show="true" data-text="https://dou.eu/en/jobs/1793628313cb4a/job_applications/new Відгукнутися на вакансію">
+  <form><label>Name <input name="full_name"></label><label>Email <input type="email" name="email"></label>
+  <label>Phone <input type="tel" name="phone"></label><label>LinkedIn <input name="linkedin"></label><button>Send</button></form>
+</template>
+<template data-case="same fields on a contact page" data-show="false" data-text="https://shop.example/contact Contact us">
+  <form><label>Name <input name="full_name"></label><label>Email <input type="email" name="email"></label>
+  <label>Phone <input type="tel" name="phone"></label><label>Company <input name="company"></label><button>Send</button></form>
+</template>
+<template data-case="login form on a careers site" data-show="false" data-text="https://jobs.example/login Sign in to apply">
+  <form><label>Email <input type="email" name="email"></label><label>Password <input type="password" name="password"></label>
+  <label>Full name <input name="name"></label><button>Sign in</button></form>
+</template>
+<template data-case="jobs newsletter" data-show="false" data-text="https://news.example/jobs Get job alerts">
+  <form><label>Email <input type="email" name="email"></label><button>Subscribe</button></form>
+</template>
+<template data-case="job search box" data-show="false" data-text="https://jobs.example/search Find jobs">
+  <form role="search"><input type="search" name="q" placeholder="Job title or company"><label>Location <input name="location"></label>
+  <label>Company <input name="company"></label><button>Search jobs</button></form>
+</template>
+<template data-case="checkout with card fields" data-show="false" data-text="https://shop.example/checkout Apply coupon">
+  <form><label>Full name <input name="name"></label><label>Email <input type="email" name="email"></label>
+  <label>Phone <input type="tel" name="phone"></label><label>Card number <input name="cardnumber" autocomplete="cc-number"></label>
+  <label>CVC <input name="cvc"></label><button>Pay</button></form>
+</template>
+<template data-case="sign-up with password on a jobs site" data-show="false" data-text="https://jobs.example/register Create a candidate account">
+  <form><label>First name <input name="first_name"></label><label>Last name <input name="last_name"></label>
+  <label>Email <input type="email" name="email"></label><label>Password <input type="password" name="password"></label></form>
+</template>
+<template data-case="CV upload alone on a job page" data-show="true" data-text="https://company.example/careers/123 Apply for Backend Engineer">
+  <form><label>Upload your CV <input type="file" name="cv"></label><button>Apply</button></form>
+</template>
+<template data-case="known job board, two fields" data-show="true" data-known="true" data-text="">
+  <form><label>Email <input type="email" name="email"></label><label>Phone <input type="tel" name="phone"></label></form>
+</template>
+
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/job-form.js"></script>
+<script>
+addEventListener('DOMContentLoaded', () => {
+  const templates = [...document.querySelectorAll('template')].map(t => ({ ...t.dataset, html: t.innerHTML }));
+  const failed = [];
+  for (const sample of templates) {
+    document.body.innerHTML = sample.html;
+    const { found } = window.CVAutofillFields.detectFields();
+    const verdict = window.CVAutofillJobForm.assess(found, { knownSite: sample.known === 'true', text: sample.text });
+    if (String(verdict.show) !== sample.show) failed.push({ case: sample.case, expected: sample.show, got: verdict, fields: found.map(f => f.key) });
+  }
+  document.body.innerHTML = '';
+  const result = document.createElement('pre');
+  result.id = 'result';
+  result.textContent = JSON.stringify({ passed: templates.length - failed.length, failed });
+  document.body.append(result);
+});
+</script>

@@ -1,16 +1,17 @@
 # CV Autofill
 
-A local Chrome extension that fills job application forms from a profile stored
-in your browser. Greenhouse, Lever and Ashby.
+A Chrome extension that recognises job application forms on any site and fills
+them from your profile, with a CV from the app. It also sends job postings to the app.
 
-Nothing leaves your machine. There is no server, no account, no telemetry.
+It talks only to your own app (`localhost:3001` and `:5173`); there is no telemetry.
 
 ## Load it
 
 1. Open `chrome://extensions`
 2. Turn on **Developer mode** (top right)
 3. **Load unpacked** → select this `extension/` folder
-4. Pin the icon, click it, fill in your details, attach your resume PDF, **Save**
+4. Pin the icon, click it, sign in on the **Profile** tab, and choose a CV in
+   the **Resume** tab
 
 After updating the extension files, click **Reload** on its card in
 `chrome://extensions`, then reload the pages you had open.
@@ -24,11 +25,33 @@ on this domain** or **Disable on all pages**; Settings in the panel turns the
 last two back on. Collapsing the panel always brings the D! button back on
 that page, even where it was hidden. It reopens after you move to another page in the same tab.
 
-- On supported job boards it is always available.
-- On any other site, the toolbar icon adds it to that tab only (Chrome's
-  temporary "active tab" access). Moving to a different site in that tab ends
-  that access, so the panel cannot reopen there until you click the icon again.
+- The extension runs on every site, so the panel opens anywhere from the
+  toolbar icon. Chrome lists this as "Read and change all your data on all
+  websites". It only reads form fields, and only sends data when you press a button.
+- Your own app (`localhost:5173`, `localhost:3001`) is excluded.
 - Chrome pages (`chrome://`, the Web Store) cannot show it.
+
+## When the D! button appears
+
+`src/job-form.js` decides, on every site, whether the page looks like a job
+application form:
+
+- a CV/resume upload together with name or email fields, or a CV upload on a
+  page with a job sign;
+- or one form with 3+ applicant fields (name, email, phone, LinkedIn, location…)
+  on a page with a job sign: apply, application, job, career, vacancy, position,
+  CV, resume, вакансія, резюме… in the address, title, headings or buttons;
+- on the known job boards in `src/sites.js`, a resume field or any 2 fields.
+
+Forms with a password, card fields or a search box never count. Ordinary sites
+are rescanned less often than job boards, and pages without inputs are skipped.
+`test/job-form.html` checks these rules against sample pages:
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+  --allow-file-access-from-files --virtual-time-budget=3000 \
+  --dump-dom "file://$PWD/test/job-form.html" | grep -o '<pre id="result">.*</pre>'
+```
 
 The panel is `src/sidepanel.html` in an iframe. The page cannot read inside it,
 and page styles do not reach it. Sites can tell the extension is installed by
@@ -48,7 +71,7 @@ project root, then reload the extension. The generated copy in
 
 ## Use it
 
-Open any application page on a supported board, for example:
+Open any job application form, for example:
 
 ```
 https://boards.greenhouse.io/<company>/jobs/<id>
@@ -56,19 +79,38 @@ https://jobs.lever.co/<company>/<id>/apply
 https://jobs.ashbyhq.com/<company>/<id>/application
 ```
 
-A panel appears bottom-right showing which fields were recognised and whether
-you have a value for each. Press **Fill this form**, then review everything
-before submitting.
+The D! button appears on the page's right edge. Open the panel to see which
+fields were recognised and whether you have a value for each. Press **Autofill
+This Page**, then review everything before submitting.
 
-**It never submits anything.** That is deliberate.
+**Nothing is filled until you press Autofill This Page, and it never submits
+anything.** Opening the panel, rescanning and page loads only read the form.
+`content.js` accepts a fill request only from the panel.
+
+## CVs
+
+The **Resume** tab lists the CVs from the app's Documents (sign in on the
+Profile tab first). Choose one, and **Autofill This Page** uploads it as
+`<CV name>.pdf`. Your primary CV is chosen until you pick another. The Autofill
+tab's Resume card switches CVs without leaving the tab. Text fields still come
+from your profile, not from the CV.
+
+The app makes PDFs only through the browser's print, so the extension does the
+same: it opens the CV in a background tab of the app, where you are signed in
+and your CV style is stored, and saves it as a PDF with Chrome's debugger
+(`Page.printToPDF`). Chrome shows a "CV Autofill started debugging this
+browser" bar for those few seconds. The PDF is kept and remade only after the
+CV changes in the app. `src/resumes.js` and `makeCvPdf` in `src/background.js`
+hold this logic; the list comes from `GET /api/extension/resumes`.
+
+PDFs added to the extension by hand before 0.13.0 are removed on update.
 
 ## Send a job to the app
 
 On any job page — LinkedIn, Indeed, a company's careers page — open the
 panel and press **Send this job to the app**. Sign in on the Profile tab first.
 
-- The first time on a site, Chrome asks to let the extension read it. It reads
-  that tab only when you press the button.
+- It reads the page only when you press the button.
 - On search pages (LinkedIn, Indeed, Glassdoor) it captures the open job, not
   the list beside it. The rules for that are in `src/capture-sites.js`; when a
   site changes its layout, that is the file to update.
@@ -89,9 +131,11 @@ fields.js    finds inputs and guesses what each one is
 filler.js    writes values in a way React accepts
 content.js     answers the panel's scan and fill requests
 launcher.js    the D! button on the page edge
+job-form.js    decides whether a page looks like a job application form
 panel-host.js  puts the panel frame into the page; opens and closes it
 background.js  toolbar icon, adding the panel to other sites, reopening after loads
 sidepanel.js   the panel itself; stores your profile in chrome.storage.local
+resumes.js     your app CVs, which one Autofill uploads, and its PDF
 ```
 
 **Field detection** gathers every signal an input carries — its `<label>`,

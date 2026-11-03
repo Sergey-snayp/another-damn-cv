@@ -66,13 +66,16 @@ async function fill(profile) {
   return { filled, failures, skippedSensitive: lastScan.skipped.length };
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'scan') {
     sendResponse(scan());
     return false;
   }
 
+  // Filling happens only when the person presses "Autofill This Page" in the
+  // panel. Nothing else may ask for it: not page loads, scans or the launcher.
   if (message.type === 'fill') {
+    if (!sender.url?.startsWith(chrome.runtime.getURL('src/sidepanel.html'))) return false;
     // Async reply: returning true keeps the message channel open.
     fill(message.profile).then(sendResponse);
     return true;
@@ -81,15 +84,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
+// The D! button appears only on pages that look like a job application form
+// (src/job-form.js). This script runs on every site, so it stays cheap: pages
+// without inputs are skipped, and ordinary sites rescan less often.
+const KNOWN_BOARD = Boolean(Sites.siteFor(location.hostname)) || location.protocol === 'file:';
+let lastVerdict = null;
 function updateLauncher() {
-  const result = scan();
-  const site = Boolean(result.site) || location.protocol === 'file:';
-  const fields = lastScan.found.filter(field => field.key !== 'coverLetter' && !field.element.closest('form')?.querySelector('input[type="password"]'));
-  const application = fields.some(field => field.key === 'resume') || fields.length >= 2;
-  window.CVAutofillLauncher?.update(site && application);
+  if (!document.querySelector('input, textarea, select')) { window.CVAutofillLauncher?.update(false); return; }
+  scan();
+  const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD });
+  if (verdict.show !== lastVerdict) { lastVerdict = verdict.show; window.CVAutofillLauncher?.update(verdict.show); }
 }
 let scanTimer;
-const scheduleScan = () => { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, 140); };
+const scheduleScan = () => { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, KNOWN_BOARD ? 140 : 600); };
 const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel']);
 new MutationObserver(records => {
   const changed = records.some(record => {
@@ -98,7 +105,13 @@ new MutationObserver(records => {
     return true;
   });
   if (changed) scheduleScan();
-}).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'disabled', 'readonly', 'type', 'class', 'style'] });
+}).observe(document.documentElement, {
+  childList: true,
+  subtree: true,
+  attributes: true,
+  // class/style change constantly on busy sites; job boards need them to spot step changes.
+  attributeFilter: KNOWN_BOARD ? ['hidden', 'disabled', 'readonly', 'type', 'class', 'style'] : ['hidden', 'disabled', 'type'],
+});
 addEventListener('resize', scheduleScan);
 addEventListener('popstate', scheduleScan);
 addEventListener('hashchange', scheduleScan);

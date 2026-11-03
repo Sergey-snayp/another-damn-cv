@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CV Autofill",
-  "version": "0.11.0",
+  "version": "0.14.0",
   "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -12,30 +12,16 @@
   },
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "activeTab",
     "scripting",
     "tabs",
-    "identity"
+    "identity",
+    "debugger"
   ],
   "host_permissions": [
-    "https://boards.greenhouse.io/*",
-    "https://job-boards.greenhouse.io/*",
-    "https://boards.eu.greenhouse.io/*",
-    "https://jobs.lever.co/*",
-    "https://jobs.ashbyhq.com/*",
-    "https://jobs.smartrecruiters.com/*",
-    "https://apply.workable.com/*",
-    "https://*.bamboohr.com/*",
-    "https://*.recruitee.com/*",
-    "https://*.breezy.hr/*",
-    "https://*.applytojob.com/*",
-    "https://*.myworkdayjobs.com/*",
-    "https://*.icims.com/*",
-    "http://localhost:3001/*"
-  ],
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "action": {
     "default_title": "CV Autofill",
@@ -47,20 +33,13 @@
   "content_scripts": [
     {
       "matches": [
-        "https://boards.greenhouse.io/*",
-        "https://job-boards.greenhouse.io/*",
-        "https://boards.eu.greenhouse.io/*",
-        "https://jobs.lever.co/*",
-        "https://jobs.ashbyhq.com/*",
-        "https://jobs.smartrecruiters.com/*",
-        "https://apply.workable.com/*",
-        "https://*.bamboohr.com/*",
-        "https://*.recruitee.com/*",
-        "https://*.breezy.hr/*",
-        "https://*.applytojob.com/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.icims.com/*",
+        "http://*/*",
+        "https://*/*",
         "file:///*"
+      ],
+      "exclude_matches": [
+        "http://localhost:5173/*",
+        "http://localhost:3001/*"
       ],
       "js": [
         "src/sites.js",
@@ -68,6 +47,7 @@
         "src/filler.js",
         "src/launcher.js",
         "src/panel-host.js",
+        "src/job-form.js",
         "src/content.js"
       ],
       "all_frames": false,

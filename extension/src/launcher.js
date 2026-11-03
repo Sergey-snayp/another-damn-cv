@@ -1,6 +1,11 @@
 /** Isolated page-edge launcher. It never reads profile values or fills a form. */
 (() => {
   if (window.CVAutofillLauncher) return;
+  // False once the extension is reloaded or updated: this copy can no longer use
+  // chrome.* APIs, and calling them throws "Extension context invalidated".
+  const alive = () => Boolean(chrome.runtime?.id);
+  const store = values => { if (!alive()) return; try { void chrome.storage.local.set(values).catch(() => {}); } catch { /* reloaded */ } };
+  const STALE = 'CV Autofill was updated. Reload this page to use it.';
   const host = document.createElement('div');
   host.id = 'adcv-autofill-launcher';
   const shadow = host.attachShadow({ mode: 'open' });
@@ -33,14 +38,22 @@
     // where it was hidden. A new hide choice from the × menu applies again.
     const hiddenByChoice = !enabled || disabledHosts.includes(location.hostname) || dismissedUrl === location.href;
     if (!panelOpen && (keepAfterPanel || (available && !hiddenByChoice))) {
+      loadTheme();
       if (!host.isConnected) document.documentElement.append(host);
       if (position !== null) host.style.setProperty('top', `${clamp(position * innerHeight)}px`, 'important');
     } else { closeMenu(); host.remove(); }
   }
-  fetch(chrome.runtime.getURL('assets/theme/launcher-colors.css')).then(response => {
-    if (!response.ok) throw new Error('Theme unavailable');
-    return response.text();
-  }).then(theme => { sheet.replaceSync(theme + css); host.hidden = false; }).catch(() => host.remove());
+  // Loaded the first time the button shows: this script runs on every site,
+  // and most pages never show it.
+  let themeRequested = false;
+  function loadTheme() {
+    if (themeRequested || !alive()) return;
+    themeRequested = true;
+    fetch(chrome.runtime.getURL('assets/theme/launcher-colors.css')).then(response => {
+      if (!response.ok) throw new Error('Theme unavailable');
+      return response.text();
+    }).then(theme => { sheet.replaceSync(theme + css); host.hidden = false; }).catch(() => host.remove());
+  }
   host.hidden = true;
   shadow.innerHTML = `<div class="launcher" role="group" aria-label="CV Autofill launcher">
     <button class="open" title="Open Autofill" aria-label="Open Autofill"><img alt="D!" src="${chrome.runtime.getURL('assets/brand/d-stamp-logo.png')}"></button>
@@ -54,8 +67,8 @@
   const launcher = shadow.querySelector('.launcher'), open = shadow.querySelector('.open'), grip = shadow.querySelector('.grip'), status = shadow.querySelector('.status');
   open.addEventListener('click', () => {
     status.hidden = true;
-    if (window.CVAutofillPanel) window.CVAutofillPanel.open();
-    else { status.textContent = 'Reload this page to reconnect the extension.'; status.hidden = false; }
+    if (window.CVAutofillPanel?.open()) return;
+    status.textContent = alive() ? 'Reload this page to reconnect the extension.' : STALE; status.hidden = false;
   });
   // × opens a menu of how long to hide. Settings in the panel undo the lasting choices.
   const dismiss = shadow.querySelector('.dismiss'), menu = shadow.querySelector('.menu'), items = [...menu.querySelectorAll('button')];
@@ -82,13 +95,13 @@
     closeMenu();
     keepAfterPanel = false;
     if (choice === 'visit') dismissedUrl = location.href;
-    else if (choice === 'domain') { disabledHosts = [...new Set([...disabledHosts, location.hostname])]; void chrome.storage.local.set({ launcherDisabledHosts: disabledHosts }).catch(() => {}); }
-    else { enabled = false; void chrome.storage.local.set({ launcherEnabled: false }).catch(() => {}); }
+    else if (choice === 'domain') { disabledHosts = [...new Set([...disabledHosts, location.hostname])]; store({ launcherDisabledHosts: disabledHosts }); }
+    else { enabled = false; store({ launcherEnabled: false }); }
     renderVisibility();
   });
   let drag = null;
   function move(y) { const top = clamp(y); position = top / innerHeight; host.style.setProperty('top', `${top}px`, 'important'); }
-  function savePosition() { void chrome.storage.local.set({ launcherPosition: position }).catch(() => {}); }
+  function savePosition() { store({ launcherPosition: position }); }
   grip.addEventListener('pointerdown', event => {
     if (event.button !== 0) return;
     event.preventDefault(); drag = { id: event.pointerId, offset: event.clientY - host.getBoundingClientRect().top };
