@@ -7,7 +7,8 @@ import { AuthenticationError } from '../../src/modules/auth/application/errors';
 import { AUTH_API } from '../../src/modules/auth/auth.tokens';
 import { ExtensionResumesController } from '../../src/modules/resumes/adapters/inbound/http/extension-resumes.controller';
 import { RESUMES_API } from '../../src/modules/resumes/resumes.tokens';
-import type { ResumeSummary } from '../../src/modules/resumes/domain/resume';
+import type { RenderedResume, ResumeSummary } from '../../src/modules/resumes/domain/resume';
+import { ResumeError } from '../../src/modules/resumes/application/errors';
 
 const summary = (overrides: Partial<ResumeSummary>): ResumeSummary => ({
   id: 'resume-1',
@@ -23,6 +24,24 @@ const summary = (overrides: Partial<ResumeSummary>): ResumeSummary => ({
   ...overrides,
 });
 const listed: string[] = [];
+const rendered = {
+  snapshot: 3,
+  contact: { firstName: 'Private', lastName: 'Person', email: 'private@example.com', phone: '+1 555 0100' },
+  summaries: { default: 'Backend engineer building payment APIs.' },
+  experiences: [
+    {
+      title: 'Senior Engineer',
+      company: 'Acme',
+      client: null,
+      blurb: null,
+      achievements: [
+        { bullet: 'Moved billing to PostgreSQL', problem: null, action: null, result: 'Cut costs' },
+      ],
+    },
+  ],
+  skills: [{ name: 'Node.js', category: 'Backend', aliases: ['NestJS'] }],
+  educations: [{ degree: 'BSc', field: 'Computer Science', institution: 'KPI', fullName: null }],
+} as unknown as RenderedResume;
 
 @Module({
   controllers: [ExtensionResumesController],
@@ -39,6 +58,10 @@ const listed: string[] = [];
     {
       provide: RESUMES_API,
       useValue: {
+        current: (userId: string, id: string) =>
+          userId === 'owner' && id === 'primary'
+            ? Promise.resolve(rendered)
+            : Promise.reject(new ResumeError('not-found', 'No such resume.')),
         list: (userId: string) => {
           listed.push(userId);
           return Promise.resolve([
@@ -84,4 +107,27 @@ test('the extension lists CVs with its sync token and gets only picker fields', 
     },
   ]);
   assert.deepEqual(listed, ['owner']);
+
+  const text = await fetch(`${url}/primary/text`, { headers: { authorization: 'Bearer owner-token' } });
+  assert.equal(text.status, 200);
+  const body = (await text.json()) as { id: string; text: string };
+  assert.equal(body.id, 'primary');
+  for (const part of [
+    'payment APIs',
+    'Senior Engineer',
+    'PostgreSQL',
+    'Cut costs',
+    'Node.js',
+    'NestJS',
+    'Computer Science',
+  ]) {
+    assert.ok(body.text.includes(part), part);
+  }
+  for (const secret of ['Private', 'private@example.com', '555'])
+    assert.ok(!body.text.includes(secret), secret);
+  assert.equal(
+    (await fetch(`${url}/someone-else/text`, { headers: { authorization: 'Bearer owner-token' } })).status,
+    404,
+  );
+  assert.equal((await fetch(`${url}/primary/text`)).status, 401);
 });

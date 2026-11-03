@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ALL_STATUSES, EXTRACTION_LABELS, SOURCE_LABELS, STATUS_LABELS, jobName, jobsApi,
   type Job, type JobDetail as JobWithHistory, type JobEdit, type JobStatus,
@@ -229,6 +229,9 @@ export function JobDetail() {
  */
 function TailorCard({ job }: { job: Job }) {
   const navigate = useNavigate();
+  // The extension's "Improve my match" links here with ?tailorFrom=<resume id>.
+  const [searchParams] = useSearchParams();
+  const requested = searchParams.get('tailorFrom');
   const [resumes, setResumes] = useState<ResumeSummary[] | null>(null);
   const [source, setSource] = useState('');
   const [running, setRunning] = useState(false);
@@ -238,10 +241,10 @@ function TailorCard({ job }: { job: Job }) {
     resumeApi.list().then((rows) => {
       setResumes(rows);
       const own = rows.filter((r) => !r.jobId);
-      const main = own.find((r) => r.isPrimary) ?? own.find((r) => r.currentSnapshotId) ?? own[0];
+      const main = own.find((r) => r.id === requested) ?? own.find((r) => r.isPrimary) ?? own.find((r) => r.currentSnapshotId) ?? own[0];
       setSource(main?.id ?? '');
     }, (err: Error) => setError(err.message));
-  }, []);
+  }, [requested]);
 
   const copy = resumes?.find((r) => r.jobId === job.id);
   const sources = resumes?.filter((r) => !r.jobId) ?? [];
