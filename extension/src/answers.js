@@ -20,7 +20,10 @@ async function post(path, body) {
     throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`);
   }
   if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
-  if (!response.ok) throw new Error(`Server returned ${response.status}.`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(typeof body.message === 'string' ? body.message : `Server returned ${response.status}.`);
+  }
   return response.json();
 }
 
@@ -31,4 +34,9 @@ export function matchAnswers(company, questions) {
 
 export function saveAnswers(company, answers) {
   return post('', { company, answers });
+}
+
+/** An AI draft for one question: { answer, needsInput }. Runs Claude on the server. */
+export function draftAnswer(request) {
+  return post('/draft', request);
 }

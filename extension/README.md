@@ -237,10 +237,25 @@ On the next form, Autofill asks the server for matches (`src/answers.js`,
 Settings → Fields to fill → **Saved answers** switches this off. Telegram is
 now a normal profile field (Links).
 
-## What it does not do yet
+## AI drafts
 
-- **Brand-new free-text questions** ("Fintech experience") the first time:
-  planned as AI drafts.
+Questions with no saved answer appear in **Questions to answer** on the
+Autofill tab. **Draft with AI** (or **Draft all**) asks the server to draft
+one with the Claude CLI (`POST /api/extension/answers/draft`), from the chosen
+CV without contact details and the job posting on the page. Drafts run one at
+a time and only on your click, or when you press Autofill with Settings →
+**Draft unknown questions with AI** switched on (off by default).
+
+- Claims come only from the CV. Motivation, salary, availability, handles and
+  similar personal facts come back as questions for you, not as answers;
+  "why us" drafts leave `[add your reason]`.
+- Choice questions get one of the form's options, number fields a number, and
+  text stays within the field's character limit.
+- A draft goes into an empty field with a dashed outline and an "AI draft"
+  tooltip until you edit it. A field you already filled is left alone; copy
+  the draft instead. **Save as answer** keeps a good draft for next time.
+
+## What it does not do yet
 - **Multi-step forms** fill one step per press of Autofill.
 - **Workday.** Multi-step, iframes, shadow DOM. Disproportionate effort.
 - **Forms inside iframes** from another site (a Greenhouse form embedded on a

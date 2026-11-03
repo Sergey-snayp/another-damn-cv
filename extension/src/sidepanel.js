@@ -3,7 +3,7 @@ import { captureTab, jobUrl, NotSignedInError, requestSiteAccess, sendCapture, u
 import { icon, escapeHtml as esc } from './icons.js';
 import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
-import { matchAnswers, saveAnswers } from './answers.js';
+import { draftAnswer, matchAnswers, saveAnswers } from './answers.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
@@ -103,6 +103,7 @@ function renderAutofill() {
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
   host.innerHTML = `${pageCard()}${matchCard()}
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
+    ${questionsCard()}
     ${answersCard()}
     ${resumeCard()}
     <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
@@ -140,7 +141,9 @@ async function runFill() {
       missing: result.missing ?? [],
     };
   } catch (error) { fillReport = { url: target?.url, text: error.message, kind: 'error', notes: [], missing: [] }; }
-  finally { filling = false; renderAutofill(); }
+  finally { filling = false; await loadQuestions().catch(() => {}); renderAutofill(); }
+  // Settings → "Draft unknown questions with AI": off unless the person switched it on.
+  if (aiDraftAuto && fillReport?.kind !== 'error') void draftAll();
 }
 
 /**
@@ -168,6 +171,89 @@ async function savedAnswersFor(tab) {
 
 // ─── Save answers from this form ─────────────────────────────────────────
 let answerDraft = null; // { url, items: [{ question, answer, keep }] } while choosing what to save
+
+// ─── AI drafts for questions without an answer ─────────────────────────
+// Each draft runs Claude on the server, so it starts only from a button
+// (or the Autofill setting the person switched on). Nothing is saved unless
+// they press "Save as answer".
+let formQuestions = [], questionsUrl = null, aiDraftAuto = false;
+const drafts = new Map(); // question id → { status, answer, needsInput, message, inserted }
+let draftQueue = Promise.resolve(), jobCache = null;
+async function loadQuestions() {
+  if (!scan?.fields?.length) { formQuestions = []; return; }
+  formQuestions = (await askPage({ type: 'questions' }))?.questions ?? [];
+}
+/** The posting for context: the page's job description when it has one. */
+async function jobForDrafts() {
+  if (jobCache?.url === currentTab?.url) return jobCache.job;
+  let text = '';
+  try { const capture = await captureTab(currentTab.id); text = jobFromCapture(capture).text.slice(0, 40000); } catch { /* title only */ }
+  const job = { title: scan?.context?.title ?? '', company: scan?.context?.company ?? '', text };
+  jobCache = { url: currentTab?.url, job };
+  return job;
+}
+function draftQuestion(id) {
+  const question = formQuestions.find(item => item.id === id);
+  if (!question || drafts.get(id)?.status === 'drafting') return draftQueue;
+  if (!resumes.chosen) { drafts.set(id, { status: 'error', message: 'Choose a CV in the Resume tab first.' }); renderAutofill(); return draftQueue; }
+  drafts.set(id, { status: 'queued' }); renderAutofill();
+  // One at a time: each draft is a separate Claude run.
+  draftQueue = draftQueue.then(async () => {
+    drafts.set(id, { status: 'drafting' }); renderAutofill();
+    try {
+      const { answer, needsInput } = await draftAnswer({
+        question: question.question, kind: question.kind,
+        ...(question.options && { options: question.options }), ...(question.maxLength && { maxLength: question.maxLength }),
+        job: await jobForDrafts(), resumeId: resumes.chosen.id,
+      });
+      const inserted = answer ? Boolean((await askPage({ type: 'fill-draft', id, kind: question.kind, value: answer }))?.filled) : false;
+      drafts.set(id, { status: 'done', answer, needsInput, inserted });
+    } catch (error) {
+      if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
+      drafts.set(id, { status: 'error', message: error.message });
+    }
+    renderAutofill();
+  });
+  return draftQueue;
+}
+function draftAll() {
+  for (const question of formQuestions.filter(item => !item.value && !drafts.has(item.id))) void draftQuestion(question.id);
+  return draftQueue;
+}
+function questionsCard() {
+  const open = formQuestions.filter(item => !item.value || drafts.has(item.id));
+  if (!open.length) return '';
+  const rows = open.map(item => {
+    const draft = drafts.get(item.id);
+    const body = !draft ? `<button class="ghost small" data-draft="${esc(item.id)}">${icon('edit', 15)}Draft with AI</button>`
+      : draft.status === 'queued' ? '<p class="draft-state">Waiting…</p>'
+      : draft.status === 'drafting' ? '<p class="draft-state">Drafting with Claude…</p>'
+      : draft.status === 'error' ? `<p class="draft-state error">${esc(draft.message)}</p><button class="ghost small" data-draft="${esc(item.id)}">Try again</button>`
+      : `${draft.answer ? `<blockquote class="draft-text">${esc(draft.answer)}</blockquote><p class="draft-state">${draft.inserted ? 'Put in the form, marked AI draft. Review it before submitting.' : 'The field already has text, so the draft was not put in. Copy it if you want it.'}</p>` : '<p class="draft-state">Your CV does not cover this, so no draft was written.</p>'}
+        ${draft.needsInput?.length ? `<ul class="draft-needs">${draft.needsInput.map(need => `<li>${esc(need)}</li>`).join('')}</ul>` : ''}
+        <div class="draft-actions">${draft.answer ? `<button class="ghost small" data-copy-draft="${esc(item.id)}">Copy</button><button class="ghost small" data-save-draft="${esc(item.id)}">Save as answer</button>` : ''}<button class="ghost small" data-draft="${esc(item.id)}">Redraft</button></div>`;
+    return `<li><strong>${esc(item.question)}</strong>${body}</li>`;
+  }).join('');
+  const waiting = open.filter(item => !drafts.has(item.id)).length;
+  return `<div class="card questions-card"><h2>${icon('edit')}Questions to answer</h2><p>No saved answer fits these. Claude can draft from your CV; personal facts are left for you.</p>${waiting > 1 ? `<button class="ghost" id="draft-all">Draft all ${waiting} with AI</button>` : ''}<ul class="question-list">${rows}</ul><div class="status" id="questions-status" role="status"></div></div>`;
+}
+document.addEventListener('click', async event => {
+  const draft = event.target.closest('[data-draft]');
+  if (draft) { drafts.delete(draft.dataset.draft); void draftQuestion(draft.dataset.draft); return; }
+  if (event.target.closest('#draft-all')) { void draftAll(); return; }
+  const copy = event.target.closest('[data-copy-draft]');
+  if (copy) {
+    try { await navigator.clipboard.writeText(drafts.get(copy.dataset.copyDraft)?.answer ?? ''); status('questions-status', 'Copied.', 'success'); }
+    catch { status('questions-status', 'Select the draft and copy it manually.', 'error'); }
+    return;
+  }
+  const save = event.target.closest('[data-save-draft]');
+  if (save) {
+    const question = formQuestions.find(item => item.id === save.dataset.saveDraft);
+    try { await saveAnswers(scan?.context?.company ?? '', [{ question: question.question, answer: drafts.get(question.id).answer }]); status('questions-status', 'Saved. Edit it in the app under Profile → Saved answers.', 'success'); }
+    catch (error) { status('questions-status', error.message, 'error'); }
+  }
+});
 async function startSavingAnswers() {
   const questions = (await askPage({ type: 'questions' }))?.questions ?? [];
   const items = questions.filter(question => question.value).map(question => ({ question: question.question, answer: question.value, keep: true }));
@@ -458,13 +544,16 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
     if (answerDraft && answerDraft.url !== tab?.url) answerDraft = null;
+    if (questionsUrl !== tab?.url) { drafts.clear(); questionsUrl = tab?.url; jobCache = null; }
     fillGroups = stored.autofillGroups ?? {};
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
+    aiDraftAuto = stored.aiDraftAuto === true;
+    await loadQuestions().catch(() => { formQuestions = []; });
     renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
     await Promise.all([renderSyncState(), renderAccount()]);
     void updateMatch();
@@ -501,7 +590,8 @@ $('fill-groups').addEventListener('change', async event => {
   const next = { ...fillGroups, [box.dataset.fillGroup]: box.checked };
   try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
 });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups']); $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('ai-draft-auto').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ aiDraftAuto: box.checked }); aiDraftAuto = box.checked; } catch { box.checked = !box.checked; } });
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });

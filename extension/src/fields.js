@@ -374,7 +374,8 @@ function detectQuestions(found = detectFields().found) {
       if (kind === 'select') options = [...element.options].filter((option) => option.value !== '').map((option) => option.textContent.trim()).slice(0, 200);
       const question = labelOf(element);
       if (!question || question === 'Unnamed field' || looksLikeName(question)) continue;
-      questions.push({ id: tag(element), question, kind, ...(options && { options }), value: currentAnswer(element, kind) });
+      const maxLength = element.maxLength > 0 ? element.maxLength : undefined;
+      questions.push({ id: tag(element), question, kind, ...(options && { options }), ...(maxLength && { maxLength }), value: currentAnswer(element, kind) });
     }
   }
   return questions;

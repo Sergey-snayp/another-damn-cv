@@ -91,6 +91,14 @@ function focusField(id) {
   return true;
 }
 
+/** A dashed outline and tooltip on an AI-drafted field, removed when the person edits it. */
+function markDraft(element) {
+  const before = { outline: element.style.outline, title: element.title };
+  element.style.outline = '2px dashed #b8cc00';
+  element.title = 'AI draft: review before submitting';
+  element.addEventListener('input', () => { element.style.outline = before.outline; element.title = before.title; }, { once: true });
+}
+
 const fromPanel = (sender) => Boolean(sender.url?.startsWith(chrome.runtime.getURL('src/sidepanel.html')));
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -112,6 +120,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'questions') {
     sendResponse({ questions: Fields.detectQuestions(Fields.detectFields().found) });
     return false;
+  }
+  if (message.type === 'fill-draft') {
+    // An AI draft the person asked for with "Draft with AI". Marked until they edit it.
+    const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(message.id))}"]`);
+    if (!element) { sendResponse({ filled: false }); return false; }
+    Filler.fillAnswer(element, message.kind, message.value).then((result) => {
+      if (result.filled) markDraft(element);
+      sendResponse(result);
+    }, () => sendResponse({ filled: false }));
+    return true;
   }
   if (message.type === 'check-required') {
     sendResponse({ missing: Fields.findMissingRequired(Fields.detectFields().found) });
