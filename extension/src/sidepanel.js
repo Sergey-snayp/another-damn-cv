@@ -179,7 +179,7 @@ function cvDetails(item) {
 function resumeRows() {
   return resumes.items.map(item => {
     const chosen = item.id === resumes.chosen?.id;
-    return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong>${esc(item.name)}</strong><small>${esc(cvDetails(item))}</small></span>${item.isPrimary ? '<span class="badge">Primary</span>' : ''}</button></li>`;
+    return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong title="${esc(item.name)}">${esc(item.name)}</strong><small>${esc(cvDetails(item))}</small></span>${item.isPrimary ? '<span class="badge">Primary</span>' : ''}</button></li>`;
   }).join('');
 }
 function resumeEmpty() {
@@ -194,7 +194,7 @@ function cvPicker(where) {
   if (!chosen) return resumeEmpty();
   const many = resumes.items.length > 1, open = many && pickerOpen[where];
   const note = preparingPdf ? 'Making the PDF…' : where === 'autofill' ? 'Autofill uploads this CV' : cvDetails(chosen);
-  return `<div class="document-selection resume-current"><button class="resume-switch" data-toggle-picker="${where}" ${many ? `aria-expanded="${open}" aria-controls="picker-${where}"` : 'disabled'} title="${many ? 'Change CV' : 'Add more CVs in the app to switch'}"><span><strong>${esc(chosen.name)}${chosen.isPrimary ? ' <span class="badge">Primary</span>' : ''}</strong><small>${esc(note)}</small></span>${many ? `<span class="switch-label">Change${icon('chevron', 15)}</span>` : ''}</button><button class="icon-button" data-open-cv="${esc(chosen.id)}" title="Open in app" aria-label="Open ${esc(chosen.name)} in the app">${icon('link', 18)}</button></div>
+  return `<div class="document-selection resume-current"><button class="resume-switch" data-toggle-picker="${where}" ${many ? `aria-expanded="${open}" aria-controls="picker-${where}"` : 'disabled'} title="${many ? 'Change CV' : 'Add more CVs in the app to switch'}"><span><strong class="cv-name" title="${esc(chosen.name)}">${esc(chosen.name)}</strong><small>${chosen.isPrimary ? '<span class="badge">Primary</span>' : ''}${esc(note)}</small></span>${many ? `<span class="switch-label">Change${icon('chevron', 15)}</span>` : ''}</button><button class="icon-button" data-open-cv="${esc(chosen.id)}" title="Open in app" aria-label="Open ${esc(chosen.name)} in the app">${icon('link', 18)}</button></div>
     ${open ? `<ul class="resume-list" id="picker-${where}" aria-label="Choose a CV">${resumeRows()}</ul>` : ''}`;
 }
 function resumeCard() {
@@ -255,9 +255,9 @@ function matchCard() {
   const label = matchLabel(score), total = matched.length + missing.length;
   const keywords = [...matched.map(name => `<li class="kw has">${icon('check', 13)}${esc(name)}</li>`), ...missing.map(name => `<li class="kw missing">${esc(name)}</li>`)].join('');
   return `<section class="card match-card match-${label.toLowerCase()}" aria-label="Keyword match">
-    <div class="match-top"><div><h2>${label} match</h2><p><strong>${matched.length} of ${total}</strong> keywords in ${esc(resumes.chosen.name)}</p></div>
+    <div class="match-top"><div><h2>${label} match</h2><p><strong>${matched.length} of ${total}</strong> keywords in <span class="cv-inline" title="${esc(resumes.chosen.name)}">${esc(resumes.chosen.name)}</span></p></div>
       <div class="ring" role="img" aria-label="Score ${score} of 100"><svg viewBox="0 0 72 72" width="72" height="72"><circle cx="36" cy="36" r="30" class="ring-track"/><circle cx="36" cy="36" r="30" class="ring-value" stroke-dasharray="${(RING * score) / 100} ${RING}" transform="rotate(-90 36 36)"/></svg><span>${score}</span></div></div>
-    ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p>${esc(match.better.name)} matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
+    ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p><span class="cv-inline" title="${esc(match.better.name)}">${esc(match.better.name)}</span> matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
     <details class="keywords"><summary>Keywords from the posting</summary><ul>${keywords}</ul></details>
     <button class="primary" id="improve-match">Improve my match${icon('chevron', 17)}</button>
     <div class="status" id="match-status" role="status"></div>

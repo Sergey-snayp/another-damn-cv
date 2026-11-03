@@ -136,9 +136,8 @@ dialog textarea { resize: vertical; margin-bottom: 15px; }
 .resume-switch strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
 .resume-switch small { display: block; font-size: 11px; color: var(--color-muted); margin-top: 3px; }
 .resume-current .icon-button { align-self: stretch; height: auto; width: 46px; }
-.switch-label { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 12px; font-weight: 600; color: var(--color-muted); }
+.resume-switch .switch-label { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 12px; font-weight: 600; color: var(--color-muted); }
 .resume-switch[aria-expanded=true] .switch-label svg { transform: rotate(90deg); }
-.resume-switch strong .badge { margin-left: 6px; vertical-align: 1px; }
 .match-card { --match: var(--color-muted); background: linear-gradient(135deg, var(--color-surface), var(--color-background)); }
 .match-strong { --match: var(--color-success); } .match-good { --match: var(--color-accent-border); } .match-low { --match: var(--color-error); }
 .match-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -156,3 +155,9 @@ dialog textarea { resize: vertical; margin-bottom: 15px; }
 .kw.has { background: var(--color-success-soft); border-color: var(--color-success-border); }
 .kw.missing { color: var(--color-muted); background: var(--color-surface); text-decoration: line-through; text-decoration-color: var(--color-error); }
 .match-card .hint { text-align: left; margin-top: 10px; }
+/* Long CV names are cut after two lines (one in sentences); the full name is in the tooltip. */
+.resume-meta strong, .resume-switch .cv-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.resume-switch small { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.resume-switch small .badge { padding: 0 7px; font-size: 10px; }
+.cv-inline { display: inline-block; max-width: 100%; vertical-align: bottom; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.match-top > div:first-child { flex: 1; min-width: 0; }
