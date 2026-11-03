@@ -176,9 +176,11 @@ async function saveProfile() {
 function cvDetails(item) {
   return [item.targetRole, item.tailoredForJob ? 'Tailored for a job' : '', `edited ${new Date(item.updatedAt).toLocaleDateString()}`].filter(Boolean).join(' · ');
 }
-function resumeRows() {
+/** namesOnly: the Resume tab shows CV names and nothing else. */
+function resumeRows({ namesOnly = false } = {}) {
   return resumes.items.map(item => {
     const chosen = item.id === resumes.chosen?.id;
+    if (namesOnly) return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong title="${esc(item.name)}">${esc(item.name)}</strong></span></button></li>`;
     return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong title="${esc(item.name)}">${esc(item.name)}</strong><small>${esc(cvDetails(item))}</small></span>${item.isPrimary ? '<span class="badge">Primary</span>' : ''}</button></li>`;
   }).join('');
 }
@@ -193,9 +195,10 @@ function cvPicker(where) {
   const chosen = resumes.chosen;
   if (!chosen) return resumeEmpty();
   const many = resumes.items.length > 1, open = many && pickerOpen[where];
-  const note = preparingPdf ? 'Making the PDF…' : where === 'autofill' ? 'Autofill uploads this CV' : cvDetails(chosen);
-  return `<div class="document-selection resume-current"><button class="resume-switch" data-toggle-picker="${where}" ${many ? `aria-expanded="${open}" aria-controls="picker-${where}"` : 'disabled'} title="${many ? 'Change CV' : 'Add more CVs in the app to switch'}"><span><strong class="cv-name" title="${esc(chosen.name)}">${esc(chosen.name)}</strong><small>${chosen.isPrimary ? '<span class="badge">Primary</span>' : ''}${esc(note)}</small></span>${many ? `<span class="switch-label">Change${icon('chevron', 15)}</span>` : ''}</button><button class="icon-button" data-open-cv="${esc(chosen.id)}" title="Open in app" aria-label="Open ${esc(chosen.name)} in the app">${icon('link', 18)}</button></div>
-    ${open ? `<ul class="resume-list" id="picker-${where}" aria-label="Choose a CV">${resumeRows()}</ul>` : ''}`;
+  const namesOnly = where === 'resume';
+  const note = preparingPdf ? 'Making the PDF…' : 'Autofill uploads this CV';
+  return `<div class="document-selection resume-current"><button class="resume-switch" data-toggle-picker="${where}" ${many ? `aria-expanded="${open}" aria-controls="picker-${where}"` : 'disabled'} title="${many ? 'Change CV' : 'Add more CVs in the app to switch'}"><span><strong class="cv-name" title="${esc(chosen.name)}">${esc(chosen.name)}</strong>${namesOnly ? '' : `<small>${chosen.isPrimary ? '<span class="badge">Primary</span>' : ''}${esc(note)}</small>`}</span>${many ? `<span class="switch-label">Change${icon('chevron', 15)}</span>` : ''}</button><button class="icon-button" data-open-cv="${esc(chosen.id)}" title="Open in app" aria-label="Open ${esc(chosen.name)} in the app">${icon('link', 18)}</button></div>
+    ${open ? `<ul class="resume-list" id="picker-${where}" aria-label="Choose a CV">${resumeRows({ namesOnly })}</ul>` : ''}`;
 }
 function resumeCard() {
   return `<details class="card" open><summary>${icon('file')}Resume</summary>${cvPicker('autofill')}</details>`;
