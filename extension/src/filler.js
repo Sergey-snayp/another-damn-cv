@@ -291,6 +291,10 @@ function valueFor(field, profile) {
   if (field.kind === 'combobox' && LOCATION_KEYS.has(field.key)) {
     return [profile.city, profile.country].filter(Boolean).join(', ') || profile.location;
   }
+  // "City, State/Province, Country and Zip Code" asks for every part.
+  if (field.compound) {
+    return [profile.city, profile.state, profile.country, profile.postalCode].filter(Boolean).join(', ') || profile.location;
+  }
   return profile[field.key];
 }
 
@@ -354,7 +358,7 @@ async function fillAnswer(element, kind, value) {
     element.click();
     return { filled: true };
   }
-  if (String(element.value ?? '').trim()) return { filled: false };
+  if (!window.CVAutofillFields.isEmpty(element)) return { filled: false };
   if (kind === 'select') return { filled: fillSelect(element, value) };
   if (kind === 'combobox') return fillCombobox(element, value);
   if (kind === 'number') return { filled: fillNumber(element, value) };

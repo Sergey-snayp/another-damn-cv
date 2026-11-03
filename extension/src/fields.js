@@ -166,9 +166,19 @@ function diversityKey(text) {
   return DIVERSITY.find((item) => item.match.some((term) => mentions(text, term)))?.key ?? null;
 }
 
+/**
+ * "In what City, State/Province, Country and Zip Code are you residing?" asks
+ * for a whole address. Two or more of these parts make it a full-address
+ * question, not just "state" because that was the longest word.
+ */
+const ADDRESS_PARTS = [['city', 'town'], ['state', 'province', 'region'], ['country'], ['zip', 'postal', 'postcode']];
+
 function categorise(signals) {
   if (NEVER_FILL.some((term) => mentions(signals, term))) {
     return { key: null, sensitive: true };
+  }
+  if (ADDRESS_PARTS.filter((words) => words.some((word) => mentions(signals, word))).length >= 2) {
+    return { key: 'location', sensitive: false, compound: true };
   }
 
   let best = null;
@@ -250,7 +260,7 @@ function detectFields() {
 
     // A site rule is evidence; the heuristic is a guess. Prefer evidence.
     const fromSite = window.CVAutofillSites?.siteKeyFor(element) ?? null;
-    const { key: guessed, sensitive } = categorise(signals);
+    const { key: guessed, sensitive, compound } = categorise(signals);
     const key = fromSite ?? guessed;
 
     if (sensitive) {
@@ -268,6 +278,7 @@ function detectFields() {
         kind: kindOf(element),
         signals,
         source: fromSite ? 'site' : 'heuristic',
+        ...(compound && !fromSite && { compound: true }),
       });
     }
   }
@@ -301,7 +312,46 @@ function isRequired(element) {
   return /\*|\brequired\b/i.test(rawLabel(element));
 }
 
+/**
+ * A form's own hidden helper, such as react-select's "required" input: an
+ * invisible input under the dropdown. Not a field to fill or to flag.
+ */
+function isHelperInput(element) {
+  return element.getAttribute('aria-hidden') === 'true' || Boolean(element.closest('[aria-hidden="true"]'))
+    || (element.tabIndex === -1 && getComputedStyle(element).opacity === '0');
+}
+
+const isCombobox = (element) => element.getAttribute('role') === 'combobox' || ['list', 'both'].includes(element.getAttribute('aria-autocomplete'));
+
+/** The visible box of a suggestion box: react-select's input is only a few pixels wide inside it. */
+function controlFor(element) {
+  let node = element;
+  for (let depth = 0; depth < 6 && node.parentElement; depth++) {
+    if (node.getBoundingClientRect().width >= 120) return node;
+    node = node.parentElement;
+  }
+  return node;
+}
+
+const CHOSEN = '[class*="singleValue" i], [class*="single-value" i], [class*="multiValue" i], [class*="multi-value" i]';
+
+/** What a suggestion box shows as chosen. react-select keeps its input empty and shows the option beside it. */
+function comboboxValue(element) {
+  const typed = String(element.value ?? '').trim();
+  if (typed) return typed;
+  let node = element;
+  for (let depth = 0; depth < 5 && node.parentElement; depth++) {
+    node = node.parentElement;
+    // Stop before reaching a box that holds another dropdown's choice.
+    if (node.querySelectorAll('input[role="combobox"], input[aria-autocomplete]').length > 1) break;
+    const chosen = node.querySelector(CHOSEN);
+    if (chosen) return chosen.textContent.trim();
+  }
+  return '';
+}
+
 function isEmpty(element) {
+  if (isCombobox(element)) return !comboboxValue(element);
   if (element.type === 'checkbox') return !element.checked;
   if (element.type === 'radio') return !document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
   if (element.type === 'file') return !element.files?.length;
@@ -330,6 +380,7 @@ function findMissingRequired(found = detectFields().found) {
   for (const scope of scopes) {
     for (const element of scope.querySelectorAll('input, select, textarea')) {
       if (element.type === 'hidden' || element.disabled || ['submit', 'button', 'reset', 'image', 'password'].includes(element.type)) continue;
+      if (isHelperInput(element)) continue;
       const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length;
       if (!visible || !isRequired(element) || !isEmpty(element)) continue;
       if (element.type === 'radio') { if (seenRadios.has(element.name)) continue; seenRadios.add(element.name); }
@@ -358,6 +409,7 @@ function currentAnswer(element, kind) {
   }
   if (kind === 'checkbox') return element.checked ? 'Yes' : '';
   if (kind === 'select') return element.value ? element.selectedOptions[0]?.textContent.trim() ?? '' : '';
+  if (kind === 'combobox') return comboboxValue(element);
   return String(element.value ?? '').trim();
 }
 
@@ -377,11 +429,13 @@ function detectQuestions(found = detectFields().found) {
     for (const element of scope.querySelectorAll('input, select, textarea')) {
       if (known.has(element) || element.disabled || element.readOnly) continue;
       if (['hidden', 'file', 'password', 'submit', 'button', 'reset', 'image', 'search'].includes(element.type)) continue;
+      if (isHelperInput(element)) continue;
       const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length;
       if (!visible) continue;
       const signals = signalsFor(element);
       if (NEVER_FILL.some((term) => mentions(signals, term))) continue;
-      if (element.type === 'checkbox' && CONSENT.test(signals)) continue;
+      // Consent is the person's decision, as a checkbox or as a dropdown.
+      if (CONSENT.test(signals)) continue;
       let kind = kindOf(element);
       if (kind === 'text' && element.type === 'number') kind = 'number';
       let options;
@@ -411,6 +465,8 @@ window.CVAutofillFields = {
   detectFields,
   findMissingRequired,
   detectQuestions,
+  isEmpty,
+  controlFor,
   labelOf,
   zoneDone,
   groupOf,

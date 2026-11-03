@@ -197,6 +197,13 @@ render after load and change as you scroll.
 - **Yes/no questions.** Radio buttons are matched by their question (fieldset
   legend or group label), then the option that matches the profile answer.
 - **Number fields** take only the number from a profile value.
+- **React-style dropdowns** (react-select, used on Greenhouse's new boards):
+  the chosen option shown beside the empty input counts as the value, the
+  hidden "required" helper input is ignored, and icons sit at the right of the
+  visible box. `test/greenhouse.html` covers this.
+- **Whole-address questions** ("City, State/Province, Country and Zip Code")
+  get "city, state, country, postal code" from the profile.
+- **Consent questions** are never answered, whether checkbox or dropdown.
 - **Still empty and required.** After Autofill, the panel lists required
   fields that are still blank (required, aria-required, or "*"/"Required" in
   the label), with **Go to** buttons and **Check again**.

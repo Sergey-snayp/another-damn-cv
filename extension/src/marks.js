@@ -38,16 +38,15 @@
   const isZone = (element) => !element.matches('input, select, textarea');
 
   function isEmpty(element) {
-    if (isZone(element)) return !Fields().zoneDone(element);
-    if (element.type === 'radio') return !document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
-    if (element.type === 'checkbox') return !element.checked;
-    if (element.type === 'file') return !element.files?.length;
-    return !String(element.value ?? '').trim();
+    return isZone(element) ? !Fields().zoneDone(element) : Fields().isEmpty(element);
   }
 
   /** Where the icon sits: inside the right edge of text fields, beside choices and upload boxes. */
   function place(element, node) {
-    const anchor = element.type === 'radio' || element.type === 'checkbox' ? element.closest('label') ?? element : element;
+    // Choices sit beside their label; a dropdown's icon goes at the right of
+    // its visible box, not of react-select's few-pixel input.
+    const anchor = element.type === 'radio' || element.type === 'checkbox' ? element.closest('label') ?? element
+      : element.getAttribute('role') === 'combobox' ? Fields().controlFor(element) : element;
     const rect = anchor.getBoundingClientRect();
     node.hidden = !rect.width && !rect.height;
     if (node.hidden) return;

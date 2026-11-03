@@ -130,7 +130,7 @@ function isBlank(field) {
   if (field.kind === 'file') return !element.files?.length;
   if (field.kind === 'radio') return !document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
   if (field.kind === 'checkbox') return !element.checked;
-  return !String(element.value ?? '').trim();
+  return Fields.isEmpty(element);
 }
 
 function scheduleStep() {
