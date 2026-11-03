@@ -14,6 +14,9 @@ let app: INestApplication;
 let base: string;
 let owner: Awaited<ReturnType<typeof createUser>>, other: Awaited<ReturnType<typeof createUser>>;
 let ownerToken: string, otherToken: string;
+// The fake Claude CLI: each test sets what it returns and records the prompt.
+let claude: (prompt: string) => Promise<string> = () =>
+  Promise.reject(new Error('Answer tests must not call AI.'));
 
 function call(
   path: string,
@@ -39,7 +42,7 @@ before(async () => {
   await prisma.user.update({ where: { id: other.user.id }, data: { syncToken: otherToken } });
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ClaudeProcessRunner)
-    .useValue({ complete: () => Promise.reject(new Error('Answer tests must not call AI.')) })
+    .useValue({ complete: (prompt: string) => claude(prompt) })
     .overrideProvider(JOB_READ_SCHEDULER)
     .useValue({ enqueue: () => {} })
     .compile();
@@ -162,4 +165,49 @@ test('a profile stores a Telegram handle like any other contact field', async ()
   assert.equal(((await saved.json()) as { telegram: string }).telegram, '@ada');
   const synced = (await (await call('/profile/sync', { token: ownerToken })).json()) as { telegram: string };
   assert.equal(synced.telegram, '@ada');
+});
+
+test('the extension drafts an answer from the chosen CV with Claude, without contact details', async () => {
+  const created = await call('/resumes', { method: 'POST', user: owner.user.id, body: { name: 'Draft CV' } });
+  const resume = (await created.json()) as { id: string };
+  const prompts: string[] = [];
+  claude = (prompt) => {
+    prompts.push(prompt);
+    return Promise.resolve(
+      '{"answer":"I built payment retries at Acme.","needsInput":["Which fintech products did you work on?"]}',
+    );
+  };
+  const body = {
+    question: 'Fintech Experience',
+    kind: 'textarea',
+    maxLength: 2000,
+    job: { title: 'Backend Developer', company: 'Zexter', text: 'Build payment APIs.' },
+    resumeId: resume.id,
+  };
+  assert.equal((await call('/extension/answers/draft', { method: 'POST', body })).status, 401);
+  const draft = await call('/extension/answers/draft', { method: 'POST', token: ownerToken, body });
+  assert.equal(draft.status, 200);
+  assert.deepEqual(await draft.json(), {
+    answer: 'I built payment retries at Acme.',
+    needsInput: ['Which fintech products did you work on?'],
+  });
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /Fintech Experience/);
+  assert.doesNotMatch(prompts[0], new RegExp(owner.user.email.replace('.', '\\.')));
+
+  // Another user's CV is refused before Claude runs.
+  const foreign = await call('/extension/answers/draft', { method: 'POST', token: otherToken, body });
+  assert.equal(foreign.status, 404);
+  assert.equal(prompts.length, 1);
+
+  claude = () => Promise.resolve('not json');
+  assert.equal(
+    (await call('/extension/answers/draft', { method: 'POST', token: ownerToken, body })).status,
+    502,
+  );
+  claude = () => Promise.reject(new Error('Not logged in'));
+  const unavailable = await call('/extension/answers/draft', { method: 'POST', token: ownerToken, body });
+  assert.equal(unavailable.status, 503);
+  assert.match(((await unavailable.json()) as { message: string }).message, /claude auth login/);
+  claude = () => Promise.reject(new Error('Answer tests must not call AI.'));
 });

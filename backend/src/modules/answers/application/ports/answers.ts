@@ -1,4 +1,5 @@
 import type { SavedAnswer } from '../../domain/answers';
+import type { CvEvidence, Draft, DraftContext } from '../../domain/drafts';
 
 export interface NewAnswer {
   question: string;
@@ -14,4 +15,13 @@ export interface AnswerRepository {
   update(userId: string, id: string, answer: string): Promise<SavedAnswer | null>;
   remove(userId: string, id: string): Promise<boolean>;
   markUsed(userId: string, ids: string[]): Promise<void>;
+}
+
+export interface CvEvidenceReader {
+  /** The CV's content without contact details. Throws DraftError cv-not-found for a CV the user does not own. */
+  read(userId: string, resumeId: string): Promise<CvEvidence>;
+}
+
+export interface AnswerDrafter {
+  draft(context: DraftContext): Promise<Draft>;
 }

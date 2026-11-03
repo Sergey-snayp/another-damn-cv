@@ -1,4 +1,5 @@
-import type { AnswerRepository } from '../ports/answers';
+import type { AnswerDrafter, AnswerRepository, CvEvidenceReader } from '../ports/answers';
+import { fitDraft, type DraftRequest } from '../../domain/drafts';
 import { AnswerNotFoundError, matchAnswers, questionKey, type FormQuestion } from '../../domain/answers';
 
 export class ListAnswers {
@@ -59,5 +60,18 @@ export class MatchAnswers {
       await this.repository.markUsed(userId, [...new Set(result.matches.map((match) => match.answerId))]);
     }
     return result;
+  }
+}
+
+/** An AI draft for one question, from the chosen CV and the job. Nothing is saved. */
+export class DraftAnswer {
+  constructor(
+    private readonly cv: CvEvidenceReader,
+    private readonly drafter: AnswerDrafter,
+  ) {}
+  async execute(userId: string, request: DraftRequest) {
+    const { resumeId, ...rest } = request;
+    const cv = await this.cv.read(userId, resumeId);
+    return fitDraft(await this.drafter.draft({ ...rest, cv }), request);
   }
 }

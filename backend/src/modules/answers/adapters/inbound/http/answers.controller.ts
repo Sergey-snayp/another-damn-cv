@@ -19,8 +19,10 @@ import { z } from 'zod';
 import { AuthGuard, CurrentUser, SyncTokenGuard } from '../../../../auth/http';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { AnswerNotFoundError, QUESTION_KINDS, type FormQuestion } from '../../../domain/answers';
+import { DraftError, type DraftRequest } from '../../../domain/drafts';
 import {
   DeleteAnswer,
+  DraftAnswer,
   ListAnswers,
   MatchAnswers,
   SaveAnswers,
@@ -54,6 +56,36 @@ export const matchAnswersSchema = z
       .max(100),
   })
   .strict();
+
+export const draftAnswerSchema = z
+  .object({
+    question,
+    kind: z.enum(QUESTION_KINDS),
+    options: z.array(z.string().max(300)).max(200).optional(),
+    maxLength: z.number().int().min(1).max(100000).optional(),
+    job: z
+      .object({
+        title: z.string().max(300).optional(),
+        company: z.string().max(200).optional(),
+        text: z.string().max(40000).optional(),
+      })
+      .strict(),
+    resumeId: z.string().min(1).max(100),
+  })
+  .strict();
+
+const DRAFT_STATUS = { 'cv-not-found': 404, 'invalid-output': 502, unavailable: 503 } as const;
+@Catch(DraftError)
+class DraftErrorFilter implements ExceptionFilter {
+  catch(error: DraftError, host: ArgumentsHost) {
+    const status = DRAFT_STATUS[error.code];
+    host
+      .switchToHttp()
+      .getResponse<Response>()
+      .status(status)
+      .json({ statusCode: status, message: error.message });
+  }
+}
 
 @Catch(AnswerNotFoundError)
 class AnswerErrorFilter implements ExceptionFilter {
@@ -90,11 +122,20 @@ export class AnswersController {
 /** The extension saves answers from a form and finds them for the next one. */
 @Controller('extension/answers')
 @UseGuards(SyncTokenGuard)
+@UseFilters(DraftErrorFilter)
 export class ExtensionAnswersController {
   constructor(
     @Inject(SaveAnswers) private readonly saveAnswers: SaveAnswers,
     @Inject(MatchAnswers) private readonly matchAnswers: MatchAnswers,
+    @Inject(DraftAnswer) private readonly draftAnswer: DraftAnswer,
   ) {}
+  /** Runs Claude for one question. Only on the person's click in the extension. */
+  @Post('draft') @HttpCode(200) draft(
+    @CurrentUser() userId: string,
+    @Body(new ZodValidationPipe(draftAnswerSchema)) body: DraftRequest,
+  ) {
+    return this.draftAnswer.execute(userId, body);
+  }
   @Post() async save(
     @CurrentUser() userId: string,
     @Body(new ZodValidationPipe(saveAnswersSchema)) body: z.infer<typeof saveAnswersSchema>,
