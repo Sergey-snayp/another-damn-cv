@@ -97,6 +97,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !Number.isInteger(sender.tab?.id)) return false;
   const tabId = sender.tab.id;
   const fromPage = sender.frameId === 0 && !sender.url?.startsWith('chrome-extension:');
+  // The page scripts in any frame of the tab (forms can be embedded in iframes).
+  const fromContent = !sender.url?.startsWith('chrome-extension:');
   const fromPanel = sender.url?.startsWith(PANEL_URL);
 
   if (message?.type === 'panel-tab' && fromPanel) {
@@ -106,7 +108,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'arm-steps' && fromPanel) {
     const armed = { host: message.host, company: message.company ?? '', profile: message.profile, useAnswers: message.useAnswers === true, expires: Date.now() + STEP_MINUTES * 60_000 };
     chrome.storage.session.set({ [stepKey(tabId)]: armed })
-      .then(() => chrome.tabs.sendMessage(tabId, { type: 'steps-armed' }, { frameId: 0 }).catch(() => {}))
+      // Every frame: an embedded form's next steps fill too.
+      .then(() => chrome.tabs.sendMessage(tabId, { type: 'steps-armed' }).catch(() => {}))
       .then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
     return true;
   }
@@ -114,14 +117,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     makeCvPdf(String(message.url ?? '')).then((dataUrl) => sendResponse({ dataUrl }), (error) => sendResponse({ error: error.message }));
     return true;
   }
-  if (!fromPage) { sendResponse({ ok: false }); return false; }
-  if (message?.type === 'steps-state') {
-    armedSteps(tabId, sender.url).then((armed) => sendResponse({ armed: Boolean(armed) }), () => sendResponse({ armed: false }));
+  // The tab's address, not the frame's: an embedded form lives on another site.
+  if (message?.type === 'steps-state' && fromContent) {
+    armedSteps(tabId, sender.tab.url).then((armed) => sendResponse({ armed: Boolean(armed) }), () => sendResponse({ armed: false }));
     return true;
   }
-  if (message?.type === 'step-request') {
+  if (message?.type === 'step-request' && fromContent) {
     void (async () => {
-      const armed = await armedSteps(tabId, sender.url);
+      const armed = await armedSteps(tabId, sender.tab.url);
       if (!armed) return sendResponse({ armed: false });
       const questions = Array.isArray(message.questions) ? message.questions : [];
       let answers = [];
@@ -135,6 +138,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })().catch(() => sendResponse({ armed: false }));
     return true;
   }
+  if (!fromPage) { sendResponse({ ok: false }); return false; }
   if (message?.type === 'panel-state') {
     openTabs().then((tabs) => sendResponse({ open: tabs.has(tabId) }), () => sendResponse({ open: false }));
     return true;

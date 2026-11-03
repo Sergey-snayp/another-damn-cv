@@ -27,12 +27,62 @@ function setValue(element, value) {
   element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+// ─── Typing ───────────────────────────────────────────────────────────────
+// Text goes in through the browser's own editing ("insert text"), so the page
+// gets the same input events as from typing or pasting. React, Angular and
+// plain pages all register it. Fields that refuse it get a keyboard-like
+// sequence instead: key down, key press, the value, input, key up, change.
+
+const EDITABLE = new Set(['text', 'email', 'tel', 'url', 'search', 'number', 'password', '']);
+let typing = false;
+/** True while Autofill types: its input events are trusted, but they are not the person's edits. */
+const isTyping = () => typing;
+
+function keyboardSequence(element, text) {
+  const key = String(text).slice(-1) || 'a';
+  const options = { bubbles: true, cancelable: true, key };
+  element.dispatchEvent(new KeyboardEvent('keydown', options));
+  element.dispatchEvent(new KeyboardEvent('keypress', options));
+  setValue(element, text);
+  element.dispatchEvent(new KeyboardEvent('keyup', options));
+}
+
+/**
+ * Replaces a text field's value as typing would. Returns how: 'insert' or
+ * 'events'. With `leave`, focus moves on inside the same typing window: the
+ * browser's own change event on leaving is Autofill's, not the person's edit.
+ */
+function typeText(element, value, { leave = false } = {}) {
+  const text = String(value);
+  const editable = element instanceof HTMLTextAreaElement || (element instanceof HTMLInputElement && EDITABLE.has(element.type));
+  const x = scrollX, y = scrollY;
+  typing = true;
+  try {
+    element.focus({ preventScroll: true });
+    let how = 'events';
+    if (editable && document.activeElement === element) {
+      try {
+        element.select();
+        if (document.execCommand('insertText', false, text) && element.value === text) {
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          how = 'insert';
+        }
+      } catch { /* not allowed here: fall back to events */ }
+    }
+    if (how === 'events') keyboardSequence(element, text);
+    if (leave) element.blur();
+    return how;
+  } finally {
+    typing = false;
+    // Inserting text can scroll to the caret; the follow-along decides where the page is.
+    if (scrollX !== x || scrollY !== y) scrollTo({ left: x, top: y, behavior: 'instant' });
+  }
+}
+
 function fillText(element, value) {
   if (!value) return false;
 
-  element.focus({ preventScroll: true });
-  setValue(element, value);
-  element.blur();
+  typeText(element, value, { leave: true });
 
   return true;
 }
@@ -148,7 +198,7 @@ const optionText = (option) => normal(option.textContent);
 function typeInto(element, text) {
   const key = String(text).slice(-1) || 'a';
   element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }));
-  setValue(element, text);
+  typeText(element, text);
   element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key }));
 }
 
@@ -435,4 +485,4 @@ async function fillAnswer(element, kind, value) {
   return { filled: fillText(element, value) };
 }
 
-window.CVAutofillFiller = { fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+window.CVAutofillFiller = { isTyping, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };

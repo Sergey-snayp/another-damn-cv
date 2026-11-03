@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Embedded application form (used by test/iframe.html)</title>
+<script>window.chrome = { runtime: { id: 'test', getURL: (p) => (p.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} }, sendMessage: async () => ({}) }, storage: { local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } } };</script>
+<body>
+<form>
+  <label for="first">First name</label><input id="first" name="first_name">
+  <label for="email">Email</label><input id="email" type="email" name="email">
+  <label for="resume">Resume/CV</label><input id="resume" type="file" name="resume">
+</form>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/launcher.js"></script><script src="../src/panel-host.js"></script><script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+</body>

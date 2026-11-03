@@ -1,6 +1,7 @@
 /** Isolated page-edge launcher. It never reads profile values or fills a form. */
 (() => {
-  if (window.CVAutofillLauncher) return;
+  // One button per tab: only the top page shows it. Forms in iframes report to it (content.js).
+  if (window.CVAutofillLauncher || window !== window.top) return;
   // False once the extension is reloaded or updated: this copy can no longer use
   // chrome.* APIs, and calling them throws "Extension context invalidated".
   const alive = () => Boolean(chrome.runtime?.id);

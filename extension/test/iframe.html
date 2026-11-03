@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — application form inside an iframe</title>
+<!--
+  A careers page embeds the application form in an iframe, as companies do
+  with Greenhouse. The page scripts run in the iframe too: it reports its form
+  to the top page, which shows the tab's one D! button. The iframe shows no
+  button or panel of its own, and a tiny (ad-sized) iframe is ignored.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=10000 \
+      --dump-dom "file://$PWD/test/iframe.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>window.chrome = { runtime: { id: 'test', getURL: (p) => (p.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} }, sendMessage: async () => ({}) }, storage: { local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } } };</script>
+<body>
+<h1>Careers at Example</h1>
+<p>Read about the role, then apply below.</p>
+<iframe id="ad" src="iframe-form.html" width="120" height="60"></iframe>
+<iframe id="form" src="iframe-form.html" width="700" height="500"></iframe>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/launcher.js"></script><script src="../src/panel-host.js"></script><script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+<script>
+addEventListener('load', () => setTimeout(() => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const frame = document.getElementById('form').contentWindow, ad = document.getElementById('ad').contentWindow;
+  expect(window.CVAutofillFields.detectFields().found.length === 0, 'the top page itself has no form');
+  expect(Boolean(document.getElementById('adcv-autofill-launcher')), 'the top page shows the D! button for the form in its iframe');
+  expect(!frame.document.getElementById('adcv-autofill-launcher') && !frame.CVAutofillLauncher && !frame.CVAutofillPanel, 'the iframe shows no button or panel of its own');
+  expect(frame.CVAutofillFields.detectFields().found.map((f) => f.key).join(',') === 'firstName,email,resume', 'the page scripts in the iframe find its form');
+  expect(document.querySelectorAll('#adcv-autofill-launcher').length === 1, 'one button for the tab');
+  expect(ad.innerWidth < 250, 'the small iframe counts as an ad-sized frame and is ignored');
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+}, 2500));
+</script>
+</body>

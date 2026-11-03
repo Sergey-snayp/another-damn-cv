@@ -244,14 +244,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // (src/job-form.js). This script runs on every site, so it stays cheap: pages
 // without inputs are skipped, and ordinary sites rescan less often.
 const KNOWN_BOARD = Boolean(Sites.siteFor(location.hostname)) || location.protocol === 'file:';
+
+// This script also runs in iframes, where an embedded application form may
+// live (a Greenhouse form on a company's careers page). Tiny frames (ads,
+// trackers) are left alone. A frame with a form tells the top page, which
+// shows the one D! button for the tab.
+const IS_TOP = window === window.top;
+const TINY_FRAME = !IS_TOP && (innerWidth < 250 || innerHeight < 150);
+const framesWithForms = new Set();
+let frameVerdict = null;
+function showLauncher(ownForm) {
+  if (IS_TOP) { window.CVAutofillLauncher?.update(ownForm || framesWithForms.size > 0); return; }
+  if (ownForm === frameVerdict) return;
+  frameVerdict = ownForm;
+  window.top.postMessage({ adcvFrameForm: ownForm }, '*');
+}
+if (IS_TOP) {
+  // Only shows or hides the button; a page faking this message gains nothing else.
+  addEventListener('message', (event) => {
+    if (typeof event.data?.adcvFrameForm !== 'boolean' || event.source === window) return;
+    if (event.data.adcvFrameForm) framesWithForms.add(event.source); else framesWithForms.delete(event.source);
+    showLauncher(lastOwnForm);
+  });
+}
+let lastOwnForm = false;
 function updateLauncher() {
+  if (TINY_FRAME) return;
   scheduleStep();
-  if (!document.querySelector('input, textarea, select')) { window.CVAutofillLauncher?.update(false); return; }
+  if (!document.querySelector('input, textarea, select')) { lastOwnForm = false; showLauncher(false); return; }
   scan();
   // Teamtailor and other boards on company domains are known by page structure.
   const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });
   // Always passed on: update() also puts the button back if the page removed it.
-  window.CVAutofillLauncher?.update(verdict.show);
+  lastOwnForm = verdict.show;
+  showLauncher(verdict.show);
 }
 
 /**
@@ -267,7 +293,7 @@ function reattachOwnElements() {
 let scanTimer;
 const scheduleScan = () => { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, KNOWN_BOARD ? 140 : 600); };
 const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel', 'adcv-fill-marks']);
-new MutationObserver(records => {
+const pageWatcher = new MutationObserver(records => {
   reattachOwnElements();
   const changed = records.some(record => {
     if (OWN_NODES.has(record.target.id)) return false;
@@ -275,9 +301,10 @@ new MutationObserver(records => {
     return true;
   });
   if (changed) scheduleScan();
+});
 // The document, not <html>: a page that replaces its <html> element would
-// otherwise leave this watching a detached copy.
-}).observe(document, {
+// otherwise leave this watching a detached copy. Tiny frames are not watched.
+if (!TINY_FRAME) pageWatcher.observe(document, {
   childList: true,
   subtree: true,
   attributes: true,

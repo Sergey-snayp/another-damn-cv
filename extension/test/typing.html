@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — typing through the browser's editing</title>
+<!--
+  Text goes in through the browser's own "insert text", so pages get the same
+  events as from typing (beforeinput fires only for real editing). When that
+  is blocked, a keyboard-like sequence is used instead. Typing never moves the
+  page, and fill status icons ignore Autofill's own typing.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=8000 \
+      --dump-dom "file://$PWD/test/typing.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>window.chrome = { storage: { local: { get: async () => ({}) }, onChanged: { addListener() {} } } };</script>
+<body>
+<form>
+  <label for="name">First name</label><input id="name" name="first_name">
+  <label for="letter">Cover letter</label><textarea id="letter" name="cover"></textarea>
+  <div style="height: 2000px"></div>
+  <label for="far">Email</label><input id="far" type="email" name="email">
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script src="../src/marks.js"></script>
+<script>
+addEventListener('DOMContentLoaded', async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const F = window.CVAutofillFiller;
+  const seen = [];
+  document.addEventListener('input', (e) => { if (e.isTrusted) seen.push(`trusted-input:${e.target.id}`); }, true);
+  document.addEventListener('keyup', (e) => seen.push(`keyup:${e.target.id}`), true);
+
+  expect(F.typeText($('name'), 'Ada') === 'insert' && $('name').value === 'Ada', 'types into a text field with the browser\'s insert text');
+  expect(seen.includes('trusted-input:name'), 'the page sees real editing (a trusted input event)');
+  F.typeText($('name'), 'Ada Lovelace');
+  expect($('name').value === 'Ada Lovelace', 'replaces the existing value, not appends');
+  expect(F.typeText($('letter'), 'Line one\nLine two') === 'insert' && $('letter').value === 'Line one\nLine two', 'types into a text area, keeping line breaks');
+
+  // Far down the page: typing there does not scroll.
+  scrollTo(0, 0);
+  F.typeText($('far'), 'ada@example.com');
+  expect(scrollY === 0 && $('far').value === 'ada@example.com', `typing does not move the page (scrollY ${scrollY})`);
+
+  // Blocked editing: the keyboard-like sequence, with key-up, still sets the value.
+  const realExec = document.execCommand;
+  document.execCommand = () => false;
+  seen.length = 0;
+  expect(F.typeText($('name'), 'Grace') === 'events' && $('name').value === 'Grace', 'falls back to key events when insert text is blocked');
+  expect(seen.includes('keyup:name'), 'the fallback ends with key-up, as typing does');
+  document.execCommand = realExec;
+
+  // Icons: Autofill's own (trusted) typing does not clear them.
+  await window.CVAutofillMarks.show([{ element: $('name'), status: 'ok', reason: 'From your profile' }]);
+  F.fillText($('name'), 'Ada');
+  expect(window.CVAutofillMarks.statusOf($('name')) === 'ok', 'a field\'s icon stays when Autofill types into it');
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+});
+</script>
+</body>

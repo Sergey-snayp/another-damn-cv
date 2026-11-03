@@ -9,7 +9,8 @@
  * click), so it only sets itself up once.
  */
 (() => {
-  if (window.CVAutofillPanel) return;
+  // One panel per tab, on the top page; it reaches forms in iframes by frame id.
+  if (window.CVAutofillPanel || window !== window.top) return;
 
   const WIDTH = 400;
   const host = document.createElement('div');

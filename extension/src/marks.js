@@ -203,7 +203,9 @@
 
   // Only the person's own edits clear an icon: Autofill's events are not trusted.
   function onEdit(event) {
-    if (!event.isTrusted) return;
+    // Autofill's own typing goes through the browser's editing, so its events
+    // are trusted; it flags itself while typing.
+    if (!event.isTrusted || window.CVAutofillFiller?.isTyping?.()) return;
     const target = event.target;
     for (const [element, mark] of marks) {
       const same = element === target || (target.type === 'radio' && element.type === 'radio' && element.name === target.name) || (isZone(element) && element.contains(target));

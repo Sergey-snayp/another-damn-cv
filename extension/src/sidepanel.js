@@ -88,6 +88,57 @@ async function askPage(message, tab = currentTab) {
     return null;
   }
 }
+// ─── Frames ───────────────────────────────────────────────────────────────
+// A form can sit in an iframe from another site (a Greenhouse form inside a
+// company's careers page). The page scripts run in every frame; the panel
+// asks each frame that holds application fields. Ids from a frame carry its
+// number ("3:12") so answers, drafts and "Go to" reach the right frame.
+let formFrames = [0];
+const frameKey = (frameId, id) => `${frameId}:${id}`;
+function splitKey(key) {
+  const text = String(key), at = text.indexOf(':');
+  return at < 0 ? [0, text] : [Number(text.slice(0, at)), text.slice(at + 1)];
+}
+async function frameIdsOf(tab) {
+  if (!tab?.id) return [];
+  try {
+    const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
+    return frames.filter(frame => /^(https?|file):/.test(frame.url)).map(frame => frame.frameId).sort((a, b) => a - b);
+  } catch { return [0]; }
+}
+async function askFrame(frameId, message, tab = currentTab) {
+  if (frameId === 0) return askPage(message, tab);
+  if (!tab?.id) return null;
+  try { return await chrome.tabs.sendMessage(tab.id, message, { frameId }); } catch { return null; }
+}
+/** Asks every frame that holds the form, top first; [{ frameId, reply }]. */
+async function askForms(message, tab = currentTab) {
+  const replies = [];
+  for (const frameId of formFrames.length ? formFrames : [0]) {
+    const reply = await askFrame(frameId, message, tab);
+    if (reply) replies.push({ frameId, reply });
+  }
+  return replies;
+}
+/** One scan for the panel: the top page's details, every frame's fields. */
+async function scanFrames(tab) {
+  const scans = [];
+  for (const frameId of await frameIdsOf(tab)) {
+    const reply = await askFrame(frameId, { type: 'scan' }, tab);
+    if (reply) scans.push({ frameId, reply });
+  }
+  formFrames = scans.filter(entry => entry.reply.fields?.length).map(entry => entry.frameId);
+  const top = scans.find(entry => entry.frameId === 0)?.reply ?? scans[0]?.reply ?? null;
+  if (!top) return null;
+  const fields = [...new Map(scans.flatMap(entry => entry.reply.fields ?? []).map(field => [field.key, field])).values()];
+  const total = (name) => scans.reduce((sum, entry) => sum + (entry.reply[name] ?? 0), 0);
+  return { ...top, fields, skippedSensitive: total('skippedSensitive'), consentCount: total('consentCount'), canOpenForm: Boolean(top.canOpenForm) && !fields.length, frames: formFrames.length };
+}
+/** The form's questions from every frame, with frame-qualified ids. */
+async function questionsFromFrames(tab = currentTab) {
+  return (await askForms({ type: 'questions' }, tab)).flatMap(({ frameId, reply }) => (reply.questions ?? []).map(question => ({ ...question, id: frameKey(frameId, question.id) })));
+}
+
 function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; return profile[key] ?? ''; }
 function pageCard() {
   if (!scan) return '';
@@ -145,7 +196,17 @@ async function runFill() {
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName };
-    const result = await askPage({ type: 'fill', profile: payload, answers }, target);
+    // Each frame holding the form fills in turn; their results add up to one report.
+    let result = null;
+    for (const frameId of formFrames.length ? formFrames : [0]) {
+      const own = answers.filter(item => splitKey(item.id)[0] === frameId).map(item => ({ ...item, id: splitKey(item.id)[1] }));
+      const reply = await askFrame(frameId, { type: 'fill', profile: payload, answers: own }, target);
+      if (!reply) continue;
+      const missing = (reply.missing ?? []).map(item => ({ ...item, id: frameKey(frameId, item.id) }));
+      result = result
+        ? { ...result, filled: result.filled + reply.filled, fromAnswers: (result.fromAnswers ?? 0) + (reply.fromAnswers ?? 0), failures: [...result.failures, ...reply.failures], notes: [...(result.notes ?? []), ...(reply.notes ?? [])], missing: [...result.missing, ...missing] }
+        : { ...reply, missing };
+    }
     // Settings → "Keep filling the next steps": later steps of this form, on this site, for 30 minutes.
     if (result && continueSteps && target?.url) {
       void chrome.runtime.sendMessage({ type: 'arm-steps', host: new URL(target.url).host, company: scan?.context?.company ?? '', profile: payload, useAnswers: fillGroups.answers !== false }).catch(() => {});
@@ -172,7 +233,7 @@ async function runFill() {
  */
 async function savedAnswersFor(tab) {
   if (fillGroups.answers === false) return { answers: [], notes: [] };
-  const questions = (await askPage({ type: 'questions' }, tab))?.questions ?? [];
+  const questions = await questionsFromFrames(tab);
   const open = questions.filter(question => !question.value);
   if (!open.length) return { answers: [], notes: [] };
   try {
@@ -200,7 +261,7 @@ const drafts = new Map(); // question id → { status, answer, needsInput, messa
 let draftQueue = Promise.resolve(), jobCache = null;
 async function loadQuestions() {
   if (!scan?.fields?.length) { formQuestions = []; return; }
-  formQuestions = (await askPage({ type: 'questions' }))?.questions ?? [];
+  formQuestions = await questionsFromFrames();
 }
 /** The posting for context: the page's job description when it has one. */
 async function jobForDrafts() {
@@ -225,7 +286,8 @@ function draftQuestion(id) {
         ...(question.options && { options: question.options }), ...(question.maxLength && { maxLength: question.maxLength }),
         job: await jobForDrafts(), resumeId: resumes.chosen.id,
       });
-      const inserted = answer ? Boolean((await askPage({ type: 'fill-draft', id, kind: question.kind, value: answer }))?.filled) : false;
+      const [frameId, fieldId] = splitKey(id);
+      const inserted = answer ? Boolean((await askFrame(frameId, { type: 'fill-draft', id: fieldId, kind: question.kind, value: answer }))?.filled) : false;
       drafts.set(id, { status: 'done', answer, needsInput, inserted });
     } catch (error) {
       if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
@@ -274,7 +336,7 @@ document.addEventListener('click', async event => {
   }
 });
 async function startSavingAnswers() {
-  const questions = (await askPage({ type: 'questions' }))?.questions ?? [];
+  const questions = await questionsFromFrames();
   const items = questions.filter(question => question.value).map(question => ({ question: question.question, answer: question.value, keep: true }));
   answerDraft = { url: currentTab?.url, items, status: items.length ? '' : 'Fill in the company\'s questions first, then save them.' };
   renderAutofill();
@@ -317,12 +379,15 @@ function fillReportDetails() {
   return notes + missing;
 }
 async function checkRequired() {
-  const result = await askPage({ type: 'check-required' });
-  if (result && fillReport) { fillReport.missing = result.missing; renderAutofill(); }
+  const replies = await askForms({ type: 'check-required' });
+  if (replies.length && fillReport) {
+    fillReport.missing = replies.flatMap(({ frameId, reply }) => (reply.missing ?? []).map(item => ({ ...item, id: frameKey(frameId, item.id) })));
+    renderAutofill();
+  }
 }
 document.addEventListener('click', event => {
   const go = event.target.closest('[data-focus-field]');
-  if (go) { void askPage({ type: 'focus-field', id: go.dataset.focusField }); return; }
+  if (go) { const [frameId, fieldId] = splitKey(go.dataset.focusField); void askFrame(frameId, { type: 'focus-field', id: fieldId }); return; }
   if (event.target.closest('#check-required')) void checkRequired();
 });
 /** Presses the job page's Apply button, then rescans once the form has loaded. */
@@ -563,7 +628,7 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;

@@ -188,6 +188,20 @@ render after load and change as you scroll.
 
 ## Filling harder fields
 
+- **Typing.** Text goes in through the browser's own "insert text" editing
+  command, so pages get real input events, as from typing or pasting, and
+  React, Angular and plain pages all register it. Fields that refuse it get a
+  keyboard-like sequence (key down, key press, value, input, key up, change).
+  Typing never moves the page; the follow-along decides where it is.
+  `test/typing.html` covers both paths.
+- **Forms inside iframes.** The page scripts run in every frame, so a form
+  embedded from another site (a Greenhouse form on a company's careers page)
+  is recognised and filled. The D! button and panel stay on the top page; a
+  frame with a form tells the top page to show the button. The panel scans
+  every frame (`webNavigation` lists them), fills each frame holding the form
+  and combines the results; "Go to", saved answers and AI drafts reach the
+  right frame. Ad-sized frames are ignored. `test/iframe.html` covers this.
+
 - **Teamtailor.** Recognised by its page structure, so company domains such as
   careers.zexter.com work, and filled by its field names (`src/sites.js`).
   On a job page whose form is still closed, the panel offers **Open
