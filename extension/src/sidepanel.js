@@ -3,14 +3,15 @@ import { captureTab, jobUrl, NotSignedInError, requestSiteAccess, sendCapture, u
 import { icon, escapeHtml as esc } from './icons.js';
 import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
+import { matchAnswers, saveAnswers } from './answers.js';
 
 const FIELD_LABELS = {
-  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
+  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
 };
 const PROFILE_GROUPS = [
   { title: 'Personal', keys: ['fullName', 'firstName', 'lastName', 'preferredName', 'email', 'phone'] },
   { title: 'Location', keys: ['location', 'city', 'state', 'country', 'postalCode'] },
-  { title: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website'] },
+  { title: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website', 'telegram'] },
   { title: 'Eligibility', keys: ['workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod'] },
 ];
 const DERIVED_KEYS = ['currentCompany', 'currentTitle', 'yearsExperience'];
@@ -18,11 +19,13 @@ const DERIVED_KEYS = ['currentCompany', 'currentTitle', 'yearsExperience'];
 const FILL_GROUPS = [
   { id: 'contact', label: 'Contact', keys: ['firstName', 'lastName', 'middleName', 'preferredName', 'fullName', 'email', 'phone', 'pronouns'] },
   { id: 'location', label: 'Location', keys: ['location', 'city', 'state', 'country', 'postalCode', 'addressLine'] },
-  { id: 'links', label: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website', 'twitter'] },
+  { id: 'links', label: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website', 'twitter', 'telegram'] },
   { id: 'documents', label: 'CV and cover letter', keys: ['resume', 'coverLetter'] },
   { id: 'experience', label: 'Experience and education', keys: ['currentCompany', 'currentTitle', 'yearsExperience', 'school', 'degree', 'fieldOfStudy', 'graduationYear'] },
   { id: 'workAuthorization', label: 'Work authorization', keys: ['workAuthorization', 'requiresSponsorship'] },
   { id: 'salary', label: 'Salary and availability', keys: ['salaryExpectation', 'noticePeriod'] },
+  // The company's own questions, from answers saved in the app. Not a profile field group.
+  { id: 'answers', label: 'Saved answers', keys: [] },
 ];
 const GROUP_OF_KEY = new Map(FILL_GROUPS.flatMap(group => group.keys.map(key => [key, group.id])));
 let fillGroups = {};
@@ -100,6 +103,7 @@ function renderAutofill() {
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
   host.innerHTML = `${pageCard()}${matchCard()}
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
+    ${answersCard()}
     ${resumeCard()}
     <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
@@ -124,19 +128,79 @@ async function runFill() {
     }
     // Fields in groups switched off in Settings are sent empty, so they stay as they are.
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
-    const result = await askPage({ type: 'fill', profile: { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName } }, target);
+    const { answers, notes: answerNotes } = await savedAnswersFor(target);
+    const result = await askPage({ type: 'fill', profile: { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName }, answers }, target);
     if (cvProblem && result) result.failures.push(cvProblem);
     if (!result) throw new Error(pageDisconnected ? 'The extension was updated. Reload this page, then try again.' : 'Lost contact with the page. Reload it and try again.');
     fillReport = {
       url: target?.url,
       text: result.failures.length ? `Filled ${result.filled}. Could not fill: ${result.failures.join('; ')}` : `Filled ${result.filled} field${result.filled === 1 ? '' : 's'}. Review the form before submitting.`,
       kind: result.failures.length ? 'error' : 'success',
-      notes: result.notes ?? [],
+      notes: [...(result.notes ?? []), ...(result.fromAnswers ? [`${result.fromAnswers} filled from saved answers`] : []), ...answerNotes],
       missing: result.missing ?? [],
     };
   } catch (error) { fillReport = { url: target?.url, text: error.message, kind: 'error', notes: [], missing: [] }; }
   finally { filling = false; renderAutofill(); }
 }
+
+/**
+ * Saved answers for the form's own questions. Similar-wording matches and
+ * answers held back (they name another company) become notes to check.
+ * Signed out or offline: Autofill still fills the profile fields.
+ */
+async function savedAnswersFor(tab) {
+  if (fillGroups.answers === false) return { answers: [], notes: [] };
+  const questions = (await askPage({ type: 'questions' }, tab))?.questions ?? [];
+  const open = questions.filter(question => !question.value);
+  if (!open.length) return { answers: [], notes: [] };
+  try {
+    const { matches, skipped } = await matchAnswers(scan?.context?.company ?? '', open);
+    const byId = new Map(open.map(question => [question.id, question]));
+    const notes = [
+      ...matches.filter(match => match.match === 'similar').map(match => `${byId.get(match.id)?.question}: from your answer to "${match.savedQuestion}", check it`),
+      ...skipped.filter(item => item.reason === 'names-another-company').map(item => `${byId.get(item.id)?.question}: your saved answer names another company, so it was not used`),
+    ];
+    return { answers: matches.map(match => ({ id: match.id, value: match.value, kind: byId.get(match.id)?.kind })), notes };
+  } catch (error) {
+    return { answers: [], notes: [error instanceof NotSignedInError ? 'Sign in to use saved answers.' : `Saved answers not used: ${error.message}`] };
+  }
+}
+
+// ─── Save answers from this form ─────────────────────────────────────────
+let answerDraft = null; // { url, items: [{ question, answer, keep }] } while choosing what to save
+async function startSavingAnswers() {
+  const questions = (await askPage({ type: 'questions' }))?.questions ?? [];
+  const items = questions.filter(question => question.value).map(question => ({ question: question.question, answer: question.value, keep: true }));
+  answerDraft = { url: currentTab?.url, items, status: items.length ? '' : 'Fill in the company\'s questions first, then save them.' };
+  renderAutofill();
+}
+function answersCard() {
+  if (!scan?.fields?.length) return '';
+  if (!answerDraft) return `<div class="card soft-card answers-card"><h2>${icon('check')}Your answers</h2><p>Answered the company's own questions? Save them, and Autofill fills them next time.</p><button class="ghost" id="save-answers-start">Save answers from this form</button></div>`;
+  const rows = answerDraft.items.map((item, index) => `<li><label><input type="checkbox" data-keep-answer="${index}" ${item.keep ? 'checked' : ''}><span><strong>${esc(item.question)}</strong><small>${esc(item.answer.length > 160 ? `${item.answer.slice(0, 160)}…` : item.answer)}</small></span></label></li>`).join('');
+  return `<div class="card answers-card"><h2>${icon('check')}Save answers</h2>${rows ? `<ul class="answer-picks">${rows}</ul>` : ''}<div class="status${answerDraft.kind ? ` ${answerDraft.kind}` : ''}" role="status">${esc(answerDraft.status)}</div><div class="actions">${rows ? '<button class="primary" id="save-answers">Save selected</button>' : ''}<button class="ghost" id="save-answers-cancel">${answerDraft.kind === 'success' ? 'Done' : 'Cancel'}</button></div></div>`;
+}
+async function saveSelectedAnswers() {
+  const chosen = answerDraft.items.filter(item => item.keep).map(({ question, answer }) => ({ question, answer }));
+  if (!chosen.length) { answerDraft.status = 'Choose at least one answer.'; renderAutofill(); return; }
+  try {
+    const { saved } = await saveAnswers(scan?.context?.company ?? '', chosen);
+    answerDraft = { ...answerDraft, items: [], status: `Saved ${saved} answer${saved === 1 ? '' : 's'}. Edit them in the app under Profile → Saved answers.`, kind: 'success' };
+  } catch (error) {
+    if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
+    answerDraft.status = error.message; answerDraft.kind = 'error';
+  }
+  renderAutofill();
+}
+document.addEventListener('click', event => {
+  if (event.target.closest('#save-answers-start')) void startSavingAnswers();
+  else if (event.target.closest('#save-answers')) void saveSelectedAnswers();
+  else if (event.target.closest('#save-answers-cancel')) { answerDraft = null; renderAutofill(); }
+});
+document.addEventListener('change', event => {
+  const box = event.target.closest('[data-keep-answer]');
+  if (box && answerDraft) answerDraft.items[Number(box.dataset.keepAnswer)].keep = box.checked;
+});
 
 /** Notes from the last fill ("CV: uploaded") and required fields still empty. */
 function fillReportDetails() {
@@ -201,7 +265,7 @@ function renderProfileOverview() {
   const initials = (name || '?').split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
   let html = `<div class="card"><div class="profile-card-heading"><h2>${name ? esc(name) : 'Your profile'}</h2><button class="icon-button edit-app-profile" aria-label="Edit contact information in app">${icon('edit')}</button></div><div class="profile-contact"><div class="profile-initials">${esc(initials)}</div><div>${copy(name, 'name')}${copy(profile.location || profile.city, 'location', true)}${copy(profile.email, 'email')}${copy(profile.phone, 'phone')}${!name && !profile.email ? '<p>Sync your profile or add local details below.</p>' : ''}</div></div></div>`;
   if (DERIVED_KEYS.some(key => profile[key])) html += `<div class="card"><div class="profile-card-heading"><h2>${icon('briefcase')} Experience</h2><button class="icon-button edit-app-profile" aria-label="Edit experience in app">${icon('edit')}</button></div>${copy(profile.currentTitle, 'current title', true)}${copy(profile.currentCompany, 'current company')}${copy(profile.yearsExperience ? `${profile.yearsExperience} years of experience` : '', 'years of experience')}<p>Current role from your saved app profile.</p></div>`;
-  const links = ['linkedin', 'github', 'portfolio', 'website'].filter(key => profile[key]);
+  const links = ['linkedin', 'github', 'portfolio', 'website', 'telegram'].filter(key => profile[key]);
   if (links.length) html += `<div class="card"><h2>${icon('link')} Links</h2>${links.map(key => `<small class="muted">${FIELD_LABELS[key]}</small>${copy(profile[key], FIELD_LABELS[key])}`).join('')}</div>`;
   $('profile-overview').innerHTML = html;
   $('profile-overview').querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', async () => {
@@ -398,6 +462,7 @@ async function refresh() {
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
+    if (answerDraft && answerDraft.url !== tab?.url) answerDraft = null;
     fillGroups = stored.autofillGroups ?? {};
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
     renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();

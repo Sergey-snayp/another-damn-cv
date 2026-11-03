@@ -41,6 +41,7 @@ const CATEGORIES = [
   { key: 'portfolio', group: 'Social', match: ['portfolio'] },
   { key: 'website', group: 'Social', match: ['website', 'personal site', 'personal website', 'blog', 'url'] },
   { key: 'twitter', group: 'Social', match: ['twitter', 'x profile'] },
+  { key: 'telegram', group: 'Social', match: ['telegram'] },
 
   // --- documents ------------------------------------------------------------
   { key: 'resume', group: 'Documents', match: ['resume', 'cv', 'upload resume', 'attach resume', 'resume/cv'] },
@@ -114,8 +115,8 @@ function signalsFor(element) {
     labelFromFor,
     element.closest('label')?.textContent,
     element.getAttribute('aria-label'),
-    element.getAttribute('name'),
-    element.getAttribute('id'),
+    splitWords(element.getAttribute('name')),
+    splitWords(element.getAttribute('id')),
     element.getAttribute('placeholder'),
     element.getAttribute('autocomplete'),
   ]
@@ -127,8 +128,29 @@ function signalsFor(element) {
     .trim();
 }
 
+/** "applicantFirstName" → "applicant First Name", so word matching works on ids. */
+function splitWords(value) {
+  return value ? value.replace(/([a-z])([A-Z])/g, '$1 $2') : value;
+}
+
+/**
+ * A phrase counts only at the start of a word: "location" is not in
+ * "relocation", "age" is not in "manage". Short phrases ("cv", "zip", "age")
+ * must also end the word, so "cv" is not in "cvc".
+ */
+const phrasePatterns = new Map();
+function mentions(signals, phrase) {
+  let pattern = phrasePatterns.get(phrase);
+  if (!pattern) {
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}${phrase.length <= 3 ? '(?![\\p{L}\\p{N}])' : ''}`, 'u');
+    phrasePatterns.set(phrase, pattern);
+  }
+  return pattern.test(signals);
+}
+
 function categorise(signals) {
-  if (NEVER_FILL.some((term) => signals.includes(term))) {
+  if (NEVER_FILL.some((term) => mentions(signals, term))) {
     return { key: null, sensitive: true };
   }
 
@@ -136,7 +158,7 @@ function categorise(signals) {
 
   for (const category of CATEGORIES) {
     for (const phrase of category.match) {
-      if (!signals.includes(phrase)) continue;
+      if (!mentions(signals, phrase)) continue;
       if (!best || phrase.length > best.length) {
         best = { key: category.key, length: phrase.length };
       }
@@ -304,6 +326,60 @@ function findMissingRequired(found = detectFields().found) {
   return missing.sort((a, b) => (order(a).compareDocumentPosition(order(b)) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
 }
 
+// ─── Questions with no profile field ────────────────────────────────────────
+
+/** "candidate[answers_attributes][3][text]" is a name, not a question. */
+const looksLikeName = (text) => !/\s/.test(text) && /[[\]_]/.test(text);
+
+function currentAnswer(element, kind) {
+  if (kind === 'radio') {
+    const checked = document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
+    return checked ? labelOf(checked.labels?.[0] ?? checked).trim() : '';
+  }
+  if (kind === 'checkbox') return element.checked ? 'Yes' : '';
+  if (kind === 'select') return element.value ? element.selectedOptions[0]?.textContent.trim() ?? '' : '';
+  return String(element.value ?? '').trim();
+}
+
+/**
+ * Questions on the application form that no profile field covers: the
+ * company's own questions ("Telegram account", "Fintech experience"). Saved
+ * answers fill these, and the person can save what they typed. Consent,
+ * demographic and password fields are never included.
+ */
+function detectQuestions(found = detectFields().found) {
+  const known = new Set(found.map((field) => field.element));
+  const knownGroups = new Set(found.filter((field) => field.kind === 'radio').map((field) => field.element.name));
+  const scopes = [...new Set(found.map((field) => field.element.closest('form') ?? document.body))];
+  if (!scopes.length) scopes.push(document.body);
+  const questions = [], seenRadios = new Set();
+  for (const scope of scopes) {
+    for (const element of scope.querySelectorAll('input, select, textarea')) {
+      if (known.has(element) || element.disabled || element.readOnly) continue;
+      if (['hidden', 'file', 'password', 'submit', 'button', 'reset', 'image', 'search'].includes(element.type)) continue;
+      const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length;
+      if (!visible) continue;
+      const signals = signalsFor(element);
+      if (NEVER_FILL.some((term) => mentions(signals, term))) continue;
+      if (element.type === 'checkbox' && CONSENT.test(signals)) continue;
+      let kind = kindOf(element);
+      if (kind === 'text' && element.type === 'number') kind = 'number';
+      let options;
+      if (kind === 'radio') {
+        if (knownGroups.has(element.name) || seenRadios.has(element.name)) continue;
+        seenRadios.add(element.name);
+        if (!groupQuestion(element)) continue; // Options without their question.
+        options = [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)].map((radio) => labelOf(radio.labels?.[0] ?? radio));
+      }
+      if (kind === 'select') options = [...element.options].filter((option) => option.value !== '').map((option) => option.textContent.trim()).slice(0, 200);
+      const question = labelOf(element);
+      if (!question || question === 'Unnamed field' || looksLikeName(question)) continue;
+      questions.push({ id: tag(element), question, kind, ...(options && { options }), value: currentAnswer(element, kind) });
+    }
+  }
+  return questions;
+}
+
 function groupOf(key) {
   return CATEGORY_BY_KEY.get(key)?.group ?? 'Other';
 }
@@ -312,6 +388,7 @@ function groupOf(key) {
 window.CVAutofillFields = {
   detectFields,
   findMissingRequired,
+  detectQuestions,
   labelOf,
   zoneDone,
   groupOf,

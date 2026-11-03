@@ -18,6 +18,15 @@ const Filler = window.CVAutofillFiller;
 /** Kept between messages so "fill" acts on exactly what "scan" reported. */
 let lastScan = { found: [], skipped: [] };
 
+/** The employer's name: a company element, the site name, or the domain ("careers.zexter.com" → "Zexter"). */
+function companyName() {
+  const named = document.querySelector('.company-name, [data-testid="company-name"]')?.textContent?.trim()
+    || document.querySelector('meta[property="og:site_name"]')?.content?.trim();
+  if (named) return named.slice(0, 100);
+  const core = location.hostname.replace(/^(www|careers|jobs|apply|join)\./, '').split('.')[0] ?? '';
+  return core ? core[0].toUpperCase() + core.slice(1) : '';
+}
+
 function scan() {
   lastScan = Fields.detectFields();
 
@@ -34,7 +43,7 @@ function scan() {
     ruleCount,
     context: {
       title: (document.querySelector('h1')?.innerText || document.title || 'Application form').trim().slice(0, 180),
-      company: (document.querySelector('.company-name, [data-testid="company-name"]')?.textContent || '').trim().slice(0, 100),
+      company: companyName(),
     },
     fields: unique.map((field) => ({
       key: field.key,
@@ -49,9 +58,19 @@ function scan() {
   };
 }
 
-async function fill(profile) {
+async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
   const result = await Filler.fillAll(lastScan.found, profile);
+  // Saved answers, matched by the panel to the ids from a "questions" request.
+  let fromAnswers = 0;
+  for (const item of answers) {
+    const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
+    if (!element) continue;
+    try { if ((await Filler.fillAnswer(element, item.kind, item.value)).filled) fromAnswers++; }
+    catch (err) { result.failures.push(`${Fields.labelOf(element)}: ${err.message}`); }
+  }
+  result.filled += fromAnswers;
+  result.fromAnswers = fromAnswers;
   return {
     ...result,
     skippedSensitive: lastScan.skipped.filter((item) => item.reason === 'sensitive').length,
@@ -85,11 +104,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'fill') {
     if (!fromPanel(sender)) return false;
     // Async reply: returning true keeps the message channel open.
-    fill(message.profile).then(sendResponse);
+    fill(message.profile, message.answers).then(sendResponse);
     return true;
   }
 
   if (!fromPanel(sender)) return false;
+  if (message.type === 'questions') {
+    sendResponse({ questions: Fields.detectQuestions(Fields.detectFields().found) });
+    return false;
+  }
   if (message.type === 'check-required') {
     sendResponse({ missing: Fields.findMissingRequired(Fields.detectFields().found) });
     return false;

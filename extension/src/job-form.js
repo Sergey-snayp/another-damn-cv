@@ -17,7 +17,7 @@
   const CONTACT = new Set(['firstName', 'lastName', 'fullName', 'email', 'phone']);
   const APPLICANT = new Set([
     'firstName', 'lastName', 'fullName', 'preferredName', 'email', 'phone', 'location', 'city', 'country',
-    'linkedin', 'github', 'portfolio', 'resume', 'coverLetter', 'currentCompany', 'currentTitle',
+    'linkedin', 'github', 'portfolio', 'telegram', 'resume', 'coverLetter', 'currentCompany', 'currentTitle',
     'yearsExperience', 'school', 'degree', 'workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod',
   ]);
   const JOB_WORDS = /\b(apply|applying|application|applicant|jobs?|careers?|vacanc(y|ies)|positions?|hiring|recruit\w*|candidates?|resume|résumé|cv)\b|ваканс|резюме|відгук|кар['’]?єр|работ|отклик|робот/i;

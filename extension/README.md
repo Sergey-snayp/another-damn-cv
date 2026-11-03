@@ -216,10 +216,31 @@ Teamtailor-shaped form with stand-in widgets:
   --dump-dom "file://$PWD/test/teamtailor.html" | grep -o '<pre id="result">.*</pre>'
 ```
 
+## Saved answers
+
+The company's own questions ("How did you hear about us?", "Fintech
+experience") have no profile field. After you answer them on a form, press
+**Save answers from this form** in the Autofill tab, tick the ones to keep and
+**Save selected**. They are stored on your account and editable in the app
+under **Profile → Saved answers**.
+
+On the next form, Autofill asks the server for matches (`src/answers.js`,
+`POST /api/extension/answers/match`) and fills only empty fields:
+
+- the same question, ignoring case, punctuation and "Required", fills as is;
+- similar wording ("Telegram account" / "Your Telegram") fills and is listed
+  under the result as "check it";
+- an answer naming the company it was written for is not used for another
+  company, and the result says so;
+- for dropdowns and yes/no questions the answer must match one of the options.
+
+Settings → Fields to fill → **Saved answers** switches this off. Telegram is
+now a normal profile field (Links).
+
 ## What it does not do yet
 
-- **Custom questions** (Telegram, "Fintech experience"): planned as saved
-  answers, then AI drafts.
+- **Brand-new free-text questions** ("Fintech experience") the first time:
+  planned as AI drafts.
 - **Multi-step forms** fill one step per press of Autofill.
 - **Workday.** Multi-step, iframes, shadow DOM. Disproportionate effort.
 - **Forms inside iframes** from another site (a Greenhouse form embedded on a

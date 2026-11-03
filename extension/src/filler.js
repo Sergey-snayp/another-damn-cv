@@ -252,4 +252,30 @@ async function fillAll(found, profile) {
   return { filled, failures, notes };
 }
 
-window.CVAutofillFiller = { fillField, fillAll, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+/**
+ * A saved answer into the field it was matched to. Fields the person already
+ * filled are left alone. For choices the value is the option's exact text.
+ */
+async function fillAnswer(element, kind, value) {
+  if (!value) return { filled: false };
+  if (kind === 'radio') {
+    const radios = [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+    if (radios.some((radio) => radio.checked)) return { filled: false };
+    const option = radios.find((radio) => normal(window.CVAutofillFields.labelOf(radio.labels?.[0] ?? radio)) === normal(value));
+    if (!option) return { filled: false };
+    option.click();
+    return { filled: true };
+  }
+  if (kind === 'checkbox') {
+    if (element.checked || !/^(yes|true|1)$/i.test(String(value).trim())) return { filled: false };
+    element.click();
+    return { filled: true };
+  }
+  if (String(element.value ?? '').trim()) return { filled: false };
+  if (kind === 'select') return { filled: fillSelect(element, value) };
+  if (kind === 'combobox') return fillCombobox(element, value);
+  if (kind === 'number') return { filled: fillNumber(element, value) };
+  return { filled: fillText(element, value) };
+}
+
+window.CVAutofillFiller = { fillField, fillAll, fillAnswer, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };

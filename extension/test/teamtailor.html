@@ -59,6 +59,14 @@
     <label><input type="radio" name="auth" value="0"> No</label>
   </fieldset>
 
+  <label for="heard">How did you hear about us?</label>
+  <select id="heard" name="candidate[answers_attributes][7][choice]"><option value="">Choose</option><option value="li">LinkedIn</option><option value="ref">Referral</option></select>
+  <fieldset>
+    <legend>Are you open to relocation?</legend>
+    <label><input type="radio" name="relocate" value="y"> Yes</label>
+    <label><input type="radio" name="relocate" value="n"> No</label>
+  </fieldset>
+
   <label for="cover">Cover letter</label>
   <textarea name="candidate[job_applications_attributes][0][cover_letter]" id="cover"></textarea>
 
@@ -107,7 +115,7 @@ addEventListener('DOMContentLoaded', async () => {
 
   const { found, skipped } = window.CVAutofillFields.detectFields();
   const keys = found.map(f => `${f.key}:${f.kind}`);
-  for (const key of ['firstName:text', 'lastName:text', 'email:text', 'phone:text', 'location:combobox', 'country:combobox', 'resume:drop', 'linkedin:text', 'salaryExpectation:text', 'salaryExpectation:text', 'workAuthorization:radio', 'coverLetter:textarea']) {
+  for (const key of ['telegram:text', 'firstName:text', 'lastName:text', 'email:text', 'phone:text', 'location:combobox', 'country:combobox', 'resume:drop', 'linkedin:text', 'salaryExpectation:text', 'salaryExpectation:text', 'workAuthorization:radio', 'coverLetter:textarea']) {
     expect(keys.includes(key), `detects ${key}`);
   }
   expect(skipped.some(item => item.reason === 'consent'), 'consent checkbox is recognised and skipped');
@@ -116,7 +124,7 @@ addEventListener('DOMContentLoaded', async () => {
 
   const profile = {
     firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', phone: '+1 416 555 0100',
-    city: 'Toronto', country: 'Canada', location: 'Toronto, ON', linkedin: 'https://linkedin.com/in/ada',
+    city: 'Toronto', country: 'Canada', location: 'Toronto, ON', linkedin: 'https://linkedin.com/in/ada', telegram: '@ada',
     salaryExpectation: '$6,000 USD', workAuthorization: 'Yes',
     resumeDataUrl: 'data:application/pdf;base64,JVBERi0xLjQK', resumeFileName: 'Ada_Lovelace_CV.pdf',
   };
@@ -134,8 +142,26 @@ addEventListener('DOMContentLoaded', async () => {
   expect(result.failures.length === 0, `no failures (${result.failures.join('; ')})`);
 
   const missing = window.CVAutofillFields.findMissingRequired(found).map(item => item.label);
-  const wanted = ['Telegram account', 'Fintech Experience', 'I agree that I have read the privacy policy.'];
+  expect($('q3').value === '@ada', 'fills Telegram from the profile');
+  const wanted = ['Fintech Experience', 'I agree that I have read the privacy policy.'];
   expect(JSON.stringify(missing) === JSON.stringify(wanted), `lists required fields still empty in page order (got ${JSON.stringify(missing)})`);
+
+  // Questions no profile field covers, as the panel sends them for saved answers.
+  const questions = window.CVAutofillFields.detectQuestions(found);
+  const asked = questions.map(q => `${q.question}|${q.kind}|${(q.options ?? []).join('/')}`);
+  expect(JSON.stringify(asked) === JSON.stringify(['Fintech Experience|textarea|', 'How did you hear about us?|select|LinkedIn/Referral', 'Are you open to relocation?|radio|Yes/No']),
+    `finds the company's own questions with their options, not consent or profile fields (got ${JSON.stringify(asked)})`);
+  const answer = { 'How did you hear about us?': 'Referral', 'Are you open to relocation?': 'No' };
+  for (const q of questions) {
+    if (answer[q.question]) await window.CVAutofillFiller.fillAnswer(document.querySelector(`[data-adcv-field="${q.id}"]`), q.kind, answer[q.question]);
+  }
+  expect($('heard').value === 'ref' && document.querySelector('input[name="relocate"][value="n"]').checked, 'fills saved answers into text, dropdown and yes/no questions');
+  $('q5').value = 'Built payment retries at Acme.';
+  const typed = await window.CVAutofillFiller.fillAnswer($('q5'), 'textarea', 'Something else');
+  expect(!typed.filled && $('q5').value === 'Built payment retries at Acme.', 'never overwrites an answer the person typed');
+  const values = window.CVAutofillFields.detectQuestions(found).filter(q => q.value).map(q => `${q.question}=${q.value}`);
+  expect(JSON.stringify(values) === JSON.stringify(['Fintech Experience=Built payment retries at Acme.', 'How did you hear about us?=Referral', 'Are you open to relocation?=No']),
+    `reads typed answers back for "Save answers" (got ${JSON.stringify(values)})`);
 
   const out = document.createElement('pre');
   out.id = 'result';
