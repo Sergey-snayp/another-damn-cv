@@ -112,6 +112,55 @@ async function fillAcknowledgements(found, hooks) {
   return { filled, marks };
 }
 
+// ─── Why a required field is still empty ───────────────────────────────
+// Each red icon (and the panel's "Still empty" list) says why Autofill did not
+// fill the field and what fixes it. The context is the last fill: its profile
+// values, the groups switched off, and the reasons fields failed.
+let lastFill = { profile: {}, failed: new Map() };
+
+function explain(element) {
+  const { profile, failed } = lastFill;
+  if (failed.has(element)) return failed.get(element);
+  const field = lastScan.found.find((item) => item.element === element || (element.type === 'radio' && item.element.name === element.name && item.element.type === 'radio'));
+  const label = Fields.labelOf(element).replace(/\?$/, '');
+  if (field) {
+    const off = profile.offKeys?.[field.key];
+    if (off) return `Off in Settings → Fields to fill (${off}).`;
+    if (field.diversity) return 'Diversity questions are off in Settings → Fields to fill.';
+    if ((field.key === 'requiresSponsorship' || field.key === 'workAuthorization') && field.country) {
+      return `Answer once in the panel: ${field.key === 'requiresSponsorship' ? 'sponsorship' : 'work authorization'} for ${field.country}.`;
+    }
+    if (field.key === 'resume') return profile.resumeDataUrl ? 'Your CV upload did not finish. Try Autofill again or upload it yourself.' : 'No CV chosen. Choose one in the Resume tab.';
+    if (field.key === 'workedHereBefore') return 'Could not tell from your CV. Answer it yourself.';
+    if (field.kind === 'select' || field.kind === 'radio' || field.kind === 'combobox') return `None of the options matched your profile answer for "${label}". Choose one yourself.`;
+    return `Your profile has no value for "${label}". Add it in the app's Profile.`;
+  }
+  const kind = Fields.leftAlone(element);
+  if (kind === 'never') return 'A personal question Autofill never answers.';
+  if (kind === 'consent') {
+    return profile.acknowledgeRequired
+      ? 'Not a routine acknowledgement, so it is left for you. Read it and choose.'
+      : 'Consent is yours to give. Choose it, or switch on Settings → Acknowledge required privacy notices.';
+  }
+  if (Fields.detectQuestions().some((question) => question.id === element.dataset.adcvField)) {
+    return 'The company\'s own question. Answer it, then use "Save answers from this form", or "Draft with AI" in the panel.';
+  }
+  return 'Autofill did not recognise this field. Fill it yourself.';
+}
+
+/** Required fields still empty, each with why. */
+function missingWithReasons() {
+  return Fields.findMissingRequired(Fields.detectFields().found).map((item) => {
+    const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
+    return { ...item, reason: element ? explain(element) : 'Required, still empty.' };
+  });
+}
+
+function rememberFill(profile, marks) {
+  const failed = new Map(marks.filter((mark) => mark.status === 'missing').map((mark) => [mark.element, mark.reason]));
+  lastFill = { profile, failed: new Map([...lastFill.failed, ...failed]) };
+}
+
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
   // Settings → "Animate filling": the page follows each field as it fills.
@@ -127,7 +176,9 @@ async function fill(profile, answers = []) {
   result.filled += fromAnswers.filled;
   result.fromAnswers = fromAnswers.filled;
   rememberStep();
-  const missing = Fields.findMissingRequired(Fields.detectFields().found);
+  lastFill = { profile, failed: new Map() };
+  rememberFill(profile, marks);
+  const missing = missingWithReasons();
   await Marks?.show([...marks, ...fromAnswers.marks, ...acknowledged.marks]);
   await Marks?.showMissing(missing);
   return {
@@ -147,6 +198,8 @@ function focusField(id) {
   const before = target.style.outline;
   target.style.outline = '3px solid #e6ff00';
   setTimeout(() => { target.style.outline = before; }, 1800);
+  // Once the scroll settles, show why it is empty beside it.
+  setTimeout(() => Marks?.point(element), 450);
   return true;
 }
 
@@ -198,8 +251,9 @@ async function fillNextStep() {
     await hooks?.finish?.(fresh);
     hooks?.end();
     result.filled += fromAnswers.filled;
+    rememberFill(reply.profile, marks);
     await Marks?.show([...marks, ...fromAnswers.marks]);
-    await Marks?.showMissing(Fields.findMissingRequired(Fields.detectFields().found));
+    await Marks?.showMissing(missingWithReasons());
     if (result.filled) void chrome.runtime.sendMessage({ type: 'step-filled', filled: result.filled, notes: result.notes }).catch(() => {});
   } catch { /* extension reloaded or background unavailable: leave the step for the person */ }
   finally { stepBusy = false; }
@@ -250,7 +304,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'check-required') {
-    const missing = Fields.findMissingRequired(Fields.detectFields().found);
+    const missing = missingWithReasons();
     void Marks?.showMissing(missing);
     sendResponse({ missing });
     return false;

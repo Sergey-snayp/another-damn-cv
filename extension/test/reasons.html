@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — why a required field is still empty</title>
+<!--
+  Runs the page script's real fill, then checks each red icon explains why its
+  field was left empty and what fixes it.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/reasons.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>window.chrome = { runtime: { id: 'test', getURL: (p) => (p.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} }, sendMessage: async () => ({}) }, storage: { local: { get: async () => ({ animateFill: false }), set: async () => {} }, onChanged: { addListener() {} } } };</script>
+<body>
+<form>
+  <label for="first">First name*</label><input id="first" name="first_name" required>
+  <label for="phone">Phone*</label><input id="phone" type="tel" name="phone" required>
+  <label for="salary">What are your salary expectations?*</label><input id="salary" name="salary" required>
+  <label for="sponsor">Will you require visa sponsorship to work in Poland?*</label>
+  <select id="sponsor" required><option value="">Select...</option><option>Yes</option><option>No</option></select>
+  <label><input type="checkbox" id="privacy" required> I have read the privacy policy*</label>
+  <label for="heard">How did you hear about this job?*</label><input id="heard" name="q1" required>
+  <label for="orientation">Sexual orientation*</label>
+  <select id="orientation" required><option value="">Select...</option><option>Prefer not to say</option></select>
+  <input id="badge" name="field_9" required>
+</form>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+<script>
+addEventListener('load', () => setTimeout(async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  // fill() is the page script's own; the panel normally asks for it.
+  const result = await fill({ firstName: 'Ada', country: 'Canada', requiresSponsorship: 'No', offKeys: { salaryExpectation: 'Salary and availability' } });
+  const reasonFor = (id) => result.missing.find((item) => document.querySelector(`[data-adcv-field="${item.id}"]`) === $(id))?.reason ?? '(not listed)';
+  const cases = {
+    phone: /Your profile has no value for "Phone"/,
+    salary: /Off in Settings → Fields to fill \(Salary and availability\)/,
+    sponsor: /Answer once in the panel: sponsorship for Poland/,
+    privacy: /Consent is yours to give/,
+    heard: /company's own question/,
+    orientation: /never answers/,
+    badge: /did not recognise this field/,
+  };
+  for (const [id, pattern] of Object.entries(cases)) expect(pattern.test(reasonFor(id)), `${id}: ${reasonFor(id)}`);
+  expect(!result.missing.some((item) => document.querySelector(`[data-adcv-field="${item.id}"]`) === $('first')), 'filled fields are not listed');
+  expect(window.CVAutofillMarks.statusOf($('phone')) === 'missing' && /Phone/.test(window.CVAutofillMarks.reasonOf($('phone'))), 'the red icon carries the same reason');
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+}, 1500));
+</script>
+</body>

@@ -28,6 +28,9 @@
     .mark { position: absolute; display: grid; place-items: center; width: ${SIZE}px; height: ${SIZE}px; border-radius: 50%; border: 2px solid #fff;
       color: #fff; font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: help; box-sizing: content-box; }
     .mark[hidden] { display: none; }
+    .tip { position: absolute; z-index: 2; width: max-content; max-width: 300px; padding: 8px 11px; border-radius: 8px; background: #111827; color: #fff;
+      font: 500 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.25); pointer-events: none; }
+    .tip[hidden] { display: none; }
     .glow { position: absolute; pointer-events: none; border-radius: 10px; border: 2px solid var(--c);
       box-shadow: 0 0 0 5px color-mix(in srgb, var(--c) 22%, transparent), 0 0 18px color-mix(in srgb, var(--c) 35%, transparent);
       animation: glow-fade .9s ease-out forwards; }
@@ -132,6 +135,7 @@
   }
 
   function remove(element) {
+    if (marks.get(element)?.reason === tip.textContent) hideTip();
     marks.get(element)?.node.remove();
     marks.delete(element);
     if (!marks.size) stop();
@@ -160,6 +164,25 @@
     }, 500);
   }
 
+  // The reason, shown at once on hover or click (a native tooltip waits about a second).
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  tip.hidden = true;
+  tip.setAttribute('role', 'tooltip');
+  shadow.append(tip);
+  function showTip(node, reason) {
+    tip.textContent = reason;
+    tip.hidden = false;
+    const left = parseFloat(node.style.left), top = parseFloat(node.style.top);
+    const width = Math.min(300, tip.offsetWidth);
+    // Below the icon, kept on the page: right-aligned to it near the right edge.
+    const x = left + width + 8 > scrollX + document.documentElement.clientWidth ? left + SIZE - width : left;
+    tip.style.left = `${Math.max(scrollX + 4, x)}px`;
+    tip.style.top = `${top + SIZE + 8}px`;
+  }
+  const hideTip = () => { tip.hidden = true; };
+  addEventListener('scroll', hideTip, { capture: true, passive: true });
+
   function add(element, status, reason) {
     if (!element?.isConnected || !LOOK[status]) return;
     remove(element);
@@ -167,11 +190,13 @@
     node.className = 'mark';
     node.style.background = LOOK[status].color;
     node.textContent = LOOK[status].glyph;
-    node.title = reason;
     node.setAttribute('role', 'img');
     node.setAttribute('aria-label', reason);
+    node.addEventListener('pointerenter', () => showTip(node, reason));
+    node.addEventListener('pointerleave', hideTip);
+    node.addEventListener('click', () => (tip.hidden || tip.textContent !== reason ? showTip(node, reason) : hideTip()));
     shadow.append(node);
-    marks.set(element, { node, status });
+    marks.set(element, { node, status, reason });
     start();
     place(element, node);
   }
@@ -193,7 +218,9 @@
     for (const [element, mark] of marks) if (mark.status === 'missing' && !ids.has(element.dataset.adcvField)) remove(element);
     for (const item of missing) {
       const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
-      if (element && marks.get(element)?.status !== 'missing') add(element, 'missing', 'Required, still empty');
+      const reason = item.reason || 'Required, still empty.';
+      const mark = marks.get(element);
+      if (element && (mark?.status !== 'missing' || mark.reason !== reason)) add(element, 'missing', reason);
     }
   }
 
@@ -334,5 +361,14 @@
   /** What a person's own scroll does during a fill: stop following. Also used by tests, which cannot send trusted events. */
   const stopFollowing = () => { motion.tookOver = true; };
 
-  window.CVAutofillMarks = { show, showMissing, clear, reattach, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.node.title ?? null };
+  /** Opens a field's reason bubble: the panel's "Go to" lands with the reason in view. */
+  function point(element) {
+    const mark = marks.get(element);
+    if (!mark) return false;
+    place(element, mark.node);
+    showTip(mark.node, mark.reason);
+    return true;
+  }
+
+  window.CVAutofillMarks = { show, showMissing, clear, reattach, point, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.reason ?? null };
 })();

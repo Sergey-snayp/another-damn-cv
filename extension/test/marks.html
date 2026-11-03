@@ -62,7 +62,7 @@ addEventListener('DOMContentLoaded', async () => {
   expect(Marks.statusOf($('city')) === 'check' && /pick the matching suggestion/.test(Marks.reasonOf($('city'))), `yellow for an address with no suggestion picked (${Marks.reasonOf($('city'))})`);
   expect(Marks.statusOf($('telegram')) === 'check', 'yellow for a similar saved answer');
   expect(Marks.statusOf(document.querySelector('[name="relocate"][value="n"]')) === 'ok', 'green on the chosen radio option');
-  expect(Marks.statusOf($('fintech')) === 'missing' && Marks.reasonOf($('fintech')) === 'Required, still empty', 'red for a required field still empty');
+  expect(Marks.statusOf($('fintech')) === 'missing' && /^Required, still empty/.test(Marks.reasonOf($('fintech'))), 'red for a required field still empty');
 
   // Autofill's own events are not the person's edits: the green icon stays.
   window.CVAutofillFiller.fillText($('first'), 'Ada');

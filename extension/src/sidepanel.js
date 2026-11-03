@@ -250,7 +250,9 @@ async function runFill() {
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
-    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, eligibility, acknowledgeRequired, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}) };
+    // Groups switched off, by field, so a still-empty field can say which setting left it empty.
+    const offKeys = Object.fromEntries(FILL_GROUPS.filter(group => group.keys.length && !groupOn(group.keys[0])).flatMap(group => group.keys.map(key => [key, group.label])));
+    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, eligibility, acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}) };
     // Each frame holding the form fills in turn; their results add up to one report.
     let result = null;
     for (const frameId of formFrames.length ? formFrames : [0]) {
@@ -429,7 +431,7 @@ function fillReportDetails() {
   if (!fillReport) return '';
   const notes = fillReport.notes.length ? `<ul class="fill-notes">${fillReport.notes.map(note => `<li>${esc(note)}</li>`).join('')}</ul>` : '';
   const missing = fillReport.missing.length
-    ? `<div class="still-empty"><strong>Still empty and required (${fillReport.missing.length})</strong><ul>${fillReport.missing.map(item => `<li><button data-focus-field="${esc(item.id)}">${esc(item.label)}<span>Go to</span></button></li>`).join('')}</ul><button class="ghost" id="check-required">${icon('refresh', 16)}Check again</button></div>`
+    ? `<div class="still-empty"><strong>Still empty and required (${fillReport.missing.length})</strong><ul>${fillReport.missing.map(item => `<li><button data-focus-field="${esc(item.id)}"><span class="empty-label">${esc(item.label)}${item.reason ? `<small>${esc(item.reason)}</small>` : ''}</span><span>Go to</span></button></li>`).join('')}</ul><button class="ghost" id="check-required">${icon('refresh', 16)}Check again</button></div>`
     : fillReport.kind === 'success' ? '<p class="hint">No required fields are empty.</p>' : '';
   return notes + missing;
 }

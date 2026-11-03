@@ -545,6 +545,17 @@ function detectAcknowledgements(found = detectFields().found) {
   return items;
 }
 
+/**
+ * What kind of field Autofill leaves alone on purpose: 'consent' (the
+ * person's own decision) or 'never' (personal questions it never answers).
+ */
+function leftAlone(element) {
+  const signals = signalsFor(element);
+  if (ALWAYS_SKIP.some((term) => mentions(signals, term))) return 'never';
+  if (CONSENT.test(signals) || CONSENT.test(groupQuestion(element) ?? '')) return 'consent';
+  return null;
+}
+
 function groupOf(key) {
   if (key.startsWith('eeo')) return 'Diversity';
   return CATEGORY_BY_KEY.get(key)?.group ?? 'Other';
@@ -557,6 +568,7 @@ window.CVAutofillFields = {
   detectQuestions,
   detectAcknowledgements,
   acknowledges,
+  leftAlone,
   countryIn,
   isEmpty,
   controlFor,

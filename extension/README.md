@@ -322,7 +322,16 @@ page or on a neighbouring field (Country beside Phone). Hover for the reason.
 - **! yellow**: filled, but check it: an AI draft, a similar saved answer, an
   address with no suggestion picked, an upload still finishing.
 - **× red**: required and still empty (the same list as "Still empty and
-  required"), or not filled, with the reason.
+  required"), or not filled. It says why and what fixes it: the profile has
+  no value for it, its group is off in Settings, sponsorship for a country
+  needs "Answer once", consent is the person's to give (or the acknowledge
+  setting), the company's own question (save an answer or draft one), a
+  personal question Autofill never answers, no option matched, the upload
+  did not finish, or a field it did not recognise. `test/reasons.html`.
+
+The reason shows at once in a bubble on hover or click, and the panel's
+"Still empty" list shows it under each field; its **Go to** opens the bubble
+beside the field.
 
 Icons are drawn in a shadow root over the page, so the site's layout is
 untouched, and follow their fields on scroll and resize. Green and yellow icons
