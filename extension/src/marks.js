@@ -174,11 +174,13 @@
     tip.textContent = reason;
     tip.hidden = false;
     const left = parseFloat(node.style.left), top = parseFloat(node.style.top);
-    const width = Math.min(300, tip.offsetWidth);
-    // Below the icon, kept on the page: right-aligned to it near the right edge.
-    const x = left + width + 8 > scrollX + document.documentElement.clientWidth ? left + SIZE - width : left;
-    tip.style.left = `${Math.max(scrollX + 4, x)}px`;
-    tip.style.top = `${top + SIZE + 8}px`;
+    const width = Math.min(300, tip.offsetWidth), height = tip.offsetHeight;
+    // Above the icon and to its left: away from the panel on the right edge of
+    // the page. Below it only when there is no room above.
+    const x = Math.max(scrollX + 4, left + SIZE + 4 - width);
+    const above = top - height - 8;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${above >= scrollY + 4 ? above : top + SIZE + 12}px`;
   }
   const hideTip = () => { tip.hidden = true; };
   addEventListener('scroll', hideTip, { capture: true, passive: true });

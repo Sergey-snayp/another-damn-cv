@@ -329,7 +329,7 @@ page or on a neighbouring field (Country beside Phone). Hover for the reason.
   personal question Autofill never answers, no option matched, the upload
   did not finish, or a field it did not recognise. `test/reasons.html`.
 
-The reason shows at once in a bubble on hover or click, and the panel's
+The reason shows at once in a bubble above and to the left of the icon (away from the panel on the right; below only when there is no room above) on hover or click, and the panel's
 "Still empty" list shows it under each field; its **Go to** opens the bubble
 beside the field.
 
