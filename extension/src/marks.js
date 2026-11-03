@@ -59,35 +59,67 @@
   const fieldsIn = (node) => [...node.querySelectorAll('input, select, textarea')]
     .filter((input) => input.type !== 'hidden' && input.getAttribute('aria-hidden') !== 'true').length;
 
+  /** Whether the element draws a visible frame: a border, an outline, an outer shadow, or one on ::before/::after. */
+  function framed(node) {
+    const style = getComputedStyle(node);
+    if (parseFloat(style.borderRightWidth) > 0 && style.borderRightStyle !== 'none') return true;
+    if (parseFloat(style.outlineWidth) > 0 && style.outlineStyle !== 'none') return true; // Greenhouse
+    if (style.boxShadow !== 'none' && !style.boxShadow.includes('inset')) return true;
+    return ['::before', '::after'].some((pseudo) => {
+      const part = getComputedStyle(node, pseudo);
+      return part.content !== 'none' && part.position === 'absolute' && parseFloat(part.borderRightWidth) > 0 && part.borderRightStyle !== 'none';
+    });
+  }
+
   /**
-   * The box a person sees as the field. Many forms (Greenhouse) draw the border
-   * on a wrapper around the label and input, so the nearest bordered ancestor
-   * holding only this field is used; otherwise the field itself.
+   * The box a person sees as the field. Many forms draw the frame on a wrapper
+   * around the label and input (Greenhouse uses an outline), so the nearest
+   * framed ancestor holding only this field is used; otherwise the field itself.
    */
   function boxFor(element) {
     const anchor = anchorFor(element);
     if (element.type === 'radio' || element.type === 'checkbox') return anchor;
-    let node = anchor;
-    for (let depth = 0; depth < 5 && node && node !== document.body; depth++, node = node.parentElement) {
-      if (node !== anchor && fieldsIn(node) > 1) break;
-      const style = getComputedStyle(node);
-      const bordered = (parseFloat(style.borderRightWidth) > 0 && style.borderRightStyle !== 'none') || style.boxShadow !== 'none';
-      if (bordered) return node;
+    let node = element;
+    for (let depth = 0; depth < 7 && node && node !== document.body; depth++, node = node.parentElement) {
+      if (node !== element && fieldsIn(node) > 1) break;
+      if (framed(node)) return node;
     }
     return anchor;
   }
 
-  /** Where the icon sits: just outside the field's box, on the right, or on the left when the right has no room. */
+  /**
+   * Whether an icon at (left, top) would sit on another field: side-by-side
+   * fields (Country next to Phone) leave only a narrow gap. Checked on screen;
+   * off screen counts as free.
+   */
+  function clashes(element, left, top) {
+    const points = [[left + SIZE / 2, top + SIZE / 2], [left + 1, top + SIZE / 2], [left + SIZE + 3, top + SIZE / 2]];
+    host.style.setProperty('pointer-events', 'none', 'important');
+    try {
+      return points.some(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || hit === document.documentElement || hit === document.body || hit.contains(element)) return false;
+        return Boolean(hit.closest('input, select, textarea, button, a, [role="combobox"]')) || fieldsIn(hit) > 0;
+      });
+    } finally { host.style.removeProperty('pointer-events'); }
+  }
+
+  /**
+   * Where the icon sits: just outside the field's box and level with its
+   * middle, on the right; on the left when the right is off the page or on
+   * another field; inside the right edge only when neither side is free.
+   */
   function place(element, node) {
     const rect = boxFor(element).getBoundingClientRect();
     node.hidden = !rect.width && !rect.height;
     if (node.hidden) return;
     const width = document.documentElement.clientWidth;
-    const left = rect.right + SIZE + 12 <= width ? rect.right + 8
-      : rect.left - SIZE - 12 >= 0 ? rect.left - SIZE - 8
-        : rect.right - SIZE - 8; // No room either side: inside the right edge.
-    const top = rect.height > 120 ? rect.top + 10 : rect.top + (rect.height - SIZE) / 2 - 2;
-    node.style.left = `${left + scrollX}px`;
+    const top = rect.top + (rect.height - SIZE) / 2 - 2; // The middle of the box.
+    const right = rect.right + 8, left = rect.left - SIZE - 12;
+    const spot = right + SIZE + 4 <= width && !clashes(element, right, top) ? right
+      : left >= 0 && !clashes(element, left, top) ? left
+        : rect.right - SIZE - 12;
+    node.style.left = `${spot + scrollX}px`;
     node.style.top = `${top + scrollY}px`;
   }
 

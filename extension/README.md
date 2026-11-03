@@ -271,9 +271,11 @@ a time and only on your click, or when you press Autofill with Settings →
 ## Fill status icons
 
 After Autofill, a small icon sits just outside each field it touched or
-checked (`src/marks.js`), on the right of the box you see as the field (on
-forms that draw the border around the label and input, that wrapper), or on
-the left when the right has no room. Hover for the reason.
+checked (`src/marks.js`), level with the middle of the box you see as the
+field. That box is the nearest wrapper drawing a frame (border, outline as on
+Greenhouse, outer shadow, or a ::before/::after border) and holding only that
+field. The icon goes on the right, or on the left when the right is off the
+page or on a neighbouring field (Country beside Phone). Hover for the reason.
 
 - **✓ green**: filled from your profile, diversity answers or an exact saved
   answer, or your CV attached.
