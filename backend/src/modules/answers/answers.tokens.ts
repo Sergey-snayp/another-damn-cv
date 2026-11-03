@@ -1,0 +1,1 @@
+export const ANSWER_REPOSITORY = Symbol('ANSWER_REPOSITORY');

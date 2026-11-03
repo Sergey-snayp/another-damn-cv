@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SavedAnswers } from "./SavedAnswers";
 import { Link } from "react-router-dom";
 import type { ContactFields } from "../api";
 import {
@@ -368,6 +369,7 @@ export function ProfileCareer({
               icon: "laptop",
             },
             { label: "Other URL", value: profile.website, icon: "link" },
+            { label: "Telegram", value: profile.telegram, icon: "link" },
           ].map((item) => (
             <div className="profile-link-row" key={item.label}>
               <span className="profile-feature-icon">
@@ -431,6 +433,8 @@ export function ProfileCareer({
         <p className="profile-muted">No items added</p>
         <span className="profile-tag">Coming soon</span>
       </section>
+
+      <SavedAnswers />
     </>
   );
 }

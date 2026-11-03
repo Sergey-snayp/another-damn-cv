@@ -54,6 +54,8 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   later CV edits. Until a section is imported, Profile still shows the primary CV.
   File parsing uses Claude; choosing a saved CV makes no AI call. Neither action
   changes your documents or CV versions attached to applications.
+- **Profile → Saved answers** lists answers saved from application forms in
+  the extension, with when each was last used. Edit or delete them here.
 - **Interview Prep** collects active jobs in Screening or Interviewing, with
   search, status filters, job details and the saved application CV version.
   Jobs appear automatically from Dashboard; archived and other statuses stay out.
@@ -100,6 +102,7 @@ currently filtered collection, descriptions, dates and attached resume versions.
 | `resumes` | `POST /api/import/cv`, `GET /api/extension/resumes` and `GET /api/extension/resumes/:id/text` (extension token), `GET/POST /api/resumes`, `GET /api/resumes/:id`, `POST /api/resumes/:id/save`, `POST /api/resumes/:id/rewrite`, `POST /api/jobs/:id/tailor`, `GET/DELETE /api/resumes/:id/tailoring`, history, diff, revert | CV import, versioned resumes, line rewriting and job-specific tailoring in one module. PDF/DOCX/TXT/Markdown imports return an unsaved draft. Tailoring suggests summaries and bullets for review. Changed saves add snapshots; unchanged saves add none |
 | `jobs` | `POST /api/jobs/capture` (extension token), `GET/POST /api/jobs`, `GET/PATCH/DELETE /api/jobs/:id`, `POST /api/jobs/:id/reread`, `POST /api/jobs/:id/status/undo` | Saved postings. JSON-LD first, the Claude CLI when a page has none. Status runs Saved → Applied → Screening → Interview → Offer → Accepted / Rejected / Declined, or Dismissed; every move is logged and the latest can be undone |
 | applications | `POST /api/jobs/applications`, `GET /api/jobs/applications/export`, `POST /api/jobs/applications/import`, `PATCH /api/jobs/applications/preferences`, `PATCH /api/jobs/applications/:id/resume` | Structured application entry, CSV tools, account favorites/archives and versioned resume attachments |
+| answers | `GET /api/answers`, `PATCH/DELETE /api/answers/:id`, `POST /api/extension/answers` and `POST /api/extension/answers/match` (extension token) | Answers to employers' own application questions, saved from the extension and refilled on matching questions. Exact or similar wording; never reused when an answer names another company |
 | interviews | `GET/PUT /api/jobs/:jobId/preparation` | Account-owned interview type, interviewer, instructions, notes and questions for the next interview. Opening the form does not create a record |
 
 From `backend/`, `npm run check` runs types, lint, formatting and unit/architecture

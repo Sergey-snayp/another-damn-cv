@@ -32,6 +32,7 @@ model User {
   profile               Profile?
   interviewPreparations InterviewPreparation[]
   interviewPractice     InterviewPractice[]
+  savedAnswers          SavedAnswer[]
 
   @@map("users")
 }
@@ -171,6 +172,30 @@ model InterviewPractice {
   @@map("interview_practice")
 }
 
+/// Your answer to an application question a form asked, kept so the extension
+/// can fill it next time. Saved only when you choose "Save answers".
+///
+/// `questionKey` is the question lowercased without punctuation: the same
+/// question on another form finds this row. `company` is where the answer was
+/// written, so an answer naming that company is not reused for another one.
+model SavedAnswer {
+  id          String    @id @default(uuid())
+  userId      String
+  question    String
+  questionKey String
+  answer      String
+  company     String?
+  usedCount   Int       @default(0)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionKey])
+  @@index([userId])
+  @@map("saved_answers")
+}
+
 /// One status change, so a move can be undone and the job page can show its
 /// timeline. The job's status and its event are written in one transaction.
 model JobStatusEvent {
@@ -236,6 +261,7 @@ model Profile {
   github    String?
   portfolio String?
   website   String?
+  telegram  String?
 
   workAuthorization   String?
   requiresSponsorship String?
@@ -244,7 +270,7 @@ model Profile {
 
   /// Reviewed career sections imported into Profile, independent of CV versions.
   career         Json?
-  careerRevision Int @default(0)
+  careerRevision Int   @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

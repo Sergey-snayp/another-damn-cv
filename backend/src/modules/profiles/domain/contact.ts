@@ -14,6 +14,7 @@ export interface ContactFields {
   github: string;
   portfolio: string;
   website: string;
+  telegram: string;
   currentCompany: string;
   currentTitle: string;
   yearsExperience: string;
@@ -39,6 +40,7 @@ export const EMPTY_CONTACT: ContactFields = {
   github: '',
   portfolio: '',
   website: '',
+  telegram: '',
   currentCompany: '',
   currentTitle: '',
   yearsExperience: '',

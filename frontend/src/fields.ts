@@ -42,6 +42,7 @@ export const SECTIONS: { title: string; hint?: string; fields: FieldSpec[] }[] =
       { key: 'github', label: 'GitHub', placeholder: 'https://github.com/…' },
       { key: 'portfolio', label: 'Portfolio', half: true },
       { key: 'website', label: 'Website', half: true },
+      { key: 'telegram', label: 'Telegram', placeholder: '@username', half: true },
     ],
   },
   {

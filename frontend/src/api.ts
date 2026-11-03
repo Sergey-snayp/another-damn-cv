@@ -46,7 +46,7 @@ export interface ContactFields {
   firstName: string; lastName: string; fullName: string; preferredName: string;
   email: string; phone: string;
   location: string; city: string; state: string; country: string; postalCode: string;
-  linkedin: string; github: string; portfolio: string; website: string;
+  linkedin: string; github: string; portfolio: string; website: string; telegram: string;
   currentCompany: string; currentTitle: string; yearsExperience: string;
   workAuthorization: string; requiresSponsorship: string;
   salaryExpectation: string; noticePeriod: string;
