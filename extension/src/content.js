@@ -61,56 +61,7 @@ function scan() {
 
 const Marks = window.CVAutofillMarks;
 
-/** Fills saved answers by question id; returns how many, plus icons for them. */
-async function fillAnswers(answers, failures, hooks = null) {
-  let filled = 0;
-  const marks = [];
-  const ordered = answers
-    .map((item) => ({ item, element: document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`) }))
-    .filter((entry) => entry.element)
-    .sort((a, b) => (a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
-  for (const { item, element } of ordered) {
-    const field = { element, kind: item.kind };
-    const token = await hooks?.before?.(field);
-    let mark = null;
-    try {
-      const result = await Filler.fillAnswer(element, item.kind, item.value);
-      if (result.filled) {
-        filled++;
-        mark = item.match === 'similar'
-          ? { element: result.element ?? element, status: 'check', reason: `From your answer to "${item.savedQuestion ?? 'a similar question'}". Check it fits.` }
-          : { element: result.element ?? element, status: 'ok', reason: 'From your saved answers' };
-        marks.push(mark);
-      }
-    } catch (err) { failures.push(`${Fields.labelOf(element)}: ${err.message}`); }
-    await hooks?.after?.(field, mark, token);
-  }
-  return { filled, marks };
-}
 
-/**
- * Required acknowledgements, when the person switched it on (Settings →
- * "Acknowledge required privacy notices"). Each gets a yellow icon: read it.
- */
-async function fillAcknowledgements(found, hooks) {
-  const marks = [];
-  let filled = 0;
-  for (const item of Fields.detectAcknowledgements(found)) {
-    const field = { element: item.element, kind: item.kind };
-    const token = await hooks?.before?.(field);
-    let mark = null;
-    try {
-      const result = await Filler.fillAcknowledgement(item);
-      if (result.filled) {
-        filled++;
-        mark = { element: result.element ?? item.element, status: 'check', reason: 'Acknowledged for you (Settings). Read it before submitting.' };
-        marks.push(mark);
-      }
-    } catch { /* left for the person: it stays in the still-empty list */ }
-    await hooks?.after?.(field, mark, token);
-  }
-  return { filled, marks };
-}
 
 // ─── Why a required field is still empty ───────────────────────────────
 // Each red icon (and the panel's "Still empty" list) says why Autofill did not
@@ -156,30 +107,87 @@ function missingWithReasons() {
   });
 }
 
-function rememberFill(profile, marks) {
-  const failed = new Map(marks.filter((mark) => mark.status === 'missing').map((mark) => [mark.element, mark.reason]));
-  lastFill = { profile, failed: new Map([...lastFill.failed, ...failed]) };
+
+const byTag = (id) => document.querySelector(`[data-adcv-field="${CSS.escape(String(id))}"]`);
+const stopOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+
+/**
+ * One pass down the form, in page order. Each stop gets its icon the moment
+ * it is done: profile fields, saved answers and (when switched on) required
+ * acknowledgements are filled; other required fields still empty get a red
+ * icon saying why. `explainIf` limits which empty fields are explained (a
+ * later step explains only its new fields).
+ */
+async function runPass({ found, profile, answers = [], hooks, explainIf = () => true }) {
+  const result = { filled: 0, fromAnswers: 0, acknowledged: 0, failures: [], notes: [] };
+  const stops = [], covered = new Set(), groups = new Set(), state = {};
+  const cover = (element) => { covered.add(element); if (element.type === 'radio' && element.name) groups.add(element.name); };
+  const isCovered = (element) => covered.has(element) || (element.type === 'radio' && groups.has(element.name));
+  for (const field of found) if (Filler.valueFor(field, profile)) stops.push({ kind: 'field', element: field.element, field });
+  stops.forEach((stop) => cover(stop.element));
+  for (const item of answers) {
+    const element = byTag(item.id);
+    if (element && !isCovered(element)) { stops.push({ kind: 'answer', element, item }); cover(element); }
+  }
+  if (profile.acknowledgeRequired) {
+    for (const ack of Fields.detectAcknowledgements(found)) if (!isCovered(ack.element)) { stops.push({ kind: 'ack', element: ack.element, ack }); cover(ack.element); }
+  }
+  for (const item of Fields.findMissingRequired(found)) {
+    const element = byTag(item.id);
+    if (element && !isCovered(element) && explainIf(element)) { stops.push({ kind: 'explain', element }); cover(element); }
+  }
+  stops.sort(stopOrder);
+
+  for (const stop of stops) {
+    if (stop.kind === 'explain' && !Fields.isEmpty(stop.element)) continue;
+    const field = stop.field ?? { element: stop.element, kind: stop.item?.kind ?? stop.ack?.kind };
+    const token = await hooks?.before?.(field);
+    let mark = null;
+    try {
+      if (stop.kind === 'field') {
+        const done = await Filler.fillOne(stop.field, profile, state);
+        if (done.filled) result.filled++;
+        if (done.note) result.notes.push(done.note);
+        if (done.failure) result.failures.push(done.failure);
+        mark = done.mark;
+        if (mark?.status === 'missing') lastFill.failed.set(mark.element, mark.reason);
+      } else if (stop.kind === 'answer') {
+        const done = await Filler.fillAnswer(stop.element, stop.item.kind, stop.item.value);
+        if (done.filled) {
+          result.filled++; result.fromAnswers++;
+          mark = stop.item.match === 'similar'
+            ? { element: done.element ?? stop.element, status: 'check', reason: `From your answer to "${stop.item.savedQuestion ?? 'a similar question'}". Check it fits.` }
+            : { element: done.element ?? stop.element, status: 'ok', reason: 'From your saved answers' };
+        }
+      } else if (stop.kind === 'ack') {
+        const done = await Filler.fillAcknowledgement(stop.ack);
+        if (done.filled) {
+          result.filled++; result.acknowledged++;
+          mark = { element: done.element ?? stop.element, status: 'check', reason: 'Acknowledged for you (Settings). Read it before submitting.' };
+        }
+      } else {
+        mark = { element: stop.element, status: 'missing', reason: explain(stop.element) };
+      }
+    } catch (err) {
+      result.failures.push(`${Fields.labelOf(stop.element)}: ${err.message}`);
+    }
+    await hooks?.after?.(field, mark, token);
+  }
+  if (result.acknowledged) result.notes.push(`${result.acknowledged} required acknowledgement${result.acknowledged === 1 ? '' : 's'} ticked for you: read ${result.acknowledged === 1 ? 'it' : 'them'} before submitting`);
+  return result;
 }
 
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
-  // Settings → "Animate filling": the page follows each field as it fills.
+  lastFill = { profile, failed: new Map() };
+  // Settings → "Animate filling": the page follows each field as it fills. Icons appear as each field is done either way.
   const hooks = Marks?.fillHooks(await Marks.animationMode());
-  const { marks, ...result } = await Filler.fillAll(lastScan.found, profile, hooks);
-  // Saved answers, matched by the panel to the ids from a "questions" request.
-  const fromAnswers = await fillAnswers(answers, result.failures, hooks);
-  const acknowledged = profile.acknowledgeRequired ? await fillAcknowledgements(lastScan.found, hooks) : { filled: 0, marks: [] };
-  result.filled += acknowledged.filled;
-  if (acknowledged.filled) result.notes.push(`${acknowledged.filled} required acknowledgement${acknowledged.filled === 1 ? '' : 's'} ticked for you: read ${acknowledged.filled === 1 ? 'it' : 'them'} before submitting`);
+  const result = await runPass({ found: lastScan.found, profile, answers, hooks });
   await hooks?.finish?.(lastScan.found);
   hooks?.end();
-  result.filled += fromAnswers.filled;
-  result.fromAnswers = fromAnswers.filled;
   rememberStep();
-  lastFill = { profile, failed: new Map() };
-  rememberFill(profile, marks);
+  // A last check for anything the pass could not reach (fields that appeared meanwhile).
   const missing = missingWithReasons();
-  await Marks?.show([...marks, ...fromAnswers.marks, ...acknowledged.marks]);
   await Marks?.showMissing(missing);
   return {
     ...result,
@@ -240,19 +248,17 @@ async function fillNextStep() {
   questions.forEach((question) => seenQuestions.add(question.id));
   const fresh = found.filter(isBlank);
   if (!fresh.length && !questions.length) return;
+  // Only this step's new fields are explained, so the page never jumps back up to earlier ones.
+  const isNew = new Set([...found.map((field) => field.element), ...questions.map((question) => byTag(question.id))]);
   stepBusy = true;
   try {
     const reply = await chrome.runtime.sendMessage({ type: 'step-request', questions });
     if (!reply?.armed) { stepsArmed = false; return; }
     const hooks = Marks?.fillHooks(await Marks.animationMode());
-    const { marks, ...result } = await Filler.fillAll(fresh, reply.profile, hooks);
-    const fromAnswers = await fillAnswers(reply.answers ?? [], result.failures, hooks);
-    if (reply.profile?.acknowledgeRequired) result.filled += (await fillAcknowledgements(fresh, hooks)).filled;
+    lastFill = { profile: reply.profile, failed: lastFill.failed };
+    const result = await runPass({ found: fresh, profile: reply.profile, answers: reply.answers ?? [], hooks, explainIf: (element) => isNew.has(element) });
     await hooks?.finish?.(fresh);
     hooks?.end();
-    result.filled += fromAnswers.filled;
-    rememberFill(reply.profile, marks);
-    await Marks?.show([...marks, ...fromAnswers.marks]);
     await Marks?.showMissing(missingWithReasons());
     if (result.filled) void chrome.runtime.sendMessage({ type: 'step-filled', filled: result.filled, notes: result.notes }).catch(() => {});
   } catch { /* extension reloaded or background unavailable: leave the step for the person */ }

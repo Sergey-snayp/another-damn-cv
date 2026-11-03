@@ -310,6 +310,14 @@ a time and only on your click, or when you press Autofill with Settings →
 
 ## Fill status icons
 
+Autofill makes one pass down the form in page order. Each stop gets its icon
+the moment it is done: profile fields, saved answers and (when switched on)
+required acknowledgements are filled and turn green or yellow; any other
+required field still empty turns red with the reason as the pass reaches it.
+This is the same with animation on or off. A final check catches fields that
+appeared meanwhile. `test/flow.html` checks fields above are already marked
+while a later one fills.
+
 After Autofill, a small icon sits just outside each field it touched or
 checked (`src/marks.js`), level with the middle of the box you see as the
 field. That box is the nearest wrapper drawing a frame (border, outline as on

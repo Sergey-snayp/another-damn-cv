@@ -312,7 +312,15 @@
   function fillHooks(mode) {
     motion.mode = mode;
     motion.tookOver = false;
-    if (mode === 'off') return null;
+    // Animation off: no scrolling or glow, but each field's icon still appears as soon as it is done.
+    if (mode === 'off') {
+      return {
+        async before() { return null; },
+        async after(field, mark) { if (mark) await show([{ element: mark.element ?? field.element, status: mark.status, reason: mark.reason }]); },
+        async finish() {},
+        end() {},
+      };
+    }
     for (const type of ['wheel', 'touchmove', 'keydown']) addEventListener(type, takeOver, { capture: true, passive: true });
     return {
       async before(field) {

@@ -481,30 +481,36 @@ const pageOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node
  * it, after(field, mark, token) shows its result. Fields fill in page order,
  * so the page moves down the form like a person would.
  */
+/**
+ * Fills one detected field. `state` carries what a whole pass shares (one CV
+ * upload per form). Returns { filled, mark, note, failure, skipped }.
+ */
+async function fillOne(field, profile, state = {}) {
+  const value = valueFor(field, profile);
+  if (!value || (field.key === 'resume' && state.uploaded)) return { filled: false, skipped: true };
+  const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
+  try {
+    const result = field.diversity ? await fillDiversity(field, value) : await fillField(field, value, profile.resumeFileName);
+    if (field.key === 'resume' && result.filled) state.uploaded = true;
+    const status = markFor(field, result, profile);
+    return { filled: Boolean(result.filled), note: result.note ? `${label}: ${result.note}` : null, mark: status ? { element: field.element, ...status } : null };
+  } catch (err) {
+    return { filled: false, failure: `${label}: ${err.message}`, mark: { element: field.element, status: 'missing', reason: `Not filled: ${err.message}` } };
+  }
+}
+
 async function fillAll(found, profile, hooks = null) {
   let filled = 0;
-  const failures = [], notes = [], marks = [];
-  let uploaded = false;
+  const failures = [], notes = [], marks = [], state = {};
   for (const field of [...found].sort(pageOrder)) {
-    const value = valueFor(field, profile);
-    if (!value) continue;
-    if (field.key === 'resume' && uploaded) continue;
-    const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
+    if (!valueFor(field, profile)) continue;
     const token = await hooks?.before?.(field);
-    let mark = null;
-    try {
-      const result = field.diversity ? await fillDiversity(field, value) : await fillField(field, value, profile.resumeFileName);
-      if (result.filled) filled++;
-      if (field.key === 'resume' && result.filled) uploaded = true;
-      if (result.note) notes.push(`${label}: ${result.note}`);
-      const status = markFor(field, result, profile);
-      if (status) { mark = { element: field.element, ...status }; marks.push(mark); }
-    } catch (err) {
-      failures.push(`${label}: ${err.message}`);
-      mark = { element: field.element, status: 'missing', reason: `Not filled: ${err.message}` };
-      marks.push(mark);
-    }
-    await hooks?.after?.(field, mark, token);
+    const result = await fillOne(field, profile, state);
+    if (result.filled) filled++;
+    if (result.note) notes.push(result.note);
+    if (result.failure) failures.push(result.failure);
+    if (result.mark) marks.push(result.mark);
+    await hooks?.after?.(field, result.mark, token);
   }
   // `marks` holds page elements: the page script keeps it and never sends it on.
   return { filled, failures, notes, marks };
@@ -572,4 +578,4 @@ async function fillAcknowledgement(item) {
   return { filled: false };
 }
 
-window.CVAutofillFiller = { isTyping, fillAcknowledgement, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+window.CVAutofillFiller = { isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };

@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — each icon appears as its field is done</title>
+<!--
+  One pass down the form in page order. When a later field is being filled,
+  the fields above it must already show their icons: green when filled, red
+  (with the reason) when left empty. Checked with animation on and off.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=30000 \
+      --dump-dom "file://$PWD/test/flow.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const settings = {};
+  window.chrome = { runtime: { id: 'test', getURL: (p) => (p.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} }, sendMessage: async () => ({}) }, storage: { local: { get: async () => settings, set: async () => {} }, onChanged: { addListener() {} } } };
+</script>
+<body>
+<form>
+  <label for="first">First name*</label><input id="first" name="first_name" required>
+  <label for="phone">Phone*</label><input id="phone" type="tel" name="phone" required>
+  <label for="heard">How did you hear about this job?*</label><input id="heard" name="q1" required>
+  <label for="email">Email*</label><input id="email" type="email" name="email" required>
+</form>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+<script>
+addEventListener('load', () => setTimeout(async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const M = window.CVAutofillMarks;
+  for (const mode of ['on', 'off']) {
+    document.querySelector('form').reset(); M.clear();
+    settings.animateFill = mode === 'on';
+    let seenWhileFilling = null;
+    const watch = (event) => { if (event.target.id === 'email' && !seenWhileFilling) seenWhileFilling = { first: M.statusOf($('first')), phone: M.statusOf($('phone')), heard: M.statusOf($('heard')), phoneReason: M.reasonOf($('phone')) }; };
+    document.addEventListener('input', watch, true);
+    await fill({ firstName: 'Ada', email: 'ada@example.com' });
+    document.removeEventListener('input', watch, true);
+    expect(seenWhileFilling?.first === 'ok', `animation ${mode}: the first field is already green when a later field fills (${JSON.stringify(seenWhileFilling)})`);
+    expect(seenWhileFilling?.phone === 'missing' && /Phone/.test(seenWhileFilling.phoneReason ?? ''), `animation ${mode}: a required field without a profile value is already red, with why`);
+    expect(seenWhileFilling?.heard === 'missing', `animation ${mode}: the company's question above is already red`);
+    expect(M.statusOf($('email')) === 'ok', `animation ${mode}: the last field gets its icon too`);
+  }
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+}, 1500));
+</script>
+</body>
