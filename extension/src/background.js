@@ -70,6 +70,8 @@ async function injectPanel(tabId) {
   if (await hasPanelHost(tabId)) return true;
   try {
     await chrome.scripting.executeScript({ target: { tabId }, files: PAGE_SCRIPTS });
+    // React dropdown helper, in the page's own world (see page-world.js).
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/page-world.js'], world: 'MAIN' }).catch(() => {});
     return true;
   } catch {
     return false;

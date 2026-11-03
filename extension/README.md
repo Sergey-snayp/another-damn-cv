@@ -216,7 +216,11 @@ render after load and change as you scroll.
   The best suggestion wins: one starting with your city ("Vancouver, British
   Columbia, Canada" over "North Vancouver…"), then the most words shared. It
   is highlighted and picked with Enter, as with a keyboard, or clicked if that
-  does not take, and the box is checked to show it. If not, the city alone is
+  does not take, and the box is checked to show it. React dropdowns that
+  ignore simulated events get a last resort: `src/page-world.js`, which runs
+  in the page's own world (manifest `"world": "MAIN"`), calls the option's own
+  React click handler. It receives only a tag on the option element, never
+  profile data. `test/react-pick.html` covers this. If not, the city alone is
   tried. Address pickers search by "city, country". With no pick, a typed
   value is yellow ("pick a suggestion"); a box that clears it shows red.
 - **Yes/no questions.** Radio buttons are matched by their question (fieldset

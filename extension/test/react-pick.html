@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — React dropdowns that only answer their own handlers</title>
+<!--
+  Some React dropdowns ignore simulated clicks, mouse events and Enter, and
+  only respond to their React handler. The page-world script (page-world.js)
+  calls that handler for an option the extension tagged. In this test page
+  everything runs in one world; in the extension it runs in the page's world.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=20000 \
+      --dump-dom "file://$PWD/test/react-pick.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>window.chrome = { storage: { local: { get: async () => ({}) }, onChanged: { addListener() {} } } };</script>
+<body>
+<form>
+  <label id="country-label" for="country">Country</label>
+  <div class="box"><span class="chosen" id="country-chosen"></span><input id="country" role="combobox" aria-autocomplete="list" aria-labelledby="country-label" aria-controls="country-list"></div>
+  <div id="country-list"></div>
+  <label id="state-label" for="state">State / province</label>
+  <div class="box"><span class="chosen" id="state-chosen"></span><input id="state" role="combobox" aria-autocomplete="list" aria-labelledby="state-label" aria-controls="state-list"></div>
+  <div id="state-list"></div>
+</form>
+<script>
+  // Options carry only React-style props; no DOM listeners pick them.
+  function dropdown(id, options, withHandlers) {
+    const input = document.getElementById(id), list = document.getElementById(`${id}-list`);
+    const show = () => {
+      list.innerHTML = options.filter((o) => o.toLowerCase().startsWith(input.value.toLowerCase().slice(0, 2))).map((o) => `<div role="option">${o}</div>`).join('');
+      if (withHandlers) for (const node of list.children) node.__reactProps$test = { onClick: (event) => { if (event.currentTarget !== node) return; document.getElementById(`${id}-chosen`).className = 'select__single-value'; document.getElementById(`${id}-chosen`).textContent = node.textContent; input.value = ''; list.innerHTML = ''; } };
+    };
+    input.addEventListener('input', () => setTimeout(show, 60));
+  }
+  dropdown('country', ['Cameroon', 'Canada'], true);
+  dropdown('state', ['British Columbia', 'Alberta'], false);
+</script>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script src="../src/page-world.js"></script>
+<script>
+addEventListener('DOMContentLoaded', async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const requests = [];
+  document.addEventListener('adcv:react-pick', (e) => requests.push(e.detail), true);
+
+  const { found } = window.CVAutofillFields.detectFields();
+  const result = await window.CVAutofillFiller.fillAll(found, { country: 'Canada', state: 'British Columbia' });
+
+  expect($('country-chosen').textContent === 'Canada', `picks Canada through the option's own React handler (got "${$('country-chosen').textContent}")`);
+  expect(requests.length >= 1 && requests.every((r) => /^pick-\d+$/.test(r)), `the page world only receives a tag, no profile data (${JSON.stringify(requests)})`);
+  expect(!document.querySelector('[data-adcv-pick]'), 'the tag is removed afterwards');
+  expect(!$('state-chosen').textContent && result.notes.some((n) => /pick/.test(n)), `an option with no handler fails cleanly with a note (${JSON.stringify(result.notes)})`);
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+});
+</script>
+</body>

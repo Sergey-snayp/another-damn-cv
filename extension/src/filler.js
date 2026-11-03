@@ -229,6 +229,31 @@ function choiceShown(element, chosen, typed) {
 }
 
 /**
+ * Last resort for React dropdowns: asks the page-world script (page-world.js)
+ * to call the option's own React click handler. Only a tag on the option
+ * element is sent. Resolves whether the handler was found and called.
+ */
+let pickCount = 0;
+function reactPick(option) {
+  return new Promise((resolve) => {
+    const token = `pick-${++pickCount}`;
+    option.setAttribute('data-adcv-pick', token);
+    const finish = (ok) => {
+      document.removeEventListener('adcv:react-picked', onReply);
+      clearTimeout(timer);
+      option.removeAttribute('data-adcv-pick');
+      resolve(ok);
+    };
+    const onReply = (event) => {
+      try { const reply = JSON.parse(event.detail); if (reply.token === token) finish(Boolean(reply.ok)); } catch { /* not ours */ }
+    };
+    document.addEventListener('adcv:react-picked', onReply);
+    const timer = setTimeout(() => finish(false), 600);
+    document.dispatchEvent(new CustomEvent('adcv:react-pick', { detail: token }));
+  });
+}
+
+/**
  * Selects one suggestion the way a person does with the keyboard: highlight
  * it, then Enter in the box (react-select selects its highlighted option).
  * If that does not take, click a fresh copy of it (the list may have been
@@ -241,8 +266,13 @@ async function pickOption(element, option, typed = '') {
   element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
   await wait(200);
   if (choiceShown(element, chosen, typed)) return true;
-  const fresh = optionsFor(element).find((item) => optionText(item) === chosen) ?? (option.isConnected ? option : null);
-  if (fresh) { press(fresh); await wait(200); }
+  const fresh = () => optionsFor(element).find((item) => optionText(item) === chosen) ?? (option.isConnected ? option : null);
+  const clickable = fresh();
+  if (clickable) { press(clickable); await wait(200); }
+  if (choiceShown(element, chosen, typed)) return true;
+  // React dropdowns that ignore simulated events: the option's own handler.
+  const target = fresh();
+  if (target && (await reactPick(target))) await wait(200);
   return choiceShown(element, chosen, typed);
 }
 
