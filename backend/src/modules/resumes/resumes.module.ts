@@ -18,6 +18,7 @@ import { ResumesController } from './adapters/inbound/http/resumes.controller';
 import { TailoringController } from './adapters/inbound/http/tailoring.controller';
 import { RewriteController } from './adapters/inbound/http/rewrite.controller';
 import { CvImportController } from './adapters/inbound/http/cv-import.controller';
+import { ExtensionResumesController } from './adapters/inbound/http/extension-resumes.controller';
 import { ImportCv } from './application/use-cases/import-cv';
 import { CvDocumentTextExtractor } from './adapters/outbound/documents/document-text.extractor';
 import { ClaudeCvTranscriber } from './adapters/outbound/ai/import/claude-cv.transcriber';
@@ -38,7 +39,13 @@ import {
 } from './resumes.tokens';
 @Module({
   imports: [DatabaseModule, ProfileDirectoryModule, AuthModule, AiModule, JobDirectoryModule],
-  controllers: [ResumesController, TailoringController, RewriteController, CvImportController],
+  controllers: [
+    ResumesController,
+    TailoringController,
+    RewriteController,
+    CvImportController,
+    ExtensionResumesController,
+  ],
   providers: [
     {
       provide: RESUME_REPOSITORY,
