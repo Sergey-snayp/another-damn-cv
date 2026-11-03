@@ -105,6 +105,26 @@ hold this logic; the list comes from `GET /api/extension/resumes`.
 
 PDFs added to the extension by hand before 0.13.0 are removed on update.
 
+## Keyword match
+
+On a job description page, the Autofill tab shows how many of the posting's
+keywords your chosen CV mentions, as a 0-100 score: Strong (80+), Good (60+),
+Fair (40+) or Low. It counts keywords only and does not judge experience depth.
+
+- Keywords come from a fixed list of about 250 skills in `src/match.js`, with
+  spellings that count as one ("node", "nodejs", "Node.js"). Skills under
+  Requirements or mentioned twice count double; "nice to have" counts once.
+- The page is read with the same capture as Send job. The card appears only for
+  the page's own JobPosting data, a site rule (LinkedIn, Indeed…), or a
+  description with requirement/responsibility sections and 3+ skills.
+- Each CV's text (no contact details) comes from
+  `GET /api/extension/resumes/:id/text` and is kept until the CV changes. If
+  another CV scores 10+ points higher, the card offers to switch.
+- **Improve my match** saves the job and opens it in the app with the chosen CV
+  selected for tailoring. Tailoring runs only when you press its button there.
+
+`node --test test/match.test.mjs` checks the matching rules.
+
 ## Send a job to the app
 
 On any job page — LinkedIn, Indeed, a company's careers page — open the
@@ -132,6 +152,7 @@ filler.js    writes values in a way React accepts
 content.js     answers the panel's scan and fill requests
 launcher.js    the D! button on the page edge
 job-form.js    decides whether a page looks like a job application form
+match.js       keyword match between a posting and your CVs
 panel-host.js  puts the panel frame into the page; opens and closes it
 background.js  toolbar icon, adding the panel to other sites, reopening after loads
 sidepanel.js   the panel itself; stores your profile in chrome.storage.local

@@ -76,3 +76,24 @@ export function fileNameFor(resume) {
   const base = resume.name.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Resume';
   return `${base.replace(/\.pdf$/i, '')}.pdf`;
 }
+
+/**
+ * Each CV's plain text for keyword matching, keyed by id. Fetched once per CV
+ * version and kept in storage (cvTexts); CVs that are gone are dropped.
+ */
+export async function cvTexts(items) {
+  const { auth, cvTexts: cached = {} } = await chrome.storage.local.get(['auth', 'cvTexts']);
+  if (!auth?.syncToken) throw new NotSignedInError();
+  const next = {};
+  let changed = Object.keys(cached).some(id => !items.some(item => item.id === id));
+  await Promise.all(items.map(async item => {
+    if (cached[item.id]?.updatedAt === item.updatedAt) { next[item.id] = cached[item.id]; return; }
+    const response = await fetch(`${API_URL}/api/extension/resumes/${encodeURIComponent(item.id)}/text`, { headers: { Authorization: `Bearer ${auth.syncToken}` } }).catch(() => null);
+    if (response?.status === 401) { await signOut(); throw new NotSignedInError(); }
+    if (!response?.ok) return; // Left out of the match until it can be read.
+    next[item.id] = { updatedAt: item.updatedAt, text: (await response.json()).text };
+    changed = true;
+  }));
+  if (changed) await chrome.storage.local.set({ cvTexts: next });
+  return Object.fromEntries(Object.entries(next).map(([id, entry]) => [id, entry.text]));
+}

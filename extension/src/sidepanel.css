@@ -139,3 +139,20 @@ dialog textarea { resize: vertical; margin-bottom: 15px; }
 .switch-label { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 12px; font-weight: 600; color: var(--color-muted); }
 .resume-switch[aria-expanded=true] .switch-label svg { transform: rotate(90deg); }
 .resume-switch strong .badge { margin-left: 6px; vertical-align: 1px; }
+.match-card { --match: var(--color-muted); background: linear-gradient(135deg, var(--color-surface), var(--color-background)); }
+.match-strong { --match: var(--color-success); } .match-good { --match: var(--color-accent-border); } .match-low { --match: var(--color-error); }
+.match-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.match-top h2 { margin: 0 0 4px; } .match-top p { margin: 0; overflow-wrap: anywhere; }
+.match-top p strong { color: var(--color-text); }
+.ring { position: relative; flex: none; width: 72px; height: 72px; }
+.ring svg { display: block; } .ring circle { fill: none; stroke-width: 7; }
+.ring-track { stroke: var(--color-border); } .ring-value { stroke: var(--match); stroke-linecap: round; }
+.ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; font-weight: 750; }
+.better-cv { margin: 16px 0 0; padding: 14px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.better-cv strong { font-size: 13px; } .better-cv p { margin: 4px 0 10px; }
+.keywords { margin: 14px 0; } .keywords > summary { font-size: 13px; } details.keywords[open] > summary { margin-bottom: 10px; }
+.keywords ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.kw { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--color-border); }
+.kw.has { background: var(--color-success-soft); border-color: var(--color-success-border); }
+.kw.missing { color: var(--color-muted); background: var(--color-surface); text-decoration: line-through; text-decoration-color: var(--color-error); }
+.match-card .hint { text-align: left; margin-top: 10px; }

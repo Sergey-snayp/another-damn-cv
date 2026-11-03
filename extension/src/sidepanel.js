@@ -1,7 +1,8 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
 import { captureTab, jobUrl, NotSignedInError, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
-import { cachedResumes, chooseResume, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
+import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
+import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
@@ -34,6 +35,7 @@ document.addEventListener('click', event => { if (!alive() && !event.target.clos
 let profile = {}, scan = null, currentTab = null, sending = false, filling = false, localDirty = false, refreshId = 0;
 let copyValues = [];
 let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, pickerOpen = { autofill: false, resume: false }, pageDisconnected = false;
+let match = null, matchUrl = null, matchKeywords = null, matchRun = 0, improving = false;
 function status(id, text, kind = '') { const node = $(id); if (node) { node.textContent = text; node.className = `status ${kind}`; } }
 function openApp(path = '/') { return chrome.tabs.create({ url: `${APP_URL}${path}` }); }
 // The panel lives inside one page, so it always works with that page's tab.
@@ -71,7 +73,7 @@ function renderAutofill() {
     return;
   }
   if (!scan || !scan.fields?.length) {
-    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p><button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
+    host.innerHTML = `${pageCard()}${matchCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p><button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
     $('rescan-empty').addEventListener('click', refresh);
     return;
   }
@@ -79,7 +81,7 @@ function renderAutofill() {
   const groups = new Map();
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
-  host.innerHTML = `${pageCard()}
+  host.innerHTML = `${pageCard()}${matchCard()}
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status" id="fill-status" role="status"></div><p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
     ${resumeCard()}
     <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}</details>`;
@@ -243,6 +245,79 @@ document.addEventListener('click', event => {
   })();
 });
 
+// ─── Keyword match card ───────────────────────────────────────────────────
+// On a job description page, scores how many of the posting's keywords each CV
+// mentions (src/match.js). Keywords only: it does not judge experience depth.
+const RING = 2 * Math.PI * 30;
+function matchCard() {
+  if (!match) return '';
+  const { score, matched, missing } = match.chosen;
+  const label = matchLabel(score), total = matched.length + missing.length;
+  const keywords = [...matched.map(name => `<li class="kw has">${icon('check', 13)}${esc(name)}</li>`), ...missing.map(name => `<li class="kw missing">${esc(name)}</li>`)].join('');
+  return `<section class="card match-card match-${label.toLowerCase()}" aria-label="Keyword match">
+    <div class="match-top"><div><h2>${label} match</h2><p><strong>${matched.length} of ${total}</strong> keywords in ${esc(resumes.chosen.name)}</p></div>
+      <div class="ring" role="img" aria-label="Score ${score} of 100"><svg viewBox="0 0 72 72" width="72" height="72"><circle cx="36" cy="36" r="30" class="ring-track"/><circle cx="36" cy="36" r="30" class="ring-value" stroke-dasharray="${(RING * score) / 100} ${RING}" transform="rotate(-90 36 36)"/></svg><span>${score}</span></div></div>
+    ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p>${esc(match.better.name)} matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
+    <details class="keywords"><summary>Keywords from the posting</summary><ul>${keywords}</ul></details>
+    <button class="primary" id="improve-match">Improve my match${icon('chevron', 17)}</button>
+    <div class="status" id="match-status" role="status"></div>
+    <p class="hint">Counts the posting's keywords found in your CV. It does not judge how deep your experience is.</p>
+  </section>`;
+}
+/** Reads the page once per address; rescoring after a CV switch reuses the keywords. */
+async function updateMatch() {
+  const tab = currentTab, run = ++matchRun;
+  if (!tab?.id || unsendableReason(tab)) { matchUrl = null; matchKeywords = null; }
+  else if (tab.url !== matchUrl) {
+    matchUrl = tab.url; matchKeywords = null;
+    try {
+      const capture = await captureTab(tab.id), job = jobFromCapture(capture), keywords = findKeywords(job.text);
+      if (looksLikeJobPosting(capture, job, keywords)) matchKeywords = keywords;
+    } catch { /* not readable: no card */ }
+  }
+  await rescore(run);
+}
+async function rescore(run = ++matchRun) {
+  let next = null;
+  if (matchKeywords && resumes.chosen) {
+    try {
+      const texts = await cvTexts(resumes.items);
+      const scored = resumes.items.filter(item => texts[item.id] !== undefined).map(item => ({ ...item, ...scoreCv(matchKeywords, texts[item.id]) }));
+      const chosen = scored.find(item => item.id === resumes.chosen.id);
+      if (chosen) {
+        // Suggest another CV only when it is clearly better, not one keyword ahead.
+        const best = scored.filter(item => item.id !== chosen.id).sort((a, b) => b.score - a.score)[0];
+        const better = best && best.score >= chosen.score + 10 ? { id: best.id, name: best.name, score: best.score, matched: best.matched.length } : null;
+        next = { chosen, better };
+      }
+    } catch { /* signed out or app unreachable: no card */ }
+  }
+  if (run !== matchRun) return;
+  const changed = JSON.stringify(next) !== JSON.stringify(match);
+  match = next;
+  if (changed && !filling) renderAutofill();
+}
+// Save the job, then open it in the app with the chosen CV ready to tailor.
+// Tailoring itself runs Claude, so it starts only from the app's button.
+function improveMatch() {
+  const tab = currentTab, chosen = resumes.chosen;
+  if (improving || !tab?.id || !chosen || unsendableReason(tab)) return;
+  const access = requestSiteAccess(tab); // Must start in the click's user gesture.
+  improving = true; $('improve-match').disabled = true; status('match-status', 'Saving this job…');
+  void (async () => {
+    try {
+      if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
+      const { job } = await sendCapture(await captureTab(tab.id));
+      await chrome.tabs.create({ url: `${jobUrl(job.id)}?tailorFrom=${encodeURIComponent(chosen.id)}` });
+      status('match-status', `Saved. In the app, press "Tailor resume for this job" to improve ${chosen.name}.`, 'success');
+    } catch (error) {
+      if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
+      status('match-status', error.message, 'error');
+    } finally { improving = false; if ($('improve-match')) $('improve-match').disabled = false; }
+  })();
+}
+document.addEventListener('click', event => { if (event.target.closest('#improve-match')) improveMatch(); });
+
 async function renderAccount() {
   $('redirect-uri').textContent = redirectUri();
   const user = await currentUser(); $('signed-out').hidden = !!user; $('signed-in').hidden = !user;
@@ -272,6 +347,7 @@ async function refresh() {
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
     renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
     await Promise.all([renderSyncState(), renderAccount()]);
+    void updateMatch();
   } catch { if (!alive()) showStale(); else status('auth-status', 'Could not refresh. Reload the extension to reconnect.', 'error'); }
 }
 function initIcons() { document.querySelectorAll('[data-icon]').forEach(node => { node.innerHTML = icon(node.dataset.icon, Number(node.dataset.size) || 20); }); }
