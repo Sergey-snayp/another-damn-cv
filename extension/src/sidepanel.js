@@ -14,6 +14,19 @@ const PROFILE_GROUPS = [
   { title: 'Eligibility', keys: ['workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod'] },
 ];
 const DERIVED_KEYS = ['currentCompany', 'currentTitle', 'yearsExperience'];
+// Settings → "Fields to fill": each group can be switched off. All start on.
+const FILL_GROUPS = [
+  { id: 'contact', label: 'Contact', keys: ['firstName', 'lastName', 'middleName', 'preferredName', 'fullName', 'email', 'phone', 'pronouns'] },
+  { id: 'location', label: 'Location', keys: ['location', 'city', 'state', 'country', 'postalCode', 'addressLine'] },
+  { id: 'links', label: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website', 'twitter'] },
+  { id: 'documents', label: 'CV and cover letter', keys: ['resume', 'coverLetter'] },
+  { id: 'experience', label: 'Experience and education', keys: ['currentCompany', 'currentTitle', 'yearsExperience', 'school', 'degree', 'fieldOfStudy', 'graduationYear'] },
+  { id: 'workAuthorization', label: 'Work authorization', keys: ['workAuthorization', 'requiresSponsorship'] },
+  { id: 'salary', label: 'Salary and availability', keys: ['salaryExpectation', 'noticePeriod'] },
+];
+const GROUP_OF_KEY = new Map(FILL_GROUPS.flatMap(group => group.keys.map(key => [key, group.id])));
+let fillGroups = {};
+const groupOn = key => fillGroups[GROUP_OF_KEY.get(key)] !== false;
 const $ = id => document.getElementById(id);
 
 // After the extension is reloaded or updated, Chrome leaves this panel in the page
@@ -36,6 +49,8 @@ let profile = {}, scan = null, currentTab = null, sending = false, filling = fal
 let copyValues = [];
 let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, pickerOpen = { autofill: false, resume: false }, pageDisconnected = false;
 let match = null, matchUrl = null, matchKeywords = null, matchRun = 0, improving = false;
+// The last Autofill result for this page: summary, notes and required fields still empty.
+let fillReport = null;
 function status(id, text, kind = '') { const node = $(id); if (node) { node.textContent = text; node.className = `status ${kind}`; } }
 function openApp(path = '/') { return chrome.tabs.create({ url: `${APP_URL}${path}` }); }
 // The panel lives inside one page, so it always works with that page's tab.
@@ -57,7 +72,7 @@ async function askPage(message, tab = currentTab) {
     return null;
   }
 }
-function valueFor(key) { if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; return profile[key] ?? ''; }
+function valueFor(key) { if (!groupOn(key)) return ''; if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; return profile[key] ?? ''; }
 function pageCard() {
   if (!scan) return '';
   const title = scan.context?.title || 'Application form';
@@ -73,18 +88,20 @@ function renderAutofill() {
     return;
   }
   if (!scan || !scan.fields?.length) {
-    host.innerHTML = `${pageCard()}${matchCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p><button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
+    const opener = scan?.canOpenForm ? `<button class="primary" id="open-form">${icon('file')}Open application form</button>` : '';
+    host.innerHTML = `${pageCard()}${matchCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'This job page opens its form when you press Apply.' : scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
     $('rescan-empty').addEventListener('click', refresh);
+    $('open-form')?.addEventListener('click', openForm);
     return;
   }
   const ready = scan.fields.filter(field => valueFor(field.key)).length;
   const groups = new Map();
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
-  const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
+  const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
   host.innerHTML = `${pageCard()}${matchCard()}
-    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status" id="fill-status" role="status"></div><p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
+    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
     ${resumeCard()}
-    <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}</details>`;
+    <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
   $('add-details')?.addEventListener('click', () => { selectTab('profile'); $('local-details').open = true; });
 }
@@ -97,7 +114,7 @@ async function runFill() {
     // Autofill uploads the CV chosen at the moment of the click, as a PDF of its
     // latest saved version. A missing PDF does not stop the other fields.
     let file = null, cvProblem = '';
-    if (resumes.chosen && scan?.fields.some(field => field.key === 'resume')) {
+    if (resumes.chosen && groupOn('resume') && scan?.fields.some(field => field.key === 'resume')) {
       try {
         try { resumes = await fetchResumes(); } catch { /* use the cached list */ }
         if (!(await hasFreshPdf(resumes.chosen))) status('fill-status', 'Making a PDF of your CV…');
@@ -105,12 +122,45 @@ async function runFill() {
       } catch (error) { cvProblem = `CV not attached: ${error.message}`; }
       status('fill-status', 'Filling…');
     }
-    const result = await askPage({ type: 'fill', profile: { ...profile, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName } }, target);
+    // Fields in groups switched off in Settings are sent empty, so they stay as they are.
+    const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
+    const result = await askPage({ type: 'fill', profile: { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName } }, target);
     if (cvProblem && result) result.failures.push(cvProblem);
     if (!result) throw new Error(pageDisconnected ? 'The extension was updated. Reload this page, then try again.' : 'Lost contact with the page. Reload it and try again.');
-    status('fill-status', result.failures.length ? `Filled ${result.filled}. Could not fill: ${result.failures.join('; ')}` : `Filled ${result.filled} field${result.filled === 1 ? '' : 's'}. Review the form before submitting.`, result.failures.length ? 'error' : 'success');
-  } catch (error) { status('fill-status', error.message, 'error'); }
-  finally { filling = false; if (button.isConnected) button.disabled = false; }
+    fillReport = {
+      url: target?.url,
+      text: result.failures.length ? `Filled ${result.filled}. Could not fill: ${result.failures.join('; ')}` : `Filled ${result.filled} field${result.filled === 1 ? '' : 's'}. Review the form before submitting.`,
+      kind: result.failures.length ? 'error' : 'success',
+      notes: result.notes ?? [],
+      missing: result.missing ?? [],
+    };
+  } catch (error) { fillReport = { url: target?.url, text: error.message, kind: 'error', notes: [], missing: [] }; }
+  finally { filling = false; renderAutofill(); }
+}
+
+/** Notes from the last fill ("CV: uploaded") and required fields still empty. */
+function fillReportDetails() {
+  if (!fillReport) return '';
+  const notes = fillReport.notes.length ? `<ul class="fill-notes">${fillReport.notes.map(note => `<li>${esc(note)}</li>`).join('')}</ul>` : '';
+  const missing = fillReport.missing.length
+    ? `<div class="still-empty"><strong>Still empty and required (${fillReport.missing.length})</strong><ul>${fillReport.missing.map(item => `<li><button data-focus-field="${esc(item.id)}">${esc(item.label)}<span>Go to</span></button></li>`).join('')}</ul><button class="ghost" id="check-required">${icon('refresh', 16)}Check again</button></div>`
+    : fillReport.kind === 'success' ? '<p class="hint">No required fields are empty.</p>' : '';
+  return notes + missing;
+}
+async function checkRequired() {
+  const result = await askPage({ type: 'check-required' });
+  if (result && fillReport) { fillReport.missing = result.missing; renderAutofill(); }
+}
+document.addEventListener('click', event => {
+  const go = event.target.closest('[data-focus-field]');
+  if (go) { void askPage({ type: 'focus-field', id: go.dataset.focusField }); return; }
+  if (event.target.closest('#check-required')) void checkRequired();
+});
+/** Presses the job page's Apply button, then rescans once the form has loaded. */
+async function openForm() {
+  const button = $('open-form'); if (button) button.disabled = true;
+  await askPage({ type: 'open-form' });
+  for (const delay of [800, 1500, 2500]) setTimeout(() => void refresh(), delay);
 }
 
 // Saving job postings stays an explicit, permission-controlled action.
@@ -344,9 +394,11 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get('profile'); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await askPage({ type: 'scan' }, tab);
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
+    if (fillReport && fillReport.url !== tab?.url) fillReport = null;
+    fillGroups = stored.autofillGroups ?? {};
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
     renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
     await Promise.all([renderSyncState(), renderAccount()]);
@@ -376,7 +428,15 @@ $('disabled-sites-list').addEventListener('click', async event => {
   try { const { launcherDisabledHosts = [] } = await chrome.storage.local.get('launcherDisabledHosts'); const next = launcherDisabledHosts.filter(h => h !== host); await chrome.storage.local.set({ launcherDisabledHosts: next }); renderDisabledSites(next); }
   catch { status('auth-status', 'Could not update extension settings.', 'error'); }
 });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts']); $('launcher-enabled').checked = settings.launcherEnabled !== false; renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+function renderFillGroups() {
+  $('fill-groups').innerHTML = FILL_GROUPS.map(group => `<label class="toggle-row compact"><span>${esc(group.label)}</span><input type="checkbox" data-fill-group="${group.id}" ${fillGroups[group.id] !== false ? 'checked' : ''}></label>`).join('');
+}
+$('fill-groups').addEventListener('change', async event => {
+  const box = event.target.closest('[data-fill-group]'); if (!box) return;
+  const next = { ...fillGroups, [box.dataset.fillGroup]: box.checked };
+  try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
+});
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups']); $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });

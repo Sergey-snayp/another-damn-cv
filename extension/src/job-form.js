@@ -56,7 +56,7 @@
       if (excluded(container)) { fallback = { show: false, reason: 'login, search or payment form' }; continue; }
       const usable = fields.filter(field => field.key !== 'coverLetter');
       const keys = new Set(usable.map(field => field.key));
-      const resumeUpload = usable.some(field => field.key === 'resume' && field.kind === 'file');
+      const resumeUpload = usable.some(field => field.key === 'resume' && (field.kind === 'file' || field.kind === 'drop'));
       const contacts = [...keys].filter(key => CONTACT.has(key)).length;
       const applicant = [...keys].filter(key => APPLICANT.has(key)).length;
       if (knownSite && (keys.has('resume') || usable.length >= 2)) return { show: true, reason: 'job board form' };

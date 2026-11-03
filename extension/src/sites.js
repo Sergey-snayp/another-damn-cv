@@ -60,6 +60,25 @@ const SITES = [
     },
   },
 
+  {
+    name: 'teamtailor',
+    // Companies run Teamtailor on their own domains (careers.zexter.com), so the
+    // page structure identifies it as well as the host. Read from a live form,
+    // 2026-11-02.
+    matches: /(^|\.)teamtailor\.com$/,
+    fingerprint: () => Boolean(document.querySelector('[name^="candidate["], turbo-frame#application_form, [data-action*="form-overlay#showFormOverlay"]')),
+    byName: {
+      'candidate[first_name]': 'firstName',
+      'candidate[last_name]': 'lastName',
+      'candidate[email]': 'email',
+      'candidate[phone]': 'phone',
+      'candidate[location][query]': 'location',
+      'candidate[job_applications_attributes][0][cover_letter]': 'coverLetter',
+    },
+    // The job page loads its form into an overlay only after Apply is pressed.
+    openForm: '[data-action*="form-overlay#showFormOverlay"]:not([disabled])',
+  },
+
   // --- activated, heuristic-only until someone reads a live form -------------
   { name: 'ashby', matches: /(^|\.)jobs\.ashbyhq\.com$/, byId: {} },
   { name: 'smartrecruiters', matches: /(^|\.)jobs\.smartrecruiters\.com$/, byId: {} },
@@ -76,9 +95,20 @@ function siteFor(hostname) {
   return SITES.find((site) => site.matches.test(hostname)) ?? null;
 }
 
+/** The site rule for this page: by host, or by page structure for custom domains. */
+function siteForPage(hostname = location.hostname) {
+  return siteFor(hostname) ?? SITES.find((site) => site.fingerprint?.()) ?? null;
+}
+
+/** The button that opens this site's application form, when it is still closed. */
+function formOpener() {
+  const selector = siteForPage()?.openForm;
+  return selector ? [...document.querySelectorAll(selector)].find((button) => button.getClientRects().length) ?? null : null;
+}
+
 /** A category key when the current site names this element explicitly. */
 function siteKeyFor(element, hostname = location.hostname) {
-  const site = siteFor(hostname);
+  const site = siteForPage(hostname);
   if (!site) return null;
 
   const id = element.getAttribute('id');
@@ -87,4 +117,4 @@ function siteKeyFor(element, hostname = location.hostname) {
   return (id && site.byId?.[id]) || (name && site.byName?.[name]) || null;
 }
 
-window.CVAutofillSites = { siteKeyFor, siteFor, SITES };
+window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, SITES };

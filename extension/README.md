@@ -181,15 +181,49 @@ path — a content script cannot read your disk.
 **Re-scanning** uses a `MutationObserver`, not a timeout. Application forms
 render after load and change as you scroll.
 
+## Filling harder fields
+
+- **Teamtailor.** Recognised by its page structure, so company domains such as
+  careers.zexter.com work, and filled by its field names (`src/sites.js`).
+  On a job page whose form is still closed, the panel offers **Open
+  application form**, which presses the site's Apply button.
+- **Upload boxes.** Drag-and-drop boxes without a file input (Dropzone and
+  similar) get the CV dropped on them, then are watched until the site shows
+  the upload as finished. The fill result says "uploaded" or why not.
+- **Suggestion boxes.** Address pickers and React-style dropdowns: the value
+  is typed, and the suggestion sharing the most words is clicked. Address
+  pickers search by "city, country". With no match the text stays and the
+  result asks you to pick a suggestion.
+- **Yes/no questions.** Radio buttons are matched by their question (fieldset
+  legend or group label), then the option that matches the profile answer.
+- **Number fields** take only the number from a profile value.
+- **Still empty and required.** After Autofill, the panel lists required
+  fields that are still blank (required, aria-required, or "*"/"Required" in
+  the label), with **Go to** buttons and **Check again**.
+- **Fields to fill** in Settings switches off groups: contact, location,
+  links, CV and cover letter, experience and education, work authorization,
+  salary and availability.
+
+Consent checkboxes ("I agree", privacy policy, terms) are never ticked, and
+demographic questions are never filled.
+
+`test/teamtailor.html` runs the real detection and filling code against a
+Teamtailor-shaped form with stand-in widgets:
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+  --allow-file-access-from-files --virtual-time-budget=15000 \
+  --dump-dom "file://$PWD/test/teamtailor.html" | grep -o '<pre id="result">.*</pre>'
+```
+
 ## What it does not do yet
 
-- **Custom dropdowns.** Greenhouse and Ashby use `react-select`, not `<select>`.
-  You cannot set a value: you have to click to open, type to filter, then click
-  the option, with waits in between. This is the largest remaining piece.
-- **EEO and demographics.** Radio groups with opaque values. Left alone on purpose.
+- **Custom questions** (Telegram, "Fintech experience"): planned as saved
+  answers, then AI drafts.
+- **Multi-step forms** fill one step per press of Autofill.
 - **Workday.** Multi-step, iframes, shadow DOM. Disproportionate effort.
-- **Per-site rules.** One heuristic for all three boards. Sites that need
-  exceptions would get a small selector file each.
+- **Forms inside iframes** from another site (a Greenhouse form embedded on a
+  company page).
 
 ## Adding a field
 

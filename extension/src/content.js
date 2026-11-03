@@ -24,7 +24,7 @@ function scan() {
   // One entry per category: a form may repeat a field across steps.
   const unique = [...new Map(lastScan.found.map((f) => [f.key, f])).values()];
 
-  const site = Sites.siteFor(location.hostname);
+  const site = Sites.siteForPage();
   const ruleCount = Object.keys(site?.byId ?? {}).length + Object.keys(site?.byName ?? {}).length;
 
   return {
@@ -42,29 +42,37 @@ function scan() {
       group: Fields.groupOf(field.key),
       source: field.source,
     })),
-    skippedSensitive: lastScan.skipped.length,
+    skippedSensitive: lastScan.skipped.filter((item) => item.reason === 'sensitive').length,
+    consentCount: lastScan.skipped.filter((item) => item.reason === 'consent').length,
+    // The job page has an Apply button that opens a form not loaded yet.
+    canOpenForm: Boolean(Sites.formOpener()) && !lastScan.found.length,
   };
 }
 
 async function fill(profile) {
   scan(); // Forms can replace controls between the preview and a click.
-
-  let filled = 0;
-  const failures = [];
-
-  for (const field of lastScan.found) {
-    const value = field.key === 'resume' ? profile.resumeDataUrl : profile[field.key];
-    if (!value) continue;
-
-    try {
-      if (await Filler.fillField(field, value, profile.resumeFileName)) filled++;
-    } catch (err) {
-      failures.push(`${field.key}: ${err.message}`);
-    }
-  }
-
-  return { filled, failures, skippedSensitive: lastScan.skipped.length };
+  const result = await Filler.fillAll(lastScan.found, profile);
+  return {
+    ...result,
+    skippedSensitive: lastScan.skipped.filter((item) => item.reason === 'sensitive').length,
+    missing: Fields.findMissingRequired(Fields.detectFields().found),
+  };
 }
+
+/** Scrolls to a field from the panel's "still empty" list and outlines it briefly. */
+function focusField(id) {
+  const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(id))}"]`);
+  if (!element) return false;
+  element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const target = element.matches('input, select, textarea') && element.getClientRects().length ? element : element.closest('label') ?? element;
+  target.focus?.({ preventScroll: true });
+  const before = target.style.outline;
+  target.style.outline = '3px solid #e6ff00';
+  setTimeout(() => { target.style.outline = before; }, 1800);
+  return true;
+}
+
+const fromPanel = (sender) => Boolean(sender.url?.startsWith(chrome.runtime.getURL('src/sidepanel.html')));
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'scan') {
@@ -75,12 +83,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Filling happens only when the person presses "Autofill This Page" in the
   // panel. Nothing else may ask for it: not page loads, scans or the launcher.
   if (message.type === 'fill') {
-    if (!sender.url?.startsWith(chrome.runtime.getURL('src/sidepanel.html'))) return false;
+    if (!fromPanel(sender)) return false;
     // Async reply: returning true keeps the message channel open.
     fill(message.profile).then(sendResponse);
     return true;
   }
 
+  if (!fromPanel(sender)) return false;
+  if (message.type === 'check-required') {
+    sendResponse({ missing: Fields.findMissingRequired(Fields.detectFields().found) });
+    return false;
+  }
+  if (message.type === 'focus-field') {
+    sendResponse({ ok: focusField(message.id) });
+    return false;
+  }
+  if (message.type === 'open-form') {
+    // Only when the person presses "Open application form" in the panel.
+    const opener = Sites.formOpener();
+    opener?.click();
+    sendResponse({ ok: Boolean(opener) });
+    return false;
+  }
   return false;
 });
 
@@ -92,7 +116,8 @@ let lastVerdict = null;
 function updateLauncher() {
   if (!document.querySelector('input, textarea, select')) { window.CVAutofillLauncher?.update(false); return; }
   scan();
-  const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD });
+  // Teamtailor and other boards on company domains are known by page structure.
+  const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });
   if (verdict.show !== lastVerdict) { lastVerdict = verdict.show; window.CVAutofillLauncher?.update(verdict.show); }
 }
 let scanTimer;

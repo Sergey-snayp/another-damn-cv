@@ -1,0 +1,146 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — Teamtailor-style application</title>
+<!--
+  A hand-written page shaped like a Teamtailor application form (careers.zexter.com,
+  2026-11-02), with small stand-ins for its widgets: a Dropzone upload box, an
+  address suggestion box, plus a React-style country dropdown and a yes/no
+  question. It runs the real detection and filling code and checks the result.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/teamtailor.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<style>.hidden { display: none; } [role="listbox"]:empty { display: none; }</style>
+<body>
+<button data-action="click->careersite--jobs--form-overlay#showFormOverlay">Apply for this job</button>
+<form id="application">
+  <label for="candidate_first_name">First name<sup>*</sup><span class="hidden">Required</span></label>
+  <input type="text" name="candidate[first_name]" id="candidate_first_name" autocomplete="given-name">
+  <label for="candidate_last_name">Last name<sup>*</sup></label>
+  <input type="text" name="candidate[last_name]" id="candidate_last_name" autocomplete="family-name">
+  <label for="candidate_email">Email<sup>*</sup></label>
+  <input type="email" name="candidate[email]" id="candidate_email" autocomplete="email">
+  <label for="candidate_phone">Phone<sup>*</sup></label>
+  <input type="tel" name="candidate[phone]" id="candidate_phone" autocomplete="tel">
+
+  <div id="location-widget">
+    <label for="candidate_location">Address<sup>*</sup></label>
+    <input type="text" name="candidate[location][query]" id="candidate_location" role="combobox" aria-autocomplete="list" aria-controls="location-listbox" placeholder="Start typing your address">
+    <input type="hidden" name="candidate[location][city]" id="candidate_city">
+    <ul role="listbox" id="location-listbox"></ul>
+  </div>
+
+  <label for="country">Country</label>
+  <input type="text" id="country" role="combobox" aria-autocomplete="list" aria-controls="react-select-2-listbox">
+  <div id="react-select-2-listbox"></div>
+
+  <div data-controller="forms--inputs--upload" id="cv-zone">
+    <label for="candidate_resume_remote_url">Upload CV<sup>*</sup><span class="hidden">Required</span></label>
+    <div class="dz-clickable-area"><span class="dz-message">Drop your file or upload</span></div>
+    <div class="previews"></div>
+    <input type="text" class="hidden" disabled name="candidate[resume_remote_url]" id="candidate_resume_remote_url">
+  </div>
+
+  <label for="q0">LinkedIn profile<sup>*</sup></label>
+  <input type="text" name="candidate[answers_attributes][0][text]" id="q0">
+  <label for="q2">What are your monthly salary expectations? (USD, gross)<sup>*</sup></label>
+  <input type="text" name="candidate[answers_attributes][2][text]" id="q2">
+  <label for="q3">Telegram account<sup>*</sup></label>
+  <input type="text" name="candidate[answers_attributes][3][text]" id="q3">
+  <label for="q5">Fintech Experience<sup>*</sup></label>
+  <textarea name="candidate[answers_attributes][5][text]" id="q5"></textarea>
+  <label for="q6">What is your monthly salary expectation (USD, Gross)?<sup>*</sup></label>
+  <input type="number" name="candidate[answers_attributes][6][number]" id="q6">
+
+  <fieldset>
+    <legend>Are you legally authorized to work in Canada?<sup>*</sup></legend>
+    <label><input type="radio" name="auth" value="1" required> Yes</label>
+    <label><input type="radio" name="auth" value="0"> No</label>
+  </fieldset>
+
+  <label for="cover">Cover letter</label>
+  <textarea name="candidate[job_applications_attributes][0][cover_letter]" id="cover"></textarea>
+
+  <label><input type="checkbox" name="candidate[consent_given]" required> I agree that I have read the privacy policy.</label>
+  <input type="submit" value="Send application">
+</form>
+
+<script>
+  // Stand-in for Teamtailor's address picker: suggestions appear after typing.
+  const place = document.getElementById('candidate_location'), places = document.getElementById('location-listbox');
+  place.addEventListener('input', () => setTimeout(() => {
+    places.innerHTML = ['Toronto, OH, United States', 'Toronto, ON, Canada'].map(text => `<li role="option">${text}</li>`).join('');
+  }, 120));
+  places.addEventListener('click', event => {
+    const option = event.target.closest('[role="option"]'); if (!option) return;
+    place.value = option.textContent; document.getElementById('candidate_city').value = option.textContent.split(',')[0]; places.innerHTML = '';
+  });
+  // Stand-in for react-select: options are divs with -option- ids and no role.
+  const country = document.getElementById('country'), countries = document.getElementById('react-select-2-listbox');
+  country.addEventListener('input', () => setTimeout(() => {
+    countries.innerHTML = ['Cameroon', 'Canada'].filter(name => name.toLowerCase().startsWith(country.value.toLowerCase().slice(0, 2)))
+      .map((name, i) => `<div id="react-select-2-option-${i}">${name}</div>`).join('');
+  }, 80));
+  countries.addEventListener('mousedown', event => { const option = event.target.closest('[id*="-option-"]'); if (option) { country.dataset.chosen = option.textContent; country.value = option.textContent; countries.innerHTML = ''; } });
+  // Stand-in for Dropzone: takes a dropped file, "uploads" it, stores its URL.
+  const zone = document.getElementById('cv-zone');
+  zone.addEventListener('dragover', event => event.preventDefault());
+  zone.addEventListener('drop', event => {
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    setTimeout(() => {
+      zone.querySelector('.previews').innerHTML = `<div class="dz-preview dz-success"><span data-dz-name>${file.name}</span></div>`;
+      document.getElementById('candidate_resume_remote_url').value = `https://uploads.example/${file.name}`;
+      zone.dataset.size = file.size;
+    }, 300);
+  });
+</script>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script>
+addEventListener('DOMContentLoaded', async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = id => document.getElementById(id);
+
+  const { found, skipped } = window.CVAutofillFields.detectFields();
+  const keys = found.map(f => `${f.key}:${f.kind}`);
+  for (const key of ['firstName:text', 'lastName:text', 'email:text', 'phone:text', 'location:combobox', 'country:combobox', 'resume:drop', 'linkedin:text', 'salaryExpectation:text', 'salaryExpectation:text', 'workAuthorization:radio', 'coverLetter:textarea']) {
+    expect(keys.includes(key), `detects ${key}`);
+  }
+  expect(skipped.some(item => item.reason === 'consent'), 'consent checkbox is recognised and skipped');
+  expect(window.CVAutofillSites.siteForPage()?.name === 'teamtailor', 'recognises Teamtailor by page structure on a custom domain');
+  expect(Boolean(window.CVAutofillSites.formOpener()), 'finds the Apply button that opens the form');
+
+  const profile = {
+    firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', phone: '+1 416 555 0100',
+    city: 'Toronto', country: 'Canada', location: 'Toronto, ON', linkedin: 'https://linkedin.com/in/ada',
+    salaryExpectation: '$6,000 USD', workAuthorization: 'Yes',
+    resumeDataUrl: 'data:application/pdf;base64,JVBERi0xLjQK', resumeFileName: 'Ada_Lovelace_CV.pdf',
+  };
+  const result = await window.CVAutofillFiller.fillAll(found, profile);
+
+  expect($('candidate_first_name').value === 'Ada' && $('candidate_email').value === 'ada@example.com', 'fills contact fields');
+  expect($('candidate_location').value === 'Toronto, ON, Canada' && $('candidate_city').value === 'Toronto', `picks the matching address suggestion (got "${$('candidate_location').value}")`);
+  expect($('country').dataset.chosen === 'Canada', `picks Canada in the React-style dropdown (got "${$('country').dataset.chosen}")`);
+  expect($('candidate_resume_remote_url').value === 'https://uploads.example/Ada_Lovelace_CV.pdf', 'uploads the CV by dropping it on the upload box');
+  expect(result.notes.some(note => /Upload CV: uploaded/.test(note)), `reports the upload (notes: ${JSON.stringify(result.notes)})`);
+  expect($('q0').value === 'https://linkedin.com/in/ada', 'fills LinkedIn from a custom question');
+  expect($('q2').value === '$6,000 USD' && $('q6').value === '6000', `fills salary as text, and as a plain number in the number field (got "${$('q6').value}")`);
+  expect(document.querySelector('input[name="auth"][value="1"]').checked, 'answers the yes/no work authorization question');
+  expect(!document.querySelector('input[name="candidate[consent_given]"]').checked, 'never ticks consent');
+  expect(result.failures.length === 0, `no failures (${result.failures.join('; ')})`);
+
+  const missing = window.CVAutofillFields.findMissingRequired(found).map(item => item.label);
+  const wanted = ['Telegram account', 'Fintech Experience', 'I agree that I have read the privacy policy.'];
+  expect(JSON.stringify(missing) === JSON.stringify(wanted), `lists required fields still empty in page order (got ${JSON.stringify(missing)})`);
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.append(out);
+});
+</script>
+</body>
