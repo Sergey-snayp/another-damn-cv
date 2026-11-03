@@ -28,6 +28,14 @@
     .mark { position: absolute; display: grid; place-items: center; width: ${SIZE}px; height: ${SIZE}px; border-radius: 50%; border: 2px solid #fff;
       color: #fff; font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: help; box-sizing: content-box; }
     .mark[hidden] { display: none; }
+    .glow { position: absolute; pointer-events: none; border-radius: 10px; border: 2px solid var(--c);
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--c) 22%, transparent), 0 0 18px color-mix(in srgb, var(--c) 35%, transparent);
+      animation: glow-fade .9s ease-out forwards; }
+    .glow.ok { --c: #16a34a; } .glow.check, .glow.pending { --c: #d97706; } .glow.missing { --c: #dc2626; }
+    .glow.pulse { animation: glow-pulse 1s ease-in-out infinite; }
+    .glow.still { animation: none; }
+    @keyframes glow-fade { 0% { opacity: 0; transform: scale(.98); } 15% { opacity: 1; transform: none; } 70% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes glow-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
   </style>`;
 
   /** element → { node, status } */
@@ -41,19 +49,44 @@
     return isZone(element) ? !Fields().zoneDone(element) : Fields().isEmpty(element);
   }
 
-  /** Where the icon sits: inside the right edge of text fields, beside choices and upload boxes. */
-  function place(element, node) {
-    // Choices sit beside their label; a dropdown's icon goes at the right of
-    // its visible box, not of react-select's few-pixel input.
-    const anchor = element.type === 'radio' || element.type === 'checkbox' ? element.closest('label') ?? element
+  // Choices sit beside their label; a dropdown's icon goes at the right of
+  // its visible box, not of react-select's few-pixel input.
+  function anchorFor(element) {
+    return element.type === 'radio' || element.type === 'checkbox' ? element.closest('label') ?? element
       : element.getAttribute('role') === 'combobox' ? Fields().controlFor(element) : element;
-    const rect = anchor.getBoundingClientRect();
+  }
+
+  const fieldsIn = (node) => [...node.querySelectorAll('input, select, textarea')]
+    .filter((input) => input.type !== 'hidden' && input.getAttribute('aria-hidden') !== 'true').length;
+
+  /**
+   * The box a person sees as the field. Many forms (Greenhouse) draw the border
+   * on a wrapper around the label and input, so the nearest bordered ancestor
+   * holding only this field is used; otherwise the field itself.
+   */
+  function boxFor(element) {
+    const anchor = anchorFor(element);
+    if (element.type === 'radio' || element.type === 'checkbox') return anchor;
+    let node = anchor;
+    for (let depth = 0; depth < 5 && node && node !== document.body; depth++, node = node.parentElement) {
+      if (node !== anchor && fieldsIn(node) > 1) break;
+      const style = getComputedStyle(node);
+      const bordered = (parseFloat(style.borderRightWidth) > 0 && style.borderRightStyle !== 'none') || style.boxShadow !== 'none';
+      if (bordered) return node;
+    }
+    return anchor;
+  }
+
+  /** Where the icon sits: just outside the field's box, on the right, or on the left when the right has no room. */
+  function place(element, node) {
+    const rect = boxFor(element).getBoundingClientRect();
     node.hidden = !rect.width && !rect.height;
     if (node.hidden) return;
-    const inside = element.matches('input:not([type="radio"]):not([type="checkbox"]), textarea');
-    const roomRight = rect.right + SIZE + 10 < document.documentElement.clientWidth;
-    const left = inside || !roomRight ? rect.right - SIZE - 10 : rect.right + 6;
-    const top = element.matches('textarea') || isZone(element) ? rect.top + 6 : rect.top + (rect.height - SIZE) / 2 - 2;
+    const width = document.documentElement.clientWidth;
+    const left = rect.right + SIZE + 12 <= width ? rect.right + 8
+      : rect.left - SIZE - 12 >= 0 ? rect.left - SIZE - 8
+        : rect.right - SIZE - 8; // No room either side: inside the right edge.
+    const top = rect.height > 120 ? rect.top + 10 : rect.top + (rect.height - SIZE) / 2 - 2;
     node.style.left = `${left + scrollX}px`;
     node.style.top = `${top + scrollY}px`;
   }
@@ -76,7 +109,7 @@
     clearInterval(ticker); ticker = 0;
     removeEventListener('scroll', reposition, true);
     removeEventListener('resize', reposition);
-    host.remove();
+    if (!shadow.querySelector('.glow')) host.remove();
   }
 
   function start() {
@@ -151,10 +184,90 @@
     chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.fillMarks?.newValue === false) clear(); });
   } catch { /* extension reloaded */ }
 
+  // ─── Follow-along while filling ──────────────────────────────────────────
+  // Settings → "Animate filling" (on by default). The page scrolls to each
+  // field that is off screen, and the field glows in its result colour. With
+  // the system's "Reduce motion" on, nothing scrolls and the glow does not
+  // move. Scrolling by hand during a fill stops the follow-along for that fill.
+  const motion = { mode: 'off', tookOver: false };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const takeOver = (event) => {
+    if (event.type !== 'keydown' || ['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' '].includes(event.key)) motion.tookOver = true;
+  };
+
+  async function animationMode() {
+    try {
+      if ((await chrome.storage.local.get('animateFill')).animateFill === false) return 'off';
+    } catch { return 'off'; }
+    return matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
+  }
+
+  function scrolled() {
+    return new Promise((resolve) => {
+      const done = () => { removeEventListener('scrollend', done); clearTimeout(timer); resolve(); };
+      const timer = setTimeout(done, 650);
+      addEventListener('scrollend', done, { once: true });
+    });
+  }
+
+  async function follow(element) {
+    if (motion.mode !== 'full' || motion.tookOver) return;
+    const anchor = anchorFor(element);
+    const rect = anchor.getBoundingClientRect();
+    if (!rect.width && !rect.height) return;
+    const onScreen = (box) => box.top >= 60 && box.bottom <= innerHeight - 60;
+    if (onScreen(rect)) return; // Already on screen: no jump.
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await scrolled();
+    // A smooth scroll the page interrupted (or a browser without one): go there directly.
+    if (!motion.tookOver && !onScreen(anchor.getBoundingClientRect())) anchor.scrollIntoView({ block: 'center' });
+  }
+
+  /** A ring around the field in its result colour. Returns a function that removes it. */
+  function glow(element, status, { pulse = false } = {}) {
+    const rect = boxFor(element).getBoundingClientRect();
+    if (!rect.width && !rect.height) return () => {};
+    if (!host.isConnected) document.documentElement.append(host);
+    const node = document.createElement('div');
+    node.className = `glow ${status}${pulse ? ' pulse' : ''}${motion.mode === 'reduced' ? ' still' : ''}`;
+    Object.assign(node.style, { left: `${rect.left + scrollX - 4}px`, top: `${rect.top + scrollY - 4}px`, width: `${rect.width + 8}px`, height: `${rect.height + 8}px` });
+    shadow.append(node);
+    const removeGlow = () => { node.remove(); if (!marks.size && !shadow.querySelector('.glow')) host.remove(); };
+    if (!pulse) setTimeout(removeGlow, motion.mode === 'reduced' ? 500 : 900);
+    return removeGlow;
+  }
+
+  /**
+   * Hooks for one fill: before each field (scroll to it, pulse an upload) and
+   * after it (glow, its icon, a short pause). Null when animation is off.
+   */
+  function fillHooks(mode) {
+    motion.mode = mode;
+    motion.tookOver = false;
+    if (mode === 'off') return null;
+    for (const type of ['wheel', 'touchmove', 'keydown']) addEventListener(type, takeOver, { capture: true, passive: true });
+    return {
+      async before(field) {
+        await follow(field.element);
+        return field.kind === 'drop' || field.kind === 'file' ? glow(field.element, 'pending', { pulse: true }) : null;
+      },
+      async after(field, mark, stopPending) {
+        stopPending?.();
+        if (!mark) return;
+        glow(mark.element ?? field.element, mark.status);
+        await show([{ element: mark.element ?? field.element, status: mark.status, reason: mark.reason }]);
+        if (motion.mode === 'full' && !motion.tookOver) await wait(180);
+      },
+      end() {
+        for (const type of ['wheel', 'touchmove', 'keydown']) removeEventListener(type, takeOver, { capture: true });
+      },
+    };
+  }
+
   /** Icons go back on the page if the page rebuilt its document. */
   function reattach() {
     if (marks.size && !host.isConnected) { document.documentElement.append(host); reposition(); }
   }
 
-  window.CVAutofillMarks = { show, showMissing, clear, reattach, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.node.title ?? null };
+  window.CVAutofillMarks = { show, showMissing, clear, reattach, animationMode, fillHooks, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.node.title ?? null };
 })();

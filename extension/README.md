@@ -270,8 +270,10 @@ a time and only on your click, or when you press Autofill with Settings →
 
 ## Fill status icons
 
-After Autofill, a small icon sits at the edge of each field it touched or
-checked (`src/marks.js`). Hover for the reason.
+After Autofill, a small icon sits just outside each field it touched or
+checked (`src/marks.js`), on the right of the box you see as the field (on
+forms that draw the border around the label and input, that wrapper), or on
+the left when the right has no room. Hover for the reason.
 
 - **✓ green**: filled from your profile, diversity answers or an exact saved
   answer, or your CV attached.
@@ -286,6 +288,18 @@ go when you edit that field (Autofill's own changes do not count); red ones go
 once the field has a value. All clear on reload. Settings → **Show fill status
 icons** (on by default) turns them off. `test/marks.html` covers them and
 leaves the icons visible for a screenshot.
+
+## Follow-along animation
+
+Settings → **Animate filling** (on by default). Fields fill in page order. The
+page scrolls smoothly to each field that is off screen (fields already on
+screen do not make it jump), and the field glows in its result colour; a CV
+upload pulses until it finishes. Each field takes about a quarter of a second,
+and the page ends on the last filled field. Scrolling by hand during a fill
+stops the follow-along for that fill. With the system's "Reduce motion" on,
+nothing scrolls and the glow does not move. Filling no longer scrolls the page
+when it focuses a field, so with animation off the page stays put.
+`test/animation.html` covers all four cases.
 
 ## Multi-step forms
 

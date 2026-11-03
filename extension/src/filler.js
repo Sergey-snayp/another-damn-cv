@@ -30,7 +30,7 @@ function setValue(element, value) {
 function fillText(element, value) {
   if (!value) return false;
 
-  element.focus();
+  element.focus({ preventScroll: true });
   setValue(element, value);
   element.blur();
 
@@ -61,7 +61,7 @@ function fillSelect(element, value) {
   const chosen = exact ?? loose;
   if (!chosen) return false;
 
-  element.focus();
+  element.focus({ preventScroll: true });
   setValue(element, chosen.value);
   element.blur();
 
@@ -146,7 +146,7 @@ function press(element) {
 async function fillCombobox(element, value) {
   const wanted = normal(value);
   if (!wanted) return { filled: false };
-  element.focus();
+  element.focus({ preventScroll: true });
   setValue(element, value);
   element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
   // "Toronto, Canada" should pick "Toronto, ON, Canada" over "Toronto, OH, United States":
@@ -258,7 +258,7 @@ async function fillDiversity(field, choice) {
   if (kind === 'select') {
     const option = [...element.options].find((item) => item.value !== '' && matches(item.textContent));
     if (!option) return { filled: false, note: 'no option matched your answer' };
-    element.focus(); setValue(element, option.value); element.blur();
+    element.focus({ preventScroll: true }); setValue(element, option.value); element.blur();
     return { filled: true };
   }
   if (kind === 'radio' || kind === 'checkbox') {
@@ -268,7 +268,7 @@ async function fillDiversity(field, choice) {
     return { filled: true };
   }
   if (kind === 'combobox') {
-    element.focus();
+    element.focus({ preventScroll: true });
     element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
     press(element);
     for (let waited = 0; waited < 3000; waited += 150) {
@@ -314,26 +314,37 @@ function markFor(field, result, profile) {
   return { status: 'ok', reason: field.diversity ? 'From your diversity answers' : 'From your profile' };
 }
 
-async function fillAll(found, profile) {
+const pageOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+
+/**
+ * `hooks` (optional, from marks.js) animate the fill: before(field) scrolls to
+ * it, after(field, mark, token) shows its result. Fields fill in page order,
+ * so the page moves down the form like a person would.
+ */
+async function fillAll(found, profile, hooks = null) {
   let filled = 0;
   const failures = [], notes = [], marks = [];
   let uploaded = false;
-  for (const field of found) {
+  for (const field of [...found].sort(pageOrder)) {
     const value = valueFor(field, profile);
     if (!value) continue;
     if (field.key === 'resume' && uploaded) continue;
     const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
+    const token = await hooks?.before?.(field);
+    let mark = null;
     try {
       const result = field.diversity ? await fillDiversity(field, value) : await fillField(field, value, profile.resumeFileName);
       if (result.filled) filled++;
       if (field.key === 'resume' && result.filled) uploaded = true;
       if (result.note) notes.push(`${label}: ${result.note}`);
-      const mark = markFor(field, result, profile);
-      if (mark) marks.push({ element: field.element, ...mark });
+      const status = markFor(field, result, profile);
+      if (status) { mark = { element: field.element, ...status }; marks.push(mark); }
     } catch (err) {
       failures.push(`${label}: ${err.message}`);
-      marks.push({ element: field.element, status: 'missing', reason: `Not filled: ${err.message}` });
+      mark = { element: field.element, status: 'missing', reason: `Not filled: ${err.message}` };
+      marks.push(mark);
     }
+    await hooks?.after?.(field, mark, token);
   }
   // `marks` holds page elements: the page script keeps it and never sends it on.
   return { filled, failures, notes, marks };

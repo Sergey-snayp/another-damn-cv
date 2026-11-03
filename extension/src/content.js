@@ -61,29 +61,40 @@ function scan() {
 const Marks = window.CVAutofillMarks;
 
 /** Fills saved answers by question id; returns how many, plus icons for them. */
-async function fillAnswers(answers, failures) {
+async function fillAnswers(answers, failures, hooks = null) {
   let filled = 0;
   const marks = [];
-  for (const item of answers) {
-    const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
-    if (!element) continue;
+  const ordered = answers
+    .map((item) => ({ item, element: document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`) }))
+    .filter((entry) => entry.element)
+    .sort((a, b) => (a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  for (const { item, element } of ordered) {
+    const field = { element, kind: item.kind };
+    const token = await hooks?.before?.(field);
+    let mark = null;
     try {
       const result = await Filler.fillAnswer(element, item.kind, item.value);
-      if (!result.filled) continue;
-      filled++;
-      marks.push(item.match === 'similar'
-        ? { element: result.element ?? element, status: 'check', reason: `From your answer to "${item.savedQuestion ?? 'a similar question'}". Check it fits.` }
-        : { element: result.element ?? element, status: 'ok', reason: 'From your saved answers' });
+      if (result.filled) {
+        filled++;
+        mark = item.match === 'similar'
+          ? { element: result.element ?? element, status: 'check', reason: `From your answer to "${item.savedQuestion ?? 'a similar question'}". Check it fits.` }
+          : { element: result.element ?? element, status: 'ok', reason: 'From your saved answers' };
+        marks.push(mark);
+      }
     } catch (err) { failures.push(`${Fields.labelOf(element)}: ${err.message}`); }
+    await hooks?.after?.(field, mark, token);
   }
   return { filled, marks };
 }
 
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
-  const { marks, ...result } = await Filler.fillAll(lastScan.found, profile);
+  // Settings → "Animate filling": the page follows each field as it fills.
+  const hooks = Marks?.fillHooks(await Marks.animationMode());
+  const { marks, ...result } = await Filler.fillAll(lastScan.found, profile, hooks);
   // Saved answers, matched by the panel to the ids from a "questions" request.
-  const fromAnswers = await fillAnswers(answers, result.failures);
+  const fromAnswers = await fillAnswers(answers, result.failures, hooks);
+  hooks?.end();
   result.filled += fromAnswers.filled;
   result.fromAnswers = fromAnswers.filled;
   rememberStep();
@@ -151,8 +162,10 @@ async function fillNextStep() {
   try {
     const reply = await chrome.runtime.sendMessage({ type: 'step-request', questions });
     if (!reply?.armed) { stepsArmed = false; return; }
-    const { marks, ...result } = await Filler.fillAll(fresh, reply.profile);
-    const fromAnswers = await fillAnswers(reply.answers ?? [], result.failures);
+    const hooks = Marks?.fillHooks(await Marks.animationMode());
+    const { marks, ...result } = await Filler.fillAll(fresh, reply.profile, hooks);
+    const fromAnswers = await fillAnswers(reply.answers ?? [], result.failures, hooks);
+    hooks?.end();
     result.filled += fromAnswers.filled;
     await Marks?.show([...marks, ...fromAnswers.marks]);
     await Marks?.showMissing(Fields.findMissingRequired(Fields.detectFields().found));
@@ -192,10 +205,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // An AI draft the person asked for with "Draft with AI". Marked until they edit it.
     const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(message.id))}"]`);
     if (!element) { sendResponse({ filled: false }); return false; }
-    Filler.fillAnswer(element, message.kind, message.value).then(async (result) => {
-      if (result.filled) await Marks?.show([{ element: result.element ?? element, status: 'check', reason: 'AI draft: review it before submitting' }]);
+    void (async () => {
+      const hooks = Marks?.fillHooks(await Marks.animationMode());
+      const field = { element, kind: message.kind };
+      const token = await hooks?.before?.(field);
+      const result = await Filler.fillAnswer(element, message.kind, message.value).catch(() => ({ filled: false }));
+      const mark = result.filled ? { element: result.element ?? element, status: 'check', reason: 'AI draft: review it before submitting' } : null;
+      await hooks?.after?.(field, mark, token);
+      hooks?.end();
+      if (mark) await Marks?.show([mark]);
       sendResponse({ filled: result.filled });
-    }, () => sendResponse({ filled: false }));
+    })();
     return true;
   }
   if (message.type === 'check-required') {

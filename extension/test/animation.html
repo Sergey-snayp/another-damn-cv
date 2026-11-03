@@ -1,0 +1,92 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — follow-along animation</title>
+<!--
+  Fields far apart on a long page, filled four ways: animated (the page
+  follows each field and it glows), with the person scrolling by hand part way
+  (the page stops following), with Settings → "Animate filling" off, and with
+  "Reduce motion" (no scrolling). Records where the page was at each fill.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=30000 --window-size=800,600 \
+      --dump-dom "file://$PWD/test/animation.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const settings = {};
+  window.chrome = { storage: { local: { get: async () => settings }, onChanged: { addListener() {} } } };
+</script>
+<style>
+  body { font: 14px system-ui, sans-serif; max-width: 520px; margin: 24px; }
+  label { display: block; margin-top: 12px; } input { width: 100%; box-sizing: border-box; padding: 8px; }
+  .gap { height: 900px; }
+</style>
+<body>
+<form>
+  <label for="first">First name</label><input id="first" name="first_name">
+  <div class="gap"></div>
+  <label for="email">Email</label><input id="email" type="email" name="email">
+  <div class="gap"></div>
+  <label for="phone">Phone</label><input id="phone" type="tel" name="phone">
+  <div class="gap"></div>
+  <label for="city">City</label><input id="city" name="city">
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script src="../src/marks.js"></script>
+<script>
+addEventListener('DOMContentLoaded', async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const Marks = window.CVAutofillMarks, Filler = window.CVAutofillFiller;
+  const profile = { firstName: 'Ada', email: 'ada@example.com', phone: '+1 416 555 0100', city: 'Toronto' };
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const inView = (el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; };
+
+  async function run({ onFill } = {}) {
+    document.querySelector('form').reset(); Marks.clear(); scrollTo(0, 0); await sleep(1200); // Let the last run's glows fade.
+    const log = [];
+    const record = (event) => { log.push({ id: event.target.id, y: Math.round(scrollY), inView: inView(event.target), glowing: Marks.glowing() }); onFill?.(log.length); };
+    document.addEventListener('input', record, true);
+    const hooks = Marks.fillHooks(await Marks.animationMode());
+    await Filler.fillAll(window.CVAutofillFields.detectFields().found, profile, hooks);
+    hooks?.end();
+    document.removeEventListener('input', record, true);
+    return log;
+  }
+
+  // 1. Animated: each field is on screen when it fills, in page order, glowing as it goes.
+  let log = await run();
+  expect(JSON.stringify(log.map((e) => e.id)) === '["first","email","phone","city"]', `fills in page order (got ${log.map((e) => e.id)})`);
+  expect(log.every((e) => e.inView), `each field is on screen when it fills (${JSON.stringify(log)})`);
+  expect(log.at(-1).y > 1500, 'the page moved down the form');
+  expect(log.slice(1).some((e) => e.glowing > 0), 'filled fields glow');
+  expect(inView($('city')), 'ends on the last filled field');
+  expect(window.CVAutofillMarks.statusOf($('first')) === 'ok', 'each field gets its icon as it fills');
+
+  // 2. Scrolling by hand after the first field: the page stops following.
+  log = await run({ onFill: (n) => { if (n === 1) dispatchEvent(new WheelEvent('wheel', { deltaY: 10 })); } });
+  expect(log.every((e) => e.y === log[0].y), `stops following after a manual scroll (${log.map((e) => e.y)})`);
+  expect($('city').value === 'Toronto', 'still fills every field');
+
+  // 3. Settings → "Animate filling" off: no scrolling, no glow.
+  settings.animateFill = false;
+  log = await run();
+  expect(log.every((e) => e.y === 0 && e.glowing === 0) && $('city').value === 'Toronto', 'off: fills without moving the page');
+  delete settings.animateFill;
+
+  // 4. "Reduce motion": fills without scrolling.
+  const realMatch = window.matchMedia;
+  window.matchMedia = (query) => ({ matches: query.includes('reduce'), media: query });
+  log = await run();
+  expect(log.every((e) => e.y === 0) && $('city').value === 'Toronto', 'reduced motion: no scrolling');
+  window.matchMedia = realMatch;
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+});
+</script>
+</body>
