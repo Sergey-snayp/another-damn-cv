@@ -55,9 +55,6 @@ export function ProfileCareer({
   return (
     <>
       <section className="profile-panel profile-autofill">
-        <h2>
-          Your profile is used directly to autofill your job applications!
-        </h2>
         <div className="profile-promos">
           <div className="profile-promo">
             <div className="profile-promo-heading">
