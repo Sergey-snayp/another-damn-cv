@@ -196,7 +196,9 @@ render after load and change as you scroll.
   similar) get the CV dropped on them, then are watched until the site shows
   the upload as finished. The fill result says "uploaded" or why not.
 - **Suggestion boxes.** Address pickers and React-style dropdowns: the value
-  is typed and the list is left to settle (search results arrive in stages).
+  is typed like a keyboard does (key down, text, key up: Greenhouse's
+  Location (City) opens its results only on key-up), the city alone first,
+  and the list is left to settle (search results arrive in stages).
   The best suggestion wins: one starting with your city ("Vancouver, British
   Columbia, Canada" over "North Vancouver…"), then the most words shared. It
   is highlighted and picked with Enter, as with a keyboard, or clicked if that

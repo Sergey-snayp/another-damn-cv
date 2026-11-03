@@ -42,13 +42,15 @@
 <script>
   const form = document.getElementById('application');
   form.insertAdjacentHTML('beforeend', '<div class="field"><label for="first">First name<span>*</span></label><input class="text" id="first" name="first_name"></div>');
-  // A stand-in for react-select: typed text searches, results arrive in two stages and are
-  // redrawn, hovering highlights, Enter or a click picks, and unpicked text is cleared on blur.
+  // A stand-in for react-select as Greenhouse uses it: typed text searches, but the list
+  // opens only after a key-up (as on the live Location (City) field); results arrive in two
+  // stages and are redrawn, hovering highlights, Enter or a click picks, and unpicked text is
+  // cleared on blur.
   const addSelect = (id, question, options, search) => {
     form.insertAdjacentHTML('beforeend', document.getElementById('select').innerHTML.replaceAll('LABEL', id).replace('QUESTION', question));
     const input = document.getElementById(id), menu = document.getElementById(`${id}-menu`), box = input.closest('.select__control');
-    let results = [], focused = 0, chosen = '';
-    const render = () => { menu.innerHTML = results.map((o, i) => `<div role="option" id="react-select-${id}-option-${i}"${i === focused ? ' class="is-focused"' : ''}>${o}</div>`).join(''); };
+    let results = [], focused = 0, chosen = '', open = false;
+    const render = () => { if (!open) { menu.innerHTML = ''; return; } menu.innerHTML = results.map((o, i) => `<div role="option" id="react-select-${id}-option-${i}"${i === focused ? ' class="is-focused"' : ''}>${o}</div>`).join(''); };
     const choose = (text) => {
       chosen = text; input.value = ''; results = []; menu.innerHTML = '';
       box.querySelector('.select__placeholder')?.remove();
@@ -62,15 +64,16 @@
       setTimeout(() => { results = matching.slice(-1); focused = 0; render(); }, 80);
       setTimeout(() => { results = matching; focused = 0; render(); }, 250);
     });
+    input.addEventListener('keyup', () => { open = true; render(); });
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowDown') { if (!results.length) results = options; else focused = Math.min(focused + 1, results.length - 1); render(); }
+      if (event.key === 'ArrowDown') { open = true; if (!results.length) results = options; else focused = Math.min(focused + 1, results.length - 1); render(); }
       if (event.key === 'Enter' && results[focused]) { event.preventDefault(); choose(results[focused]); }
     });
     const highlight = (event) => { const option = event.target.closest('[role="option"]'); if (option) focused = [...menu.children].indexOf(option); };
     menu.addEventListener('mousemove', highlight);
     menu.addEventListener('mouseover', highlight);
     menu.addEventListener('click', (event) => { const option = event.target.closest('[role="option"]'); if (option) choose(option.textContent); });
-    input.addEventListener('blur', () => { if (!chosen) input.value = ''; });
+    input.addEventListener('blur', () => { open = false; if (!chosen) input.value = ''; render(); });
   };
   addSelect('sponsorship', 'Do you now, or will you in the future, require sponsorship for employment visa status to work legally in Poland?', ['Yes', 'No']);
   form.insertAdjacentHTML('beforeend', '<div class="field"><label for="residence">In what City, State/Province, Country and Zip Code are you currently residing?<span>*</span></label><input class="text" id="residence" name="question_1"></div>');

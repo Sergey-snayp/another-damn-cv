@@ -140,6 +140,18 @@ function press(element) {
 
 const optionText = (option) => normal(option.textContent);
 
+/**
+ * Types into a suggestion box the way a keyboard does: key down, the text,
+ * key up. Some dropdowns open their list only on key-up; Greenhouse's
+ * Location (City) searches on the text but shows results after a key-up.
+ */
+function typeInto(element, text) {
+  const key = String(text).slice(-1) || 'a';
+  element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }));
+  setValue(element, text);
+  element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key }));
+}
+
 /** The suggestion list once it stops changing: search results often arrive in stages and are redrawn. */
 async function settledOptions(element, timeout = 4500) {
   let last = '', steady = 0;
@@ -202,11 +214,12 @@ async function fillCombobox(element, value) {
     if (!text.includes(first) && !(first.includes(text) && text.length > 1)) return 0;
     return 1 + parts.filter((part) => text.includes(part)).length + (text.split(',')[0].trim() === first ? 2 : 0);
   };
-  const queries = [String(value)];
-  if (parts.length > 1) queries.push(String(value).split(',')[0].trim());
+  // The city alone first: location searches (Greenhouse) find "Vancouver" but not
+  // "Vancouver, Canada". The country still decides between the results.
+  const queries = parts.length > 1 ? [String(value).split(',')[0].trim(), String(value)] : [String(value)];
   for (const query of queries) {
     element.focus({ preventScroll: true });
-    setValue(element, query);
+    typeInto(element, query);
     const ranked = (await settledOptions(element)).map((option) => ({ option, score: score(option) })).filter((entry) => entry.score > 0);
     if (!ranked.length) continue;
     const best = ranked.reduce((top, entry) => (entry.score > top.score ? entry : top)).option;

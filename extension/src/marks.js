@@ -255,7 +255,8 @@
     anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await scrolled();
     // A smooth scroll the page interrupted (or a browser without one): go there directly.
-    if (!motion.tookOver && !onScreen(anchor.getBoundingClientRect())) anchor.scrollIntoView({ block: 'center' });
+    // 'instant' overrides pages that set CSS scroll-behavior: smooth (Greenhouse does).
+    if (!motion.tookOver && !onScreen(anchor.getBoundingClientRect())) anchor.scrollIntoView({ block: 'center', behavior: 'instant' });
   }
 
   /** A ring around the field in its result colour. Returns a function that removes it. */
