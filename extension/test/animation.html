@@ -65,8 +65,12 @@ addEventListener('DOMContentLoaded', async () => {
   expect(inView($('city')), 'ends on the last filled field');
   expect(window.CVAutofillMarks.statusOf($('first')) === 'ok', 'each field gets its icon as it fills');
 
-  // 2. Scrolling by hand after the first field: the page stops following.
-  log = await run({ onFill: (n) => { if (n === 1) dispatchEvent(new WheelEvent('wheel', { deltaY: 10 })); } });
+  // 2. Autofill's own key presses (dropdowns send ArrowDown and Enter) do not stop it.
+  log = await run({ onFill: (n) => { if (n === 1) document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })); } });
+  expect(log.every((e) => e.inView) && inView($('city')), `follows to the end despite its own key presses (${JSON.stringify(log)})`);
+  // A person's scroll does stop it. A test cannot send a trusted (person's) event, so it
+  // calls what a trusted wheel, touch or scroll key triggers.
+  log = await run({ onFill: (n) => { if (n === 1) Marks.stopFollowing(); } });
   expect(log.every((e) => e.y === log[0].y), `stops following after a manual scroll (${log.map((e) => e.y)})`);
   expect($('city').value === 'Toronto', 'still fills every field');
 

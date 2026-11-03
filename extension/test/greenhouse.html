@@ -42,25 +42,42 @@
 <script>
   const form = document.getElementById('application');
   form.insertAdjacentHTML('beforeend', '<div class="field"><label for="first">First name<span>*</span></label><input class="text" id="first" name="first_name"></div>');
-  const addSelect = (id, question, options) => {
+  // A stand-in for react-select: typed text searches, results arrive in two stages and are
+  // redrawn, hovering highlights, Enter or a click picks, and unpicked text is cleared on blur.
+  const addSelect = (id, question, options, search) => {
     form.insertAdjacentHTML('beforeend', document.getElementById('select').innerHTML.replaceAll('LABEL', id).replace('QUESTION', question));
     const input = document.getElementById(id), menu = document.getElementById(`${id}-menu`), box = input.closest('.select__control');
-    const show = () => { menu.innerHTML = options.filter((o) => !input.value || o.toLowerCase().startsWith(input.value.toLowerCase())).map((o) => `<div role="option">${o}</div>`).join(''); };
-    input.addEventListener('input', () => setTimeout(show, 60));
-    input.addEventListener('keydown', () => setTimeout(show, 60));
-    menu.addEventListener('mousedown', (event) => {
-      const option = event.target.closest('[role="option"]'); if (!option) return;
-      // As react-select: the input empties, the choice shows beside it, the helper goes.
-      input.value = ''; menu.innerHTML = '';
+    let results = [], focused = 0, chosen = '';
+    const render = () => { menu.innerHTML = results.map((o, i) => `<div role="option" id="react-select-${id}-option-${i}"${i === focused ? ' class="is-focused"' : ''}>${o}</div>`).join(''); };
+    const choose = (text) => {
+      chosen = text; input.value = ''; results = []; menu.innerHTML = '';
       box.querySelector('.select__placeholder')?.remove();
       box.querySelector('.helper')?.remove();
       box.querySelector('.select__single-value')?.remove();
-      box.querySelector('.select__value-container').insertAdjacentHTML('afterbegin', `<div class="select__single-value">${option.textContent}</div>`);
+      box.querySelector('.select__value-container').insertAdjacentHTML('afterbegin', `<div class="select__single-value">${text}</div>`);
+    };
+    input.addEventListener('input', () => {
+      const q = input.value.toLowerCase();
+      const matching = search ? search(q) : options.filter((o) => !q || o.toLowerCase().startsWith(q.slice(0, 2)));
+      setTimeout(() => { results = matching.slice(-1); focused = 0; render(); }, 80);
+      setTimeout(() => { results = matching; focused = 0; render(); }, 250);
     });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') { if (!results.length) results = options; else focused = Math.min(focused + 1, results.length - 1); render(); }
+      if (event.key === 'Enter' && results[focused]) { event.preventDefault(); choose(results[focused]); }
+    });
+    const highlight = (event) => { const option = event.target.closest('[role="option"]'); if (option) focused = [...menu.children].indexOf(option); };
+    menu.addEventListener('mousemove', highlight);
+    menu.addEventListener('mouseover', highlight);
+    menu.addEventListener('click', (event) => { const option = event.target.closest('[role="option"]'); if (option) choose(option.textContent); });
+    input.addEventListener('blur', () => { if (!chosen) input.value = ''; });
   };
   addSelect('sponsorship', 'Do you now, or will you in the future, require sponsorship for employment visa status to work legally in Poland?', ['Yes', 'No']);
   form.insertAdjacentHTML('beforeend', '<div class="field"><label for="residence">In what City, State/Province, Country and Zip Code are you currently residing?<span>*</span></label><input class="text" id="residence" name="question_1"></div>');
   addSelect('employed', 'Have you ever been employed at Box?', ['Yes', 'No']);
+  // Location (City): "North Vancouver" comes first, as on Box's form.
+  addSelect('candidate-location', 'Location (City)', [], (q) => (q.includes('vancouver')
+    ? ['North Vancouver, British Columbia, Canada', 'Vancouver, British Columbia, Canada', 'West Vancouver, British Columbia, Canada'] : []));
   addSelect('privacy', 'Privacy Notice Acknowledgement', ['I acknowledge']);
 </script>
 <script src="../src/sites.js"></script>
@@ -76,7 +93,7 @@ addEventListener('DOMContentLoaded', async () => {
 
   const before = F.findMissingRequired().map((item) => item.label);
   // Labels are shortened to 90 characters for the panel's list.
-  expect(JSON.stringify(before) === JSON.stringify(['First name', 'Do you now, or will you in the future, require sponsorship for employment visa status to work legally in Poland?'.slice(0, 90).trim(), 'In what City, State/Province, Country and Zip Code are you currently residing?', 'Have you ever been employed at Box?', 'Privacy Notice Acknowledgement']),
+  expect(JSON.stringify(before) === JSON.stringify(['First name', 'Do you now, or will you in the future, require sponsorship for employment visa status to work legally in Poland?'.slice(0, 90).trim(), 'In what City, State/Province, Country and Zip Code are you currently residing?', 'Have you ever been employed at Box?', 'Location (City)', 'Privacy Notice Acknowledgement']),
     `each required dropdown is listed once, without react-select's hidden helper (got ${JSON.stringify(before)})`);
 
   const { found } = F.detectFields();
@@ -85,17 +102,20 @@ addEventListener('DOMContentLoaded', async () => {
   const asked = F.detectQuestions(found).map((q) => q.question);
   expect(JSON.stringify(asked) === JSON.stringify(['Have you ever been employed at Box?']), `consent dropdowns are never offered as questions to answer (got ${JSON.stringify(asked)})`);
 
-  const { marks } = await window.CVAutofillFiller.fillAll(found, { firstName: 'Serhii', city: 'Warsaw', state: 'Mazowieckie', country: 'Poland', postalCode: '00-001', requiresSponsorship: 'No' });
+  const { marks } = await window.CVAutofillFiller.fillAll(found, { firstName: 'Serhii', city: 'Vancouver', state: 'British Columbia', country: 'Canada', postalCode: 'V5K 0A1', requiresSponsorship: 'No' });
   await window.CVAutofillMarks.show(marks);
   const missing = F.findMissingRequired(found);
   await window.CVAutofillMarks.showMissing(missing);
 
-  expect($('residence').value === 'Warsaw, Mazowieckie, Poland, 00-001', `fills the full address (got "${$('residence').value}")`);
+  expect($('residence').value === 'Vancouver, British Columbia, Canada, V5K 0A1', `fills the full address (got "${$('residence').value}")`);
+  const city = document.querySelector('#candidate-location').closest('.select__control').querySelector('.select__single-value')?.textContent;
+  expect(city === 'Vancouver, British Columbia, Canada', `picks Vancouver, not North Vancouver, and it sticks after leaving the field (got "${city}")`);
+  expect(window.CVAutofillMarks.statusOf($('candidate-location')) === 'ok', 'the city gets a green icon');
   expect(document.querySelector('#sponsorship').closest('.select__control').querySelector('.select__single-value')?.textContent === 'No', 'picks No in the sponsorship dropdown');
   expect(!F.isEmpty($('sponsorship')), 'a react-select showing a choice counts as filled');
   expect(JSON.stringify(missing.map((item) => item.label)) === JSON.stringify(['Have you ever been employed at Box?', 'Privacy Notice Acknowledgement']), `only the unanswered dropdowns stay red (got ${JSON.stringify(missing.map((m) => m.label))})`);
   expect(window.CVAutofillMarks.statusOf($('sponsorship')) === 'ok' && window.CVAutofillMarks.statusOf($('employed')) === 'missing', 'green on the filled dropdown, red on the empty one');
-  expect(window.CVAutofillMarks.count() === 5, `one icon per field, none for helper inputs (got ${window.CVAutofillMarks.count()})`);
+  expect(window.CVAutofillMarks.count() === 6, `one icon per field, none for helper inputs (got ${window.CVAutofillMarks.count()})`);
   // The icon's box sits at the right of the dropdown, not at its tiny input on the left.
   const box = F.controlFor($('employed')).getBoundingClientRect();
   expect(box.width > 300, `the icon is anchored to the dropdown's visible box (width ${Math.round(box.width)})`);

@@ -138,36 +138,85 @@ function press(element) {
   element.click();
 }
 
+const optionText = (option) => normal(option.textContent);
+
+/** The suggestion list once it stops changing: search results often arrive in stages and are redrawn. */
+async function settledOptions(element, timeout = 4500) {
+  let last = '', steady = 0;
+  for (let waited = 0; waited < timeout; waited += 150) {
+    await wait(150);
+    const options = optionsFor(element);
+    const key = options.map((option) => option.textContent).join('|');
+    if (options.length && key === last) { if (++steady >= 2) return options; } else steady = 0;
+    last = key;
+  }
+  return optionsFor(element);
+}
+
+/** Whether the box now shows the chosen option, not just the text that was typed. */
+function choiceShown(element, chosen, typed) {
+  const same = (text) => text === chosen || text.includes(chosen) || chosen.includes(text);
+  // react-select: the choice is shown beside the input.
+  const picked = normal(window.CVAutofillFields.chosenValue(element));
+  if (picked) return same(picked);
+  // Plain suggestion boxes put the choice in the input. If that is just the typed
+  // text ("Canada" picking "Canada"), it counts once the list has closed.
+  const text = normal(element.value);
+  if (!text) return false;
+  return text !== normal(typed) ? same(text) : text === chosen && optionsFor(element).length === 0;
+}
+
 /**
- * Suggestion boxes: address pickers and React-style dropdowns. Type the value,
- * wait for the list, then click the option that contains it. When nothing
- * matches, the typed text stays and the person picks a suggestion.
+ * Selects one suggestion the way a person does with the keyboard: highlight
+ * it, then Enter in the box (react-select selects its highlighted option).
+ * If that does not take, click a fresh copy of it (the list may have been
+ * redrawn). Returns whether the box shows the choice afterwards.
+ */
+async function pickOption(element, option, typed = '') {
+  const chosen = optionText(option);
+  // mousemove first: react-select ignores hovering right after keyboard moves until the mouse moves.
+  for (const type of ['mousemove', 'mouseover', 'mousemove']) option.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+  element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+  await wait(200);
+  if (choiceShown(element, chosen, typed)) return true;
+  const fresh = optionsFor(element).find((item) => optionText(item) === chosen) ?? (option.isConnected ? option : null);
+  if (fresh) { press(fresh); await wait(200); }
+  return choiceShown(element, chosen, typed);
+}
+
+/**
+ * Suggestion boxes: address pickers and React-style dropdowns. Type, wait for
+ * the list to settle, pick the best match, and check the box shows it. If the
+ * full text finds nothing, try again with its first part ("Vancouver").
  */
 async function fillCombobox(element, value) {
   const wanted = normal(value);
   if (!wanted) return { filled: false };
-  element.focus({ preventScroll: true });
-  setValue(element, value);
-  element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
-  // "Toronto, Canada" should pick "Toronto, ON, Canada" over "Toronto, OH, United States":
-  // the option sharing the most parts wins, and it must contain the first part.
+  // "Vancouver, Canada" should pick "Vancouver, British Columbia, Canada": an option whose
+  // first part is the wanted first part wins over "North Vancouver…", then the most parts shared.
   const parts = wanted.split(',').map((part) => part.trim()).filter(Boolean);
   const first = parts[0];
   const score = (option) => {
-    const text = normal(option.textContent);
+    const text = optionText(option);
     if (text === wanted) return 100;
     if (!text.includes(first) && !(first.includes(text) && text.length > 1)) return 0;
-    return 1 + parts.filter((part) => text.includes(part)).length;
+    return 1 + parts.filter((part) => text.includes(part)).length + (text.split(',')[0].trim() === first ? 2 : 0);
   };
-  for (let waited = 0; waited < 4000; waited += 150) {
-    await wait(150);
-    const ranked = optionsFor(element).map((option) => ({ option, score: score(option) })).filter((entry) => entry.score > 0);
-    if (ranked.length) {
-      press(ranked.reduce((best, entry) => (entry.score > best.score ? entry : best)).option);
-      return { filled: true };
-    }
+  const queries = [String(value)];
+  if (parts.length > 1) queries.push(String(value).split(',')[0].trim());
+  for (const query of queries) {
+    element.focus({ preventScroll: true });
+    setValue(element, query);
+    const ranked = (await settledOptions(element)).map((option) => ({ option, score: score(option) })).filter((entry) => entry.score > 0);
+    if (!ranked.length) continue;
+    const best = ranked.reduce((top, entry) => (entry.score > top.score ? entry : top)).option;
+    if (await pickOption(element, best, query)) return { filled: true };
   }
-  return { filled: true, note: 'typed, pick the matching suggestion' };
+  // Nothing picked. A plain box keeps the typed text (yellow: pick a suggestion);
+  // react-select clears it when the field loses focus, and it then shows as empty.
+  return normal(element.value)
+    ? { filled: true, note: 'typed, pick the matching suggestion' }
+    : { filled: false, note: 'could not pick a suggestion, choose one from the list' };
 }
 
 /**
@@ -271,12 +320,9 @@ async function fillDiversity(field, choice) {
     element.focus({ preventScroll: true });
     element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
     press(element);
-    for (let waited = 0; waited < 3000; waited += 150) {
-      await wait(150);
-      const option = optionsFor(element).find((item) => matches(item.textContent));
-      if (option) { press(option); return { filled: true }; }
-    }
-    return { filled: false, note: 'no option matched your answer' };
+    const option = (await settledOptions(element, 3000)).find((item) => matches(item.textContent));
+    if (!option) return { filled: false, note: 'no option matched your answer' };
+    return (await pickOption(element, option)) ? { filled: true } : { filled: false, note: 'could not pick the option, choose it from the list' };
   }
   return { filled: false };
 }

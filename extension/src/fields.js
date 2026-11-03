@@ -337,8 +337,11 @@ const CHOSEN = '[class*="singleValue" i], [class*="single-value" i], [class*="mu
 
 /** What a suggestion box shows as chosen. react-select keeps its input empty and shows the option beside it. */
 function comboboxValue(element) {
-  const typed = String(element.value ?? '').trim();
-  if (typed) return typed;
+  return String(element.value ?? '').trim() || chosenValue(element);
+}
+
+/** The option react-select shows as chosen beside its input; empty for plain suggestion boxes. */
+function chosenValue(element) {
   let node = element;
   for (let depth = 0; depth < 5 && node.parentElement; depth++) {
     node = node.parentElement;
@@ -467,6 +470,8 @@ window.CVAutofillFields = {
   detectQuestions,
   isEmpty,
   controlFor,
+  comboboxValue,
+  chosenValue,
   labelOf,
   zoneDone,
   groupOf,

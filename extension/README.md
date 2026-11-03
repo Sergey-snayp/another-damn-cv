@@ -196,9 +196,13 @@ render after load and change as you scroll.
   similar) get the CV dropped on them, then are watched until the site shows
   the upload as finished. The fill result says "uploaded" or why not.
 - **Suggestion boxes.** Address pickers and React-style dropdowns: the value
-  is typed, and the suggestion sharing the most words is clicked. Address
-  pickers search by "city, country". With no match the text stays and the
-  result asks you to pick a suggestion.
+  is typed and the list is left to settle (search results arrive in stages).
+  The best suggestion wins: one starting with your city ("Vancouver, British
+  Columbia, Canada" over "North Vancouver…"), then the most words shared. It
+  is highlighted and picked with Enter, as with a keyboard, or clicked if that
+  does not take, and the box is checked to show it. If not, the city alone is
+  tried. Address pickers search by "city, country". With no pick, a typed
+  value is yellow ("pick a suggestion"); a box that clears it shows red.
 - **Yes/no questions.** Radio buttons are matched by their question (fieldset
   legend or group label), then the option that matches the profile answer.
 - **Number fields** take only the number from a profile value.
@@ -298,7 +302,8 @@ page scrolls smoothly to each field that is off screen (fields already on
 screen do not make it jump), and the field glows in its result colour; a CV
 upload pulses until it finishes. Each field takes about a quarter of a second,
 and the page ends on the last filled field. Scrolling by hand during a fill
-stops the follow-along for that fill. With the system's "Reduce motion" on,
+stops the follow-along for that fill (only your own scrolling counts, not
+the key presses Autofill sends to dropdowns). With the system's "Reduce motion" on,
 nothing scrolls and the glow does not move. Filling no longer scrolls the page
 when it focuses a field, so with animation off the page stays put.
 `test/animation.html` covers all four cases.

@@ -223,7 +223,10 @@
   // move. Scrolling by hand during a fill stops the follow-along for that fill.
   const motion = { mode: 'off', tookOver: false };
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Only the person's own scrolling counts. Autofill sends key presses itself
+  // (ArrowDown and Enter open and pick dropdown options); those are not trusted.
   const takeOver = (event) => {
+    if (!event.isTrusted) return;
     if (event.type !== 'keydown' || ['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' '].includes(event.key)) motion.tookOver = true;
   };
 
@@ -301,5 +304,8 @@
     if (marks.size && !host.isConnected) { document.documentElement.append(host); reposition(); }
   }
 
-  window.CVAutofillMarks = { show, showMissing, clear, reattach, animationMode, fillHooks, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.node.title ?? null };
+  /** What a person's own scroll does during a fill: stop following. Also used by tests, which cannot send trusted events. */
+  const stopFollowing = () => { motion.tookOver = true; };
+
+  window.CVAutofillMarks = { show, showMissing, clear, reattach, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.node.title ?? null };
 })();
