@@ -6,7 +6,7 @@ import { NotSignedInError } from './jobs.js';
  * (or the panel's "Answer once" card):
  *
  *   workAuthorization / requiresSponsorship, per country ("Poland")
- *   workedHereBefore, per company ("Box")
+ *   workedHereBefore, one answer for every company
  *
  * A copy is kept in chrome.storage.local as `autofillDefaults`, so the page
  * scripts can show the current default without asking the server.
@@ -89,9 +89,9 @@ export function eligibilityMap(defaults = []) {
     .map((row) => [row.scope ? `${row.kind}:${row.scope}` : row.kind, row.value]));
 }
 
-/** The "worked here before" answer saved for this company, if any. */
-export function workedBeforeFor(defaults = [], company) {
-  return defaults.find((row) => row.kind === 'workedHereBefore' && sameScope(row.scope, company))?.value ?? '';
+/** Your one "worked here before" answer for every company, if you chose it. */
+export function workedBeforeFor(defaults = []) {
+  return defaults.find((row) => row.kind === 'workedHereBefore' && !row.scope)?.value ?? '';
 }
 
 /** Sets profile values the form asked for (phone, LinkedIn…), and updates the local profile. */

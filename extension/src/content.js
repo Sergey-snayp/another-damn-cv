@@ -109,7 +109,7 @@ function explain(element) {
       return field.country ? `No answer yet about ${what} for ${field.country}. Click to answer: it is saved for ${field.country} only.` : `No answer yet about ${what}. Click to answer.`;
     }
     if (field.key === 'resume') return profile.resumeDataUrl ? 'Your CV upload did not finish. Try Autofill again or upload it yourself.' : 'No CV chosen. Choose one in the Resume tab.';
-    if (field.key === 'workedHereBefore') return 'Could not tell from your CV. Click to answer for this company.';
+    if (field.key === 'workedHereBefore') return 'Could not tell from your CV. Click to answer once for every company.';
     if (field.kind === 'select' || field.kind === 'radio' || field.kind === 'combobox') return `None of the options matched your profile answer for "${label}". Click to choose one.`;
     return PROFILE_DEFAULTS.has(field.key) ? `Your profile has no value for "${label}". Click to add it.` : `Your profile has no value for "${label}". Add it in the app's Profile.`;
   }
@@ -292,12 +292,12 @@ async function editorFor(element) {
   const company = companyName();
 
   if (field && (ELIGIBILITY_FIELDS.has(field.key) || field.key === 'workedHereBefore')) {
-    const scope = field.key === 'workedHereBefore' ? companyAskedAbout(element) : field.country ?? '';
-    if (field.key === 'workedHereBefore' && !scope) return null;
+    // "Worked here before" is one answer for every company; eligibility is per country.
+    const scope = field.key === 'workedHereBefore' ? '' : field.country ?? '';
     const target = { type: 'default', kind: field.key, scope };
     const current = autofillDefaults.find((row) => row.kind === field.key && sameText(row.scope, scope))?.value ?? '';
     const what = { requiresSponsorship: 'Sponsorship', workAuthorization: 'Work authorization', workedHereBefore: 'Worked here before' }[field.key];
-    const reason = field.key === 'workedHereBefore' ? `Your answer for ${scope}. Click to change it.` : scope ? `Your answer for ${scope}. Click to change it.` : 'Your answer. Click to change it.';
+    const reason = field.key === 'workedHereBefore' ? 'Your answer for every company. Click to change it.' : scope ? `Your answer for ${scope}. Click to change it.` : 'Your answer. Click to change it.';
     const choose = async (value) => {
       const answer = yesNo(value);
       const done = await fillChosen(element, answer);
@@ -305,12 +305,12 @@ async function editorFor(element) {
     };
     return {
       heading: scope ? `${what} · ${scope}` : what,
-      currentLabel: scope ? `Your answer for ${scope}` : 'Your answer',
+      currentLabel: field.key === 'workedHereBefore' ? 'Your answer for every company' : scope ? `Your answer for ${scope}` : 'Your answer',
       current,
       choices: ['Yes', 'No'],
       fromForm: kind === 'combobox',
       canReset: Boolean(current),
-      note: field.key === 'workedHereBefore' ? `Saved for ${scope} only.` : scope ? `Saved for ${scope} only. Other countries are asked separately.` : 'Used when a question names no country.',
+      note: field.key === 'workedHereBefore' ? 'Used for every company, except one your CV lists as an employer.' : scope ? `Saved for ${scope} only. Other countries are asked separately.` : 'Used when a question names no country.',
       choose,
       saveFromForm: async () => {
         const value = yesNo(inForm());

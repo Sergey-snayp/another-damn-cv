@@ -2,8 +2,8 @@
  * Answers the extension uses for one kind of question, set from a field's icon.
  *
  * Eligibility answers belong to one country: "Poland: Yes" for sponsorship is
- * never used for a question about Germany. "Worked here before" belongs to one
- * company. An empty scope is the general answer for that kind.
+ * never used for a question about Germany. "Worked here before" is one answer
+ * for every company (empty scope). An empty scope is the general answer.
  */
 
 export const DEFAULT_KINDS = ['workAuthorization', 'requiresSponsorship', 'workedHereBefore'] as const;

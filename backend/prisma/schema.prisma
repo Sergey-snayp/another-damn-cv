@@ -199,8 +199,8 @@ model SavedAnswer {
 
 /// An answer the extension uses for one kind of question, chosen from a field's
 /// icon on a form. `scope` narrows it: the country for work authorization and
-/// sponsorship ("Poland"), the company for "worked here before" ("Box"), or ""
-/// for the general answer. `scopeKey` is the scope lowercased, so "poland" and
+/// sponsorship ("Poland"), or "" for the general answer ("worked here before"
+/// is always one answer for every company). `scopeKey` is the scope lowercased, so "poland" and
 /// "Poland" are one row.
 model AutofillDefault {
   id        String   @id @default(uuid())

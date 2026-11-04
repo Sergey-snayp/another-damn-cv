@@ -98,22 +98,20 @@ async function loadDefaults() {
  */
 async function workedHereBefore() {
   const asked = scan?.fields?.find(field => field.key === 'workedHereBefore');
+  if (!asked) return {};
   // The company the question names ("employed at Box"), else the page's.
-  const company = String(asked?.company || scan?.context?.company || '').trim();
-  if (!company || !asked) return {};
-  // An answer chosen for this company from the field's icon wins over the CV.
-  const saved = workedBeforeFor(autofillDefaults, company);
-  if (saved) return { workedHereBefore: saved, workedHereBeforeSaved: true, workedHereBeforeReason: `Your answer for ${company}. Click to change it.` };
-  if (!resumes.chosen) return {};
-  try {
-    const text = (await cvTexts(resumes.items))[resumes.chosen.id];
-    if (!text) return {};
-    const name = company.toLowerCase();
-    const listed = text.split('\n').some(line => { const value = line.trim().toLowerCase(); return value === name || value.startsWith(`${name} (`); });
-    return listed
-      ? { workedHereBefore: 'Yes', workedHereBeforeReason: `Your CV lists ${company} as an employer, so "Yes". Check it, or click to save your answer.` }
-      : { workedHereBefore: 'No', workedHereBeforeReason: `${company} is not among the employers in your CV, so "No". Check it, or click to save your answer.` };
-  } catch { return {}; }
+  const company = String(asked.company || scan?.context?.company || '').trim();
+  let text = '';
+  if (company && resumes.chosen) { try { text = (await cvTexts(resumes.items))[resumes.chosen.id] ?? ''; } catch { /* no CV text */ } }
+  const name = company.toLowerCase();
+  const listed = Boolean(text) && text.split('\n').some(line => { const value = line.trim().toLowerCase(); return value === name || value.startsWith(`${name} (`); });
+  // A CV that lists this company as an employer is a fact about this one company.
+  if (listed) return { workedHereBefore: 'Yes', workedHereBeforeReason: `Your CV lists ${company} as an employer, so "Yes". Check it.` };
+  // Otherwise your one answer for every company, chosen from the field's icon.
+  const saved = workedBeforeFor(autofillDefaults);
+  if (saved) return { workedHereBefore: saved, workedHereBeforeSaved: true, workedHereBeforeReason: 'Your answer for every company. Click to change it.' };
+  if (!text) return {};
+  return { workedHereBefore: 'No', workedHereBeforeReason: `${company} is not among the employers in your CV, so "No". Check it, or click to save one answer for every company.` };
 }
 const diversityValue = key => diversityAnswers[key] ?? 'Prefer not to answer';
 const GROUP_OF_KEY = new Map(FILL_GROUPS.flatMap(group => group.keys.map(key => [key, group.id])));

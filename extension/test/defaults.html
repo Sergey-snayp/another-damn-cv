@@ -122,12 +122,12 @@ addEventListener('load', () => setTimeout(async () => {
     expect(result.ok && $('heard').value === 'ref' && json(last().target) === json({ type: 'answer', question: 'How did you hear about us?', company: 'Acme' }), `saves it as an answer for the question (sent ${json(last())})`);
     M.close();
 
-    // Worked here before: per company.
+    // Worked here before: one answer for every company.
     expect(await M.open(radio('before', 'y')), 'the worked-before icon opens a popover');
     spec = M.popoverState().spec;
-    expect(spec?.heading === 'Worked here before · Acme', `scoped to the company (got ${spec?.heading})`);
+    expect(spec?.heading === 'Worked here before' && /every company/.test(spec?.note ?? ''), `one answer for every company (got ${spec?.heading}, ${spec?.note})`);
     await spec.choose('No');
-    expect(radio('before', 'n').checked && json(last().target) === json({ type: 'default', kind: 'workedHereBefore', scope: 'Acme' }), `saves it for Acme (sent ${json(last())})`);
+    expect(radio('before', 'n').checked && json(last().target) === json({ type: 'default', kind: 'workedHereBefore', scope: '' }), `saves it for every company (sent ${json(last())})`);
     M.close();
 
     // Free text, saved as an answer; a failed save still fills, and says so.

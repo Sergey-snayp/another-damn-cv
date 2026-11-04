@@ -8,14 +8,15 @@ const LABELS: Record<AutofillDefault["kind"], string> = {
 };
 
 function where(row: AutofillDefault): string {
-  if (!row.scope) return row.kind === "workedHereBefore" ? "" : "When a form names no country";
-  return row.kind === "workedHereBefore" ? `At ${row.scope}` : `In ${row.scope}`;
+  if (row.kind === "workedHereBefore") return "For every company";
+  return row.scope ? `In ${row.scope}` : "When a form names no country";
 }
 
 /**
  * Yes/No answers chosen from a field's icon in the extension. Each belongs to
- * one country (sponsorship, work authorization) or one company (worked here
- * before), so "Poland: Yes" never answers a question about another country.
+ * one country (sponsorship, work authorization), so "Poland: Yes" never
+ * answers a question about another country. "Worked here before" is one
+ * answer for every company.
  */
 export function DefaultAnswers() {
   const [rows, setRows] = useState<AutofillDefault[] | null>(null);
@@ -66,8 +67,8 @@ export function DefaultAnswers() {
         <h2 id="default-answers-heading">Default answers</h2>
       </div>
       <p className="profile-muted">
-        Chosen in the extension from a field's icon. Sponsorship and work authorization are kept per country, and
-        "worked here before" per company.
+        Chosen in the extension from a field's icon. Sponsorship and work authorization are kept per country.
+        "Worked here before" is one answer for every company.
       </p>
       {error && (
         <p className="profile-error" role="alert">
