@@ -4,10 +4,10 @@ import { icon, escapeHtml as esc } from './icons.js';
 import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { draftAnswer, matchAnswers, saveAnswers } from './answers.js';
-import { eligibilityMap, moveLocalEligibility, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
+import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
 
 const FIELD_LABELS = {
-  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear',
+  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear', workArrangement: 'Office, hybrid or remote', willingToRelocate: 'Relocation',
 };
 const PROFILE_GROUPS = [
   { title: 'Personal', keys: ['fullName', 'firstName', 'lastName', 'preferredName', 'email', 'phone'] },
@@ -25,6 +25,8 @@ const FILL_GROUPS = [
   { id: 'experience', label: 'Experience and education', keys: ['currentCompany', 'currentTitle', 'yearsExperience', 'school', 'degree', 'fieldOfStudy', 'graduationYear', 'workedHereBefore'] },
   { id: 'workAuthorization', label: 'Work authorization', keys: ['workAuthorization', 'requiresSponsorship'] },
   { id: 'salary', label: 'Salary and availability', keys: ['salaryExpectation', 'noticePeriod'] },
+  // Types of work accepted (Profile) and relocation per country (default answers).
+  { id: 'workPrefs', label: 'Work type and relocation', keys: ['workArrangement', 'willingToRelocate', 'workArrangements'] },
   // "How did you hear about this job?" → the link below. Off: saved answers fill it like any company question.
   { id: 'heardAbout', label: '"How did you hear" → another-damn.cv', keys: ['heardAbout'] },
   // The company's own questions, from answers saved in the app. Not a profile field group.
@@ -73,7 +75,7 @@ document.addEventListener('click', async event => {
   try { useDefaults(await saveDefault(kind, scope.join(':'), button.dataset.answer)); renderAutofill(); }
   catch (error) { button.disabled = false; status('fill-status', error instanceof NotSignedInError ? 'Sign in to save eligibility answers.' : `Not saved: ${error.message}`, 'error'); }
 });
-const DEFAULT_LABELS = { requiresSponsorship: 'Sponsorship', workAuthorization: 'Work authorization', workedHereBefore: 'Worked here before' };
+const DEFAULT_LABELS = { requiresSponsorship: 'Sponsorship', workAuthorization: 'Work authorization', workedHereBefore: 'Worked here before', willingToRelocate: 'Relocate' };
 // Answers still only in this browser (signed out since before 0.27.0) keep working until they move.
 let legacyEligibility = {};
 function useDefaults(rows) { autofillDefaults = Array.isArray(rows) ? rows : []; eligibility = { ...legacyEligibility, ...eligibilityMap(autofillDefaults) }; }
@@ -214,7 +216,10 @@ async function questionsFromFrames(tab = currentTab) {
   return (await askForms({ type: 'questions' }, tab)).flatMap(({ frameId, reply }) => (reply.questions ?? []).map(question => ({ ...question, id: frameKey(frameId, question.id) })));
 }
 
-function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; if (key === 'heardAbout') return HEARD_ABOUT_ANSWER; return profile[key] ?? ''; }
+function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; if (key === 'heardAbout') return HEARD_ABOUT_ANSWER; if (key === 'workArrangement') return workTypesText(); if (key === 'willingToRelocate') return relocationText(); return profile[key] ?? ''; }
+const WORK_TYPE_NAMES = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
+function workTypesText() { return String(profile.workArrangements ?? '').split(',').map(kind => WORK_TYPE_NAMES[kind]).filter(Boolean).join(', '); }
+function relocationText() { return Object.entries(relocationMap(autofillDefaults)).map(([country, answer]) => `${country || 'Anywhere'}: ${answer}`).join(', '); }
 function pageCard() {
   if (!scan) return '';
   const title = scan.context?.title || 'Application form';
@@ -271,6 +276,7 @@ async function runFill() {
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
     allowed.heardAbout = groupOn('heardAbout') ? HEARD_ABOUT_ANSWER : '';
+    allowed.relocation = groupOn('willingToRelocate') ? relocationMap(autofillDefaults) : {};
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     // Groups switched off, by field, so a still-empty field can say which setting left it empty.
     const offKeys = Object.fromEntries(FILL_GROUPS.filter(group => group.keys.length && !groupOn(group.keys[0])).flatMap(group => group.keys.map(key => [key, group.label])));

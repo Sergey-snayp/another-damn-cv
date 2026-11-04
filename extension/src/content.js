@@ -92,6 +92,8 @@ let lastFill = { profile: {}, failed: new Map(), answers: new Map() };
 // Fields whose default can be set from the icon (same list as the server's EXTENSION_PROFILE_KEYS).
 const PROFILE_DEFAULTS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'salaryExpectation', 'noticePeriod']);
 const ELIGIBILITY_FIELDS = new Set(['requiresSponsorship', 'workAuthorization']);
+const WORK_FIELDS = new Set(['workArrangement', 'willingToRelocate']);
+const WORK_OPTIONS = [{ value: 'remote', label: 'Remote' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'onsite', label: 'On-site' }];
 
 function explain(element) {
   const { profile, failed } = lastFill;
@@ -104,6 +106,11 @@ function explain(element) {
     const off = profile.offKeys?.[field.key];
     if (off) return `Off in Settings → Fields to fill (${off}).`;
     if (field.diversity) return 'Diversity questions are off in Settings → Fields to fill.';
+    if (WORK_FIELDS.has(field.key)) {
+      const decision = Filler.workDecision(field, profile);
+      if (decision.why === 'types') return 'Choose the types of work you accept: remote, hybrid, on-site. Click to choose.';
+      if (decision.why === 'relocation') return decision.country ? `Would you relocate to ${decision.country}? Click to answer: it is saved for ${decision.country} only.` : 'Would you relocate? Click to answer.';
+    }
     if (ELIGIBILITY_FIELDS.has(field.key)) {
       const what = field.key === 'requiresSponsorship' ? 'sponsorship' : 'work authorization';
       return field.country ? `No answer yet about ${what} for ${field.country}. Click to answer: it is saved for ${field.country} only.` : `No answer yet about ${what}. Click to answer.`;
@@ -291,6 +298,8 @@ async function editorFor(element) {
   const fromForm = kind === 'combobox' || kind === 'select' || kind === 'radio';
   const company = companyName();
 
+  if (field && WORK_FIELDS.has(field.key)) return workEditor(element, field, autofillDefaults, profile);
+
   if (field && (ELIGIBILITY_FIELDS.has(field.key) || field.key === 'workedHereBefore')) {
     // "Worked here before" is one answer for every company; eligibility is per country.
     const scope = field.key === 'workedHereBefore' ? '' : field.country ?? '';
@@ -389,6 +398,62 @@ async function editorFor(element) {
     reset: async () => {
       const result = await saveRemotely('default-reset', { type: 'answer', question: used?.savedQuestion || question.question });
       if (result.ok) lastFill.answers.delete(String(question.id));
+      return result.ok ? { ok: true, message: 'Forgotten. The field keeps its value.' } : result;
+    },
+  };
+}
+/**
+ * Office, hybrid, remote and relocation questions. The types of work you
+ * accept go to the Profile; relocation is saved per country. Each change
+ * answers the question again from the new preferences.
+ */
+function workEditor(element, field, defaults, profile) {
+  const kinds = String(profile.workArrangements ?? '').split(',').filter(Boolean);
+  const relocation = (rows) => Object.fromEntries(rows.filter((row) => row.kind === 'willingToRelocate').map((row) => [row.scope, row.value]));
+  // Answers the question again from what is saved now.
+  const refill = async () => {
+    const stored = await chrome.storage.local.get(['profile', 'autofillDefaults']);
+    const latest = { ...lastFill.profile, workArrangements: stored.profile?.workArrangements ?? '', country: stored.profile?.country ?? lastFill.profile.country, relocation: relocation(stored.autofillDefaults ?? []) };
+    lastFill.profile = latest;
+    const done = await Filler.fillOne(field, latest, {});
+    const decision = Filler.workDecision(field, latest);
+    const mark = done.mark ?? (decision.why ? { element, status: 'missing', reason: explain(element) } : null);
+    if (mark) await Marks.show([mark]);
+    return done.filled;
+  };
+  const multi = (!kinds.length || field.key === 'workArrangement' || field.office) && {
+    label: kinds.length ? 'Types of work you accept' : 'Choose the types of work you accept',
+    options: WORK_OPTIONS,
+    selected: kinds,
+    save: async (values) => {
+      if (!values.length) return { ok: false, message: 'Choose at least one.' };
+      const saved = await saveRemotely('default-save', { type: 'profile', key: 'workArrangements' }, WORK_OPTIONS.map((item) => item.value).filter((value) => values.includes(value)).join(','));
+      if (!saved.ok) return saved;
+      return { ok: true, message: (await refill()) ? 'Saved to your Profile, and answered.' : 'Saved to your Profile.' };
+    },
+  };
+  const named = WORK_OPTIONS.filter((item) => kinds.includes(item.value)).map((item) => item.label).join(', ');
+  if (field.key === 'workArrangement') {
+    return { heading: 'Types of work', currentLabel: 'You accept', current: named, multi, canReset: false, note: 'Saved to your Profile in the app. Used for every office, hybrid and remote question.' };
+  }
+  const scope = field.country ?? '';
+  const target = { type: 'default', kind: 'willingToRelocate', scope };
+  const current = defaults.find((row) => row.kind === 'willingToRelocate' && sameText(row.scope, scope))?.value ?? '';
+  return {
+    heading: scope ? `Relocate · ${scope}` : 'Relocate',
+    currentLabel: scope ? `Relocate to ${scope}` : 'Relocate',
+    current,
+    choices: ['Yes', 'No'],
+    multi,
+    canReset: Boolean(current),
+    note: `${scope ? `Saved for ${scope} only. Other countries are asked separately.` : 'Used when a question names no country.'}${field.office ? ' This question also asks about office work, so the types of work you accept count too.' : ''}`,
+    choose: async (value) => {
+      const saved = await saveRemotely('default-save', target, yesNo(value));
+      if (!saved.ok) return saved;
+      return { ok: true, message: (await refill()) ? 'Saved, and answered.' : 'Saved. Choose the types of work you accept too.' };
+    },
+    reset: async () => {
+      const result = await saveRemotely('default-reset', target);
       return result.ok ? { ok: true, message: 'Forgotten. The field keeps its value.' } : result;
     },
   };

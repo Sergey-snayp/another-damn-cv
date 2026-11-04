@@ -1,0 +1,126 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta property="og:description" content="Warsaw, Poland">
+<title>Autofill test — office, hybrid, remote and relocation questions</title>
+<!--
+  Answered from the types of work accepted (profile.workArrangements) and
+  relocation per country (profile.relocation). The job's country comes from
+  the page when the question names none. Without an answer the field is red
+  and its icon offers the choice.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=30000 \
+      --dump-dom "file://$PWD/test/work.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const store = { animateFill: false, autofillDefaults: [], profile: {} };
+  const sent = [];
+  window.chrome = {
+    runtime: {
+      id: 'test', getURL: (p) => (p.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} },
+      sendMessage: async (message) => {
+        sent.push(message);
+        const { type, target, value } = message;
+        if (target?.type === 'profile' && type === 'default-save') store.profile = { ...store.profile, [target.key]: value };
+        if (target?.type === 'default') {
+          store.autofillDefaults = store.autofillDefaults.filter((row) => !(row.kind === target.kind && row.scope === target.scope));
+          if (type === 'default-save') store.autofillDefaults.push({ id: String(sent.length), kind: target.kind, scope: target.scope, value });
+        }
+        return { ok: true };
+      },
+    },
+    storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => Object.assign(store, values) }, onChanged: { addListener() {} } },
+  };
+</script>
+<body>
+<p class="job-location">Warsaw, Poland</p>
+<form>
+  <label for="name">First name*</label><input id="name" name="first_name" required>
+  <label for="box">Boxers are expected to work from the office a minimum of 3 days per week. Are you willing to relocate and commute to this position's designated office?*</label>
+  <select id="box" name="q_box" required><option value="">Select…</option><option>Yes</option><option>No</option></select>
+  <fieldset><legend>Are you open to a hybrid setup?*</legend>
+    <label><input type="radio" name="hybrid" value="y" required> Yes</label>
+    <label><input type="radio" name="hybrid" value="n"> No</label>
+  </fieldset>
+  <label for="onsite">Are you comfortable working on-site 5 days a week?*</label>
+  <select id="onsite" name="q_onsite" required><option value="">Select…</option><option>Yes</option><option>No</option></select>
+  <label for="model">Preferred work model*</label>
+  <select id="model" name="q_model" required><option value="">Select…</option><option>On-site</option><option>Hybrid</option><option>Remote</option></select>
+  <label for="arrangement">What is your preferred work arrangement?</label><input id="arrangement" name="q_arrangement">
+  <label for="relocate">Are you willing to relocate to Germany?*</label>
+  <select id="relocate" name="q_relocate" required><option value="">Select…</option><option>Yes</option><option>No</option></select>
+  <label for="sponsor">Will you require sponsorship to work on-site in Poland?</label>
+  <select id="sponsor" name="q_sponsor"><option value="">Select…</option><option>Yes</option><option>No</option></select>
+  <label for="where">Where are you based?</label><input id="where" name="q_where">
+  <input type="submit" value="Submit application">
+</form>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+<script>
+addEventListener('load', () => setTimeout(async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const M = window.CVAutofillMarks;
+  const reset = () => { document.querySelector('form').reset(); M.clear(); };
+  try {
+    const found = window.CVAutofillFields.detectFields().found;
+    const byId = (id) => found.find((field) => (field.element.id || field.element.name) === id);
+    expect(byId('box')?.key === 'willingToRelocate' && byId('box')?.office && byId('box')?.country === 'Poland', `the Box question is relocation plus office, in Poland from the page (got ${JSON.stringify(byId('box') && { key: byId('box').key, office: byId('box').office, country: byId('box').country })})`);
+    expect(byId('hybrid')?.key === 'workArrangement' && byId('onsite')?.key === 'workArrangement' && byId('model')?.key === 'workArrangement' && byId('arrangement')?.key === 'workArrangement', 'office, hybrid and work-model questions are work-type questions');
+    expect(byId('relocate')?.key === 'willingToRelocate' && byId('relocate')?.country === 'Germany', 'a country named in the question wins over the page');
+    expect(byId('sponsor')?.key === 'requiresSponsorship', 'a sponsorship question that mentions on-site stays a sponsorship question');
+    expect(byId('where')?.key !== 'workArrangement', '"Where are you based?" is not a work-type question');
+
+    // Remote or hybrid, would move to Poland, not to Germany.
+    await fill({ firstName: 'Ada', country: 'Canada', workArrangements: 'remote,hybrid', relocation: { Poland: 'Yes', Germany: 'No' } });
+    expect($('box').value === 'Yes' && M.statusOf($('box')) === 'ok', `Box: hybrid accepted and would relocate to Poland → Yes (got "${$('box').value}")`);
+    expect(document.querySelector('input[name="hybrid"][value="y"]').checked, 'hybrid setup → Yes');
+    expect($('onsite').value === 'No', `on-site 5 days without accepting on-site → No (got "${$('onsite').value}")`);
+    expect($('model').value === 'Remote', `a list of work models picks the first type you accept (got "${$('model').value}")`);
+    expect($('arrangement').value === 'Remote or Hybrid', `an open question gets the types you accept (got "${$('arrangement').value}")`);
+    expect($('relocate').value === 'No', `Germany gets its own answer (got "${$('relocate').value}")`);
+
+    // Remote only: an office question is No without asking about relocation.
+    reset();
+    await fill({ firstName: 'Ada', country: 'Canada', workArrangements: 'remote', relocation: {} });
+    expect($('box').value === 'No' && /not this office schedule/.test(M.reasonOf($('box')) ?? ''), `remote only → No for the office question (got "${$('box').value}", "${M.reasonOf($('box'))}")`);
+
+    // Living in the country: no relocation needed.
+    reset();
+    await fill({ firstName: 'Ada', country: 'Poland', workArrangements: 'hybrid', relocation: {} });
+    expect($('box').value === 'Yes', `already living in Poland → Yes without a relocation answer (got "${$('box').value}")`);
+
+    // Nothing saved: red, and the icon offers the choice.
+    reset();
+    await fill({ firstName: 'Ada', country: 'Canada', workArrangements: 'hybrid', relocation: {} });
+    expect(!$('box').value && M.statusOf($('box')) === 'missing' && /relocate to Poland/.test(M.reasonOf($('box')) ?? ''), `no relocation answer → red, asking about Poland (got "${M.reasonOf($('box'))}")`);
+    store.profile = { workArrangements: 'hybrid', country: 'Canada' };
+    expect(await M.open($('box')), 'its icon opens a popover');
+    const spec = M.popoverState().spec;
+    expect(spec?.heading === 'Relocate · Poland' && JSON.stringify(spec.choices) === '["Yes","No"]' && spec.multi, `offers relocation for Poland and the types of work (got ${JSON.stringify(spec && { heading: spec.heading, choices: spec.choices, multi: Boolean(spec.multi) })})`);
+    const result = await spec.choose('Yes');
+    expect(result.ok && JSON.stringify(sent.at(-1).target) === JSON.stringify({ type: 'default', kind: 'willingToRelocate', scope: 'Poland' }), `saves relocation for Poland (sent ${JSON.stringify(sent.at(-1))})`);
+    expect($('box').value === 'Yes' && M.statusOf($('box')) === 'ok', `and answers the question at once (got "${$('box').value}", ${M.statusOf($('box'))})`);
+    M.close();
+
+    // Types of work from an icon: saved to the profile, then answered.
+    reset();
+    store.profile = { country: 'Canada' };
+    await fill({ firstName: 'Ada', country: 'Canada', workArrangements: '', relocation: {} });
+    expect(M.statusOf($('onsite')) === 'missing' && /types of work/.test(M.reasonOf($('onsite')) ?? ''), `no types of work → red, asking for them (got "${M.reasonOf($('onsite'))}")`);
+    await M.open($('onsite'));
+    const types = M.popoverState().spec;
+    const saved = await types.multi.save(['onsite', 'remote']);
+    expect(saved.ok && JSON.stringify(sent.at(-1)) === JSON.stringify({ type: 'default-save', target: { type: 'profile', key: 'workArrangements' }, value: 'remote,onsite' }), `saves the types to the profile in order (sent ${JSON.stringify(sent.at(-1))})`);
+    expect($('onsite').value === 'Yes', `and answers: on-site accepted → Yes (got "${$('onsite').value}")`);
+    M.close();
+  } catch (error) { problems.push(`threw: ${error.stack}`); }
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+}, 1500));
+</script>
+</body>

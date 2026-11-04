@@ -50,6 +50,8 @@ export interface ContactFields {
   currentCompany: string; currentTitle: string; yearsExperience: string;
   workAuthorization: string; requiresSponsorship: string;
   salaryExpectation: string; noticePeriod: string;
+  /** Types of work accepted: "remote,hybrid,onsite" or any of them. */
+  workArrangements: string;
 }
 
 export interface ImportProposal {

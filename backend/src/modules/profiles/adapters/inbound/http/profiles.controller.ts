@@ -78,6 +78,7 @@ export const EXTENSION_PROFILE_KEYS = [
   'requiresSponsorship',
   'salaryExpectation',
   'noticePeriod',
+  'workArrangements',
 ] as const;
 export const extensionProfileSchema = z
   .object(

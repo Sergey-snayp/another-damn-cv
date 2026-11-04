@@ -289,6 +289,8 @@ model Profile {
   requiresSponsorship String?
   salaryExpectation   String?
   noticePeriod        String?
+  /// Types of work accepted, in order: "remote,hybrid,onsite" or any of them.
+  workArrangements    String?
 
   /// Reviewed career sections imported into Profile, independent of CV versions.
   career         Json?

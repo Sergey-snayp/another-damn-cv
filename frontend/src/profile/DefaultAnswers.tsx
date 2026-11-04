@@ -5,10 +5,12 @@ const LABELS: Record<AutofillDefault["kind"], string> = {
   requiresSponsorship: "Needs visa sponsorship",
   workAuthorization: "Allowed to work",
   workedHereBefore: "Worked here before",
+  willingToRelocate: "Willing to relocate",
 };
 
 function where(row: AutofillDefault): string {
   if (row.kind === "workedHereBefore") return "For every company";
+  if (row.kind === "willingToRelocate") return row.scope ? `To ${row.scope}` : "When a form names no country";
   return row.scope ? `In ${row.scope}` : "When a form names no country";
 }
 
@@ -67,7 +69,7 @@ export function DefaultAnswers() {
         <h2 id="default-answers-heading">Default answers</h2>
       </div>
       <p className="profile-muted">
-        Chosen in the extension from a field's icon. Sponsorship and work authorization are kept per country.
+        Chosen in the extension from a field's icon. Sponsorship, work authorization and relocation are kept per country.
         "Worked here before" is one answer for every company.
       </p>
       {error && (

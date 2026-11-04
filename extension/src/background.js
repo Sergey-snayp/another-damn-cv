@@ -171,9 +171,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (hasManifestScripts(tab.url)) return; // The page's own host reopens the panel.
   if (!(await injectPanel(tabId))) await setTabOpen(tabId, false);
 });
-const DEFAULT_KINDS = new Set(['workAuthorization', 'requiresSponsorship', 'workedHereBefore']);
+const DEFAULT_KINDS = new Set(['workAuthorization', 'requiresSponsorship', 'workedHereBefore', 'willingToRelocate']);
 // Same list as the server's (EXTENSION_PROFILE_KEYS): name and email stay in the app.
-const PROFILE_KEYS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod']);
+const PROFILE_KEYS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod', 'workArrangements']);
 
 /**
  * Saves or forgets one default on the account. `target` says where it lives:

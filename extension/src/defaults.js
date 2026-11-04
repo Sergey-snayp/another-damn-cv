@@ -7,6 +7,7 @@ import { NotSignedInError } from './jobs.js';
  *
  *   workAuthorization / requiresSponsorship, per country ("Poland")
  *   workedHereBefore, one answer for every company
+ *   willingToRelocate, per country
  *
  * A copy is kept in chrome.storage.local as `autofillDefaults`, so the page
  * scripts can show the current default without asking the server.
@@ -87,6 +88,11 @@ export function eligibilityMap(defaults = []) {
   return Object.fromEntries(defaults
     .filter((row) => row.kind === 'workAuthorization' || row.kind === 'requiresSponsorship')
     .map((row) => [row.scope ? `${row.kind}:${row.scope}` : row.kind, row.value]));
+}
+
+/** Relocation answers as Autofill reads them: { Poland: 'Yes', '': 'No' } ('' names no country). */
+export function relocationMap(defaults = []) {
+  return Object.fromEntries(defaults.filter((row) => row.kind === 'willingToRelocate').map((row) => [row.scope, row.value]));
 }
 
 /** Your one "worked here before" answer for every company, if you chose it. */

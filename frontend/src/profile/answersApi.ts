@@ -37,7 +37,7 @@ export const answersApi = {
  */
 export interface AutofillDefault {
   id: string;
-  kind: "workAuthorization" | "requiresSponsorship" | "workedHereBefore";
+  kind: "workAuthorization" | "requiresSponsorship" | "workedHereBefore" | "willingToRelocate";
   scope: string;
   value: string;
   updatedAt: string;

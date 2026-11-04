@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SavedAnswers } from "./SavedAnswers";
 import { DefaultAnswers } from "./DefaultAnswers";
+import { WorkPreferences } from "./WorkPreferences";
 import { Link } from "react-router-dom";
 import type { ContactFields } from "../api";
 import {
@@ -435,6 +436,7 @@ export function ProfileCareer({
         <span className="profile-tag">Coming soon</span>
       </section>
 
+      <WorkPreferences />
       <SavedAnswers />
       <DefaultAnswers />
     </>

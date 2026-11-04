@@ -543,9 +543,121 @@ async function fillHeardAbout(field, link, state = {}) {
   return done('check', `No "Other" option, so chose "${chosen.text}"${box ? ` and typed ${link} below` : ''}. Check it.`, { element: chosenElement, also });
 }
 
+// ─── Work type and relocation ─────────────────────────────────────────
+// The profile lists the types of work accepted ("remote,hybrid"). Relocation
+// is answered per country (profile.relocation: { Poland: 'Yes', '': 'No' }),
+// and needs no answer for the country the person already lives in.
+
+const WORK_KINDS = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
+const KIND_OF_TEXT = [['hybrid', /\bhybrid\b/i], ['onsite', /on-?site|in[- ]office|in the office|office[- ]based|in[- ]person/i], ['remote', /\bremote\b/i]];
+const kindOfText = (text) => KIND_OF_TEXT.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
+const FULLY_ONSITE = /fully on-?site|on-?site full|full[- ]time (in|at|from) (the )?office|5 days|five days|every day|daily/i;
+const YES_NO_QUESTION = /^\s*(are|do|does|would|will|can|could|is|have|has|did|were|was|should)\b/i;
+
+function accepted(profile) {
+  return String(profile.workArrangements ?? '').split(',').map((kind) => kind.trim()).filter((kind) => WORK_KINDS[kind]);
+}
+const kindsText = (kinds) => kinds.map((kind) => WORK_KINDS[kind]).join(kinds.length > 2 ? ', ' : ' or ').replace(/, ([^,]+)$/, ', or $1');
+
+/** The relocation answer for a country: its own, else the general one only for questions naming no country. */
+function relocationFor(profile, country) {
+  const answers = profile.relocation ?? {};
+  if (!country) return answers[''] ?? '';
+  return Object.entries(answers).find(([key]) => key.toLowerCase() === country.toLowerCase())?.[1] ?? '';
+}
+
+/**
+ * What to answer for a work-type or relocation question: { value, list,
+ * reason } or { value: '', why: 'types' | 'relocation', country }.
+ */
+function workDecision(field, profile) {
+  const kinds = accepted(profile);
+  const question = window.CVAutofillFields.labelOf(field.element);
+  const country = field.country ?? null;
+  if (field.key === 'willingToRelocate') {
+    const home = String(profile.country ?? '').trim().toLowerCase();
+    const livesThere = Boolean(country && home && home === country.toLowerCase());
+    const relocate = livesThere ? 'Yes' : relocationFor(profile, country);
+    if (field.office) {
+      if (!kinds.length) return { value: '', why: 'types', country };
+      const officeOk = FULLY_ONSITE.test(question) ? kinds.includes('onsite') : kinds.includes('hybrid') || kinds.includes('onsite');
+      if (!officeOk) return { value: 'No', reason: `You accept ${kindsText(kinds).toLowerCase()} work, not this office schedule, so "No".` };
+      if (!relocate) return { value: '', why: 'relocation', country };
+      return { value: relocate, reason: livesThere ? `You live in ${country} and accept office work.` : `You accept office work, and your relocation answer${country ? ` for ${country}` : ''} is "${relocate}".` };
+    }
+    if (!relocate) return { value: '', why: 'relocation', country };
+    return { value: relocate, reason: livesThere ? `You live in ${country}.` : country ? `Your answer for ${country}.` : 'Your relocation answer.' };
+  }
+  if (!kinds.length) return { value: '', why: 'types' };
+  const asks = FULLY_ONSITE.test(question) ? 'onsite' : /hybrid|office|on-?site|commut|in[- ]person|days? (a|per) week/i.test(question) ? 'office' : /remote/i.test(question) ? 'remote' : null;
+  const yes = asks === 'onsite' ? kinds.includes('onsite') : asks === 'office' ? kinds.includes('hybrid') || kinds.includes('onsite') : asks === 'remote' ? kinds.includes('remote') : true;
+  return { value: yes ? 'Yes' : 'No', list: kindsText(kinds), kinds, reason: `You accept ${kindsText(kinds).toLowerCase()} work.` };
+}
+
+/** Option texts and how to choose one, for a select, radio group or dropdown. */
+async function optionsOf(element, kind) {
+  if (kind === 'select') {
+    const options = [...element.options].filter((option) => option.value !== '' && !option.disabled);
+    return { texts: options.map((option) => option.text.trim()), choose: async (i) => { element.focus({ preventScroll: true }); setValue(element, options[i].value); element.blur(); return { ok: true }; } };
+  }
+  if (kind === 'radio') {
+    const radios = radiosOf(element);
+    return { texts: radios.map(radioText), choose: async (i) => { if (!radios[i].checked) radios[i].click(); return { ok: radios[i].checked, element: radios[i] }; } };
+  }
+  if (kind === 'combobox') {
+    element.focus({ preventScroll: true });
+    element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+    press(element);
+    const options = await settledOptions(element, 3000);
+    return { texts: options.map((option) => option.textContent.trim()), choose: async (i) => ({ ok: await pickOption(element, options[i]) }), close: () => element.blur() };
+  }
+  return null;
+}
+
+/** Fills one work-type or relocation question from the decision. Returns { filled, element, mark }. */
+async function fillWork(field, decision, state = {}) {
+  const { element, kind } = field;
+  const done = (status, reason, extra = {}) => ({ filled: status !== 'missing', mark: { status, reason }, ...extra });
+  if (kind === 'radio') {
+    if (state.workGroups?.has(element.name)) return { filled: false, skipped: true };
+    (state.workGroups ??= new Set()).add(element.name);
+  }
+  if (kind === 'checkbox') {
+    // A list of checkboxes, one per type of work: tick each type accepted.
+    const own = kindOfText(window.CVAutofillFields.labelOf(element.labels?.[0] ?? element));
+    if (own && decision.kinds) {
+      const want = decision.kinds.includes(own);
+      if (element.checked !== want) element.click();
+      return want ? done('ok', `You accept ${WORK_KINDS[own].toLowerCase()} work.`) : { filled: false, skipped: true };
+    }
+    if (element.checked !== (decision.value === 'Yes')) element.click();
+    return done('ok', decision.reason);
+  }
+  if (kind === 'text' || kind === 'textarea') {
+    const question = window.CVAutofillFields.labelOf(element);
+    fillText(element, field.key === 'workArrangement' && !YES_NO_QUESTION.test(question) && decision.list ? decision.list : decision.value);
+    return done('ok', decision.reason);
+  }
+  const list = await optionsOf(element, kind);
+  if (!list) return { filled: false };
+  // Options naming types of work ("Remote", "Hybrid", "On-site"): the first one accepted, in the order you ranked them.
+  const kinds = list.texts.map(kindOfText);
+  let index = -1;
+  if (field.key === 'workArrangement' && decision.kinds && kinds.filter(Boolean).length >= 2) {
+    for (const wanted of decision.kinds) { index = kinds.indexOf(wanted); if (index >= 0) break; }
+  } else {
+    const wanted = decision.value.toLowerCase();
+    index = list.texts.findIndex((text) => new RegExp(`^\\s*${wanted}\\b`, 'i').test(text));
+  }
+  if (index < 0) { list.close?.(); return done('missing', `None of the options fits your answer "${decision.list ?? decision.value}". Choose one yourself.`); }
+  const chosen = await list.choose(index);
+  return chosen.ok ? done('ok', decision.reason, { element: chosen.element }) : done('missing', 'Could not pick the option. Choose it yourself.');
+}
+
 /** The value for one field from the profile the panel sent. */
 function valueFor(field, profile) {
   if (field.key === 'resume') return profile.resumeDataUrl;
+  if (field.key === 'workArrangement' || field.key === 'willingToRelocate') return workDecision(field, profile).value;
   if (ELIGIBILITY.has(field.key)) return eligibilityValue(field, profile);
   // Address pickers search by place: "Toronto, Canada" finds a suggestion where
   // a full street address often does not.
@@ -592,6 +704,15 @@ async function fillOne(field, profile, state = {}) {
   const value = valueFor(field, profile);
   if (!value || (field.key === 'resume' && state.uploaded)) return { filled: false, skipped: true };
   const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
+  if (field.key === 'workArrangement' || field.key === 'willingToRelocate') {
+    try {
+      const result = await fillWork(field, workDecision(field, profile), state);
+      if (result.skipped) return result;
+      return { filled: result.filled, mark: result.mark ? { element: result.element ?? field.element, ...result.mark } : null };
+    } catch (err) {
+      return { filled: false, failure: `${label}: ${err.message}`, mark: { element: field.element, status: 'missing', reason: `Not filled: ${err.message}` } };
+    }
+  }
   if (field.key === 'heardAbout') {
     try {
       const result = await fillHeardAbout(field, value, state);
@@ -753,4 +874,4 @@ function diversityChoiceFor(key, optionText) {
   return (DIVERSITY_VOCABULARY[key] ?? []).find((choice) => diversityOptionMatches(key, choice, optionText)) ?? null;
 }
 
-window.CVAutofillFiller = { controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+window.CVAutofillFiller = { workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };

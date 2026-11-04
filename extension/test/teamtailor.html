@@ -149,18 +149,20 @@ addEventListener('DOMContentLoaded', async () => {
   // Questions no profile field covers, as the panel sends them for saved answers.
   const questions = window.CVAutofillFields.detectQuestions(found);
   const asked = questions.map(q => `${q.question}|${q.kind}|${(q.options ?? []).join('/')}`);
-  expect(JSON.stringify(asked) === JSON.stringify(['Fintech Experience|textarea|', 'How did you hear about us?|select|LinkedIn/Referral', 'Are you open to relocation?|radio|Yes/No']),
+  // "How did you hear" stays a question (saved answers fill it when its setting is off); relocation is a profile question.
+  expect(JSON.stringify(asked) === JSON.stringify(['Fintech Experience|textarea|', 'How did you hear about us?|select|LinkedIn/Referral']),
     `finds the company's own questions with their options, not consent or profile fields (got ${JSON.stringify(asked)})`);
-  const answer = { 'How did you hear about us?': 'Referral', 'Are you open to relocation?': 'No' };
+  expect(window.CVAutofillFields.detectFields().found.some((field) => field.key === 'willingToRelocate' && field.element.name === 'relocate'), 'relocation is answered from your relocation answers, not saved answers');
+  const answer = { 'How did you hear about us?': 'Referral' };
   for (const q of questions) {
     if (answer[q.question]) await window.CVAutofillFiller.fillAnswer(document.querySelector(`[data-adcv-field="${q.id}"]`), q.kind, answer[q.question]);
   }
-  expect($('heard').value === 'ref' && document.querySelector('input[name="relocate"][value="n"]').checked, 'fills saved answers into text, dropdown and yes/no questions');
+  expect($('heard').value === 'ref', 'fills saved answers into dropdown questions');
   $('q5').value = 'Built payment retries at Acme.';
   const typed = await window.CVAutofillFiller.fillAnswer($('q5'), 'textarea', 'Something else');
   expect(!typed.filled && $('q5').value === 'Built payment retries at Acme.', 'never overwrites an answer the person typed');
   const values = window.CVAutofillFields.detectQuestions(found).filter(q => q.value).map(q => `${q.question}=${q.value}`);
-  expect(JSON.stringify(values) === JSON.stringify(['Fintech Experience=Built payment retries at Acme.', 'How did you hear about us?=Referral', 'Are you open to relocation?=No']),
+  expect(JSON.stringify(values) === JSON.stringify(['Fintech Experience=Built payment retries at Acme.', 'How did you hear about us?=Referral']),
     `reads typed answers back for "Save answers" (got ${JSON.stringify(values)})`);
 
   const out = document.createElement('pre');

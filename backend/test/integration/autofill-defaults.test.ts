@@ -145,3 +145,27 @@ test('the extension forgets a saved answer by its question', async () => {
   const left = (await (await call('/answers', { user: owner.user.id })).json()) as { question: string }[];
   assert.ok(!left.some((row) => row.question === 'Are you open to relocation?'));
 });
+
+test('relocation answers are kept per country and work types on the profile', async () => {
+  await call('/extension/defaults', {
+    method: 'POST',
+    token: ownerToken,
+    body: { defaults: [{ kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }] },
+  });
+  const rows = (await (await call('/extension/defaults', { token: ownerToken })).json()) as Row[];
+  assert.ok(
+    rows.some((row) => row.kind === 'willingToRelocate' && row.scope === 'Poland' && row.value === 'Yes'),
+  );
+  const saved = await call('/extension/profile', {
+    method: 'PATCH',
+    token: ownerToken,
+    body: { workArrangements: 'Hybrid, Remote' },
+  });
+  assert.equal(((await saved.json()) as { workArrangements: string }).workArrangements, 'remote,hybrid');
+  const app = await call('/profile', {
+    method: 'PUT',
+    user: owner.user.id,
+    body: { workArrangements: 'onsite' },
+  });
+  assert.equal(((await app.json()) as { workArrangements: string }).workArrangements, 'onsite');
+});

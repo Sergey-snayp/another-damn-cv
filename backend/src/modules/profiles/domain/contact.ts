@@ -22,6 +22,8 @@ export interface ContactFields {
   requiresSponsorship: string;
   salaryExpectation: string;
   noticePeriod: string;
+  /** Types of work accepted: "remote,hybrid,onsite" or any of them, in that order. */
+  workArrangements: string;
 }
 
 export const EMPTY_CONTACT: ContactFields = {
@@ -48,6 +50,7 @@ export const EMPTY_CONTACT: ContactFields = {
   requiresSponsorship: '',
   salaryExpectation: '',
   noticePeriod: '',
+  workArrangements: '',
 };
 
 export const CONTACT_KEYS = Object.keys(EMPTY_CONTACT) as (keyof ContactFields)[];
@@ -73,4 +76,16 @@ export interface CareerFields {
   currentCompany: string;
   currentTitle: string;
   yearsExperience: string;
+}
+
+export const WORK_ARRANGEMENTS = ['remote', 'hybrid', 'onsite'] as const;
+
+/** "On-site, Remote" → "remote,onsite": known types only, in a fixed order. */
+export function normalizeWorkArrangements(text: string): string {
+  const words = String(text)
+    .toLowerCase()
+    .split(/[,;/|]+/)
+    .map((word) => word.replace(/[^a-z]/g, ''))
+    .map((word) => (word === 'office' || word === 'inoffice' || word === 'onsite' ? 'onsite' : word));
+  return WORK_ARRANGEMENTS.filter((kind) => words.includes(kind)).join(',');
 }

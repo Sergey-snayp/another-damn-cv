@@ -45,3 +45,15 @@ test('the extension may set fillable profile values but not name or email', () =
   assert.ok(!extensionProfileSchema.safeParse({}).success);
   assert.ok(!extensionProfileSchema.safeParse({ phone: '   ' }).success);
 });
+
+test('types of work are stored as known kinds in a fixed order', async () => {
+  const { normalizeWorkArrangements } = await import('../src/modules/profiles/domain/contact');
+  assert.equal(normalizeWorkArrangements('On-site, Remote'), 'remote,onsite');
+  assert.equal(normalizeWorkArrangements('hybrid,hybrid,office'), 'hybrid,onsite');
+  assert.equal(normalizeWorkArrangements('anywhere'), '');
+  assert.ok(extensionProfileSchema.safeParse({ workArrangements: 'remote,hybrid' }).success);
+  assert.ok(
+    saveDefaultsSchema.safeParse({ defaults: [{ kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }] })
+      .success,
+  );
+});

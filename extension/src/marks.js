@@ -357,6 +357,24 @@
         }))),
       ]));
     }
+    if (spec.multi) {
+      // Several at once (types of work): toggle, then Save.
+      const picked = new Set(spec.multi.selected);
+      const chips = spec.multi.options.map((option) => {
+        const chip = make('button', { className: `choice${picked.has(option.value) ? ' on' : ''}`, textContent: option.label, disabled: busy, type: 'button' });
+        chip.setAttribute('aria-pressed', String(picked.has(option.value)));
+        chip.onclick = trusted(() => {
+          if (picked.has(option.value)) picked.delete(option.value); else picked.add(option.value);
+          chip.classList.toggle('on', picked.has(option.value));
+          chip.setAttribute('aria-pressed', String(picked.has(option.value)));
+        });
+        return chip;
+      });
+      parts.push(make('div', { className: 'section' }, [
+        make('p', { className: 'label', textContent: spec.multi.label }),
+        make('div', { className: 'choices' }, [...chips, make('button', { className: 'act primary', textContent: 'Save', disabled: busy, onclick: trusted(() => act(() => spec.multi.save([...picked]))) })]),
+      ]));
+    }
     if (spec.text) {
       const input = make(spec.text.multiline ? 'textarea' : 'input', { value: spec.text.value ?? '', placeholder: 'Type your answer', disabled: busy });
       const save = () => act(() => spec.choose(input.value));

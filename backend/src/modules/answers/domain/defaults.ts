@@ -3,10 +3,16 @@
  *
  * Eligibility answers belong to one country: "Poland: Yes" for sponsorship is
  * never used for a question about Germany. "Worked here before" is one answer
- * for every company (empty scope). An empty scope is the general answer.
+ * for every company (empty scope). "Willing to relocate" is per country, like
+ * eligibility. An empty scope is the general answer.
  */
 
-export const DEFAULT_KINDS = ['workAuthorization', 'requiresSponsorship', 'workedHereBefore'] as const;
+export const DEFAULT_KINDS = [
+  'workAuthorization',
+  'requiresSponsorship',
+  'workedHereBefore',
+  'willingToRelocate',
+] as const;
 export type DefaultKind = (typeof DEFAULT_KINDS)[number];
 
 export interface AutofillDefault {

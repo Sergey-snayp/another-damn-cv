@@ -69,6 +69,11 @@ const CATEGORIES = [
   // --- application ----------------------------------------------------------
   // "How did you hear about this job?": matched by HEARD_ABOUT below, not by phrases.
   { key: 'heardAbout', group: 'Application', match: [] },
+
+  // --- work preferences -----------------------------------------------------
+  // Matched by WORK_SETUP and RELOCATE below, not by phrases.
+  { key: 'workArrangement', group: 'Work preferences', match: [] },
+  { key: 'willingToRelocate', group: 'Work preferences', match: [] },
 ];
 
 /** Never filled, whatever the settings. */
@@ -145,6 +150,29 @@ const HEARD_ABOUT = [
   /\bhear(d)? about (us|this|the|our)\b/,
   /\b(source of (your |this )?application|application source|referral source|lead source|recruitment source|candidate source)\b/,
 ];
+
+/**
+ * Where the work happens: "work from the office 3 days per week", "Are you
+ * open to a hybrid setup?", "fully remote", "preferred work arrangement".
+ * Relocation is its own question, which may also ask about the office
+ * ("…willing to relocate and commute to this position's office?").
+ */
+const WORK_SETUP = /\b(hybrid|on-?site|in[- ]office|in the office|from the office|at the office|to the office|from our office|in our office|days? (a|per) week|commut\w*|in[- ]person|work(ing)? (model|arrangement|setup|set-up|location preference)|fully remote|remote(ly)? (work|role|position|first|only)|work remotely|working remotely|open to remote)\b/;
+const RELOCATE = /\brelocat\w*/;
+
+/**
+ * The job's country, from the page around the form: a location line
+ * ("Warsaw, Poland") or a short page description. Null when none names one.
+ */
+function jobCountry() {
+  const places = [...document.querySelectorAll('[class*="location" i]:not(input):not(select):not(textarea), [data-testid*="location" i], [itemprop="jobLocation"], [itemprop="addressCountry"]')]
+    .filter((node) => !node.closest('form') && node.textContent.length < 120)
+    .map((node) => node.textContent);
+  const description = document.querySelector('meta[property="og:description"]')?.content ?? '';
+  if (description.length < 80) places.push(description);
+  for (const text of places) { const country = countryIn(text); if (country) return country; }
+  return null;
+}
 
 /** "Have you ever worked at Box…", "Were you previously employed by us?" */
 const WORKED_BEFORE = [
@@ -244,6 +272,11 @@ function categorise(signals) {
   if (HEARD_ABOUT.some((pattern) => pattern.test(signals))) {
     return { key: 'heardAbout', sensitive: false };
   }
+  // Office and relocation questions; eligibility ("…sponsorship to work on-site in Poland") stays eligibility.
+  if (!/sponsor|authori[sz]|legally|right to work|visa/.test(signals)) {
+    if (RELOCATE.test(signals)) return { key: 'willingToRelocate', sensitive: false, office: WORK_SETUP.test(signals) };
+    if (WORK_SETUP.test(signals)) return { key: 'workArrangement', sensitive: false };
+  }
   // Before the general rules: "employed" would otherwise read as the current employer.
   if (WORKED_BEFORE.some((pattern) => pattern.test(signals))) {
     return { key: 'workedHereBefore', sensitive: false };
@@ -331,7 +364,7 @@ function detectFields() {
 
     // A site rule is evidence; the heuristic is a guess. Prefer evidence.
     const fromSite = window.CVAutofillSites?.siteKeyFor(element) ?? null;
-    const { key: guessed, sensitive, compound } = categorise(signals);
+    const { key: guessed, sensitive, compound, office } = categorise(signals);
     const key = fromSite ?? guessed;
 
     if (sensitive) {
@@ -343,7 +376,9 @@ function detectFields() {
     }
 
     if (key) {
-      const country = key === 'requiresSponsorship' || key === 'workAuthorization' ? countryIn(rawLabel(element) || signals) : null;
+      // Relocation is about the job's country when the question names none.
+      const country = key === 'requiresSponsorship' || key === 'workAuthorization' ? countryIn(rawLabel(element) || signals)
+        : key === 'willingToRelocate' ? countryIn(rawLabel(element) || signals) ?? jobCountry() : null;
       found.push({
         key,
         element,
@@ -352,6 +387,7 @@ function detectFields() {
         source: fromSite ? 'site' : 'heuristic',
         ...(compound && !fromSite && { compound: true }),
         ...(country && { country }),
+        ...(office && !fromSite && { office: true }),
       });
     }
   }
@@ -596,6 +632,7 @@ window.CVAutofillFields = {
   isCombobox,
   currentAnswer,
   countryIn,
+  jobCountry,
   isEmpty,
   controlFor,
   comboboxValue,

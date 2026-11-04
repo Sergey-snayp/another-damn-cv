@@ -1,4 +1,10 @@
-import { CONTACT_KEYS, type ContactFields, type StoredContactKey, type StoredProfile } from './contact';
+import {
+  CONTACT_KEYS,
+  normalizeWorkArrangements,
+  type ContactFields,
+  type StoredContactKey,
+  type StoredProfile,
+} from './contact';
 
 const COMPUTED = new Set<string>(['fullName', 'currentCompany', 'currentTitle', 'yearsExperience']);
 
@@ -16,7 +22,9 @@ export function storedContactChanges(
   const data: Partial<Record<StoredContactKey, string>> = {};
   for (const key of CONTACT_KEYS) {
     if (COMPUTED.has(key)) continue;
-    if (incoming[key] !== undefined) data[key as StoredContactKey] = String(incoming[key]);
+    if (incoming[key] === undefined) continue;
+    data[key as StoredContactKey] =
+      key === 'workArrangements' ? normalizeWorkArrangements(String(incoming[key])) : String(incoming[key]);
   }
   if (incoming.fullName && !incoming.firstName && !incoming.lastName) {
     const [firstName = '', ...rest] = incoming.fullName.split(' ');
