@@ -110,6 +110,7 @@ addEventListener('load', () => setTimeout(async () => {
     await fill({ firstName: 'Ada', country: 'Canada', workArrangements: '', relocation: {} });
     expect(M.statusOf($('onsite')) === 'missing' && /types of work/.test(M.reasonOf($('onsite')) ?? ''), `no types of work → red, asking for them (got "${M.reasonOf($('onsite'))}")`);
     await M.open($('onsite'));
+    expect(!/Save(?!d)/.test(M.popoverState().text), `types of work save on click, with no Save button (popover: "${M.popoverState().text}")`);
     const types = M.popoverState().spec;
     const saved = await types.multi.save(['onsite', 'remote']);
     expect(saved.ok && JSON.stringify(sent.at(-1)) === JSON.stringify({ type: 'default-save', target: { type: 'profile', key: 'workArrangements' }, value: 'remote,onsite' }), `saves the types to the profile in order (sent ${JSON.stringify(sent.at(-1))})`);
