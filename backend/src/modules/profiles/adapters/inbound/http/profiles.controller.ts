@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   Inject,
+  Param,
   Patch,
   Post,
   Put,
@@ -23,6 +24,8 @@ import {
 } from '../../../../auth/http';
 import type { ContactFields, ProfileApi } from '../../../contracts';
 import { PROFILE_API } from '../../../profiles.tokens';
+import { GetExtensionCareer } from '../../../application/use-cases/get-extension-career';
+import { ResumeErrorFilter } from '../../../../resumes/http';
 
 @Controller('profile')
 @UseFilters(AuthenticationErrorFilter)
@@ -91,8 +94,20 @@ export const extensionProfileSchema = z
 
 @Controller('extension/profile')
 @UseGuards(SyncTokenGuard)
+@UseFilters(ResumeErrorFilter)
 export class ExtensionProfileController {
-  constructor(@Inject(PROFILE_API) private readonly profiles: ProfileApi) {}
+  constructor(
+    @Inject(PROFILE_API) private readonly profiles: ProfileApi,
+    @Inject(GetExtensionCareer) private readonly career: GetExtensionCareer,
+  ) {}
+  /** Experience, education, skills and summary from the Profile, and what Autofill takes from them. */
+  @Get('career') fromProfile(@CurrentUser() userId: string) {
+    return this.career.fromProfile(userId);
+  }
+  /** The same from one of the user's CVs. */
+  @Get('career/resume/:id') fromResume(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.career.fromResume(userId, id);
+  }
   @Patch()
   save(
     @CurrentUser() userId: string,

@@ -116,3 +116,32 @@ export function careerFields(roles: CareerExperience[], year: number): CareerFie
     yearsExperience: Number.isFinite(start) && start > 1950 ? String(Math.max(0, year - start)) : '',
   };
 }
+
+/** Career sections as the extension shows them: every section present, empty when not imported. */
+export function fullSections(data: CareerData): CareerSections {
+  return {
+    summary: data.summary?.value ?? '',
+    experiences: data.experiences?.value ?? [],
+    educations: data.educations?.value ?? [],
+    skills: data.skills?.value ?? [],
+  };
+}
+
+export interface AutofillCareerFields extends CareerFields {
+  school: string;
+  degree: string;
+  fieldOfStudy: string;
+  graduationYear: string;
+}
+
+/** Current role and years from the experience, and the latest education, for Autofill. */
+export function autofillCareerFields(sections: CareerSections, year: number): AutofillCareerFields {
+  const latest = [...sections.educations].sort((a, b) => (b.to || b.from).localeCompare(a.to || a.from))[0];
+  return {
+    ...careerFields(sections.experiences, year),
+    school: latest?.institution ?? '',
+    degree: latest?.degree ?? '',
+    fieldOfStudy: latest?.field ?? '',
+    graduationYear: latest?.to?.slice(0, 4) ?? '',
+  };
+}

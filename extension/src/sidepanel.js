@@ -4,18 +4,12 @@ import { icon, escapeHtml as esc } from './icons.js';
 import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { draftAnswer, matchAnswers, saveAnswers } from './answers.js';
+import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
 import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear', workArrangement: 'Office, hybrid or remote', willingToRelocate: 'Relocation',
 };
-const PROFILE_GROUPS = [
-  { title: 'Personal', keys: ['fullName', 'firstName', 'lastName', 'preferredName', 'email', 'phone'] },
-  { title: 'Location', keys: ['location', 'city', 'state', 'country', 'postalCode'] },
-  { title: 'Links', keys: ['linkedin', 'github', 'portfolio', 'website', 'telegram'] },
-  { title: 'Eligibility', keys: ['workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod'] },
-];
-const DERIVED_KEYS = ['currentCompany', 'currentTitle', 'yearsExperience'];
 // Settings → "Fields to fill": each group can be switched off. All start on.
 const FILL_GROUPS = [
   { id: 'contact', label: 'Contact', keys: ['firstName', 'lastName', 'middleName', 'preferredName', 'fullName', 'email', 'phone', 'pronouns'] },
@@ -138,7 +132,7 @@ addEventListener('error', event => { if (isStaleError(event.error ?? event.messa
 addEventListener('unhandledrejection', event => { if (isStaleError(event.reason)) { event.preventDefault(); showStale(); } });
 // Clicks are the main way a cut-off panel calls Chrome; catch them before any handler runs.
 document.addEventListener('click', event => { if (!alive() && !event.target.closest('#close-panel')) { event.stopImmediatePropagation(); event.preventDefault(); showStale(); } }, true);
-let profile = {}, scan = null, currentTab = null, sending = false, filling = false, localDirty = false, refreshId = 0;
+let profile = {}, scan = null, currentTab = null, sending = false, filling = false, refreshId = 0;
 let copyValues = [];
 let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, pickerOpen = { autofill: false, resume: false }, pageDisconnected = false;
 let match = null, matchUrl = null, matchKeywords = null, matchRun = 0, improving = false;
@@ -216,7 +210,7 @@ async function questionsFromFrames(tab = currentTab) {
   return (await askForms({ type: 'questions' }, tab)).flatMap(({ frameId, reply }) => (reply.questions ?? []).map(question => ({ ...question, id: frameKey(frameId, question.id) })));
 }
 
-function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; if (key === 'heardAbout') return HEARD_ABOUT_ANSWER; if (key === 'workArrangement') return workTypesText(); if (key === 'willingToRelocate') return relocationText(); return profile[key] ?? ''; }
+function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; if (key === 'heardAbout') return HEARD_ABOUT_ANSWER; if (CAREER_KEYS.includes(key) && careerAutofill()[key]) return careerAutofill()[key]; if (key === 'workArrangement') return workTypesText(); if (key === 'willingToRelocate') return relocationText(); return profile[key] ?? ''; }
 const WORK_TYPE_NAMES = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
 function workTypesText() { return String(profile.workArrangements ?? '').split(',').map(kind => WORK_TYPE_NAMES[kind]).filter(Boolean).join(', '); }
 function relocationText() { return Object.entries(relocationMap(autofillDefaults)).map(([country, answer]) => `${country || 'Anywhere'}: ${answer}`).join(', '); }
@@ -246,14 +240,14 @@ function renderAutofill() {
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
   host.innerHTML = `${pageCard()}${matchCard()}
-    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your profile details</button>' : ''}</div>
+    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
     ${eligibilityCard()}
     ${questionsCard()}
     ${answersCard()}
     ${resumeCard()}
     <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
-  $('add-details')?.addEventListener('click', () => { selectTab('profile'); $('local-details').open = true; });
+  $('add-details')?.addEventListener('click', () => void openApp('/profile'));
 }
 async function runFill() {
   if (filling) return;
@@ -276,6 +270,8 @@ async function runFill() {
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
     allowed.heardAbout = groupOn('heardAbout') ? HEARD_ABOUT_ANSWER : '';
+    // Current role, years and education from the Profile or the selected CV ("Autofill uses" in the Profile tab).
+    for (const key of CAREER_KEYS) { const value = careerAutofill()[key]; if (value) allowed[key] = groupOn(key) ? value : ''; }
     allowed.relocation = groupOn('willingToRelocate') ? relocationMap(autofillDefaults) : {};
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     // Groups switched off, by field, so a still-empty field can say which setting left it empty.
@@ -509,19 +505,93 @@ function sendJob() {
   })();
 }
 
-// Profile cards copy values; they never submit anything to the website.
+// ─── Profile tab ─────────────────────────────────────────────────────────
+// What the app's Profile holds, from the server: contact, experience,
+// education, skills, summary and preferences. Every value copies on click;
+// nothing is sent to the website. Edits happen in the app (Edit Profile).
+//
+// "Autofill uses: Selected resume | Profile" decides where Autofill takes the
+// current company and title, years of experience and education from.
+const careerAsked = new Set();
+let career = { profile: null, resumes: {} }, careerProblem = '', careerLoading = false, careerSource = null;
+const WORK_TYPE_LABELS = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
+const hasCareer = view => Boolean(view && (view.experiences?.length || view.educations?.length || view.skills?.length || view.summary));
+/** Where Autofill takes experience and education from: the switch, else the Profile when it has experience. */
+function activeSource() {
+  if (careerSource === 'profile' || careerSource === 'resume') return careerSource;
+  return career.profile?.experiences?.length || !resumes.chosen ? 'profile' : 'resume';
+}
+function activeCareer() {
+  return activeSource() === 'resume' ? career.resumes[resumes.chosen?.id] ?? null : career.profile;
+}
+/** Current company, title, years and education for Autofill, from the active source. */
+function careerAutofill() { return activeCareer()?.fields ?? {}; }
+
+async function loadCareer() {
+  careerLoading = true; careerProblem = ''; renderProfileOverview();
+  try {
+    const [profileView, resumeView] = await Promise.all([fetchProfileCareer(), resumes.chosen ? fetchResumeCareer(resumes.chosen.id) : Promise.resolve(null)]);
+    career = { profile: profileView, resumes: { ...career.resumes, ...(resumeView && { [resumes.chosen.id]: resumeView }) } };
+  } catch (error) { careerProblem = error instanceof NotSignedInError ? 'Sign in to see your Profile from the app.' : error.message; }
+  finally { careerLoading = false; renderProfileOverview(); renderAutofill(); }
+}
+
+const formatMonth = value => {
+  const match = String(value ?? '').match(/^(\d{4})(?:-(\d{2}))?/);
+  if (!match) return String(value ?? '');
+  return match[2] ? new Date(Number(match[1]), Number(match[2]) - 1).toLocaleString('en', { month: 'short', year: 'numeric' }) : match[1];
+};
+const period = item => [formatMonth(item.from), item.current ? 'Present' : formatMonth(item.to)].filter(Boolean).join(' – ');
+
 function renderProfileOverview() {
   copyValues = [];
-  const copy = (value, label, heading = false) => {
+  const copy = (value, label, kind = '') => {
     if (!value) return ''; const index = copyValues.push(String(value)) - 1;
-    return `<button class="copy-value${heading ? ' is-heading' : ''}" data-copy="${index}" aria-label="Copy ${esc(label)}" title="Copy ${esc(label)}">${esc(value)}</button>`;
+    return `<button class="copy-value${kind ? ` ${kind}` : ''}" data-copy="${index}" aria-label="Copy ${esc(label)}" title="Copy ${esc(label)}">${esc(value)}</button>`;
   };
+  const editButton = what => `<button class="icon-button edit-app-profile" aria-label="Edit ${esc(what)} in the app" title="Edit in the app">${icon('edit', 18)}</button>`;
+  const heading = (title, extra = '') => `<div class="profile-card-heading"><h2>${esc(title)}</h2><span class="profile-card-actions">${extra}${editButton(title.toLowerCase())}</span></div>`;
+  const view = activeCareer();
+  const source = activeSource();
+  const empty = what => source === 'profile'
+    ? `<p class="muted">No ${what} in your Profile yet. <button class="link-button edit-app-profile">Import it from a CV in the app</button>.</p>`
+    : `<p class="muted">The selected CV has no ${what}.</p>`;
+
+  // Contact
   const name = profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(' ');
-  const initials = (name || '?').split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
-  let html = `<div class="card"><div class="profile-card-heading"><h2>${name ? esc(name) : 'Your profile'}</h2><button class="icon-button edit-app-profile" aria-label="Edit contact information in app">${icon('edit')}</button></div><div class="profile-contact"><div class="profile-initials">${esc(initials)}</div><div>${copy(name, 'name')}${copy(profile.location || profile.city, 'location', true)}${copy(profile.email, 'email')}${copy(profile.phone, 'phone')}${!name && !profile.email ? '<p>Sync your profile or add local details below.</p>' : ''}</div></div></div>`;
-  if (DERIVED_KEYS.some(key => profile[key])) html += `<div class="card"><div class="profile-card-heading"><h2>${icon('briefcase')} Experience</h2><button class="icon-button edit-app-profile" aria-label="Edit experience in app">${icon('edit')}</button></div>${copy(profile.currentTitle, 'current title', true)}${copy(profile.currentCompany, 'current company')}${copy(profile.yearsExperience ? `${profile.yearsExperience} years of experience` : '', 'years of experience')}<p>Current role from your saved app profile.</p></div>`;
+  const initials = (name || '?').split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+  const place = profile.location || [profile.city, profile.state, profile.country].filter(Boolean).join(', ');
   const links = ['linkedin', 'github', 'portfolio', 'website', 'telegram'].filter(key => profile[key]);
-  if (links.length) html += `<div class="card"><h2>${icon('link')} Links</h2>${links.map(key => `<small class="muted">${FIELD_LABELS[key]}</small>${copy(profile[key], FIELD_LABELS[key])}`).join('')}</div>`;
+  let html = `<div class="card">${heading(name || 'Your profile', `<button class="icon-button" id="refresh-profile" aria-label="Refresh from the app" title="Refresh from the app"${careerLoading ? ' disabled' : ''}>${icon('refresh', 18)}</button>`)}
+    <div class="profile-contact"><div class="profile-initials">${esc(initials)}</div><div>${copy(place, 'location', 'is-heading')}${copy(profile.email, 'email')}${copy(profile.phone, 'phone')}${!name && !profile.email ? '<p>Sign in under Account &amp; sync to see your profile.</p>' : ''}</div></div>
+    ${links.length ? `<div class="profile-links">${links.map(key => `<div><small class="muted">${FIELD_LABELS[key]}</small>${copy(profile[key], FIELD_LABELS[key])}</div>`).join('')}</div>` : ''}</div>`;
+  if (careerProblem && !view) html += `<div class="notice">${icon('flag')}<div><p>${esc(careerProblem)}</p></div></div>`;
+
+  // Experience, with the switch for where Autofill takes it from
+  const toggle = `<div class="source-switch" role="group" aria-label="Autofill uses"><span class="muted">Autofill uses</span><span class="segmented">${[['resume', 'Selected resume'], ['profile', 'Profile']].map(([value, label]) => `<button class="${source === value ? 'is-active' : ''}" data-career-source="${value}" aria-pressed="${source === value}"${value === 'resume' && !resumes.chosen ? ' disabled title="Choose a CV in the Resume tab"' : ''}>${label}</button>`).join('')}</span></div>`;
+  const experiences = view?.experiences ?? [];
+  html += `<div class="card">${heading('Experience')}${toggle}${source === 'resume' && resumes.chosen ? `<p class="muted small">From ${esc(resumes.chosen.name)}</p>` : ''}${experiences.length ? experiences.map((role, roleIndex) => {
+    const bullets = role.bullets ?? [];
+    const open = profileOpen.has(roleIndex);
+    return `<div class="profile-entry"><div class="profile-entry-icon">${icon('briefcase', 18)}</div><div class="profile-entry-body">${copy(role.title, 'title', 'is-heading')}${copy([role.company, role.client && `for ${role.client}`, role.location].filter(Boolean).join(' · '), 'company')}${copy(period(role), 'dates')}${role.description ? copy(role.description, 'description') : ''}${bullets.length ? `<ul class="profile-bullets">${(open ? bullets : bullets.slice(0, 3)).map(bullet => `<li>${copy(bullet, 'bullet')}</li>`).join('')}</ul>${bullets.length > 3 ? `<button class="link-button" data-toggle-role="${roleIndex}">${open ? 'Show less' : `Show all ${bullets.length}`}</button>` : ''}` : ''}</div></div>`;
+  }).join('') : careerLoading && !view ? '<p class="muted">Loading…</p>' : empty('experience')}</div>`;
+
+  // Education
+  const educations = view?.educations ?? [];
+  html += `<div class="card">${heading('Education')}${educations.length ? educations.map(entry => `<div class="profile-entry"><div class="profile-entry-icon">${icon('file', 18)}</div><div class="profile-entry-body">${copy(entry.institution, 'school', 'is-heading')}${copy([entry.degree, entry.field].filter(Boolean).join(', '), 'degree')}${copy(period(entry), 'years')}</div></div>`).join('') : empty('education')}</div>`;
+
+  // Skills
+  const skills = view?.skills ?? [];
+  html += `<div class="card">${heading('Skills')}${skills.length ? `<div class="skill-chips">${skills.map(skill => copy(skill, skill, 'chip')).join('')}</div>` : empty('skills')}</div>`;
+
+  // Summary
+  if (view?.summary) html += `<div class="card">${heading('Summary')}${copy(view.summary, 'summary')}</div>`;
+
+  // Preferences: types of work and default answers
+  const types = String(profile.workArrangements ?? '').split(',').map(kind => WORK_TYPE_LABELS[kind]).filter(Boolean);
+  const defaults = autofillDefaults.map(row => `${DEFAULT_LABELS[row.kind] ?? row.kind}${row.kind === 'workedHereBefore' ? '' : row.scope ? ` · ${row.scope}` : ''}: ${row.value}`);
+  html += `<div class="card">${heading('Preferences')}<small class="muted">Types of work</small>${types.length ? copy(types.join(', '), 'types of work') : '<p class="muted">Not set. Choose them in the app, or from a field\'s icon on a form.</p>'}${defaults.length ? `<small class="muted">Default answers</small>${defaults.map(text => copy(text, text)).join('')}` : ''}</div>`;
+
   $('profile-overview').innerHTML = html;
   $('profile-overview').querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(copyValues[Number(button.dataset.copy)]); status('copy-status', 'Copied.', 'success'); }
@@ -529,16 +599,19 @@ function renderProfileOverview() {
   }));
   $('profile-overview').querySelectorAll('.edit-app-profile').forEach(button => button.addEventListener('click', () => void openApp('/profile')));
 }
-function renderProfileForm() {
-  if (localDirty) return;
-  $('profile-form').innerHTML = PROFILE_GROUPS.map(group => `<p class="group">${group.title}</p>${group.keys.map(key => `<label class="field"><span>${FIELD_LABELS[key]}</span><input type="text" name="${key}" value="${esc(profile[key])}"></label>`).join('')}`).join('') + (DERIVED_KEYS.some(key => profile[key]) ? `<p class="group">Current role · from your profile</p>${DERIVED_KEYS.map(key => `<label class="field"><span>${FIELD_LABELS[key]}</span><input type="text" value="${esc(profile[key])}" disabled></label>`).join('')}<p class="hint">Update work experience in your app Profile to change these values.</p>` : '');
-}
-async function saveProfile() {
-  const next = { ...profile };
-  for (const input of $('profile-form').elements) if (input.name) next[input.name] = input.value.trim();
-  try { await chrome.storage.local.set({ profile: next }); profile = next; localDirty = false; renderProfileOverview(); renderProfileForm(); renderAutofill(); status('profile-status', 'Saved in this browser.', 'success'); }
-  catch { status('profile-status', 'Could not save. Your edits are still here.', 'error'); }
-}
+const profileOpen = new Set();
+$('profile-overview').addEventListener('click', async event => {
+  const roleToggle = event.target.closest('[data-toggle-role]');
+  if (roleToggle) { const index = Number(roleToggle.dataset.toggleRole); if (profileOpen.has(index)) profileOpen.delete(index); else profileOpen.add(index); renderProfileOverview(); return; }
+  if (event.target.closest('#refresh-profile')) { try { await pullProfile(); } catch { /* signed out: the career load says so */ } await loadDefaults(); await loadCareer(); return; }
+  const choice = event.target.closest('[data-career-source]');
+  if (choice && !choice.disabled) {
+    careerSource = choice.dataset.careerSource;
+    try { await chrome.storage.local.set({ careerSource }); } catch { /* kept for this panel only */ }
+    renderProfileOverview(); renderAutofill();
+    if (careerSource === 'resume' && resumes.chosen && !career.resumes[resumes.chosen.id]) void loadCareer();
+  }
+});
 
 // CVs come from the app's Documents. The Resume tab lists them; the Autofill
 // card switches between them. Autofill uploads the chosen one as a PDF.
@@ -697,10 +770,10 @@ async function renderAccount() {
 }
 async function doSignIn() {
   status('auth-status', 'Opening Google…');
-  try { await signIn(); await pullProfile(); await loadDefaults(); await refresh(); void loadResumes(); status('auth-status', 'Signed in and profile synced.', 'success'); }
+  try { await signIn(); await pullProfile(); await loadDefaults(); await refresh(); void loadResumes(); void loadCareer(); status('auth-status', 'Signed in and profile synced.', 'success'); }
   catch (error) { status('auth-status', /redirect_uri|mismatch|400/i.test(error.message) ? 'Check the redirect URI in Sign-in setup below.' : error.message, 'error'); }
 }
-async function doPull() { status('auth-status', 'Syncing…'); try { await pullProfile(); await loadDefaults(); await refresh(); void loadResumes(); status('auth-status', 'Profile up to date.', 'success'); } catch (error) { status('auth-status', error.message, 'error'); } }
+async function doPull() { status('auth-status', 'Syncing…'); try { await pullProfile(); await loadDefaults(); await refresh(); void loadResumes(); void loadCareer(); status('auth-status', 'Profile up to date.', 'success'); } catch (error) { status('auth-status', error.message, 'error'); } }
 async function doSignOut() { await signOut(); await renderAccount(); status('auth-status', 'Signed out. Your local details and PDF remain on this device.'); }
 async function renderSyncState() { const { sync } = await chrome.storage.local.get('sync'); $('sync-state').textContent = sync?.lastSyncedAt ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}` : 'Never synced'; }
 function selectTab(name) {
@@ -713,7 +786,7 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
@@ -725,10 +798,15 @@ async function refresh() {
     diversityAnswers = stored.diversityAnswers ?? {};
     continueSteps = stored.continueSteps === true;
     legacyEligibility = stored.eligibility ?? {};
+    careerSource = stored.careerSource ?? null;
+    const cache = await cachedCareer();
+    career = { profile: cache.profile ?? career.profile, resumes: { ...career.resumes, ...cache.resumes } };
+    // A newly chosen CV: fetch its sections once, for the switch and Autofill.
+    if (resumes.chosen && !career.resumes[resumes.chosen.id] && !careerLoading && !careerAsked.has(resumes.chosen.id)) { careerAsked.add(resumes.chosen.id); void loadCareer(); }
     useDefaults(stored.autofillDefaults);
     acknowledgeRequired = stored.acknowledgeRequired === true;
     await loadQuestions().catch(() => { formQuestions = []; });
-    renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
+    renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderResume();
     await Promise.all([renderSyncState(), renderAccount()]);
     void updateMatch();
   } catch { if (!alive()) showStale(); else status('auth-status', 'Could not refresh. Reload the extension to reconnect.', 'error'); }
@@ -739,12 +817,10 @@ for (const tab of document.querySelectorAll('.tab')) {
   tab.addEventListener('click', () => selectTab(tab.dataset.panel));
   tab.addEventListener('keydown', event => { const tabs = [...document.querySelectorAll('.tab')]; const i = tabs.indexOf(tab); const next = event.key === 'ArrowRight' ? tabs[(i + 1) % tabs.length] : event.key === 'ArrowLeft' ? tabs[(i + tabs.length - 1) % tabs.length] : event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : null; if (next) { event.preventDefault(); selectTab(next.dataset.panel); next.focus(); } });
 }
-$('profile-form').addEventListener('input', () => { localDirty = true; status('profile-status', 'Unsaved local changes.'); });
-$('profile-form').addEventListener('submit', event => { event.preventDefault(); void saveProfile(); });
 $('reload').addEventListener('click', () => { $('settings-dialog').close(); void refresh(); });
 $('send-job').addEventListener('click', sendJob);
 $('sign-in').addEventListener('click', () => void doSignIn()); $('sign-out').addEventListener('click', () => void doSignOut()); $('pull-now').addEventListener('click', () => void doPull());
-$('save-profile').addEventListener('click', () => void saveProfile()); $('refresh-cvs').addEventListener('click', () => void loadResumes());
+$('refresh-cvs').addEventListener('click', () => void loadResumes());
 $('open-app').addEventListener('click', () => void openApp()); $('edit-profile').addEventListener('click', () => void openApp('/profile')); $('open-documents').addEventListener('click', () => void openApp('/documents'));
 $('copy-redirect').addEventListener('click', async () => { try { await navigator.clipboard.writeText(redirectUri()); $('copy-redirect').textContent = 'Copied'; } catch { status('auth-status', 'Select the redirect URI to copy it manually.', 'error'); } });
 function renderDisabledSites(hosts) {
@@ -809,3 +885,4 @@ chrome.tabs.onUpdated.addListener((id, info) => { if (id === currentTab?.id && (
 void refresh();
 void loadResumes();
 void loadDefaults();
+void loadCareer();

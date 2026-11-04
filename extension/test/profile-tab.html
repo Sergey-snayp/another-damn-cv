@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — the panel's Profile tab</title>
+<link rel="stylesheet" href="../assets/theme/colors.css">
+<link rel="stylesheet" href="../src/sidepanel.css">
+<style>pre#result { position: absolute; left: -9999px; }</style>
+<!--
+  Runs the real panel (sidepanel.html + sidepanel.js) against a stand-in for
+  Chrome and the app's server. The Profile tab shows the Profile's career
+  sections; "Autofill uses" switches to the selected CV, and Autofill sends
+  the current role and education from whichever is chosen.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=30000 \
+      --dump-dom "file://$PWD/test/profile-tab.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const store = {
+    auth: { syncToken: 'token', user: { name: 'Sergey Proniuk', email: 'sergeypronyuk@gmail.com' } },
+    profile: { firstName: 'Sergey', lastName: 'Proniuk', email: 'sergeypronyuk@gmail.com', phone: '+16728880334', location: 'Vancouver, BC, Canada', linkedin: 'linkedin.com/in/sp', workArrangements: 'remote,hybrid' },
+    appResumes: [{ id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }],
+    autofillDefaults: [{ id: 'd1', kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }],
+  };
+  const sentToPage = [];
+  const noop = () => {};
+  const event = { addListener: noop, removeListener: noop };
+  window.chrome = {
+    runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async (message) => (message?.type === 'panel-tab' ? { tabId: 1 } : null) },
+    storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => { Object.assign(store, values); }, remove: async (keys) => { for (const key of [].concat(keys)) delete store[key]; } }, onChanged: event },
+    tabs: {
+      get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: noop,
+      sendMessage: async (_tab, message) => {
+        sentToPage.push(message);
+        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: 'Acme' }, fields: [{ key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
+        if (message.type === 'questions') return { questions: [] };
+        if (message.type === 'fill') return { filled: 3, failures: [], notes: [], missing: [] };
+        return null;
+      },
+    },
+    webNavigation: { getAllFrames: async () => [{ frameId: 0, url: 'https://jobs.example.com/apply' }] },
+    identity: { getRedirectURL: () => 'https://test.chromiumapp.org/' },
+  };
+  const view = (company, school, extra = {}) => ({
+    summary: `${company} summary`,
+    experiences: [{ company, title: 'Senior Software Engineer', client: '', location: 'Remote', from: '2023-11', to: '', current: true, description: '', bullets: ['One', 'Two', 'Three', 'Four'] }],
+    educations: [{ institution: school, degree: "Bachelor's", field: 'Computer Science', from: '2013', to: '2016' }],
+    skills: ['Node.js', 'NestJS'],
+    fields: { currentCompany: company, currentTitle: 'Senior Software Engineer', yearsExperience: '10', school, degree: "Bachelor's", fieldOfStudy: 'Computer Science', graduationYear: '2016' },
+    ...extra,
+  });
+  const reply = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  window.fetch = async (url) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path === '/api/extension/profile/career') return reply(view('Ciklum', 'Dnipro Institute of Infrastructure and Transport'));
+    if (path === '/api/extension/profile/career/resume/cv1') return reply(view('Paymorrow', 'CV School'));
+    if (path === '/api/extension/defaults') return reply(store.autofillDefaults);
+    if (path === '/api/extension/resumes') return reply(store.appResumes);
+    return new Response('{}', { status: 404 });
+  };
+</script>
+<body>
+<script type="module">
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  try {
+    // fetch is the server stand-in above, so the panel's markup is read with XHR.
+    const markup = await new Promise((resolve) => { const xhr = new XMLHttpRequest(); xhr.open('GET', '../src/sidepanel.html'); xhr.onload = () => resolve(xhr.responseText); xhr.send(); });
+    document.body.insertAdjacentHTML('afterbegin', new DOMParser().parseFromString(markup, 'text/html').body.innerHTML.replace(/<script[\s\S]*?<\/script>/g, ''));
+    await import('../src/sidepanel.js');
+    await wait(1500);
+    const overview = () => document.getElementById('profile-overview');
+    const text = () => overview().textContent;
+    expect(/Sergey Proniuk/.test(text()) && /Vancouver, BC, Canada/.test(text()) && /\+16728880334/.test(text()), 'the contact card shows name, location and phone');
+    expect(/Ciklum/.test(text()) && /Dnipro Institute/.test(text()) && /Node\.js/.test(text()), `the Profile's experience, education and skills show (got "${text().slice(0, 300)}")`);
+    expect(/Remote, Hybrid/.test(text()) && /Relocate · Poland: Yes/.test(text()), 'preferences show types of work and default answers');
+    expect(!document.getElementById('local-details') && !document.getElementById('profile-form'), 'the old local edit form is gone');
+    const active = () => overview().querySelector('[data-career-source].is-active')?.dataset.careerSource;
+    expect(active() === 'profile', `the Profile is used when it has experience (active: ${active()})`);
+    expect(overview().querySelectorAll('.profile-bullets li').length === 3 && /Show all 4/.test(text()), 'long bullet lists fold after three');
+
+    // Autofill sends the current role and school from the Profile.
+    document.getElementById('fill').click();
+    await wait(800);
+    let fill = sentToPage.filter((message) => message.type === 'fill').at(-1);
+    expect(fill?.profile.currentCompany === 'Ciklum' && fill?.profile.school === 'Dnipro Institute of Infrastructure and Transport', `Autofill takes the role and school from the Profile (sent ${JSON.stringify(fill && { currentCompany: fill.profile.currentCompany, school: fill.profile.school })})`);
+
+    // Switch to the selected CV.
+    overview().querySelector('[data-career-source="resume"]').click();
+    await wait(800);
+    expect(active() === 'resume' && /Paymorrow/.test(text()) && /From Master CV/.test(text()), `the switch shows the selected CV (active: ${active()})`);
+    expect(store.careerSource === 'resume', 'the switch is remembered');
+    document.getElementById('fill').click();
+    await wait(800);
+    fill = sentToPage.filter((message) => message.type === 'fill').at(-1);
+    expect(fill?.profile.currentCompany === 'Paymorrow' && fill?.profile.school === 'CV School', `Autofill then takes them from the CV (sent ${JSON.stringify(fill && { currentCompany: fill.profile.currentCompany, school: fill.profile.school })})`);
+  } catch (error) { problems.push(`threw: ${error.stack}`); }
+  document.querySelector('.tab[data-panel="profile"]')?.click(); // Leaves the Profile tab open for a screenshot.
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+</script>
+</body>

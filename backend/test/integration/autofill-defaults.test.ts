@@ -169,3 +169,29 @@ test('relocation answers are kept per country and work types on the profile', as
   });
   assert.equal(((await app.json()) as { workArrangements: string }).workArrangements, 'onsite');
 });
+
+test('the extension reads the profile career and only its own CVs', async () => {
+  assert.equal((await call('/extension/profile/career')).status, 401);
+  const empty = (await (await call('/extension/profile/career', { token: ownerToken })).json()) as {
+    experiences: unknown[];
+    fields: { currentCompany: string };
+  };
+  assert.deepEqual(empty.experiences, []);
+  assert.equal(empty.fields.currentCompany, '');
+
+  const created = (await (
+    await call('/resumes', { method: 'POST', user: owner.user.id, body: { name: 'Extension CV' } })
+  ).json()) as { id: string };
+  await call(`/resumes/${created.id}/save`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { summaries: [{ variant: 'default', text: 'Payments engineer.' }] },
+  });
+  const fromCv = await call(`/extension/profile/career/resume/${created.id}`, { token: ownerToken });
+  assert.equal(fromCv.status, 200);
+  assert.equal(((await fromCv.json()) as { summary: string }).summary, 'Payments engineer.');
+  assert.equal(
+    (await call(`/extension/profile/career/resume/${created.id}`, { token: otherToken })).status,
+    404,
+  );
+});

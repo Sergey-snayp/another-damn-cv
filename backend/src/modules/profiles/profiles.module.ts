@@ -15,6 +15,8 @@ import { ImportProfileCareer } from './application/use-cases/import-profile-care
 import { GetCareerFields } from './application/use-cases/get-career-fields';
 import { GetProfileCareer } from './application/use-cases/get-profile-career';
 import { ResumeCareerReader } from './adapters/outbound/resume-career.reader';
+import { ResumeSectionsAdapter } from './adapters/outbound/resume-sections.reader';
+import { GetExtensionCareer } from './application/use-cases/get-extension-career';
 import { ProfilesApplication } from './application/profile-api';
 import type { ProfileCareerReader } from './application/ports/profile-career-reader';
 import type { ProfileRepository } from './application/ports/profile-repository';
@@ -47,6 +49,12 @@ import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITO
         repository: PrismaCareerProfileRepository,
         resumes: ResumesApi,
       ) => new ImportProfileCareer(directory, repository, new ResumeImportSourceReader(resumes)),
+    },
+    {
+      provide: GetExtensionCareer,
+      inject: [PrismaCareerProfileRepository, RESUMES_API],
+      useFactory: (repository: PrismaCareerProfileRepository, resumes: ResumesApi) =>
+        new GetExtensionCareer(repository, new ResumeSectionsAdapter(resumes)),
     },
     {
       provide: PROFILE_CAREER_READER,
