@@ -65,6 +65,10 @@ const CATEGORIES = [
   // --- compensation & availability -----------------------------------------
   { key: 'salaryExpectation', group: 'Compensation', match: ['salary expectation', 'expected salary', 'desired salary', 'compensation expectation'] },
   { key: 'noticePeriod', group: 'Compensation', match: ['notice period', 'availability', 'start date', 'when can you start'] },
+
+  // --- application ----------------------------------------------------------
+  // "How did you hear about this job?": matched by HEARD_ABOUT below, not by phrases.
+  { key: 'heardAbout', group: 'Application', match: [] },
 ];
 
 /** Never filled, whatever the settings. */
@@ -129,6 +133,18 @@ function countryIn(text) {
   }
   return found;
 }
+
+/**
+ * "How did you hear about this job/Box?", "Where did you learn about us?",
+ * "Source of application". Not "Who referred you?", which asks for a name.
+ */
+const HEARD_ABOUT = [
+  /\b(how|where) (did|have) you (first )?hear\b/,
+  // "Where did you learn about us?", not "Where did you learn to code?"
+  /\b(how|where) (did|have) you (first )?(learn|find out|come across|discover|find)\b.{0,40}\b(us|about|this|our|the (job|role|position|opening|posting|vacancy|company|opportunity))\b/,
+  /\bhear(d)? about (us|this|the|our)\b/,
+  /\b(source of (your |this )?application|application source|referral source|lead source|recruitment source|candidate source)\b/,
+];
 
 /** "Have you ever worked at Box…", "Were you previously employed by us?" */
 const WORKED_BEFORE = [
@@ -223,6 +239,10 @@ const ADDRESS_PARTS = [['city', 'town'], ['state', 'province', 'region'], ['coun
 function categorise(signals) {
   if (NEVER_FILL.some((term) => mentions(signals, term))) {
     return { key: null, sensitive: true };
+  }
+  // Before the general rules: "job" or "company" in the question must not pick a category.
+  if (HEARD_ABOUT.some((pattern) => pattern.test(signals))) {
+    return { key: 'heardAbout', sensitive: false };
   }
   // Before the general rules: "employed" would otherwise read as the current employer.
   if (WORKED_BEFORE.some((pattern) => pattern.test(signals))) {
@@ -476,8 +496,10 @@ function currentAnswer(element, kind) {
  * demographic and password fields are never included.
  */
 function detectQuestions(found = detectFields().found) {
-  const known = new Set(found.map((field) => field.element));
-  const knownGroups = new Set(found.filter((field) => field.kind === 'radio').map((field) => field.element.name));
+  // "How did you hear" stays a question too: with its setting off, a saved answer fills it.
+  const profileFields = found.filter((field) => field.key !== 'heardAbout');
+  const known = new Set(profileFields.map((field) => field.element));
+  const knownGroups = new Set(profileFields.filter((field) => field.kind === 'radio').map((field) => field.element.name));
   const scopes = [...new Set(found.map((field) => field.element.closest('form') ?? document.body))];
   if (!scopes.length) scopes.push(document.body);
   const questions = [], seenRadios = new Set();
@@ -571,6 +593,7 @@ window.CVAutofillFields = {
   leftAlone,
   groupQuestion,
   kindOf,
+  isCombobox,
   currentAnswer,
   countryIn,
   isEmpty,

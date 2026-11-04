@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — "How did you hear about this job?"</title>
+<!--
+  "How did you hear" questions are answered with the link to another-damn.cv:
+  typed into a text box; "Other" plus the link in the details box below for a
+  list; the closest source when there is no "Other". "Who referred you?" and
+  look-alikes are left alone. With the setting off, a saved answer fills it.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=30000 \
+      --dump-dom "file://$PWD/test/heard.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const store = { animateFill: false };
+  window.chrome = { runtime: { id: 'test', getURL: (p) => (p.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} }, sendMessage: async () => ({}) }, storage: { local: { get: async () => store, set: async () => {} }, onChanged: { addListener() {} } } };
+</script>
+<body>
+<form>
+  <label for="name">First name*</label><input id="name" name="first_name" required>
+  <label for="text">How did you hear about us?*</label><input id="text" name="q_text" required>
+  <label for="source">How did you hear about this job/Acme?*</label>
+  <select id="source" name="q_source" required><option value="">Select…</option><option value="li">LinkedIn</option><option value="ref">Referral</option><option value="other">Other</option></select>
+  <label for="details">If you selected "Other," please provide details below</label><input id="details" name="q_details">
+  <fieldset><legend>Where did you learn about this role?*</legend>
+    <label><input type="radio" name="learn" value="li" required> LinkedIn</label>
+    <label><input type="radio" name="learn" value="board"> Job board</label>
+    <label><input type="radio" name="learn" value="friend"> A friend</label>
+  </fieldset>
+  <label for="nooption">Source of application*</label>
+  <select id="nooption" name="q_nooption" required><option value="">Select…</option><option>LinkedIn</option><option>Referral</option></select>
+  <label for="who">Who referred you?</label><input id="who" name="q_who">
+  <label for="code">Where did you learn to code?</label><input id="code" name="q_code">
+  <input type="submit" value="Submit application">
+</form>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+<script>
+addEventListener('load', () => setTimeout(async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const M = window.CVAutofillMarks, LINK = 'https://another-damn.cv';
+  try {
+    const keys = Object.fromEntries(window.CVAutofillFields.detectFields().found.map((field) => [field.element.id || field.element.name, field.key]));
+    expect(keys.text === 'heardAbout' && keys.source === 'heardAbout' && keys.learn === 'heardAbout' && keys.nooption === 'heardAbout', `detects each wording (got ${JSON.stringify(keys)})`);
+    expect(!keys.who && !keys.code && !keys.details, `leaves "Who referred you?", "Where did you learn to code?" and the details box alone (got ${JSON.stringify(keys)})`);
+
+    const result = await fill({ firstName: 'Ada', heardAbout: LINK });
+    expect($('text').value === LINK && M.statusOf($('text')) === 'ok', `types the link into a text box (got "${$('text').value}")`);
+    expect($('source').value === 'other' && $('details').value === LINK, `chooses Other and types the link below (got "${$('source').value}", "${$('details').value}")`);
+    expect(M.statusOf($('source')) === 'ok' && M.statusOf($('details')) === 'ok', `both get green icons (got ${M.statusOf($('source'))}, ${M.statusOf($('details'))})`);
+    const board = document.querySelector('input[name="learn"][value="board"]');
+    expect(board.checked && M.statusOf(board) === 'check' && /No "Other"/.test(M.reasonOf(board) ?? ''), `without Other, picks the job board and asks to check it (got ${board.checked}, ${M.statusOf(board)}, "${M.reasonOf(board)}")`);
+    expect(!$('nooption').value && M.statusOf($('nooption')) === 'missing', `with no usable option it stays empty and red (got "${$('nooption').value}", ${M.statusOf($('nooption'))})`);
+    expect(!$('who').value && !$('code').value, 'never types into look-alike questions');
+    expect(!(await M.open($('text'))), 'with the setting on its icon offers nothing to choose');
+    expect(result.notes.some((note) => /Where did you learn about this role/.test(note)), `the panel is told to check the job-board choice (notes ${JSON.stringify(result.notes)})`);
+
+    // Setting off: the question is the company's own, and a saved answer fills it.
+    document.querySelector('form').reset(); M.clear();
+    const question = window.CVAutofillFields.detectQuestions().find((item) => item.question === 'How did you hear about us?');
+    expect(Boolean(question), 'with the setting off it is still a question saved answers can match');
+    await fill({ firstName: 'Ada', heardAbout: '' }, question ? [{ id: question.id, value: 'A friend told me', kind: 'text', match: 'exact' }] : []);
+    expect($('text').value === 'A friend told me', `a saved answer fills it when the setting is off (got "${$('text').value}")`);
+    expect(!$('source').value, 'nothing else is answered with the link when the setting is off');
+    expect((await M.open($('source'))) && M.popoverState().spec?.choices?.includes('Other'), 'with the setting off its icon offers a saved answer, like any company question');
+    M.close();
+  } catch (error) { problems.push(`threw: ${error.stack}`); }
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+}, 1500));
+</script>
+</body>

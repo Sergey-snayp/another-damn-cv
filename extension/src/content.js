@@ -96,7 +96,9 @@ const ELIGIBILITY_FIELDS = new Set(['requiresSponsorship', 'workAuthorization'])
 function explain(element) {
   const { profile, failed } = lastFill;
   if (failed.has(element)) return failed.get(element);
-  const field = lastScan.found.find((item) => item.element === element || (element.type === 'radio' && item.element.name === element.name && item.element.type === 'radio'));
+  let field = lastScan.found.find((item) => item.element === element || (element.type === 'radio' && item.element.name === element.name && item.element.type === 'radio'));
+  // "How did you hear" with its setting off is the company's own question again.
+  if (field?.key === 'heardAbout' && !profile.heardAbout) field = null;
   const label = Fields.labelOf(element).replace(/\?$/, '');
   if (field) {
     const off = profile.offKeys?.[field.key];
@@ -167,10 +169,11 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
     if (stop.kind === 'explain' && !Fields.isEmpty(stop.element)) continue;
     const field = stop.field ?? { element: stop.element, kind: stop.item?.kind ?? stop.ack?.kind };
     const token = await hooks?.before?.(field);
-    let mark = null;
+    let mark = null, also = [];
     try {
       if (stop.kind === 'field') {
         const done = await Filler.fillOne(stop.field, profile, state);
+        also = done.also ?? []; // The "If other, please specify" box filled with it.
         if (done.filled) result.filled++;
         if (done.note) result.notes.push(done.note);
         if (done.failure) result.failures.push(done.failure);
@@ -197,6 +200,7 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
       result.failures.push(`${Fields.labelOf(stop.element)}: ${err.message}`);
     }
     await hooks?.after?.(field, mark, token);
+    if (also.length) await Marks?.show(also);
   }
   if (result.acknowledged) result.notes.push(`${result.acknowledged} required acknowledgement${result.acknowledged === 1 ? '' : 's'} ticked for you: read ${result.acknowledged === 1 ? 'it' : 'them'} before submitting`);
   return result;
@@ -271,7 +275,12 @@ async function finishChoice(element, done, saved, reason) {
 /** What the icon's popover offers for this element, or null when it has no default (consent, CV, name…). */
 async function editorFor(element) {
   if (!chrome.runtime?.id || !element.matches?.('input, select, textarea')) return null;
-  const field = fieldOf(element);
+  let field = fieldOf(element);
+  if (field?.key === 'heardAbout') {
+    // Always answered with the link while its setting is on: nothing to choose.
+    if (lastFill.profile.heardAbout) return null;
+    field = null; // Off: the company's own question, with a saved answer.
+  }
   const question = field ? null : questionOf(element);
   if (!field && !question) return null;
   if (field?.key === 'resume' || Fields.leftAlone(element)) return null;

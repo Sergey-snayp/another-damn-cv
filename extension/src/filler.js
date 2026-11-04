@@ -229,6 +229,18 @@ function choiceShown(element, chosen, typed) {
 }
 
 /**
+ * The text of the option the list highlights (aria-activedescendant, or
+ * react-select's "is-focused" class), '' when none is, and null when the list
+ * does not show its highlight at all.
+ */
+function highlighted(element) {
+  const id = element.getAttribute('aria-activedescendant');
+  const node = (id && document.getElementById(id)) || optionsFor(element).find((item) => /(^|[\s_-])(is-)?focused\b/.test(item.className));
+  if (node) return optionText(node);
+  return element.hasAttribute('aria-activedescendant') ? '' : null;
+}
+
+/**
  * Last resort for React dropdowns: asks the page-world script (page-world.js)
  * to call the option's own React click handler. Only a tag on the option
  * element is sent. Resolves whether the handler was found and called.
@@ -263,8 +275,21 @@ async function pickOption(element, option, typed = '') {
   const chosen = optionText(option);
   // mousemove first: react-select ignores hovering right after keyboard moves until the mouse moves.
   for (const type of ['mousemove', 'mouseover', 'mousemove']) option.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
-  element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
-  await wait(200);
+  // Some pages ignore the simulated hover (Greenhouse), and Enter would then pick
+  // the first option. Where the list shows its highlight, walk to the option with
+  // the arrow keys; Enter only once it is the highlighted one.
+  if (highlighted(element) !== null) {
+    const steps = optionsFor(element).length;
+    for (let step = 0; step < steps && highlighted(element) !== chosen; step++) {
+      element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 }));
+      await wait(0);
+    }
+  }
+  const highlight = highlighted(element);
+  if (highlight === null || highlight === chosen) {
+    element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+    await wait(200);
+  }
   if (choiceShown(element, chosen, typed)) return true;
   const fresh = () => optionsFor(element).find((item) => optionText(item) === chosen) ?? (option.isConnected ? option : null);
   const clickable = fresh();
@@ -441,6 +466,83 @@ function eligibilityValue(field, profile) {
   return answers[field.key] || profile[field.key];
 }
 
+// ─── "How did you hear about this job?" ────────────────────────────────
+// Settings → "How did you hear" (on by default): answered with the link to
+// another-damn.cv. A list of sources has no such option, so "Other" is
+// chosen and the link goes in the "If other, please specify" box below; the
+// closest source (job board, website…) when there is no "Other".
+
+const OTHER_OPTION = /^\s*other\b/i;
+const NEAR_OPTION = /job ?board|job site|website|web site|internet|online|web\b|search engine|job search|career site|careers page/i;
+const DETAILS_LABEL = /\bother\b|specify|details?\b|please (provide|explain|describe|tell)|elaborate|which one/i;
+
+/** The "If other, please specify" box after the question: one of the next few empty text fields. */
+function detailsBoxAfter(element) {
+  const scope = element.closest('form') ?? document.body;
+  const boxes = [...scope.querySelectorAll('input:not([type]), input[type="text"], textarea')]
+    .filter((box) => box !== element && !window.CVAutofillFields.isCombobox?.(box) && (element.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING))
+    .filter((box) => box.getClientRects().length && !box.disabled && !box.readOnly)
+    .slice(0, 3);
+  return boxes.find((box) => DETAILS_LABEL.test(window.CVAutofillFields.labelOf(box)) && window.CVAutofillFields.isEmpty(box)) ?? null;
+}
+
+/** The option to choose among `texts`: "Other" first, else the closest source. */
+function heardAboutOption(texts) {
+  const other = texts.findIndex((text) => OTHER_OPTION.test(text));
+  if (other >= 0) return { index: other, other: true };
+  const near = texts.findIndex((text) => NEAR_OPTION.test(text));
+  return near >= 0 ? { index: near, other: false } : null;
+}
+
+/**
+ * Fills one "How did you hear" question with `link`. Returns { filled,
+ * element, also, mark }: `also` is the details box it typed into.
+ */
+async function fillHeardAbout(field, link, state = {}) {
+  const { element, kind } = field;
+  const done = (status, reason, extra = {}) => ({ filled: status !== 'missing', mark: { status, reason }, ...extra });
+  if (kind === 'text' || kind === 'textarea') {
+    fillText(element, link);
+    return done('ok', `Filled with ${link}`);
+  }
+  let chosen = null, chosenElement = element;
+  if (kind === 'select') {
+    const options = [...element.options].filter((option) => option.value !== '' && !option.disabled);
+    const pick = heardAboutOption(options.map((option) => option.text.trim()));
+    if (pick) {
+      element.focus({ preventScroll: true }); setValue(element, options[pick.index].value); element.blur();
+      chosen = { text: options[pick.index].text.trim(), other: pick.other };
+    }
+  } else if (kind === 'radio') {
+    if (state.heardGroups?.has(element.name)) return { filled: false, skipped: true };
+    (state.heardGroups ??= new Set()).add(element.name);
+    const radios = radiosOf(element);
+    const pick = heardAboutOption(radios.map(radioText));
+    if (pick) {
+      chosenElement = radios[pick.index];
+      if (!chosenElement.checked) chosenElement.click();
+      chosen = { text: radioText(chosenElement), other: pick.other };
+    }
+  } else if (kind === 'combobox') {
+    element.focus({ preventScroll: true });
+    element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
+    press(element);
+    const options = await settledOptions(element, 3000);
+    const pick = heardAboutOption(options.map((option) => option.textContent.trim()));
+    if (pick && (await pickOption(element, options[pick.index]))) chosen = { text: options[pick.index].textContent.trim(), other: pick.other };
+    else if (!pick) element.blur();
+  } else {
+    return { filled: false };
+  }
+  if (!chosen) return done('missing', `None of the options is "Other" or a job board, so ${link} could not go in. Choose one yourself.`);
+  const box = detailsBoxAfter(element);
+  if (box) fillText(box, link);
+  const also = box ? [{ element: box, status: 'ok', reason: `Filled with ${link}` }] : [];
+  if (chosen.other && box) return done('ok', `Chose "${chosen.text}" and typed ${link} below.`, { element: chosenElement, also });
+  if (chosen.other) return done('check', `Chose "${chosen.text}". The form has no box for the link ${link}.`, { element: chosenElement });
+  return done('check', `No "Other" option, so chose "${chosen.text}"${box ? ` and typed ${link} below` : ''}. Check it.`, { element: chosenElement, also });
+}
+
 /** The value for one field from the profile the panel sent. */
 function valueFor(field, profile) {
   if (field.key === 'resume') return profile.resumeDataUrl;
@@ -490,6 +592,15 @@ async function fillOne(field, profile, state = {}) {
   const value = valueFor(field, profile);
   if (!value || (field.key === 'resume' && state.uploaded)) return { filled: false, skipped: true };
   const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
+  if (field.key === 'heardAbout') {
+    try {
+      const result = await fillHeardAbout(field, value, state);
+      if (result.skipped) return result;
+      return { filled: result.filled, also: result.also, mark: result.mark ? { element: result.element ?? field.element, ...result.mark } : null, ...(result.mark?.status === 'check' && { note: `${label}: ${result.mark.reason}` }) };
+    } catch (err) {
+      return { filled: false, failure: `${label}: ${err.message}`, mark: { element: field.element, status: 'missing', reason: `Not filled: ${err.message}` } };
+    }
+  }
   try {
     const result = field.diversity ? await fillDiversity(field, value) : await fillField(field, value, profile.resumeFileName);
     if (field.key === 'resume' && result.filled) state.uploaded = true;

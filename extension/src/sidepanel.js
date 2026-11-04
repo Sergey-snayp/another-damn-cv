@@ -7,7 +7,7 @@ import { draftAnswer, matchAnswers, saveAnswers } from './answers.js';
 import { eligibilityMap, moveLocalEligibility, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
 
 const FIELD_LABELS = {
-  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
+  firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear',
 };
 const PROFILE_GROUPS = [
   { title: 'Personal', keys: ['fullName', 'firstName', 'lastName', 'preferredName', 'email', 'phone'] },
@@ -25,6 +25,8 @@ const FILL_GROUPS = [
   { id: 'experience', label: 'Experience and education', keys: ['currentCompany', 'currentTitle', 'yearsExperience', 'school', 'degree', 'fieldOfStudy', 'graduationYear', 'workedHereBefore'] },
   { id: 'workAuthorization', label: 'Work authorization', keys: ['workAuthorization', 'requiresSponsorship'] },
   { id: 'salary', label: 'Salary and availability', keys: ['salaryExpectation', 'noticePeriod'] },
+  // "How did you hear about this job?" → the link below. Off: saved answers fill it like any company question.
+  { id: 'heardAbout', label: '"How did you hear" → another-damn.cv', keys: ['heardAbout'] },
   // The company's own questions, from answers saved in the app. Not a profile field group.
   { id: 'answers', label: 'Saved answers', keys: [] },
   // Off unless switched on: answers live only in this browser (diversityAnswers).
@@ -38,6 +40,8 @@ const DIVERSITY_CHOICES = {
   eeoVeteran: { label: 'Veteran status', choices: ['Prefer not to answer', 'I am not a protected veteran', 'I am a protected veteran'] },
   eeoDisability: { label: 'Disability', choices: ['Prefer not to answer', 'No', 'Yes'] },
 };
+/** What "How did you hear about this job?" is answered with. */
+const HEARD_ABOUT_ANSWER = 'https://another-damn.cv';
 let diversityAnswers = {}, continueSteps = false, eligibility = {}, autofillDefaults = [], acknowledgeRequired = false;
 
 // ─── Eligibility, asked once per country ─────────────────────────────────
@@ -212,7 +216,7 @@ async function questionsFromFrames(tab = currentTab) {
   return (await askForms({ type: 'questions' }, tab)).flatMap(({ frameId, reply }) => (reply.questions ?? []).map(question => ({ ...question, id: frameKey(frameId, question.id) })));
 }
 
-function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; return profile[key] ?? ''; }
+function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; if (key === 'heardAbout') return HEARD_ABOUT_ANSWER; return profile[key] ?? ''; }
 function pageCard() {
   if (!scan) return '';
   const title = scan.context?.title || 'Application form';
@@ -268,6 +272,7 @@ async function runFill() {
     // Fields in groups switched off in Settings are sent empty, so they stay as they are.
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
+    allowed.heardAbout = groupOn('heardAbout') ? HEARD_ABOUT_ANSWER : '';
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     // Groups switched off, by field, so a still-empty field can say which setting left it empty.
     const offKeys = Object.fromEntries(FILL_GROUPS.filter(group => group.keys.length && !groupOn(group.keys[0])).flatMap(group => group.keys.map(key => [key, group.label])));
