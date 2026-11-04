@@ -45,6 +45,10 @@ export class PrismaAnswerRepository implements AnswerRepository {
     return (await this.db.savedAnswer.deleteMany({ where: { id, userId } })).count > 0;
   }
 
+  async removeByKey(userId: string, questionKey: string): Promise<boolean> {
+    return (await this.db.savedAnswer.deleteMany({ where: { userId, questionKey } })).count > 0;
+  }
+
   async markUsed(userId: string, ids: string[]): Promise<void> {
     await this.db.savedAnswer.updateMany({
       where: { userId, id: { in: ids } },

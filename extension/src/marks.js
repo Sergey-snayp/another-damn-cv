@@ -7,9 +7,11 @@
  *   × red     required and still empty, or could not be filled
  *
  * Drawn in a shadow root over the page, so the site's layout and styles are
- * untouched. Hovering an icon shows why. A green or yellow icon goes when the
- * person edits that field; a red one goes once the field has a value. Settings
- * → "Show fill status icons" (on by default) turns them off.
+ * untouched. Hovering an icon shows why. Clicking it opens a small popover to
+ * choose the field's default answer, change it or reset it (content.js says
+ * what each field offers). A green or yellow icon goes when the person edits
+ * that field; a red one goes once the field has a value. Settings → "Show fill
+ * status icons" (on by default) turns them off.
  */
 (() => {
   if (window.CVAutofillMarks) return;
@@ -26,11 +28,38 @@
   shadow.innerHTML = `<style>
     :host { all: initial; position: absolute !important; left: 0 !important; top: 0 !important; width: 0 !important; height: 0 !important; z-index: 2147483645 !important; }
     .mark { position: absolute; display: grid; place-items: center; width: ${SIZE}px; height: ${SIZE}px; border-radius: 50%; border: 2px solid #fff;
-      color: #fff; font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: help; box-sizing: content-box; }
+      color: #fff; font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer; box-sizing: content-box; }
+    .mark.open { outline: 2px solid #2563eb; outline-offset: 1px; }
     .mark[hidden] { display: none; }
     .tip { position: absolute; z-index: 2; width: max-content; max-width: 300px; padding: 8px 11px; border-radius: 8px; background: #111827; color: #fff;
       font: 500 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.25); pointer-events: none; }
     .tip[hidden] { display: none; }
+    .pop { position: absolute; z-index: 3; width: 300px; box-sizing: border-box; padding: 12px; border-radius: 10px; background: #fff; color: #111827;
+      font: 400 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,.25); border: 1px solid #e5e7eb; text-align: left; }
+    .pop[hidden] { display: none; }
+    .pop * { box-sizing: border-box; font: inherit; color: inherit; margin: 0; }
+    .pop .head { display: flex; gap: 8px; align-items: flex-start; }
+    .pop .head p { flex: 1; font-weight: 600; }
+    .pop .x { all: unset; cursor: pointer; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; color: #6b7280; font-size: 16px; }
+    .pop .x:hover { background: #f3f4f6; }
+    .pop .section { margin-top: 10px; }
+    .pop .label { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+    .pop .current { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 7px 9px; border-radius: 8px; background: #f3f4f6; }
+    .pop .current b { font-weight: 600; }
+    .pop .choices { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow: auto; }
+    .pop button.choice, .pop button.act { cursor: pointer; padding: 5px 10px; border-radius: 999px; border: 1px solid #d1d5db; background: #fff; font-size: 12px; font-weight: 500; }
+    .pop button.choice:hover, .pop button.act:hover { border-color: #2563eb; color: #1d4ed8; }
+    .pop button.choice.on { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .pop button.act.primary { background: #111827; border-color: #111827; color: #fff; }
+    .pop button.link { all: unset; cursor: pointer; color: #b91c1c; font-size: 12px; font-weight: 500; }
+    .pop button:disabled { opacity: .5; cursor: default; }
+    .pop .text { display: flex; gap: 6px; }
+    .pop .text input, .pop .text textarea { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12px; }
+    .pop .text textarea { min-height: 60px; resize: vertical; }
+    .pop .note { margin-top: 8px; font-size: 11px; color: #6b7280; }
+    .pop .status { margin-top: 8px; font-size: 12px; font-weight: 500; }
+    .pop .status.ok { color: #15803d; } .pop .status.error { color: #b91c1c; }
+    .pop .status:empty { display: none; }
     .glow { position: absolute; pointer-events: none; border-radius: 10px; border: 2px solid var(--c);
       box-shadow: 0 0 0 5px color-mix(in srgb, var(--c) 22%, transparent), 0 0 18px color-mix(in srgb, var(--c) 35%, transparent);
       animation: glow-fade .9s ease-out forwards; }
@@ -131,11 +160,13 @@
     frame = requestAnimationFrame(() => {
       frame = 0;
       for (const [element, mark] of marks) place(element, mark.node);
+      placePop();
     });
   }
 
   function remove(element) {
     if (marks.get(element)?.reason === tip.textContent) hideTip();
+    if (popover.element === element && !popover.replacing) closePop();
     marks.get(element)?.node.remove();
     marks.delete(element);
     if (!marks.size) stop();
@@ -158,6 +189,7 @@
     ticker = setInterval(() => {
       reattach();
       for (const [element, mark] of marks) {
+        if (element === popover.element && element.isConnected) continue; // Kept while its popover is open.
         if (!element.isConnected || (mark.status === 'missing' && !isEmpty(element))) remove(element);
       }
       reposition();
@@ -187,7 +219,13 @@
 
   function add(element, status, reason) {
     if (!element?.isConnected || !LOOK[status]) return;
+    // One icon per radio group: the chosen option replaces the group's other icon.
+    if (element.type === 'radio' && element.name) {
+      for (const other of [...marks.keys()]) if (other !== element && other.type === 'radio' && other.name === element.name) handOver(other, element);
+    }
+    popover.replacing = popover.element === element;
     remove(element);
+    popover.replacing = false;
     const node = document.createElement('span');
     node.className = 'mark';
     node.style.background = LOOK[status].color;
@@ -196,11 +234,159 @@
     node.setAttribute('aria-label', reason);
     node.addEventListener('pointerenter', () => showTip(node, reason));
     node.addEventListener('pointerleave', hideTip);
-    node.addEventListener('click', () => (tip.hidden || tip.textContent !== reason ? showTip(node, reason) : hideTip()));
+    node.addEventListener('click', (event) => {
+      if (!event.isTrusted) return;
+      if (popover.element === element) { closePop(); return; }
+      void openPop(element).then((opened) => {
+        if (!opened) tip.hidden || tip.textContent !== reason ? showTip(node, reason) : hideTip();
+      });
+    });
     shadow.append(node);
     marks.set(element, { node, status, reason });
     start();
     place(element, node);
+    if (popover.element === element) { node.classList.add('open'); void renderPop(); }
+  }
+
+  /** Moves an open popover from one radio of a group to another before the old icon goes. */
+  function handOver(from, to) {
+    if (popover.element === from) popover.element = to;
+    remove(from);
+  }
+
+  // ─── Choosing a default from an icon ─────────────────────────────────────
+  // content.js sets `editorFor(element)`, which says what this field's default
+  // is and how to change it: { heading, note, current, choices, text,
+  // fromForm, canReset, choose(value), saveFromForm(), reset() }. The
+  // actions fill the field now and save the default for later forms. Only
+  // the person's own clicks count.
+  let editorFor = null;
+  const popover = { element: null, spec: null, busy: false, message: '', kind: '', replacing: false };
+  const pop = document.createElement('div');
+  pop.className = 'pop';
+  pop.hidden = true;
+  pop.setAttribute('role', 'dialog');
+  shadow.append(pop);
+  // Typing in the popover is not the page's business.
+  for (const type of ['keydown', 'keyup', 'keypress', 'input', 'change', 'paste']) pop.addEventListener(type, (event) => event.stopPropagation());
+  pop.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePop(); });
+
+  const make = (tag, props = {}, children = []) => {
+    const node = Object.assign(document.createElement(tag), props);
+    node.append(...children.filter(Boolean));
+    return node;
+  };
+  const trusted = (handler) => (event) => { if (event.isTrusted) handler(event); };
+
+  async function openPop(element) {
+    if (!editorFor) return false;
+    let spec = null;
+    try { spec = await editorFor(element); } catch { spec = null; }
+    if (!spec || !marks.has(element)) return false;
+    closePop();
+    hideTip();
+    Object.assign(popover, { element, spec, busy: false, message: '', kind: '' });
+    marks.get(element).node.classList.add('open');
+    draw();
+    pop.hidden = false;
+    placePop();
+    (pop.querySelector('input, textarea') ?? pop.querySelector('button.choice, button.act'))?.focus({ preventScroll: true });
+    addEventListener('pointerdown', outside, true);
+    return true;
+  }
+
+  function closePop() {
+    if (!popover.element) return;
+    marks.get(popover.element)?.node.classList.remove('open');
+    Object.assign(popover, { element: null, spec: null, busy: false, message: '', kind: '' });
+    pop.hidden = true;
+    pop.replaceChildren();
+    removeEventListener('pointerdown', outside, true);
+  }
+
+  /** A click elsewhere closes it; one on the field itself does not (choosing in the form's own dropdown). */
+  function outside(event) {
+    const path = event.composedPath();
+    if (path.includes(host) || !popover.element) return;
+    if (path.includes(boxFor(popover.element)) || path.includes(popover.element)) return;
+    closePop();
+  }
+
+  /** Re-reads the spec after a change (the default may now be set or gone). */
+  async function renderPop() {
+    if (!popover.element || !editorFor) return;
+    try { popover.spec = (await editorFor(popover.element)) ?? popover.spec; } catch { /* keep the old one */ }
+    if (popover.element) { draw(); placePop(); }
+  }
+
+  async function act(run) {
+    if (popover.busy) return;
+    popover.busy = true; popover.message = 'Saving…'; popover.kind = '';
+    draw();
+    let result;
+    try { result = await run(); } catch (error) { result = { ok: false, message: error.message }; }
+    if (!popover.element) return;
+    popover.busy = false;
+    popover.message = result?.message ?? (result?.ok ? 'Saved.' : 'Something went wrong.');
+    popover.kind = result?.ok ? 'ok' : 'error';
+    await renderPop();
+  }
+
+  function draw() {
+    const { spec, busy } = popover;
+    const mark = marks.get(popover.element);
+    if (!spec || !mark) return;
+    const parts = [];
+    parts.push(make('div', { className: 'head' }, [
+      // The reason without its "Click to…" hint: the popover is that click.
+      make('p', { textContent: mark.reason.replace(/,? or click to [^.]*\./gi, '.').replace(/\s*Click to [^.]*\./g, '').trim() || mark.reason }),
+      make('button', { className: 'x', textContent: '×', title: 'Close', onclick: trusted(closePop) }),
+    ]));
+    if (spec.current) {
+      parts.push(make('div', { className: 'section current' }, [
+        make('span', {}, [`${spec.currentLabel ?? 'Your default'}: `, make('b', { textContent: spec.current })]),
+        spec.canReset ? make('button', { className: 'link', textContent: 'Reset', disabled: busy, title: 'Forget this default. The field keeps its value.', onclick: trusted(() => act(() => spec.reset())) }) : null,
+      ]));
+    }
+    if (spec.choices?.length) {
+      parts.push(make('div', { className: 'section' }, [
+        make('p', { className: 'label', textContent: spec.current ? `Change it${spec.heading ? ` (${spec.heading})` : ''}` : `Choose a default${spec.heading ? ` (${spec.heading})` : ''}` }),
+        make('div', { className: 'choices' }, spec.choices.map((choice) => make('button', {
+          className: `choice${spec.current && spec.current.toLowerCase() === choice.toLowerCase() ? ' on' : ''}`,
+          textContent: choice, disabled: busy, onclick: trusted(() => act(() => spec.choose(choice))),
+        }))),
+      ]));
+    }
+    if (spec.text) {
+      const input = make(spec.text.multiline ? 'textarea' : 'input', { value: spec.text.value ?? '', placeholder: 'Type your answer', disabled: busy });
+      const save = () => act(() => spec.choose(input.value));
+      if (!spec.text.multiline) input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.isTrusted) { event.preventDefault(); void save(); } });
+      parts.push(make('div', { className: 'section' }, [
+        make('p', { className: 'label', textContent: spec.current ? 'Change it' : `Set a default${spec.heading ? ` (${spec.heading})` : ''}` }),
+        make('div', { className: 'text' }, [input, make('button', { className: 'act primary', textContent: 'Save', disabled: busy, onclick: trusted(save) })]),
+      ]));
+    }
+    if (spec.fromForm) {
+      parts.push(make('div', { className: 'section' }, [
+        make('p', { className: 'label', textContent: spec.choices?.length || spec.text ? 'Or choose it in the form, then:' : 'Choose it in the form, then:' }),
+        make('button', { className: 'act', textContent: 'Save my choice', disabled: busy, onclick: trusted(() => act(() => spec.saveFromForm())) }),
+      ]));
+    }
+    if (spec.note) parts.push(make('p', { className: 'note', textContent: spec.note }));
+    parts.push(make('p', { className: `status ${popover.kind}`, textContent: popover.message, role: 'status' }));
+    pop.replaceChildren(...parts);
+  }
+
+  /** Above the icon and to its left, like the reason bubble; below when there is no room above. */
+  function placePop() {
+    const mark = popover.element && marks.get(popover.element);
+    if (!mark || pop.hidden) return;
+    const left = parseFloat(mark.node.style.left), top = parseFloat(mark.node.style.top);
+    const height = pop.offsetHeight;
+    const x = Math.max(scrollX + 4, Math.min(left + SIZE + 4 - 300, scrollX + document.documentElement.clientWidth - 304));
+    const above = top - height - 8;
+    pop.style.left = `${x}px`;
+    pop.style.top = `${above >= scrollY + 4 ? above : top + SIZE + 12}px`;
   }
 
   async function enabled() {
@@ -227,6 +413,7 @@
   }
 
   function clear() {
+    closePop();
     for (const element of [...marks.keys()]) remove(element);
   }
 
@@ -237,6 +424,7 @@
     if (!event.isTrusted || window.CVAutofillFiller?.isTyping?.()) return;
     const target = event.target;
     for (const [element, mark] of marks) {
+      if (element === popover.element) continue; // The person may be choosing in the form while the popover is open.
       const same = element === target || (target.type === 'radio' && element.type === 'radio' && element.name === target.name) || (isZone(element) && element.contains(target));
       if (same && (mark.status !== 'missing' || !isEmpty(element))) remove(element);
     }
@@ -380,5 +568,12 @@
     return true;
   }
 
-  window.CVAutofillMarks = { show, showMissing, clear, reattach, point, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.reason ?? null };
+  /** content.js tells the icons what each field's default is (see "Choosing a default"). */
+  const setEditor = (fn) => { editorFor = fn; };
+  /** Opens a field's popover; tests use it, as they cannot click with trusted events. */
+  const open = (element) => openPop(element);
+  /** The popover's state, for tests. */
+  const popoverState = () => ({ element: popover.element, message: popover.message, kind: popover.kind, spec: popover.spec, text: pop.textContent });
+
+  window.CVAutofillMarks = { setEditor, open, close: closePop, popoverState, show, showMissing, clear, reattach, point, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.reason ?? null };
 })();

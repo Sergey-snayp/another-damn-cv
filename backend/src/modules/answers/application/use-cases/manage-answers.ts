@@ -51,6 +51,15 @@ export class DeleteAnswer {
   }
 }
 
+/** Forgets the answer to a question, from a field's icon on a form ("Reset"). */
+export class ForgetAnswer {
+  constructor(private readonly repository: AnswerRepository) {}
+  async execute(userId: string, question: string) {
+    const key = questionKey(question);
+    return { forgotten: key ? await this.repository.removeByKey(userId, key) : false };
+  }
+}
+
 /** Finds saved answers for a form's questions and records them as used. */
 export class MatchAnswers {
   constructor(private readonly repository: AnswerRepository) {}

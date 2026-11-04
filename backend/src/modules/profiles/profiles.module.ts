@@ -7,7 +7,7 @@ import type { AuthApi } from '../auth/contracts';
 import { ResumesModule } from '../resumes/resumes.module';
 import { RESUMES_API } from '../resumes/resumes.tokens';
 import type { ResumesApi } from '../resumes/contracts';
-import { ProfilesController } from './adapters/inbound/http/profiles.controller';
+import { ExtensionProfileController, ProfilesController } from './adapters/inbound/http/profiles.controller';
 import { ProfileCareerController } from './adapters/inbound/http/profile-career.controller';
 import { PrismaCareerProfileRepository } from './adapters/outbound/prisma-career-profile.repository';
 import { ResumeImportSourceReader } from './adapters/outbound/resume-import-source.reader';
@@ -26,7 +26,7 @@ import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITO
 
 @Module({
   imports: [AuthModule, ProfileDirectoryModule, ResumesModule, DatabaseModule],
-  controllers: [ProfilesController, ProfileCareerController],
+  controllers: [ProfilesController, ExtensionProfileController, ProfileCareerController],
   providers: [
     {
       provide: GetProfileCareer,

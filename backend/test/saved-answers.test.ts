@@ -7,7 +7,11 @@ import {
   type FormQuestion,
   type SavedAnswer,
 } from '../src/modules/answers/domain/answers';
-import { MatchAnswers, SaveAnswers } from '../src/modules/answers/application/use-cases/manage-answers';
+import {
+  ForgetAnswer,
+  MatchAnswers,
+  SaveAnswers,
+} from '../src/modules/answers/application/use-cases/manage-answers';
 import type { AnswerRepository, NewAnswer } from '../src/modules/answers/application/ports/answers';
 
 const saved = (
@@ -131,6 +135,11 @@ class MemoryAnswers implements AnswerRepository {
   remove() {
     return Promise.resolve(false);
   }
+  removeByKey(_userId: string, key: string) {
+    const before = this.rows.length;
+    this.rows = this.rows.filter((row) => questionKey(row.question) !== key);
+    return Promise.resolve(this.rows.length < before);
+  }
   markUsed(_userId: string, ids: string[]) {
     this.used.push(...ids);
     return Promise.resolve();
@@ -156,4 +165,18 @@ test('saving keeps one answer per question, drops blanks, and matching records u
   });
   assert.equal(result.matches[0].value, '@ada');
   assert.deepEqual(repository.used, [repository.rows[0].id]);
+});
+
+test('forgetting a question removes its answer whatever the punctuation', async () => {
+  const repository = new MemoryAnswers();
+  await new SaveAnswers(repository).execute('user', {
+    answers: [{ question: 'How did you hear about us?', answer: 'LinkedIn' }],
+  });
+  assert.deepEqual(await new ForgetAnswer(repository).execute('user', 'how did you hear about us *'), {
+    forgotten: true,
+  });
+  assert.deepEqual(await new ForgetAnswer(repository).execute('user', 'How did you hear about us?'), {
+    forgotten: false,
+  });
+  assert.deepEqual(await new ForgetAnswer(repository).execute('user', '???'), { forgotten: false });
 });

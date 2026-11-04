@@ -1,0 +1,153 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta property="og:site_name" content="Acme">
+<title>Autofill test — choosing a default from a field's icon</title>
+<!--
+  Clicking an icon opens a popover to choose the field's default. Choosing
+  fills the field now and saves the default where it belongs: eligibility per
+  country, "worked here before" per company, profile values to the profile,
+  the company's own questions as saved answers. Consent offers nothing.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=30000 \
+      --dump-dom "file://$PWD/test/defaults.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  // chrome.* stand-in. The background script's part: a saved eligibility or
+  // company default lands in the local copy, like src/defaults.js does.
+  const store = { animateFill: false, autofillDefaults: [], profile: { firstName: 'Ada' } };
+  const sent = [];
+  let reply = null; // Set to make the next save fail.
+  const pick = (keys) => (keys == null ? { ...store } : Object.fromEntries([].concat(keys).filter((key) => key in store).map((key) => [key, store[key]])));
+  window.chrome = {
+    runtime: {
+      id: 'test', getURL: (p) => (p.endsWith('.css') ? 'data:text/css,' : 'data:image/png;base64,'), onMessage: { addListener() {} },
+      sendMessage: async (message) => {
+        sent.push(message);
+        if (reply) { const answer = reply; reply = null; return answer; }
+        const { type, target, value } = message;
+        if (target?.type === 'default') {
+          const same = (row) => row.kind === target.kind && row.scope.toLowerCase() === target.scope.toLowerCase();
+          store.autofillDefaults = store.autofillDefaults.filter((row) => !same(row));
+          if (type === 'default-save') store.autofillDefaults.push({ id: String(sent.length), kind: target.kind, scope: target.scope, value });
+        }
+        if (target?.type === 'profile' && type === 'default-save') store.profile = { ...store.profile, [target.key]: value };
+        return { ok: true };
+      },
+    },
+    storage: { local: { get: async (keys) => pick(keys), set: async (values) => { Object.assign(store, values); } }, onChanged: { addListener() {} } },
+  };
+</script>
+<body>
+<form>
+  <fieldset><legend>Will you require visa sponsorship to work in Poland?*</legend>
+    <label><input type="radio" name="sponsor" value="1" required> Yes</label>
+    <label><input type="radio" name="sponsor" value="0"> No</label>
+  </fieldset>
+  <label for="auth">Are you legally authorized to work in Germany?*</label>
+  <select id="auth" name="auth" required><option value="">Select…</option><option value="y">Yes</option><option value="n">No</option></select>
+  <label for="phone">Phone*</label><input id="phone" type="tel" name="phone" required>
+  <label for="heard">How did you hear about us?*</label>
+  <select id="heard" name="q_heard" required><option value="">Choose</option><option value="li">LinkedIn</option><option value="ref">Referral</option></select>
+  <fieldset><legend>Have you ever worked for Acme before?*</legend>
+    <label><input type="radio" name="before" value="y" required> Yes</label>
+    <label><input type="radio" name="before" value="n"> No</label>
+  </fieldset>
+  <label for="why">Why do you want to join us?*</label><textarea id="why" name="q_why" required></textarea>
+  <label><input type="checkbox" id="consent" name="consent" required> I consent to the processing of my personal data.</label>
+  <input type="submit" value="Submit application">
+</form>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+<script>
+addEventListener('load', () => setTimeout(async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const $ = (id) => document.getElementById(id);
+  const radio = (name, value) => document.querySelector(`input[name="${name}"][value="${value}"]`);
+  const M = window.CVAutofillMarks, F = window.CVAutofillFiller;
+  const last = () => sent.at(-1) ?? {};
+  const json = (value) => JSON.stringify(value);
+  const groupMarks = (name) => [...document.querySelectorAll(`input[name="${name}"]`)].filter((input) => M.statusOf(input)).length;
+
+  try {
+    await fill({ ...store.profile });
+    expect(M.statusOf(radio('sponsor', '1')) === 'missing', 'sponsorship for Poland is red after Autofill');
+    expect(/Poland only/.test(M.reasonOf(radio('sponsor', '1')) ?? ''), `its reason says the answer is saved for Poland only (got "${M.reasonOf(radio('sponsor', '1'))}")`);
+
+    // Sponsorship in Poland: Yes or No, saved for Poland only.
+    expect(await M.open(radio('sponsor', '1')), 'the sponsorship icon opens a popover');
+    let spec = M.popoverState().spec;
+    expect(spec?.heading === 'Sponsorship · Poland' && json(spec.choices) === json(['Yes', 'No']) && !spec.current, `offers Yes and No for Poland (got ${json(spec && { heading: spec.heading, choices: spec.choices, current: spec.current })})`);
+    expect(/Saved for Poland only/.test(M.popoverState().text), 'the popover says it is saved for Poland only');
+    let result = await spec.choose('No');
+    expect(result.ok && radio('sponsor', '0').checked, `choosing No ticks No (got ${json(result)})`);
+    expect(json(last()) === json({ type: 'default-save', target: { type: 'default', kind: 'requiresSponsorship', scope: 'Poland' }, value: 'No' }), `saves it for Poland (sent ${json(last())})`);
+    expect(M.statusOf(radio('sponsor', '0')) === 'ok' && groupMarks('sponsor') === 1, `the group shows one green icon (marks: ${groupMarks('sponsor')}, status ${M.statusOf(radio('sponsor', '0'))})`);
+    expect(M.popoverState().element === radio('sponsor', '0'), 'the popover stays open on the chosen option');
+    await new Promise((resolve) => setTimeout(resolve, 100)); // It redraws with the saved answer.
+    spec = M.popoverState().spec;
+    expect(spec?.current === 'No' && spec.canReset, `then shows the saved answer with Reset (got ${json(spec && { current: spec.current, canReset: spec.canReset })})`);
+    result = await spec.reset();
+    expect(result.ok && last().type === 'default-reset' && !store.autofillDefaults.some((row) => row.scope === 'Poland'), `Reset forgets it (got ${json(result)})`);
+    expect(radio('sponsor', '0').checked, 'Reset leaves the field as it is');
+    await spec.choose('No');
+    M.close();
+
+    // The Poland answer is never used for another country.
+    expect(!F.valueFor({ key: 'requiresSponsorship', country: 'Germany' }, { eligibility: { 'requiresSponsorship:Poland': 'No' } }), 'an answer for Poland does not answer Germany');
+    expect(F.valueFor({ key: 'requiresSponsorship', country: 'Poland' }, { eligibility: { 'requiresSponsorship:poland': 'No' } }) === 'No', 'a country answer is found whatever its case');
+
+    // Work authorization in Germany, as a dropdown.
+    expect(await M.open($('auth')), 'the Germany dropdown icon opens a popover');
+    spec = M.popoverState().spec;
+    result = await spec.choose('Yes');
+    expect(result.ok && $('auth').value === 'y' && json(last().target) === json({ type: 'default', kind: 'workAuthorization', scope: 'Germany' }), `Germany gets its own answer (sent ${json(last())}, value ${$('auth').value})`);
+    M.close();
+
+    // A profile value the profile lacks: typed, saved to the profile.
+    expect(await M.open($('phone')), 'the phone icon opens a popover');
+    spec = M.popoverState().spec;
+    expect(spec?.text && !spec.choices && !spec.canReset, `phone takes text and has no Reset (got ${json(spec && { text: spec.text, choices: spec.choices, canReset: spec.canReset })})`);
+    result = await spec.choose('+48 600 100 200');
+    expect(result.ok && $('phone').value === '+48 600 100 200' && json(last()) === json({ type: 'default-save', target: { type: 'profile', key: 'phone' }, value: '+48 600 100 200' }), `fills the phone and saves it to the profile (sent ${json(last())})`);
+    expect(M.statusOf($('phone')) === 'ok', 'the phone icon turns green');
+    M.close();
+
+    // The company's own question: the form's options, saved as an answer.
+    expect(await M.open($('heard')), 'the company question opens a popover');
+    spec = M.popoverState().spec;
+    expect(json(spec?.choices) === json(['LinkedIn', 'Referral']), `offers the form's options (got ${json(spec?.choices)})`);
+    result = await spec.choose('Referral');
+    expect(result.ok && $('heard').value === 'ref' && json(last().target) === json({ type: 'answer', question: 'How did you hear about us?', company: 'Acme' }), `saves it as an answer for the question (sent ${json(last())})`);
+    M.close();
+
+    // Worked here before: per company.
+    expect(await M.open(radio('before', 'y')), 'the worked-before icon opens a popover');
+    spec = M.popoverState().spec;
+    expect(spec?.heading === 'Worked here before · Acme', `scoped to the company (got ${spec?.heading})`);
+    await spec.choose('No');
+    expect(radio('before', 'n').checked && json(last().target) === json({ type: 'default', kind: 'workedHereBefore', scope: 'Acme' }), `saves it for Acme (sent ${json(last())})`);
+    M.close();
+
+    // Free text, saved as an answer; a failed save still fills, and says so.
+    expect(await M.open($('why')), 'the textarea question opens a popover');
+    spec = M.popoverState().spec;
+    expect(spec?.text?.multiline, 'a long answer gets a multi-line box');
+    reply = { ok: false, message: 'Not saved: sign in from the panel first.' };
+    result = await spec.choose('Your products are great.');
+    expect(!result.ok && /sign in/.test(result.message) && $('why').value === 'Your products are great.' && M.statusOf($('why')) === 'check', `a failed save still fills, yellow, with why (got ${json(result)}, ${M.statusOf($('why'))})`);
+    M.close();
+
+    // Consent is the person's own decision: no default to choose.
+    expect(!(await M.open($('consent'))) && !M.popoverState().element, 'consent offers no default');
+    expect(M.statusOf($('consent')) === 'missing', 'consent keeps its red icon');
+  } catch (error) { problems.push(`threw: ${error.stack}`); }
+
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+}, 1500));
+</script>
+</body>

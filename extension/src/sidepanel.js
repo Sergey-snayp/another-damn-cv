@@ -4,6 +4,7 @@ import { icon, escapeHtml as esc } from './icons.js';
 import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { draftAnswer, matchAnswers, saveAnswers } from './answers.js';
+import { eligibilityMap, moveLocalEligibility, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period',
@@ -37,16 +38,17 @@ const DIVERSITY_CHOICES = {
   eeoVeteran: { label: 'Veteran status', choices: ['Prefer not to answer', 'I am not a protected veteran', 'I am a protected veteran'] },
   eeoDisability: { label: 'Disability', choices: ['Prefer not to answer', 'No', 'Yes'] },
 };
-let diversityAnswers = {}, continueSteps = false, eligibility = {}, acknowledgeRequired = false;
+let diversityAnswers = {}, continueSteps = false, eligibility = {}, autofillDefaults = [], acknowledgeRequired = false;
 
 // ─── Eligibility, asked once per country ─────────────────────────────────
 // "Do you require sponsorship to work in Poland?" can have a different answer
-// from the same question about the person's own country. Answers are kept in
-// this browser, per question type and country (eligibility).
+// from the same question about the person's own country. Answers are kept on
+// the account, per question type and country (src/defaults.js); `eligibility`
+// is the same answers as Autofill reads them ("requiresSponsorship:Poland").
 const ELIGIBILITY_KEYS = ['requiresSponsorship', 'workAuthorization'];
 const eligibilityKey = (field) => (field.country ? `${field.key}:${field.country}` : field.key);
 function hasEligibilityAnswer(field) {
-  if (eligibility[eligibilityKey(field)]) return true;
+  if (Object.keys(eligibility).some(key => key.toLowerCase() === eligibilityKey(field).toLowerCase())) return true;
   const home = String(profile.country ?? '').trim().toLowerCase();
   return (!field.country || field.country.toLowerCase() === home) && Boolean(eligibility[field.key] || profile[field.key]);
 }
@@ -57,21 +59,32 @@ function eligibilityQuestion(field) {
 function eligibilityCard() {
   const open = (scan?.fields ?? []).filter(field => ELIGIBILITY_KEYS.includes(field.key) && groupOn(field.key) && !hasEligibilityAnswer(field));
   if (!open.length) return '';
-  return `<div class="card eligibility-card"><h2>${icon('check')}Answer once</h2><p>This form asks about eligibility. Your answer is kept in this browser and used on later forms.</p><ul class="eligibility-list">${open.map(field => `<li><span>${esc(eligibilityQuestion(field))}</span><span class="eligibility-buttons"><button class="ghost small" data-eligibility="${esc(eligibilityKey(field))}" data-answer="Yes">Yes</button><button class="ghost small" data-eligibility="${esc(eligibilityKey(field))}" data-answer="No">No</button></span></li>`).join('')}</ul></div>`;
+  return `<div class="card eligibility-card"><h2>${icon('check')}Answer once</h2><p>This form asks about eligibility. Your answer is saved on your account for that country only, and used on later forms. You can also click the field's icon on the page.</p><ul class="eligibility-list">${open.map(field => `<li><span>${esc(eligibilityQuestion(field))}</span><span class="eligibility-buttons"><button class="ghost small" data-eligibility="${esc(eligibilityKey(field))}" data-answer="Yes">Yes</button><button class="ghost small" data-eligibility="${esc(eligibilityKey(field))}" data-answer="No">No</button></span></li>`).join('')}</ul></div>`;
 }
 document.addEventListener('click', async event => {
   const button = event.target.closest('[data-eligibility]');
   if (!button) return;
-  const next = { ...eligibility, [button.dataset.eligibility]: button.dataset.answer };
-  try { await chrome.storage.local.set({ eligibility: next }); eligibility = next; renderAutofill(); } catch { /* storage unavailable */ }
+  const [kind, ...scope] = button.dataset.eligibility.split(':');
+  button.disabled = true;
+  try { useDefaults(await saveDefault(kind, scope.join(':'), button.dataset.answer)); renderAutofill(); }
+  catch (error) { button.disabled = false; status('fill-status', error instanceof NotSignedInError ? 'Sign in to save eligibility answers.' : `Not saved: ${error.message}`, 'error'); }
 });
+const DEFAULT_LABELS = { requiresSponsorship: 'Sponsorship', workAuthorization: 'Work authorization', workedHereBefore: 'Worked here before' };
+// Answers still only in this browser (signed out since before 0.27.0) keep working until they move.
+let legacyEligibility = {};
+function useDefaults(rows) { autofillDefaults = Array.isArray(rows) ? rows : []; eligibility = { ...legacyEligibility, ...eligibilityMap(autofillDefaults) }; }
+/** Settings → Default answers: what was chosen from field icons or "Answer once", per country or company. */
 function renderEligibilityAnswers() {
-  const entries = Object.entries(eligibility);
-  $('eligibility-answers').hidden = !entries.length;
-  $('eligibility-answers-list').innerHTML = entries.map(([key, answer]) => {
-    const [type, country] = key.split(':');
-    return `<li><span>${type === 'requiresSponsorship' ? 'Sponsorship' : 'Work authorization'}${country ? ` · ${esc(country)}` : ''}: <strong>${esc(answer)}</strong></span><button data-remove-eligibility="${esc(key)}">Remove</button></li>`;
-  }).join('');
+  $('eligibility-answers').hidden = !autofillDefaults.length;
+  $('eligibility-answers-list').innerHTML = autofillDefaults.map(row => `<li><span>${esc(DEFAULT_LABELS[row.kind] ?? row.kind)}${row.scope ? ` · ${esc(row.scope)}` : ''}: <strong>${esc(row.value)}</strong></span><button data-remove-default="${esc(row.id)}">Remove</button></li>`).join('');
+}
+/**
+ * The account's defaults into the local copy the page scripts read. Answers
+ * kept in this browser before 0.27.0 move to the account first, once.
+ */
+async function loadDefaults() {
+  try { await moveLocalEligibility(); } catch { /* signed out or offline: try again next time */ }
+  try { useDefaults(await syncDefaults()); } catch { /* signed out or offline: the local copy stays */ }
 }
 
 /**
@@ -80,16 +93,22 @@ function renderEligibilityAnswers() {
  * Always marked "check it": a CV may leave employers out.
  */
 async function workedHereBefore() {
-  const company = String(scan?.context?.company ?? '').trim();
-  if (!company || !resumes.chosen || !scan?.fields?.some(field => field.key === 'workedHereBefore')) return {};
+  const asked = scan?.fields?.find(field => field.key === 'workedHereBefore');
+  // The company the question names ("employed at Box"), else the page's.
+  const company = String(asked?.company || scan?.context?.company || '').trim();
+  if (!company || !asked) return {};
+  // An answer chosen for this company from the field's icon wins over the CV.
+  const saved = workedBeforeFor(autofillDefaults, company);
+  if (saved) return { workedHereBefore: saved, workedHereBeforeSaved: true, workedHereBeforeReason: `Your answer for ${company}. Click to change it.` };
+  if (!resumes.chosen) return {};
   try {
     const text = (await cvTexts(resumes.items))[resumes.chosen.id];
     if (!text) return {};
     const name = company.toLowerCase();
     const listed = text.split('\n').some(line => { const value = line.trim().toLowerCase(); return value === name || value.startsWith(`${name} (`); });
     return listed
-      ? { workedHereBefore: 'Yes', workedHereBeforeReason: `Your CV lists ${company} as an employer, so "Yes". Check it.` }
-      : { workedHereBefore: 'No', workedHereBeforeReason: `${company} is not among the employers in your CV, so "No". Check it.` };
+      ? { workedHereBefore: 'Yes', workedHereBeforeReason: `Your CV lists ${company} as an employer, so "Yes". Check it, or click to save your answer.` }
+      : { workedHereBefore: 'No', workedHereBeforeReason: `${company} is not among the employers in your CV, so "No". Check it, or click to save your answer.` };
   } catch { return {}; }
 }
 const diversityValue = key => diversityAnswers[key] ?? 'Prefer not to answer';
@@ -669,10 +688,10 @@ async function renderAccount() {
 }
 async function doSignIn() {
   status('auth-status', 'Opening Google…');
-  try { await signIn(); await pullProfile(); await refresh(); void loadResumes(); status('auth-status', 'Signed in and profile synced.', 'success'); }
+  try { await signIn(); await pullProfile(); await loadDefaults(); await refresh(); void loadResumes(); status('auth-status', 'Signed in and profile synced.', 'success'); }
   catch (error) { status('auth-status', /redirect_uri|mismatch|400/i.test(error.message) ? 'Check the redirect URI in Sign-in setup below.' : error.message, 'error'); }
 }
-async function doPull() { status('auth-status', 'Syncing…'); try { await pullProfile(); await refresh(); void loadResumes(); status('auth-status', 'Profile up to date.', 'success'); } catch (error) { status('auth-status', error.message, 'error'); } }
+async function doPull() { status('auth-status', 'Syncing…'); try { await pullProfile(); await loadDefaults(); await refresh(); void loadResumes(); status('auth-status', 'Profile up to date.', 'success'); } catch (error) { status('auth-status', error.message, 'error'); } }
 async function doSignOut() { await signOut(); await renderAccount(); status('auth-status', 'Signed out. Your local details and PDF remain on this device.'); }
 async function renderSyncState() { const { sync } = await chrome.storage.local.get('sync'); $('sync-state').textContent = sync?.lastSyncedAt ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}` : 'Never synced'; }
 function selectTab(name) {
@@ -685,7 +704,7 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps', 'eligibility', 'acknowledgeRequired']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'aiDraftAuto', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
     if (sequence !== refreshId) return;
     if (tab?.url !== currentTab?.url && !sending) $('send-status').textContent = '';
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
@@ -696,7 +715,8 @@ async function refresh() {
     aiDraftAuto = stored.aiDraftAuto === true;
     diversityAnswers = stored.diversityAnswers ?? {};
     continueSteps = stored.continueSteps === true;
-    eligibility = stored.eligibility ?? {};
+    legacyEligibility = stored.eligibility ?? {};
+    useDefaults(stored.autofillDefaults);
     acknowledgeRequired = stored.acknowledgeRequired === true;
     await loadQuestions().catch(() => { formQuestions = []; });
     renderSendButton(); if (!filling) renderAutofill(); renderProfileOverview(); renderProfileForm(); renderResume();
@@ -747,9 +767,10 @@ $('save-diversity').addEventListener('click', async () => {
 });
 $('acknowledge-required').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ acknowledgeRequired: box.checked }); acknowledgeRequired = box.checked; } catch { box.checked = !box.checked; } });
 $('eligibility-answers-list').addEventListener('click', async event => {
-  const key = event.target.closest('[data-remove-eligibility]')?.dataset.removeEligibility; if (!key) return;
-  const next = { ...eligibility }; delete next[key];
-  try { await chrome.storage.local.set({ eligibility: next }); eligibility = next; renderEligibilityAnswers(); } catch { /* storage unavailable */ }
+  const button = event.target.closest('[data-remove-default]'); if (!button) return;
+  button.disabled = true;
+  try { useDefaults(await removeDefaultById(button.dataset.removeDefault)); renderEligibilityAnswers(); }
+  catch (error) { button.disabled = false; button.textContent = error instanceof NotSignedInError ? 'Sign in first' : 'Try again'; }
 });
 $('animate-fill').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ animateFill: box.checked }); } catch { box.checked = !box.checked; } });
 $('fill-marks').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ fillMarks: box.checked }); } catch { box.checked = !box.checked; } });
@@ -767,7 +788,7 @@ $('fill-groups').addEventListener('change', async event => {
   try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
 });
 $('ai-draft-auto').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ aiDraftAuto: box.checked }); aiDraftAuto = box.checked; } catch { box.checked = !box.checked; } });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill', 'acknowledgeRequired', 'eligibility']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('acknowledge-required').checked = settings.acknowledgeRequired === true; eligibility = settings.eligibility ?? {}; renderEligibilityAnswers(); $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'aiDraftAuto', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill', 'acknowledgeRequired', 'autofillDefaults']); $('ai-draft-auto').checked = settings.aiDraftAuto === true; $('acknowledge-required').checked = settings.acknowledgeRequired === true; useDefaults(settings.autofillDefaults); renderEligibilityAnswers(); $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });
@@ -778,3 +799,4 @@ chrome.storage.onChanged.addListener((_changes, area) => { if (area === 'local')
 chrome.tabs.onUpdated.addListener((id, info) => { if (id === currentTab?.id && (info.status === 'complete' || info.url)) void refresh(); });
 void refresh();
 void loadResumes();
+void loadDefaults();

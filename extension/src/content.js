@@ -18,13 +18,33 @@ const Filler = window.CVAutofillFiller;
 /** Kept between messages so "fill" acts on exactly what "scan" reported. */
 let lastScan = { found: [], skipped: [] };
 
-/** The employer's name: a company element, the site name, or the domain ("careers.zexter.com" → "Zexter"). */
+/**
+ * The employer's name: a company element, the site name, the page title on a
+ * job board ("Job Application for … at Box"), the board's logo ("Box Logo"),
+ * or the domain ("careers.zexter.com" → "Zexter"). A job board's own domain
+ * (job-boards.greenhouse.io) never names the employer.
+ */
+const BOARD_HOST = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
 function companyName() {
   const named = document.querySelector('.company-name, [data-testid="company-name"]')?.textContent?.trim()
     || document.querySelector('meta[property="og:site_name"]')?.content?.trim();
   if (named) return named.slice(0, 100);
+  if (BOARD_HOST.test(location.hostname)) {
+    const fromTitle = document.title.match(/^.*\bat\s+([^|–—]+?)\s*(?:[|–—].*)?$/i)?.[1]?.trim();
+    if (fromTitle) return fromTitle.slice(0, 100);
+    const logo = document.querySelector('img[alt$=" logo" i]')?.alt.replace(/\s+logo$/i, '').trim();
+    if (logo) return logo.slice(0, 100);
+    return '';
+  }
   const core = location.hostname.replace(/^(www|careers|jobs|apply|join)\./, '').split('.')[0] ?? '';
   return core ? core[0].toUpperCase() + core.slice(1) : '';
+}
+
+/** The company a "have you worked here before" question names ("employed at Box, including…"), else the page's. */
+function companyAskedAbout(element) {
+  const question = Fields.groupQuestion?.(element) || Fields.labelOf(element);
+  const named = question.match(/\b(?:employed|worked|work(?:ing)?)\s+(?:at|for|by|with)\s+([A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*){0,3})/)?.[1];
+  return (named && !/^(?:any|this|our|the|us)$/i.test(named) ? named : companyName()).replace(/[.,]+$/, '');
 }
 
 function scan() {
@@ -48,6 +68,7 @@ function scan() {
     fields: unique.map((field) => ({
       key: field.key,
       ...(field.country && { country: field.country }),
+      ...(field.key === 'workedHereBefore' && { company: companyAskedAbout(field.element) }),
       kind: field.kind,
       group: Fields.groupOf(field.key),
       source: field.source,
@@ -67,7 +88,10 @@ const Marks = window.CVAutofillMarks;
 // Each red icon (and the panel's "Still empty" list) says why Autofill did not
 // fill the field and what fixes it. The context is the last fill: its profile
 // values, the groups switched off, and the reasons fields failed.
-let lastFill = { profile: {}, failed: new Map() };
+let lastFill = { profile: {}, failed: new Map(), answers: new Map() };
+// Fields whose default can be set from the icon (same list as the server's EXTENSION_PROFILE_KEYS).
+const PROFILE_DEFAULTS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'salaryExpectation', 'noticePeriod']);
+const ELIGIBILITY_FIELDS = new Set(['requiresSponsorship', 'workAuthorization']);
 
 function explain(element) {
   const { profile, failed } = lastFill;
@@ -78,13 +102,14 @@ function explain(element) {
     const off = profile.offKeys?.[field.key];
     if (off) return `Off in Settings → Fields to fill (${off}).`;
     if (field.diversity) return 'Diversity questions are off in Settings → Fields to fill.';
-    if ((field.key === 'requiresSponsorship' || field.key === 'workAuthorization') && field.country) {
-      return `Answer once in the panel: ${field.key === 'requiresSponsorship' ? 'sponsorship' : 'work authorization'} for ${field.country}.`;
+    if (ELIGIBILITY_FIELDS.has(field.key)) {
+      const what = field.key === 'requiresSponsorship' ? 'sponsorship' : 'work authorization';
+      return field.country ? `No answer yet about ${what} for ${field.country}. Click to answer: it is saved for ${field.country} only.` : `No answer yet about ${what}. Click to answer.`;
     }
     if (field.key === 'resume') return profile.resumeDataUrl ? 'Your CV upload did not finish. Try Autofill again or upload it yourself.' : 'No CV chosen. Choose one in the Resume tab.';
-    if (field.key === 'workedHereBefore') return 'Could not tell from your CV. Answer it yourself.';
-    if (field.kind === 'select' || field.kind === 'radio' || field.kind === 'combobox') return `None of the options matched your profile answer for "${label}". Choose one yourself.`;
-    return `Your profile has no value for "${label}". Add it in the app's Profile.`;
+    if (field.key === 'workedHereBefore') return 'Could not tell from your CV. Click to answer for this company.';
+    if (field.kind === 'select' || field.kind === 'radio' || field.kind === 'combobox') return `None of the options matched your profile answer for "${label}". Click to choose one.`;
+    return PROFILE_DEFAULTS.has(field.key) ? `Your profile has no value for "${label}". Click to add it.` : `Your profile has no value for "${label}". Add it in the app's Profile.`;
   }
   const kind = Fields.leftAlone(element);
   if (kind === 'never') return 'A personal question Autofill never answers.';
@@ -94,7 +119,7 @@ function explain(element) {
       : 'Consent is yours to give. Choose it, or switch on Settings → Acknowledge required privacy notices.';
   }
   if (Fields.detectQuestions().some((question) => question.id === element.dataset.adcvField)) {
-    return 'The company\'s own question. Answer it, then use "Save answers from this form", or "Draft with AI" in the panel.';
+    return 'The company\'s own question. Click to answer it and save the answer, or use "Draft with AI" in the panel.';
   }
   return 'Autofill did not recognise this field. Fill it yourself.';
 }
@@ -179,7 +204,7 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
 
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
-  lastFill = { profile, failed: new Map() };
+  lastFill = { profile, failed: new Map(), answers: new Map(answers.map((item) => [String(item.id), item])) };
   // Settings → "Animate filling": the page follows each field as it fills. Icons appear as each field is done either way.
   const hooks = Marks?.fillHooks(await Marks.animationMode());
   const result = await runPass({ found: lastScan.found, profile, answers, hooks });
@@ -195,6 +220,171 @@ async function fill(profile, answers = []) {
     missing,
   };
 }
+
+// ─── Defaults chosen from a field's icon ────────────────────────────────
+// Clicking an icon opens a popover (marks.js). What it offers depends on the
+// field, and each choice fills the field now and is saved for later forms:
+//
+//   sponsorship / work authorization  Yes or No, saved for that country only
+//   worked here before                Yes or No, saved for this company only
+//   a profile value (phone, links…)   saved to the Profile in the app
+//   the company's own question        saved as an answer
+//   a diversity question              kept in this browser only
+//
+// Saving goes through the background script, which holds the sign-in.
+const sameText = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+const yesNo = (text) => (/^\s*yes\b/i.test(text) ? 'Yes' : /^\s*no\b/i.test(text) ? 'No' : String(text ?? '').trim());
+const sameGroup = (a, b) => a === b || (a.type === 'radio' && b.type === 'radio' && a.name && a.name === b.name);
+
+function fieldOf(element) {
+  const match = (list) => list.find((item) => sameGroup(item.element, element));
+  return match(lastScan.found) ?? match(Fields.detectFields().found) ?? null;
+}
+function questionOf(element) {
+  return Fields.detectQuestions().find((question) => { const tagged = byTag(question.id); return tagged && sameGroup(tagged, element); }) ?? null;
+}
+
+async function saveRemotely(type, target, value) {
+  try { return (await chrome.runtime.sendMessage({ type, target, value })) ?? { ok: false, message: 'Not saved: the extension did not answer.' }; }
+  catch { return { ok: false, message: 'Not saved: reload this page, the extension was updated.' }; }
+}
+
+/** Fills the field with the chosen value and updates its icon. */
+async function fillChosen(element, value) {
+  try { return await Filler.applyChoice(element, value); } catch (error) { return { filled: false, note: error.message }; }
+}
+
+async function finishChoice(element, done, saved, reason) {
+  const target = done.element ?? element;
+  if (done.filled && saved.ok) {
+    await Marks.show([{ element: target, status: 'ok', reason }]);
+    return { ok: true, message: 'Saved. Used on later forms too.' };
+  }
+  if (saved.ok) {
+    await Marks.show([{ element: target, status: 'missing', reason: `Your default is saved, but it could not be filled here${done.note ? ` (${done.note})` : ''}. Choose it yourself.` }]);
+    return { ok: true, message: 'Saved, but not filled here. Choose it in the form.' };
+  }
+  if (done.filled) await Marks.show([{ element: target, status: 'check', reason: 'Filled from your choice, but not saved as a default.' }]);
+  return { ok: false, message: saved.message };
+}
+
+/** What the icon's popover offers for this element, or null when it has no default (consent, CV, name…). */
+async function editorFor(element) {
+  if (!chrome.runtime?.id || !element.matches?.('input, select, textarea')) return null;
+  const field = fieldOf(element);
+  const question = field ? null : questionOf(element);
+  if (!field && !question) return null;
+  if (field?.key === 'resume' || Fields.leftAlone(element)) return null;
+  const { autofillDefaults = [], profile = {}, diversityAnswers = {} } = await chrome.storage.local.get(['autofillDefaults', 'profile', 'diversityAnswers']);
+  const kind = Filler.controlKind(element);
+  const formChoices = Filler.choicesFor(element);
+  const inForm = () => Fields.currentAnswer(element, kind);
+  const fromForm = kind === 'combobox' || kind === 'select' || kind === 'radio';
+  const company = companyName();
+
+  if (field && (ELIGIBILITY_FIELDS.has(field.key) || field.key === 'workedHereBefore')) {
+    const scope = field.key === 'workedHereBefore' ? companyAskedAbout(element) : field.country ?? '';
+    if (field.key === 'workedHereBefore' && !scope) return null;
+    const target = { type: 'default', kind: field.key, scope };
+    const current = autofillDefaults.find((row) => row.kind === field.key && sameText(row.scope, scope))?.value ?? '';
+    const what = { requiresSponsorship: 'Sponsorship', workAuthorization: 'Work authorization', workedHereBefore: 'Worked here before' }[field.key];
+    const reason = field.key === 'workedHereBefore' ? `Your answer for ${scope}. Click to change it.` : scope ? `Your answer for ${scope}. Click to change it.` : 'Your answer. Click to change it.';
+    const choose = async (value) => {
+      const answer = yesNo(value);
+      const done = await fillChosen(element, answer);
+      return finishChoice(element, done, await saveRemotely('default-save', target, answer), reason);
+    };
+    return {
+      heading: scope ? `${what} · ${scope}` : what,
+      currentLabel: scope ? `Your answer for ${scope}` : 'Your answer',
+      current,
+      choices: ['Yes', 'No'],
+      fromForm: kind === 'combobox',
+      canReset: Boolean(current),
+      note: field.key === 'workedHereBefore' ? `Saved for ${scope} only.` : scope ? `Saved for ${scope} only. Other countries are asked separately.` : 'Used when a question names no country.',
+      choose,
+      saveFromForm: async () => {
+        const value = yesNo(inForm());
+        if (!value) return { ok: false, message: 'Choose an option in the form first.' };
+        return finishChoice(element, { filled: true }, await saveRemotely('default-save', target, value), reason);
+      },
+      reset: async () => {
+        const result = await saveRemotely('default-reset', target);
+        return result.ok ? { ok: true, message: 'Forgotten. The field keeps its value.' } : result;
+      },
+    };
+  }
+
+  if (field?.diversity) {
+    const current = diversityAnswers[field.key] ?? '';
+    const store = async (choice) => {
+      const { diversityAnswers: saved = {} } = await chrome.storage.local.get('diversityAnswers');
+      await chrome.storage.local.set({ diversityAnswers: { ...saved, [field.key]: choice } });
+      return { ok: true };
+    };
+    const canonical = (text) => Filler.diversityChoiceFor(field.key, text) ?? String(text).trim();
+    return {
+      heading: Fields.labelOf(element).slice(0, 60),
+      current,
+      choices: formChoices,
+      fromForm: kind === 'combobox',
+      canReset: Boolean(current),
+      note: 'Kept in this browser only. Diversity answers fill only when switched on in Settings → Fields to fill.',
+      choose: async (value) => finishChoice(element, await fillChosen(element, value), await store(canonical(value)), 'From your diversity answers'),
+      saveFromForm: async () => { const value = inForm(); return value ? finishChoice(element, { filled: true }, await store(canonical(value)), 'From your diversity answers') : { ok: false, message: 'Choose an option in the form first.' }; },
+      reset: async () => {
+        const { diversityAnswers: saved = {} } = await chrome.storage.local.get('diversityAnswers');
+        const { [field.key]: _gone, ...rest } = saved;
+        await chrome.storage.local.set({ diversityAnswers: rest });
+        return { ok: true, message: 'Forgotten. "Prefer not to answer" is used again.' };
+      },
+    };
+  }
+
+  if (field) {
+    if (!PROFILE_DEFAULTS.has(field.key)) return null;
+    const target = { type: 'profile', key: field.key };
+    const current = String(profile[field.key] ?? '').trim();
+    const save = async (value, done) => finishChoice(element, done, await saveRemotely('default-save', target, value), 'From your profile');
+    return {
+      heading: Fields.labelOf(element).slice(0, 60),
+      currentLabel: 'In your profile',
+      current,
+      choices: formChoices,
+      text: formChoices ? null : { value: current || inForm() },
+      fromForm,
+      canReset: false,
+      note: 'Saved to your Profile in the app. Change or clear it there too.',
+      choose: async (value) => (String(value).trim() ? save(String(value).trim(), await fillChosen(element, value)) : { ok: false, message: 'Type a value first.' }),
+      saveFromForm: async () => { const value = inForm(); return value ? save(value, { filled: true }) : { ok: false, message: 'Fill it in the form first.' }; },
+    };
+  }
+
+  // The company's own question: saved as an answer, found again on the next form that asks it.
+  const target = { type: 'answer', question: question.question, company };
+  const used = lastFill.answers.get(String(question.id));
+  const current = used?.value ?? '';
+  const save = async (value, done) => finishChoice(element, done, await saveRemotely('default-save', target, value), 'From your saved answers');
+  const multiline = kind === 'textarea';
+  return {
+    heading: '',
+    currentLabel: 'Your saved answer',
+    current: current.length > 80 ? `${current.slice(0, 80)}…` : current,
+    choices: formChoices,
+    text: formChoices ? null : { value: current || inForm(), multiline },
+    fromForm,
+    canReset: Boolean(used),
+    note: 'Saved to your answers in the app, and used when another form asks this question.',
+    choose: async (value) => (String(value).trim() ? save(String(value).trim(), await fillChosen(element, value)) : { ok: false, message: 'Type an answer first.' }),
+    saveFromForm: async () => { const value = inForm(); return value ? save(value, { filled: true }) : { ok: false, message: 'Answer it in the form first.' }; },
+    reset: async () => {
+      const result = await saveRemotely('default-reset', { type: 'answer', question: used?.savedQuestion || question.question });
+      if (result.ok) lastFill.answers.delete(String(question.id));
+      return result.ok ? { ok: true, message: 'Forgotten. The field keeps its value.' } : result;
+    },
+  };
+}
+Marks?.setEditor(editorFor);
 
 /** Scrolls to a field from the panel's "still empty" list and outlines it briefly. */
 function focusField(id) {
@@ -255,7 +445,7 @@ async function fillNextStep() {
     const reply = await chrome.runtime.sendMessage({ type: 'step-request', questions });
     if (!reply?.armed) { stepsArmed = false; return; }
     const hooks = Marks?.fillHooks(await Marks.animationMode());
-    lastFill = { profile: reply.profile, failed: lastFill.failed };
+    lastFill = { profile: reply.profile, failed: lastFill.failed, answers: new Map([...lastFill.answers, ...(reply.answers ?? []).map((item) => [String(item.id), item])]) };
     const result = await runPass({ found: fresh, profile: reply.profile, answers: reply.answers ?? [], hooks, explainIf: (element) => isNew.has(element) });
     await hooks?.finish?.(fresh);
     hooks?.end();

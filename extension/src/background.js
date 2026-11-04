@@ -1,4 +1,6 @@
-import { matchAnswers } from './answers.js';
+import { matchAnswers, saveAnswers } from './answers.js';
+import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
+import { NotSignedInError } from './jobs.js';
 
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
@@ -140,6 +142,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })().catch(() => sendResponse({ armed: false }));
     return true;
   }
+  // A default chosen from a field's icon on the page (marks.js), in any frame.
+  if ((message?.type === 'default-save' || message?.type === 'default-reset') && fromContent) {
+    changeDefault(message).then(sendResponse, (error) => sendResponse({
+      ok: false,
+      message: error instanceof NotSignedInError ? 'Not saved: sign in from the panel first.' : `Not saved: ${error.message}`,
+    }));
+    return true;
+  }
   if (!fromPage) { sendResponse({ ok: false }); return false; }
   if (message?.type === 'panel-state') {
     openTabs().then((tabs) => sendResponse({ open: tabs.has(tabId) }), () => sendResponse({ open: false }));
@@ -161,6 +171,37 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (hasManifestScripts(tab.url)) return; // The page's own host reopens the panel.
   if (!(await injectPanel(tabId))) await setTabOpen(tabId, false);
 });
+const DEFAULT_KINDS = new Set(['workAuthorization', 'requiresSponsorship', 'workedHereBefore']);
+// Same list as the server's (EXTENSION_PROFILE_KEYS): name and email stay in the app.
+const PROFILE_KEYS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod']);
+
+/**
+ * Saves or forgets one default on the account. `target` says where it lives:
+ * { type: 'default', kind, scope } for eligibility (per country) and worked
+ * here before (per company), { type: 'profile', key } for a profile value,
+ * { type: 'answer', question, company } for a company's own question.
+ */
+async function changeDefault({ type, target = {}, value }) {
+  const text = String(value ?? '').trim().slice(0, 5000);
+  const reset = type === 'default-reset';
+  if (!reset && !text) return { ok: false, message: 'Choose or type a value first.' };
+  if (target.type === 'default' && DEFAULT_KINDS.has(target.kind)) {
+    const scope = String(target.scope ?? '').slice(0, 200);
+    if (reset) await removeDefault(target.kind, scope); else await saveDefault(target.kind, scope, text.slice(0, 500));
+    return { ok: true };
+  }
+  if (target.type === 'answer' && target.question) {
+    if (reset) await forgetAnswer(String(target.question).slice(0, 500));
+    else await saveAnswers(String(target.company ?? '').slice(0, 200), [{ question: String(target.question).slice(0, 500), answer: text }]);
+    return { ok: true };
+  }
+  if (target.type === 'profile' && PROFILE_KEYS.has(target.key) && !reset) {
+    await saveProfileValues({ [target.key]: text.slice(0, 500) });
+    return { ok: true };
+  }
+  return { ok: false, message: 'This field has no default to change.' };
+}
+
 chrome.tabs.onRemoved.addListener((tabId) => {
   void setTabOpen(tabId, false);
   void chrome.storage.session.remove(stepKey(tabId)).catch(() => {});

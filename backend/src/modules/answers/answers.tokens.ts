@@ -1,1 +1,2 @@
 export const ANSWER_REPOSITORY = Symbol('ANSWER_REPOSITORY');
+export const DEFAULT_REPOSITORY = Symbol('DEFAULT_REPOSITORY');

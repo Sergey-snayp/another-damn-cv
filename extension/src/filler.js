@@ -432,7 +432,8 @@ const ELIGIBILITY = new Set(['requiresSponsorship', 'workAuthorization']);
 function eligibilityValue(field, profile) {
   const answers = profile.eligibility ?? {};
   if (field.country) {
-    const own = answers[`${field.key}:${field.country}`];
+    const wanted = `${field.key}:${field.country}`.toLowerCase();
+    const own = Object.entries(answers).find(([key]) => key.toLowerCase() === wanted)?.[1];
     if (own) return own;
     const home = String(profile.country ?? '').trim().toLowerCase();
     return home && home === field.country.toLowerCase() ? answers[field.key] || profile[field.key] : '';
@@ -470,7 +471,7 @@ function markFor(field, result, profile) {
   }
   if (result.note) return { status: 'check', reason: `Check this: ${result.note}` };
   // Worked here before: answered from the CV's employers, which may be incomplete.
-  if (field.key === 'workedHereBefore') return { status: 'check', reason: profile.workedHereBeforeReason || 'From your CV. Check it.' };
+  if (field.key === 'workedHereBefore') return { status: profile.workedHereBeforeSaved ? 'ok' : 'check', reason: profile.workedHereBeforeReason || 'From your CV. Check it.' };
   return { status: 'ok', reason: field.diversity ? 'From your diversity answers' : ELIGIBILITY.has(field.key) && field.country ? `Your answer for ${field.country}` : 'From your profile' };
 }
 
@@ -578,4 +579,67 @@ async function fillAcknowledgement(item) {
   return { filled: false };
 }
 
-window.CVAutofillFiller = { isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+// ─── A value chosen from a field's icon (marks.js) ───────────────────────
+// The person picked it themselves, so unlike saved answers it replaces what
+// the field holds.
+
+/** What kind of control the element is, in the detector's terms ("number" for number inputs). */
+function controlKind(element) {
+  const kind = window.CVAutofillFields.kindOf(element);
+  return kind === 'text' && element.type === 'number' ? 'number' : kind;
+}
+
+const radiosOf = (element) => [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+const radioText = (radio) => window.CVAutofillFields.labelOf(radio.labels?.[0] ?? radio).trim();
+const PLACEHOLDER = /^(select|choose|please select|pick)\b|^[-—–]+/i;
+
+/** The options a person can choose from, or null when the field takes text (or hides its options, like react-select). */
+function choicesFor(element) {
+  const kind = controlKind(element);
+  if (kind === 'select') {
+    return [...element.options].filter((option) => option.value !== '' && !option.disabled && !PLACEHOLDER.test(option.text.trim())).map((option) => option.text.trim()).filter(Boolean);
+  }
+  if (kind === 'radio') return radiosOf(element).map(radioText).filter(Boolean);
+  if (kind === 'checkbox') return ['Yes', 'No'];
+  return null;
+}
+
+/** Fills the element with the chosen value, replacing what it holds. Returns { filled, element, note }. */
+async function applyChoice(element, value) {
+  const kind = controlKind(element);
+  if (kind === 'radio') {
+    const radios = radiosOf(element);
+    const option = radios.find((radio) => normal(radioText(radio)) === normal(value))
+      ?? radios.find((radio) => normal(radioText(radio)).startsWith(normal(value)));
+    if (!option) return { filled: false, note: 'that option is not on this form' };
+    if (!option.checked) option.click();
+    return { filled: option.checked, element: option };
+  }
+  if (kind === 'checkbox') {
+    const wanted = /^(yes|true|1)$/i.test(String(value).trim());
+    if (element.checked !== wanted) element.click();
+    return { filled: element.checked === wanted };
+  }
+  if (kind === 'select') return { filled: fillSelect(element, value) };
+  if (kind === 'combobox') return fillCombobox(element, value);
+  if (kind === 'number') return { filled: fillNumber(element, value) };
+  return { filled: fillText(element, value) };
+}
+
+/**
+ * The person's saved diversity choice for a form's option text: "Decline to
+ * self-identify" is "Prefer not to answer". Same choices as the panel's
+ * diversity dialog (DIVERSITY_CHOICES in sidepanel.js).
+ */
+const DIVERSITY_VOCABULARY = {
+  eeoGender: ['Prefer not to answer', 'Woman', 'Man', 'Non-binary'],
+  eeoHispanic: ['Prefer not to answer', 'Yes', 'No'],
+  eeoRace: ['Prefer not to answer', 'American Indian or Alaska Native', 'Asian', 'Black or African American', 'Hispanic or Latino', 'Native Hawaiian or Other Pacific Islander', 'White', 'Two or more races'],
+  eeoVeteran: ['Prefer not to answer', 'I am not a protected veteran', 'I am a protected veteran'],
+  eeoDisability: ['Prefer not to answer', 'No', 'Yes'],
+};
+function diversityChoiceFor(key, optionText) {
+  return (DIVERSITY_VOCABULARY[key] ?? []).find((choice) => diversityOptionMatches(key, choice, optionText)) ?? null;
+}
+
+window.CVAutofillFiller = { controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };

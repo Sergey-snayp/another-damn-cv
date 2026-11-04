@@ -14,6 +14,8 @@ export interface AnswerRepository {
   upsertMany(userId: string, answers: NewAnswer[]): Promise<SavedAnswer[]>;
   update(userId: string, id: string, answer: string): Promise<SavedAnswer | null>;
   remove(userId: string, id: string): Promise<boolean>;
+  /** Deletes the answer saved for this question key, if any. */
+  removeByKey(userId: string, questionKey: string): Promise<boolean>;
   markUsed(userId: string, ids: string[]): Promise<void>;
 }
 

@@ -23,6 +23,7 @@ import { DraftError, type DraftRequest } from '../../../domain/drafts';
 import {
   DeleteAnswer,
   DraftAnswer,
+  ForgetAnswer,
   ListAnswers,
   MatchAnswers,
   SaveAnswers,
@@ -56,6 +57,8 @@ export const matchAnswersSchema = z
       .max(100),
   })
   .strict();
+
+export const forgetAnswerSchema = z.object({ question }).strict();
 
 export const draftAnswerSchema = z
   .object({
@@ -128,7 +131,14 @@ export class ExtensionAnswersController {
     @Inject(SaveAnswers) private readonly saveAnswers: SaveAnswers,
     @Inject(MatchAnswers) private readonly matchAnswers: MatchAnswers,
     @Inject(DraftAnswer) private readonly draftAnswer: DraftAnswer,
+    @Inject(ForgetAnswer) private readonly forgetAnswer: ForgetAnswer,
   ) {}
+  @Post('forget') @HttpCode(200) forget(
+    @CurrentUser() userId: string,
+    @Body(new ZodValidationPipe(forgetAnswerSchema)) body: { question: string },
+  ) {
+    return this.forgetAnswer.execute(userId, body.question);
+  }
   /** Runs Claude for one question. Only on the person's click in the extension. */
   @Post('draft') @HttpCode(200) draft(
     @CurrentUser() userId: string,

@@ -30,3 +30,35 @@ export const answersApi = {
     await call(`/${id}`, { method: "DELETE" });
   },
 };
+
+/**
+ * A default answer chosen from a field's icon in the extension: work
+ * authorization and sponsorship per country, "worked here before" per company.
+ */
+export interface AutofillDefault {
+  id: string;
+  kind: "workAuthorization" | "requiresSponsorship" | "workedHereBefore";
+  scope: string;
+  value: string;
+  updatedAt: string;
+}
+
+async function callDefaults(path: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(`/api/defaults${path}`, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  if (response.status === 401) throw new UnauthorizedError();
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response;
+}
+
+export const defaultsApi = {
+  list: async () => (await callDefaults("")).json() as Promise<AutofillDefault[]>,
+  update: async (id: string, value: string) =>
+    (await callDefaults(`/${id}`, { method: "PATCH", body: JSON.stringify({ value }) })).json() as Promise<AutofillDefault>,
+  remove: async (id: string) => {
+    await callDefaults(`/${id}`, { method: "DELETE" });
+  },
+};
