@@ -398,6 +398,23 @@ Add to `CATEGORIES` in `src/fields.js`, add its label and group in
 
 ## Development
 
+### Autofill layout
+
+Keep this view compact and calm:
+
+- Show the current job as a small header, with Save or View in app nearby.
+- Group CV choice, PDF preview, and Autofill in one card. Autofill is the main action.
+- Keep errors and missing required fields visible. Put routine fill notes,
+  keyword matching, and field previews in expandable sections.
+- Keep sections open after a redraw. Use space and thin dividers to separate
+  tasks, rather than adding more boxes or smaller text.
+
+This follows NN/g's guidance on [proximity](https://www.nngroup.com/articles/gestalt-proximity/)
+and [progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/).
+Use `test/profile-tab.html?cvs&layout` to preview the initial Autofill state.
+
+### Text previews
+
 Display labels and previews use a shared **64-character limit** in
 `src/text-display.js`: job/company names, CV names, status messages, field
 previews and Profile cards. Long text ends in `…`; hover to read the full text.

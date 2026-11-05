@@ -327,10 +327,10 @@ function pageCard() {
   const button = jobBusy ? '<div class="job-adding" aria-live="polite">Adding to your jobs…</div>'
     : jobFormLoading ? '<div class="job-adding" aria-live="polite">Reading the job…</div>'
       : saved || jobProblem || jobForm ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
-  return `<div class="card page-card" id="job-card">
+  return `<section class="job-context" aria-label="Current job"><div class="page-card" id="job-card">
     <span class="company-avatar" data-initials="${esc(initials)}">${logo ? `<img src="${esc(logo)}" alt="" referrerpolicy="no-referrer">` : esc(initials)}</span>
     <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-company">${esc(company)}</span><span class="page-site">${esc(scan.host)}</span></span>
-  </div>${jobBanner()}${form}${button}`;
+  </div><div class="job-context-actions">${jobBanner()}${button}</div></section>${form}`;
 }
 /** "Add this job to the app": opens the "Save job" form, filled from the page. Nothing is saved yet. */
 async function onAddJob() {
@@ -451,7 +451,7 @@ function renderAutofill() {
   }
   if (!scan || !scan.fields?.length) {
     const opener = scan?.canOpenForm ? `<button class="primary" id="open-form">${icon('file')}Open application form</button>` : '';
-    host.innerHTML = `${pageCard()}${autofillCvCard()}${matchCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'This job page opens its form when you press Apply.' : scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
+    host.innerHTML = `${pageCard()}${autofillCvCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'Open the form to start Autofill.' : scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${matchCard()}`;
     $('rescan-empty').addEventListener('click', refresh);
     $('open-form')?.addEventListener('click', openForm);
     return;
@@ -460,17 +460,18 @@ function renderAutofill() {
   const groups = new Map();
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
-  host.innerHTML = `${pageCard()}${autofillCvCard()}
-    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
-    ${matchCard()}
+  host.innerHTML = `${pageCard()}<section class="card autofill-workspace" aria-label="Autofill this application">${autofillCvCard(true)}
+    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><p class="hint">${ready} of ${scan.fields.length} fields ready · Review before submitting</p><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div></section>
     ${eligibilityCard()}
-    <details class="card" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
+    ${matchCard()}
+    <details class="card autofill-detail" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check', 18)}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
   $('add-details')?.addEventListener('click', () => void openApp('/profile'));
 }
 async function runFill() {
   if (filling || switchingCv) return;
   closeCvMenu();
+  cvStatus('');
   filling = true;
   document.querySelectorAll('[data-cv-select]').forEach(button => { button.disabled = true; });
   const button = $('fill'); button.disabled = true;
@@ -557,11 +558,11 @@ async function savedAnswersFor(tab) {
 /** Notes from the last fill ("CV: uploaded") and required fields still empty. */
 function fillReportDetails() {
   if (!fillReport) return '';
-  const notes = fillReport.notes.length ? `<ul class="fill-notes">${fillReport.notes.map(note => `<li>${esc(note)}</li>`).join('')}</ul>` : '';
+  const notes = fillReport.notes.length ? `<details class="fill-notes-disclosure" data-keep-open="fill-report" ${keptOpen.has('fill-report') ? 'open' : ''}><summary>Fill details<span class="summary-count">${fillReport.notes.length}</span></summary><ul class="fill-notes">${fillReport.notes.map(note => `<li>${esc(note)}</li>`).join('')}</ul></details>` : '';
   const missing = fillReport.missing.length
     ? `<div class="still-empty"><strong>Still empty and required (${fillReport.missing.length})</strong><ul>${fillReport.missing.map(item => `<li><button data-focus-field="${esc(item.id)}"><span class="empty-label">${esc(item.label)}${item.reason ? `<small>${esc(item.reason)}</small>` : ''}</span><span>Go to</span></button></li>`).join('')}</ul><button class="ghost" id="check-required">${icon('refresh', 16)}Check again</button></div>`
     : fillReport.kind === 'success' ? '<p class="hint">No required fields are empty.</p>' : '';
-  return notes + missing;
+  return missing + notes;
 }
 async function checkRequired() {
   const replies = await askForms({ type: 'check-required' });
@@ -813,8 +814,8 @@ function cvPicker(id = 'cv-select') {
     <div class="cv-picker-actions"><span class="cv-badge">PDF${chosen.isPrimary ? ' · Default' : ''}</span><button class="link-button cv-preview" type="button" data-open-cv="${esc(chosen.id)}">${icon('eye', 16)}Preview resume</button></div>
     ${long ? `<details class="cv-full-name"><summary>Full CV name</summary><p>${esc(chosen.name)}</p></details>` : ''}`;
 }
-function autofillCvCard() {
-  return `<div class="card autofill-cv-card"><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div><p class="cv-note">${groupOn('resume') ? 'Autofill uploads the selected CV.' : 'CV uploads are off in Settings.'}</p><div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div></div>`;
+function autofillCvCard(embedded = false) {
+  return `<div class="${embedded ? '' : 'card '}autofill-cv-card"><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div>${!groupOn('resume') ? '<p class="cv-note">CV uploads are off in Settings.</p>' : ''}<div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div></div>`;
 }
 function renderResume() {
   $('resume-picker').innerHTML = cvPicker();
@@ -826,7 +827,11 @@ function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); if 
 async function loadResumes() {
   if (loadingResumes) return;
   loadingResumes = true; rerenderResumes();
-  try { resumes = await fetchResumes(); resumeProblem = ''; }
+  try {
+    const previousId = resumes.chosen?.id;
+    resumes = await fetchResumes(); resumeProblem = '';
+    if (previousId !== resumes.chosen?.id) cvStatus('');
+  }
   catch (error) { resumeProblem = error instanceof NotSignedInError ? 'signed-out' : error.message; }
   finally { loadingResumes = false; rerenderResumes(); }
 }
@@ -883,20 +888,19 @@ async function replaceUploadedCv() {
 // ─── Keyword match card ───────────────────────────────────────────────────
 // On a job description page, scores how many of the posting's keywords each CV
 // mentions (src/match.js). Keywords only: it does not judge experience depth.
-const RING = 2 * Math.PI * 30;
 function matchCard() {
   if (!match) return '';
   const { score, matched, missing } = match.chosen;
   const label = matchLabel(score), total = matched.length + missing.length;
   const keywords = [...matched.map(name => `<li class="kw has">${icon('check', 13)}${esc(name)}</li>`), ...missing.map(name => `<li class="kw missing">${esc(name)}</li>`)].join('');
-  return `<section class="card match-card match-${label.toLowerCase()}" aria-label="Keyword match">
-    <div class="match-top"><div><h2>${label} match</h2><p><strong>${matched.length} of ${total}</strong> keywords in <span class="cv-inline" title="${esc(resumes.chosen.name)}">${esc(resumes.chosen.name)}</span></p></div>
-      <div class="ring" role="img" aria-label="Score ${score} of 100"><svg viewBox="0 0 72 72" width="72" height="72"><circle cx="36" cy="36" r="30" class="ring-track"/><circle cx="36" cy="36" r="30" class="ring-value" stroke-dasharray="${(RING * score) / 100} ${RING}" transform="rotate(-90 36 36)"/></svg><span>${score}</span></div></div>
+  return `<details class="card autofill-detail match-card match-${label.toLowerCase()}" aria-label="Keyword match" data-keep-open="match" ${keptOpen.has('match') ? 'open' : ''}>
+    <summary><span class="match-heading"><strong>${label} keyword match</strong><span>${matched.length} of ${total} keywords</span></span><span class="match-score" aria-label="Keyword match ${score}%">${score}%</span></summary>
+    <p class="hint">Keyword coverage only. Check the job requirements too.</p>
     ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p><span class="cv-inline" title="${esc(match.better.name)}">${esc(match.better.name)}</span> matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
-    <details class="keywords" data-keep-open="keywords" ${keptOpen.has('keywords') ? 'open' : ''}><summary>Keywords from the posting</summary><p class="hint">Counts the posting's keywords found in your CV. It does not judge how deep your experience is.</p><ul>${keywords}</ul></details>
-    <button class="primary" id="improve-match">Improve my match${icon('chevron', 17)}</button>
+    <div class="keywords"><p class="group">Keywords from the posting</p><ul>${keywords}</ul></div>
+    <button class="ghost" id="improve-match">Improve my match${icon('chevron', 17)}</button>
     <div class="status" id="match-status" role="status"></div>
-  </section>`;
+  </details>`;
 }
 /** Reads the page once per address; rescoring after a CV switch reuses the keywords. */
 async function updateMatch() {
@@ -982,6 +986,7 @@ async function refresh() {
     const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
     if (sequence !== refreshId) return;
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
+    if (currentTab?.url !== tab?.url || resumes.chosen?.id !== nextResumes.chosen?.id) cvStatus('');
     void checkSaved(tab?.url);
     fillGroups = stored.autofillGroups ?? {};
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
