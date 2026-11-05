@@ -1,5 +1,5 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
-import { captureTab, jobUrl, lookupJob, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
+import { captureTab, jobUrl, lookupJob, postingDatesFor, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
 import { observeTextPreviews, previewCvName } from './text-display.js';
 import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl } from './resumes.js';
@@ -273,7 +273,17 @@ function jobLogo() {
   return context.logoDomain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(context.logoDomain)}&sz=128` : null;
 }
 /** Whether this page's job is saved: on a new page, and again at most once a minute. */
+// When the job was posted, from its job board (the server asks the board's public API), once per page.
+let boardDates = { url: null, posted: null };
 async function checkSaved(url) {
+  if (url && boardDates.url !== url) {
+    boardDates = { url, posted: null };
+    void postingDatesFor(url).then(found => {
+      if (boardDates.url !== url || !found) return;
+      boardDates.posted = found.posted ?? found.updated ?? null;
+      if (!filling) renderAutofill();
+    });
+  }
   if (!url || (savedJob.url === url && Date.now() - savedJob.checkedAt < 60_000)) return;
   if (savedJob.url !== url) { savedJob = { url, job: null, checkedAt: 0 }; jobAdded = false; jobProblem = ''; jobForm = null; }
   savedJob.checkedAt = Date.now();
@@ -324,21 +334,23 @@ function pageCard() {
   const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
   const logo = jobLogo();
   const saved = savedJob.url === currentTab?.url && savedJob.job;
-  const posted = postingDate(scan.context?.postedAt ?? (saved ? saved.postedAt : null));
+  // The job board's own date first (as Simplify), else the page's, else the saved job's.
+  const posted = postingDate((boardDates.url === currentTab?.url && boardDates.posted) || scan.context?.postedAt || (saved ? saved.postedAt : null));
   const form = jobForm && !saved && !jobBusy ? jobFormHtml() : '';
   const button = jobBusy ? '<div class="job-adding" aria-live="polite">Adding to your jobs…</div>'
     : jobFormLoading ? '<div class="job-adding" aria-live="polite">Reading the job…</div>'
       : saved || jobProblem || jobForm ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
   return `<section class="job-context" aria-label="Current job"><div class="page-card" id="job-card">
     <span class="company-avatar" data-initials="${esc(initials)}">${logo ? `<img src="${esc(logo)}" alt="" referrerpolicy="no-referrer">` : esc(initials)}</span>
-    <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-meta"><span class="page-card-company" title="${esc(company)}">${esc(company)}</span>${posted ? `<span class="posted-date"><span aria-hidden="true">·</span> <time datetime="${posted.day}">Posted ${posted.label}</time></span>` : ''}</span></span>
+    <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-meta"><span class="page-card-company" title="${esc(company)}">${esc(company)}</span>${posted ? `<span class="posted-date"><span aria-hidden="true">·</span> <time datetime="${posted.day}">Posted on ${posted.label}</time></span>` : ''}</span></span>
   </div><div class="job-context-actions">${jobBanner()}${button}</div></section>${form}`;
 }
 function postingDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value)) return null;
   const day = value.slice(0, 10), date = new Date(`${day}T00:00:00Z`);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day) return null;
-  return { day, label: date.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) };
+  // Simplify's wording: "Posted on 10/30/2026" (the day the board gives, not shifted to another time zone).
+  return { day, label: `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}` };
 }
 /** "Add this job to the app": opens the "Save job" form, filled from the page. Nothing is saved yet. */
 async function onAddJob() {

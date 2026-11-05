@@ -108,6 +108,19 @@ export async function recordApplication(jobId, { resumeId, answers }) {
   return response.json();
 }
 
+/**
+ * When the page's job was posted, from its job board (Greenhouse, Lever, Ashby,
+ * SmartRecruiters), as Simplify shows it: { posted, updated, board } or null.
+ */
+export async function postingDatesFor(url) {
+  const { auth } = await chrome.storage.local.get('auth');
+  if (!auth?.syncToken) return null;
+  try {
+    const response = await fetch(`${API_URL}/api/jobs/posting-date?url=${encodeURIComponent(url)}`, { headers: { Authorization: `Bearer ${auth.syncToken}` } });
+    return response.ok ? (await response.json()).posting ?? null : null;
+  } catch { return null; }
+}
+
 export class NotSignedInError extends Error {
   constructor() {
     super('Sign in first: open the Profile tab.');

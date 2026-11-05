@@ -16,6 +16,7 @@ import { AuthGuard, CurrentUser, SyncTokenGuard } from '../../../../auth/http';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { CaptureJob } from '../../../application/use-cases/capture-job';
 import { FindCapturedJob } from '../../../application/use-cases/find-captured-job';
+import { GetPostingDates } from '../../../application/use-cases/get-posting-dates';
 import { RecordApplication } from '../../../application/use-cases/manage-applications';
 import { CreateManualJob } from '../../../application/use-cases/create-manual-job';
 import { DeleteJob } from '../../../application/use-cases/delete-job';
@@ -53,6 +54,7 @@ export class JobsController {
     @Inject(DeleteJob) private readonly deleteJob: DeleteJob,
     @Inject(CaptureJob) private readonly captureJob: CaptureJob,
     @Inject(FindCapturedJob) private readonly findCapturedJob: FindCapturedJob,
+    @Inject(GetPostingDates) private readonly postingDates: GetPostingDates,
     @Inject(RecordApplication) private readonly recordApplication: RecordApplication,
     @Inject(CreateManualJob) private readonly createManualJob: CreateManualJob,
     @Inject(RereadJob) private readonly rereadJob: RereadJob,
@@ -78,6 +80,13 @@ export class JobsController {
     @Body(new ZodValidationPipe(recordApplicationSchema)) body: RecordApplicationInput,
   ) {
     return presentJob(await this.recordApplication.execute(userId, id, body));
+  }
+
+  /** When the page's job was posted, from its job board: the extension's job card shows "Posted on …". */
+  @Get('posting-date')
+  @UseGuards(SyncTokenGuard)
+  async postingDate(@Query(new ZodValidationPipe(lookupQuerySchema)) query: { url: string }) {
+    return { posting: await this.postingDates.execute(query.url) };
   }
 
   /** Whether the page's job is saved: the extension's job card shows "Saved". */

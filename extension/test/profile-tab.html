@@ -32,6 +32,8 @@
   // ?cvs: three CVs and a job posting; the Resume tab's CV dropdown, and switching after Autofill uploaded a CV.
   const CVS_MODE = location.search.includes('cvs');
   const POSTED_MODE = location.search.includes('posted');
+  // ?board: the page has no date, but the job board says when it was posted (Greenhouse's first_published).
+  const BOARD_MODE = location.search.includes('board');
   const JOB_TEXT = 'Backend Developer\nWe are hiring a backend engineer. Responsibilities: build services in Node.js and TypeScript with PostgreSQL, Docker and Kafka. Requirements: 5 years of experience.';
   let lookupReply = APPLIED_MODE ? { job: { id: 'j9', status: 'interview', appliedAt: '2026-11-02T10:00:00.000Z', companyLogo: null } } : { job: null }, failNextCapture = '';
   const noop = () => {};
@@ -71,6 +73,7 @@
   const reply = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
   window.fetch = async (url, options = {}) => {
     const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path.startsWith('/api/jobs/posting-date')) return reply({ posting: BOARD_MODE ? { posted: '2026-10-30T11:49:29-04:00', updated: '2026-11-04T13:11:09-05:00', board: 'greenhouse' } : null });
     if (path.startsWith('/api/jobs/lookup')) return reply(lookupReply);
     if (/^\/api\/jobs\/[^/]+\/application$/.test(path)) { recorded.push({ path, body: JSON.parse(options.body) }); return reply({}); }
     if (path === '/api/jobs/capture') {
@@ -101,7 +104,7 @@
     await import('../src/sidepanel.js');
     await wait(1500);
     const postedDate = document.querySelector('#job-card time');
-    expect(POSTED_MODE ? postedDate?.textContent === 'Posted Nov 4, 2026' && postedDate.dateTime === '2026-11-04' : !postedDate, 'the company row shows a real posting date, without inventing one or shifting UTC midnight');
+    expect(BOARD_MODE ? postedDate?.textContent === 'Posted on 10/30/2026' && postedDate.dateTime === '2026-10-30' : POSTED_MODE ? postedDate?.textContent === 'Posted on 11/4/2026' && postedDate.dateTime === '2026-11-04' : !postedDate, 'the company row shows a real posting date, without inventing one or shifting UTC midnight');
     expect(!document.querySelector('#job-card .page-site'), 'the company row replaces the website address');
     // ?layout keeps the initial state for visual checks of the real panel.
     if (new URLSearchParams(location.search).has('layout')) throw Object.assign(new Error('done'), { done: true });

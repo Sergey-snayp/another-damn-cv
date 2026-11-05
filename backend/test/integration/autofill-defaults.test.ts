@@ -8,6 +8,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { AppModule } from '../../src/app.module';
 import { JOB_READ_SCHEDULER } from '../../src/modules/jobs/jobs.tokens';
+import { GetPostingDates } from '../../src/modules/jobs/application/use-cases/get-posting-dates';
 
 let app: INestApplication;
 let base: string;
@@ -39,6 +40,14 @@ before(async () => {
   const module = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(JOB_READ_SCHEDULER)
     .useValue({ enqueue: () => {} })
+    // The job board's API stands in: Box's posting on Greenhouse.
+    .overrideProvider(GetPostingDates)
+    .useValue(
+      new GetPostingDates({
+        read: () =>
+          Promise.resolve({ posted: '2026-10-30T11:49:29-04:00', updated: '2026-11-04T13:11:09-05:00' }),
+      }),
+    )
     .compile();
   app = module.createNestApplication({ logger: false });
   app.setGlobalPrefix('api');
@@ -438,4 +447,23 @@ test('notes can be changed on the job page', async () => {
   });
   assert.equal(edited.status, 200);
   assert.equal(((await edited.json()) as { notes: string }).notes, 'Second');
+});
+
+test('the extension gets when a job was posted from its job board', async () => {
+  const url = encodeURIComponent('https://job-boards.greenhouse.io/boxinc/jobs/8267934?gh_src=x');
+  assert.equal((await call(`/jobs/posting-date?url=${url}`)).status, 401);
+  const found = (await (await call(`/jobs/posting-date?url=${url}`, { token: ownerToken })).json()) as {
+    posting: unknown;
+  };
+  assert.deepEqual(found.posting, {
+    posted: '2026-10-30T11:49:29-04:00',
+    updated: '2026-11-04T13:11:09-05:00',
+    board: 'greenhouse',
+  });
+  const other = (await (
+    await call(`/jobs/posting-date?url=${encodeURIComponent('https://careers.zexter.com/jobs/1')}`, {
+      token: ownerToken,
+    })
+  ).json()) as { posting: unknown };
+  assert.equal(other.posting, null);
 });
