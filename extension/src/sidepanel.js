@@ -1,7 +1,7 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
 import { captureTab, jobUrl, lookupJob, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
-import { observeTextPreviews } from './text-display.js';
+import { observeTextPreviews, previewCvName } from './text-display.js';
 import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { matchAnswers } from './answers.js';
@@ -451,7 +451,7 @@ function renderAutofill() {
   }
   if (!scan || !scan.fields?.length) {
     const opener = scan?.canOpenForm ? `<button class="primary" id="open-form">${icon('file')}Open application form</button>` : '';
-    host.innerHTML = `${pageCard()}${matchCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'This job page opens its form when you press Apply.' : scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
+    host.innerHTML = `${pageCard()}${autofillCvCard()}${matchCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'This job page opens its form when you press Apply.' : scan ? 'Open the application form, then rescan the page.' : 'Open a supported application form to use Autofill. You can still use your Profile and Resume here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>`;
     $('rescan-empty').addEventListener('click', refresh);
     $('open-form')?.addEventListener('click', openForm);
     return;
@@ -460,16 +460,20 @@ function renderAutofill() {
   const groups = new Map();
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
-  host.innerHTML = `${pageCard()}${matchCard()}
-    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
+  host.innerHTML = `${pageCard()}${autofillCvCard()}
+    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
+    ${matchCard()}
     ${eligibilityCard()}
     <details class="card" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
   $('add-details')?.addEventListener('click', () => void openApp('/profile'));
 }
 async function runFill() {
-  if (filling) return;
-  filling = true; const button = $('fill'); button.disabled = true;
+  if (filling || switchingCv) return;
+  closeCvMenu();
+  filling = true;
+  document.querySelectorAll('[data-cv-select]').forEach(button => { button.disabled = true; });
+  const button = $('fill'); button.disabled = true;
   status('fill-status', 'Filling…');
   const target = currentTab;
   try {
@@ -523,7 +527,7 @@ async function runFill() {
     lastApplication = { url: target?.url, resumeId: file ? resumes.chosen?.id : undefined, answers: await answersOnPage(target) };
     if (await recordOnSavedJob(target?.url)) fillReport.notes.push('Your CV and answers were added to this job in the app');
   } catch (error) { fillReport = { url: target?.url, text: error.message, kind: 'error', notes: [], missing: [] }; }
-  finally { filling = false; renderAutofill(); }
+  finally { filling = false; rerenderResumes(); }
   // Settings → "Draft unknown questions with AI": off unless the person switched it on.
 }
 
@@ -686,18 +690,27 @@ $('profile-overview').addEventListener('click', async event => {
   }
 });
 
-// CVs come from the app's Documents. The Resume tab chooses one with a
-// dropdown, as in Simplify: one line with the CV's name, and a list that opens
-// over the panel (so nothing below moves), with a search box, the default CV
-// first, and each CV's match score for the job on the page (70% and more).
-// Autofill uploads the chosen CV as a PDF.
-let cvMenu = { open: false, query: '', active: 0 };
+// Autofill and Resume share one choice and one searchable overlay. Names wrap
+// within the shared character limit; full names remain searchable/readable.
+let cvMenu = { open: false, query: '', active: 0, anchorId: null };
+let cvReport = { text: '', kind: '' };
+let switchingCv = false;
+function cvStatus(text, kind = '') {
+  cvReport = { text, kind };
+  status('resume-status', text, kind);
+  status('autofill-cv-status', text, kind);
+}
 const cvMenuNode = document.createElement('div');
 cvMenuNode.className = 'cv-menu';
 cvMenuNode.id = 'cv-menu';
 cvMenuNode.hidden = true;
-cvMenuNode.innerHTML = `<input class="cv-search" id="cv-search" type="search" placeholder="Search your CVs" aria-label="Search your CVs" autocomplete="off" role="combobox" aria-controls="cv-options" aria-expanded="true"><ul class="cv-options" id="cv-options" role="listbox" aria-label="Your CVs"></ul>`;
+cvMenuNode.innerHTML = `<input class="cv-search" id="cv-search" type="search" placeholder="Search your CVs" aria-label="Search your CVs" autocomplete="off" role="combobox" aria-controls="cv-options" aria-expanded="true"><ul class="cv-options" id="cv-options" role="listbox" aria-label="Your CVs"></ul><div class="cv-menu-detail" hidden><span>Full CV name</span><p id="cv-active-name"></p></div>`;
 document.body.append(cvMenuNode);
+cvMenuNode.addEventListener('pointerover', event => {
+  const option = event.target.closest('.cv-option');
+  const index = option ? [...$('cv-options').children].indexOf(option) : -1;
+  if (index >= 0 && index !== cvMenu.active) { cvMenu.active = index; renderCvOptions(); }
+});
 
 /** The CVs to list: the default first, then the rest as the app orders them; filtered by the search. */
 function cvOptions() {
@@ -713,26 +726,35 @@ function renderCvOptions() {
     const score = match?.scores?.[item.id];
     return `<li role="option" id="cv-option-${index}" aria-selected="${chosen}" class="cv-option${index === cvMenu.active ? ' is-active' : ''}"><button type="button" data-pick="${esc(item.id)}" tabindex="-1"><span class="cv-check" aria-hidden="true">${chosen ? icon('check', 14) : ''}</span><span class="cv-option-name" title="${esc(item.name)}">${esc(item.name)}${item.isPrimary ? ' <small>(default)</small>' : ''}</span>${score >= 70 ? `<span class="cv-option-score" title="Matches ${score}% of this job's keywords">${score}%</span>` : ''}</button></li>`;
   }).join('') : '<li class="cv-empty">No CVs found</li>';
+  const activeName = options[cvMenu.active]?.name ?? '';
+  $('cv-active-name').textContent = activeName;
+  $('cv-active-name').parentElement.hidden = previewCvName(activeName) === activeName;
   $('cv-search').setAttribute('aria-activedescendant', options.length ? `cv-option-${cvMenu.active}` : '');
   $('cv-options').querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
 }
 /** Under the CV button, as wide as the panel allows. */
 function placeCvMenu() {
-  const button = $('cv-select');
-  if (!button || cvMenuNode.hidden) return;
+  const button = $(cvMenu.anchorId);
+  if (cvMenuNode.hidden) return;
+  if (!button || button.closest('[hidden]')) { closeCvMenu(); return; }
   const box = button.getBoundingClientRect();
   const width = Math.min(Math.max(box.width, 280), innerWidth - 24);
   cvMenuNode.style.width = `${width}px`;
   cvMenuNode.style.left = `${Math.max(12, Math.min(box.left, innerWidth - width - 12))}px`;
-  cvMenuNode.style.top = `${box.bottom + 6}px`;
-  cvMenuNode.style.maxHeight = `${Math.max(160, innerHeight - box.bottom - 18)}px`;
+  const below = innerHeight - box.bottom - 18, above = box.top - 18;
+  const upwards = below < 220 && above > below;
+  cvMenuNode.style.top = upwards ? 'auto' : `${box.bottom + 6}px`;
+  cvMenuNode.style.bottom = upwards ? `${innerHeight - box.top + 6}px` : 'auto';
+  cvMenuNode.style.maxHeight = `${Math.max(0, upwards ? above : below)}px`;
 }
-function openCvMenu() {
-  if (!resumes.items.length) return;
-  cvMenu = { open: true, query: '', active: Math.max(0, cvOptions().findIndex(item => item.id === resumes.chosen?.id)) };
+function openCvMenu(button) {
+  if (!resumes.items.length || filling || switchingCv) return;
+  closeCvMenu();
+  cvMenu.query = '';
+  cvMenu = { open: true, query: '', active: Math.max(0, cvOptions().findIndex(item => item.id === resumes.chosen?.id)), anchorId: button.id };
   $('cv-search').value = '';
   cvMenuNode.hidden = false;
-  $('cv-select')?.setAttribute('aria-expanded', 'true');
+  button.setAttribute('aria-expanded', 'true');
   renderCvOptions();
   placeCvMenu();
   $('cv-search').focus();
@@ -741,8 +763,8 @@ function closeCvMenu(focusButton = false) {
   if (!cvMenu.open) return;
   cvMenu.open = false;
   cvMenuNode.hidden = true;
-  $('cv-select')?.setAttribute('aria-expanded', 'false');
-  if (focusButton) $('cv-select')?.focus();
+  $(cvMenu.anchorId)?.setAttribute('aria-expanded', 'false');
+  if (focusButton) $(cvMenu.anchorId)?.focus();
 }
 $('cv-search').addEventListener('input', event => { cvMenu.query = event.target.value; cvMenu.active = 0; renderCvOptions(); });
 $('cv-search').addEventListener('keydown', event => {
@@ -761,11 +783,14 @@ $('cv-search').addEventListener('keydown', event => {
   } else if (event.key === 'Tab') closeCvMenu();
 });
 document.addEventListener('pointerdown', event => {
-  if (cvMenu.open && !cvMenuNode.contains(event.target) && !event.target.closest('#cv-select')) closeCvMenu();
+  if (cvMenu.open && !cvMenuNode.contains(event.target) && !event.target.closest('[data-cv-select]')) closeCvMenu();
 }, true);
 document.querySelector('main').addEventListener('scroll', placeCvMenu, { passive: true });
 addEventListener('resize', placeCvMenu);
-document.addEventListener('click', event => { if (event.target.closest('#cv-select')) { if (cvMenu.open) closeCvMenu(); else openCvMenu(); } });
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-cv-select]');
+  if (button) { if (cvMenu.open && cvMenu.anchorId === button.id) closeCvMenu(); else openCvMenu(button); }
+});
 
 function resumeEmpty() {
   if (resumeProblem === 'signed-out') return `<div class="resume-empty"><p>Sign in to see the CVs from your app.</p><button class="ghost" data-go-sign-in>Sign in on the Profile tab</button></div>`;
@@ -773,26 +798,30 @@ function resumeEmpty() {
   if (loadingResumes) return '<div class="resume-empty"><p>Loading your CVs…</p></div>';
   return `<div class="resume-empty"><p>No CVs in Documents yet.</p><button class="ghost" data-open-documents>Open Documents</button></div>`;
 }
-/** The chosen CV: its name as a dropdown button, and Preview resume. */
-function cvPicker() {
+/** Both tabs give the CV name a full row, with secondary actions underneath. */
+function cvPicker(id = 'cv-select') {
   const chosen = resumes.chosen;
   if (!chosen) return resumeEmpty();
-  const note = 'Autofill uploads this CV.';
+  const expanded = cvMenu.open && cvMenu.anchorId === id;
+  const long = previewCvName(chosen.name) !== chosen.name;
   return `<div class="cv-select-row">
-      <button class="cv-select" id="cv-select" type="button" aria-haspopup="listbox" aria-expanded="${cvMenu.open}" aria-controls="cv-menu" title="Change CV">
-        <span class="cv-select-name" title="${esc(chosen.name)}">${esc(chosen.name)}${chosen.isPrimary ? ' <small>(default)</small>' : ''}</span>
+      <button class="cv-select" id="${id}" data-cv-select type="button" aria-haspopup="listbox" aria-expanded="${expanded}" aria-controls="cv-menu" aria-label="Change CV: ${esc(chosen.name)}" ${filling || switchingCv ? 'disabled' : ''}>
+        <span class="cv-select-copy"><span class="cv-select-label">${switchingCv ? 'Switching CV…' : 'Selected CV · Change'}</span><span class="cv-select-name" title="${esc(chosen.name)}">${esc(chosen.name)}</span></span>
         <span class="cv-select-chevron" aria-hidden="true">${icon('chevron', 14)}</span>
       </button>
-      <button class="link-button cv-preview" type="button" data-open-cv="${esc(chosen.id)}">${icon('eye', 16)}Preview resume</button>
     </div>
-    <p class="cv-note">${esc(note)}</p>`;
+    <div class="cv-picker-actions"><span class="cv-badge">PDF${chosen.isPrimary ? ' · Default' : ''}</span><button class="link-button cv-preview" type="button" data-open-cv="${esc(chosen.id)}">${icon('eye', 16)}Preview resume</button></div>
+    ${long ? `<details class="cv-full-name"><summary>Full CV name</summary><p>${esc(chosen.name)}</p></details>` : ''}`;
+}
+function autofillCvCard() {
+  return `<div class="card autofill-cv-card"><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div><p class="cv-note">${groupOn('resume') ? 'Autofill uploads the selected CV.' : 'CV uploads are off in Settings.'}</p><div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div></div>`;
 }
 function renderResume() {
   $('resume-picker').innerHTML = cvPicker();
   if (cvMenu.open) { renderCvOptions(); placeCvMenu(); }
   $('refresh-cvs').disabled = loadingResumes;
 }
-function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); }
+function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); if (cvMenu.open) placeCvMenu(); }
 /** Fetches the CV list from the app. The cached list stays on screen meanwhile. */
 async function loadResumes() {
   if (loadingResumes) return;
@@ -816,15 +845,21 @@ document.addEventListener('click', event => {
  * Simplify), and the saved job records it.
  */
 async function switchCv(id) {
+  if (filling || switchingCv) return;
+  const anchorId = cvMenu.anchorId;
   closeCvMenu(true);
   const before = resumes.chosen?.id;
   if (!id || id === before) return;
+  switchingCv = true;
+  cvStatus('Switching CV…');
+  rerenderResumes();
   try {
     await chooseResume(id);
     resumes = await cachedResumes(); rerenderResumes(); void rescore();
-    status('resume-status', `Autofill now uploads ${resumes.chosen?.name ?? 'this CV'}.`, 'success');
+    cvStatus('CV changed. Autofill will upload the selected CV.', 'success');
     await replaceUploadedCv();
-  } catch { status('resume-status', 'Could not switch CVs. Try again.', 'error'); }
+  } catch { cvStatus('Could not switch CVs. Try again.', 'error'); }
+  finally { switchingCv = false; rerenderResumes(); $(anchorId)?.focus(); }
 }
 async function replaceUploadedCv() {
   const tab = currentTab, chosen = resumes.chosen;
@@ -836,13 +871,13 @@ async function replaceUploadedCv() {
       const reply = await askFrame(frameId, { type: 'replace-cv', dataUrl: file.dataUrl, fileName: file.fileName }, tab);
       replaced += reply?.replaced ?? 0; kept += reply?.kept ?? 0;
     }
-  } catch (error) { status('resume-status', `The form still has the old CV: ${error.message}`, 'error'); return; }
+  } catch (error) { cvStatus(`The form still has the old CV: ${error.message}`, 'error'); return; }
   if (replaced) {
     lastApplication.resumeId = chosen.id;
     await recordOnSavedJob(tab.url);
-    status('resume-status', `${chosen.name} is now uploaded to the form, in place of the old CV.`, 'success');
+    cvStatus('CV updated on this form. It replaced the previous upload.', 'success');
   }
-  if (kept) status('resume-status', `This form keeps the old CV. Remove it in the form, then upload ${chosen.name} yourself.`, 'error');
+  if (kept) cvStatus(`This form keeps the old CV. Remove it in the form, then upload ${chosen.name} yourself.`, 'error');
 }
 
 // ─── Keyword match card ───────────────────────────────────────────────────
@@ -934,6 +969,7 @@ async function doPull() { status('auth-status', 'Syncing…'); try { await pullP
 async function doSignOut() { await signOut(); await renderAccount(); status('auth-status', 'Signed out. Your local details and PDF remain on this device.'); }
 async function renderSyncState() { const { sync } = await chrome.storage.local.get('sync'); $('sync-state').textContent = sync?.lastSyncedAt ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}` : 'Never synced'; }
 function selectTab(name) {
+  closeCvMenu();
   for (const tab of document.querySelectorAll('.tab')) { const selected = tab.dataset.panel === name; tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1; }
   for (const panel of document.querySelectorAll('.panel')) panel.hidden = panel.id !== `panel-${name}`;
   document.querySelector('main').scrollTop = 0;

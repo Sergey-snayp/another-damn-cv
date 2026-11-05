@@ -401,9 +401,23 @@ Add to `CATEGORIES` in `src/fields.js`, add its label and group in
 Display labels and previews use a shared **64-character limit** in
 `src/text-display.js`: job/company names, CV names, status messages, field
 previews and Profile cards. Long text ends in `…`; hover to read the full text.
+CV pickers instead shorten the middle, so similar names keep their distinctive
+endings. Names wrap, with PDF/default labels and Preview below the name.
+Open **Full CV name** to read or copy the complete selected name; the search
+list also shows the focused option's complete name below its options.
+The full-name views are deliberate exceptions to the preview limit.
 Profile copy actions, searches, saved data, form inputs and uploaded filenames
 keep their complete values. Multi-line headings and statuses also stay within
 two lines. Change `UI_TEXT_LIMIT` to adjust the default for the whole panel.
+
+Autofill and Resume use the same chosen CV. You can change it on either tab;
+if Autofill already attached a CV, changing it replaces that PDF on the form
+when the site allows replacement. Both tabs show the result.
+
+The name layout follows [Maersk's truncation guidance](https://designsystem.maersk.com/content/truncation/index.html):
+wrap where possible, keep both ends of filenames, and offer access beyond hover.
+For new CV names, prefer **Role · Company · Version**, for example
+**Lead Engineer · Hilo Labs · v2**. Existing CVs keep their original names.
 
 Plain JavaScript, no build step, so edits are immediate:
 

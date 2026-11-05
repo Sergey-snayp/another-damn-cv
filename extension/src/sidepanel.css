@@ -227,11 +227,19 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .job-form-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 4px; }
 .job-form-actions button { width: 100%; }
 
-/* Resume tab: the CV dropdown (as in Simplify). The list floats over the panel, so nothing below moves. */
-.cv-select-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* Both tabs share a full-width CV name. Secondary actions never squeeze it. */
+.cv-select-row { display: flex; }
 .cv-select { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
 .cv-select:hover, .cv-select[aria-expanded="true"] { border-color: var(--color-accent-border, var(--color-text)); }
-.cv-select-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-select-copy { flex: 1; min-width: 0; }
+.cv-select-label { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 500; color: var(--color-muted); }
+.cv-select-name { display: block; line-height: 1.45; overflow-wrap: anywhere; white-space: normal; }
+.cv-select:disabled { cursor: wait; opacity: .65; }
+.cv-picker-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; }
+.cv-badge { flex: none; padding: 3px 7px; border-radius: 6px; font-size: 11px; color: var(--color-muted); background: var(--color-background); }
+.cv-full-name { margin-top: 10px; font-size: 12px; }
+.cv-full-name summary { cursor: pointer; color: var(--color-muted); }
+.cv-full-name p { margin: 8px 0 0; max-height: 140px; overflow-y: auto; overflow-wrap: anywhere; user-select: text; }
 .cv-select-name small, .cv-option-name small { font-weight: 400; color: var(--color-muted); }
 .cv-select-chevron { display: inline-grid; flex: none; color: var(--color-muted); transform: rotate(90deg); transition: transform .2s; }
 .cv-select[aria-expanded="true"] .cv-select-chevron { transform: rotate(-90deg); }
@@ -240,12 +248,15 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .cv-note { margin: 8px 0 0; font-size: 12px; color: var(--color-muted); }
 .cv-menu { position: fixed; z-index: 50; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 12px 32px var(--color-shadow-strong, rgba(0,0,0,.18)); }
 .cv-menu[hidden] { display: none; }
-.cv-search { margin: 8px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); font: inherit; font-size: 13px; }
-.cv-options { list-style: none; margin: 0; padding: 0 6px 6px; overflow-y: auto; }
+.cv-search { flex: none; min-width: 0; margin: 8px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); font: inherit; font-size: 13px; }
+.cv-options { flex: 1; min-height: 50px; list-style: none; margin: 0; padding: 0 6px 6px; overflow-y: auto; }
 .cv-option button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px; border: 0; border-radius: 8px; background: none; color: var(--color-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .cv-option.is-active button, .cv-option button:hover { background: var(--color-accent-soft); }
 .cv-check { display: inline-grid; flex: none; width: 14px; color: var(--color-success, var(--color-text)); }
-.cv-option-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-option-name { flex: 1; min-width: 0; line-height: 1.45; overflow-wrap: anywhere; white-space: normal; }
+.cv-menu-detail { flex: none; margin: 0 8px; padding: 8px 2px; border-top: 1px solid var(--color-border); font-size: 12px; }
+.cv-menu-detail > span { color: var(--color-muted); font-size: 11px; }
+.cv-menu-detail p { margin: 4px 0 0; max-height: 90px; overflow-y: auto; overflow-wrap: anywhere; user-select: text; }
 
 /* Text previews share UI_TEXT_LIMIT in text-display.js. Full values remain in title/copy data. */
 [data-text-limited] { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }

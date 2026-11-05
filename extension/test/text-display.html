@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><title>Extension text preview test</title><link rel="stylesheet" href="../assets/theme/colors.css"><link rel="stylesheet" href="../src/sidepanel.css"></head><body>
 <div id="samples"></div><pre id="result" hidden></pre>
 <script type="module">
-  import { observeTextPreviews, previewText, UI_TEXT_LIMIT } from '../src/text-display.js';
+  import { observeTextPreviews, previewText, previewCvName, UI_TEXT_LIMIT } from '../src/text-display.js';
   const problems = [], expect = (condition, message) => { if (!condition) problems.push(message); };
   const long = "Sr. Delivery Consultant - Application Modernization/Consultant en livraison – Modernisation d'applications, AWS Professional Services — Amazon Web Services Canada, Inc.";
   const root = document.getElementById('samples');
@@ -27,14 +27,14 @@
       expect(node.title === (node.matches('.status') ? message : long), 'the full value is available on hover');
       expect(node.getAttribute('aria-description') === node.title, 'assistive descriptions keep the full value');
     }
-    expect(cv.firstChild.data.trim() === previewText(long) && cv.lastChild === badge, 'CV names are bounded and the default badge is preserved');
+    expect(cv.firstChild.data.trim() === previewCvName(long) && cv.lastChild === badge, 'CV names keep both ends and the default badge is preserved');
     copy.click(); expect(copied === long, 'copy actions keep their full source');
     expect(root.querySelector('#edit').value === long && root.querySelector('#report').value === long && root.querySelector('option').value === long, 'editable fields, reports and option values are never shortened');
     root.querySelector('.status').textContent = 'Saved.';
     await turn();
     expect(root.querySelector('.status').textContent === 'Saved.' && !root.querySelector('.status').hasAttribute('title') && !root.querySelector('.status').hasAttribute('aria-description'), 'a later short status clears the old tooltip');
     const later = document.createElement('span'); later.className = 'cv-option-name'; later.textContent = long; root.append(later);
-    await turn(); expect(later.textContent === previewText(long) && later.title === long, 'late CV menu options use the same limit');
+    await turn(); expect(later.textContent === previewCvName(long) && later.title === long, 'late CV menu options use the same limit');
     later.firstChild.data = long + ' refreshed';
     await turn(); expect(later.title === long + ' refreshed', 'a reused text node gets the new full source');
     const small = document.createElement('span'); small.className = 'cv-option-name'; small.innerHTML = 'Master CV <small>(default)</small>'; root.append(small);

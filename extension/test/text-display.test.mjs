@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { previewText, UI_TEXT_LIMIT } from '../src/text-display.js';
+import { previewText, previewCvName, UI_TEXT_LIMIT } from '../src/text-display.js';
 
 const job = "Sr. Delivery Consultant - Application Modernization/Consultant en livraison – Modernisation d'applications, AWS Professional Services — Amazon Web Services Canada, Inc.";
 const count = text => [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].length;
@@ -29,4 +29,15 @@ test('limits preserve complete emoji and combining characters', () => {
 test('invalid limits cannot silently hide all text', () => {
   for (const limit of [0, -1, NaN, 1.5]) assert.throws(() => previewText(job, limit), RangeError);
   assert.equal(previewText(job, 1), '…');
+});
+test('CV previews keep distinct endings, the shared limit and whole characters', () => {
+  assert.equal(previewCvName('Master CV'), 'Master CV');
+  for (const value of [job, '👨‍👩‍👧‍👦'.repeat(70), 'e\u0301'.repeat(70)]) {
+    const preview = previewCvName(value);
+    assert.ok(count(preview) <= UI_TEXT_LIMIT);
+    const [start, end] = preview.split('…');
+    assert.ok(value.startsWith(start) && value.endsWith(end));
+    assert.ok(start && end);
+  }
+  assert.notEqual(previewCvName(job + ' Backend.pdf'), previewCvName(job + ' Frontend.pdf'));
 });

@@ -10,6 +10,15 @@ export function previewText(value, limit = UI_TEXT_LIMIT) {
   return parts.length > limit ? parts.slice(0, limit - 1).join('').trimEnd() + '…' : text;
 }
 
+/** CV names often share a prefix; keep the role/company or version at the end visible too. */
+export function previewCvName(value) {
+  const text = String(value ?? '').replace(/\s+/gu, ' ').trim();
+  const parts = characters(text);
+  if (parts.length <= UI_TEXT_LIMIT) return text;
+  const tail = Math.floor((UI_TEXT_LIMIT - 1) * .4);
+  return parts.slice(0, UI_TEXT_LIMIT - 1 - tail).join('').trimEnd() + '…' + parts.slice(-tail).join('').trimStart();
+}
+
 // Scope this to display surfaces. Never shorten inputs, option values, reports,
 // links, IDs or the data-copy payload used by the Profile tab.
 const PREVIEWS = [
@@ -38,7 +47,8 @@ export function observeTextPreviews(root = document.body) {
         const source = previous?.preview === node.data ? previous.source : node.data;
         const long = characters(String(source).replace(/\s+/gu, ' ').trim()).length > UI_TEXT_LIMIT;
         // Preserve the separating space before badges such as "(default)".
-        const preview = long ? previewText(source) + (/\s$/u.test(source) && node.nextSibling ? ' ' : '') : source;
+        const shorten = element.matches('.cv-select-name, .cv-option-name') ? previewCvName : previewText;
+        const preview = long ? shorten(source) + (/\s$/u.test(source) && node.nextSibling ? ' ' : '') : source;
         clipped ||= long;
         sources.set(node, { source, preview });
         if (node.data !== preview) node.data = preview;
