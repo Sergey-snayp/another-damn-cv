@@ -166,10 +166,17 @@
     expect(recorded.at(-1)?.path === '/api/jobs/j1/application' && JSON.stringify(recorded.at(-1)?.body.answers) === JSON.stringify([{ question: 'How did you hear about us?', answer: 'https://another-damn.cv' }]),
       `saving records the answers on the form, not the empty ones (recorded ${JSON.stringify(recorded.at(-1))})`);
 
+    // Opening "Fields to fill" does not move the panel, and it stays open when the panel redraws.
+    expect(getComputedStyle(document.querySelector('main')).scrollbarGutter === 'stable', 'the panel keeps room for its scrollbar, so content does not jump sideways');
+    const fieldsSection = () => document.querySelector('[data-keep-open="fields"]');
+    fieldsSection().open = true;
+    await wait(50);
+
     // Autofill sends the current role and school from the Profile.
     document.getElementById('fill').click();
     await wait(800);
     let fill = sentToPage.filter((message) => message.type === 'fill').at(-1);
+    expect(fieldsSection()?.open, '"Fields to fill" stays open after the panel redraws');
     expect(recorded.length === 2 && recorded[1].path === '/api/jobs/j1/application', `Autofill on a saved job adds the answers to it (recorded ${recorded.length})`);
     expect(/added to this job in the app/.test(document.getElementById('panel-autofill').textContent), 'and says so after the fill');
     expect(fill?.profile.currentCompany === 'Ciklum' && fill?.profile.school === 'Dnipro Institute of Infrastructure and Transport', `Autofill takes the role and school from the Profile (sent ${JSON.stringify(fill && { currentCompany: fill.profile.currentCompany, school: fill.profile.school })})`);

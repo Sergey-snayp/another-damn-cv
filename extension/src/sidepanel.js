@@ -214,6 +214,14 @@ function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')
 const WORK_TYPE_NAMES = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
 function workTypesText() { return String(profile.workArrangements ?? '').split(',').map(kind => WORK_TYPE_NAMES[kind]).filter(Boolean).join(', '); }
 function relocationText() { return Object.entries(relocationMap(autofillDefaults)).map(([country, answer]) => `${country || 'Anywhere'}: ${answer}`).join(', '); }
+// Sections the person opened stay open when the panel redraws (after a save, a rescan…).
+const keptOpen = new Set();
+document.addEventListener('toggle', event => {
+  const section = event.target.closest?.('[data-keep-open]');
+  if (!section) return;
+  if (section.open) keptOpen.add(section.dataset.keepOpen); else keptOpen.delete(section.dataset.keepOpen);
+}, true);
+
 // ─── The job card ────────────────────────────────────────────────────────
 // The posting with its company's logo (src/logo.js finds it on the page; the
 // company site's icon from Google's favicon service when the page has none).
@@ -453,7 +461,7 @@ function renderAutofill() {
   host.innerHTML = `${pageCard()}${matchCard()}
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready ? '' : 'disabled'}>${icon('bolt', 23)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}<p class="hint">${ready} of ${scan.fields.length} detected fields have a value. Review before submitting.</p>${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
     ${eligibilityCard()}
-    <details class="card"><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
+    <details class="card" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check')}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
   $('add-details')?.addEventListener('click', () => void openApp('/profile'));
 }
@@ -763,7 +771,7 @@ function matchCard() {
     <div class="match-top"><div><h2>${label} match</h2><p><strong>${matched.length} of ${total}</strong> keywords in <span class="cv-inline" title="${esc(resumes.chosen.name)}">${esc(resumes.chosen.name)}</span></p></div>
       <div class="ring" role="img" aria-label="Score ${score} of 100"><svg viewBox="0 0 72 72" width="72" height="72"><circle cx="36" cy="36" r="30" class="ring-track"/><circle cx="36" cy="36" r="30" class="ring-value" stroke-dasharray="${(RING * score) / 100} ${RING}" transform="rotate(-90 36 36)"/></svg><span>${score}</span></div></div>
     ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p><span class="cv-inline" title="${esc(match.better.name)}">${esc(match.better.name)}</span> matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
-    <details class="keywords"><summary>Keywords from the posting</summary><p class="hint">Counts the posting's keywords found in your CV. It does not judge how deep your experience is.</p><ul>${keywords}</ul></details>
+    <details class="keywords" data-keep-open="keywords" ${keptOpen.has('keywords') ? 'open' : ''}><summary>Keywords from the posting</summary><p class="hint">Counts the posting's keywords found in your CV. It does not judge how deep your experience is.</p><ul>${keywords}</ul></details>
     <button class="primary" id="improve-match">Improve my match${icon('chevron', 17)}</button>
     <div class="status" id="match-status" role="status"></div>
   </section>`;
