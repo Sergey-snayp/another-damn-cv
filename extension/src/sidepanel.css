@@ -246,5 +246,12 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .cv-option.is-active button, .cv-option button:hover { background: var(--color-accent-soft); }
 .cv-check { display: inline-grid; flex: none; width: 14px; color: var(--color-success, var(--color-text)); }
 .cv-option-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Text previews share UI_TEXT_LIMIT in text-display.js. Full values remain in title/copy data. */
+[data-text-limited] { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.page-card-title[data-text-limited], .page-card-company[data-text-limited],
+.profile-card-heading h2[data-text-limited], .copy-value:not(.chip)[data-text-limited],
+.status[data-text-limited] { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.copy-value.chip[data-text-limited] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cv-option-score { flex: none; font-size: 12px; font-weight: 600; color: var(--color-success, var(--color-text)); }
 .cv-empty { padding: 10px 8px; font-size: 13px; color: var(--color-muted); }

@@ -398,6 +398,13 @@ Add to `CATEGORIES` in `src/fields.js`, add its label and group in
 
 ## Development
 
+Display labels and previews use a shared **64-character limit** in
+`src/text-display.js`: job/company names, CV names, status messages, field
+previews and Profile cards. Long text ends in `…`; hover to read the full text.
+Profile copy actions, searches, saved data, form inputs and uploaded filenames
+keep their complete values. Multi-line headings and statuses also stay within
+two lines. Change `UI_TEXT_LIMIT` to adjust the default for the whole panel.
+
 Plain JavaScript, no build step, so edits are immediate:
 
 1. Edit a file

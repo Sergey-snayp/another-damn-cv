@@ -1,6 +1,7 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
 import { captureTab, jobUrl, lookupJob, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
+import { observeTextPreviews } from './text-display.js';
 import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { matchAnswers } from './answers.js';
@@ -115,6 +116,7 @@ let fillGroups = {};
 // Every group starts on, except diversity questions, which start off.
 const groupOn = key => { const group = GROUP_OF_KEY.get(key); return group === 'diversity' ? fillGroups.diversity === true : fillGroups[group] !== false; };
 const $ = id => document.getElementById(id);
+observeTextPreviews();
 
 // After the extension is reloaded or updated, Chrome leaves this panel in the page
 // but cuts it off: every chrome.* call throws "Extension context invalidated".
@@ -636,12 +638,12 @@ function renderProfileOverview() {
   let html = `<div class="card">${heading(name || 'Your profile', `<button class="icon-button" id="refresh-profile" aria-label="Refresh from the app" title="Refresh from the app"${careerLoading ? ' disabled' : ''}>${icon('refresh', 18)}</button>`)}
     <div class="profile-contact"><div class="profile-initials">${esc(initials)}</div><div>${copy(place, 'location', 'is-heading')}${copy(profile.email, 'email')}${copy(profile.phone, 'phone')}${!name && !profile.email ? '<p>Sign in under Account &amp; sync to see your profile.</p>' : ''}</div></div>
     ${links.length ? `<div class="profile-links">${links.map(key => `<div><small class="muted">${FIELD_LABELS[key]}</small>${copy(profile[key], FIELD_LABELS[key])}</div>`).join('')}</div>` : ''}</div>`;
-  if (careerProblem && !view) html += `<div class="notice">${icon('flag')}<div><p>${esc(careerProblem)}</p></div></div>`;
+  if (careerProblem && !view) html += `<div class="notice">${icon('flag')}<div><p data-text-preview>${esc(careerProblem)}</p></div></div>`;
 
   // Experience, with the switch for where Autofill takes it from
   const toggle = `<div class="source-switch" role="group" aria-label="Autofill uses"><span class="muted">Autofill uses</span><span class="segmented">${[['resume', 'Selected resume'], ['profile', 'Profile']].map(([value, label]) => `<button class="${source === value ? 'is-active' : ''}" data-career-source="${value}" aria-pressed="${source === value}"${value === 'resume' && !resumes.chosen ? ' disabled title="Choose a CV in the Resume tab"' : ''}>${label}</button>`).join('')}</span></div>`;
   const experiences = view?.experiences ?? [];
-  html += `<div class="card">${heading('Experience')}${toggle}${source === 'resume' && resumes.chosen ? `<p class="muted small">From ${esc(resumes.chosen.name)}</p>` : ''}${experiences.length ? experiences.map((role, roleIndex) => {
+  html += `<div class="card">${heading('Experience')}${toggle}${source === 'resume' && resumes.chosen ? `<p class="muted small">From <span class="cv-inline" title="${esc(resumes.chosen.name)}">${esc(resumes.chosen.name)}</span></p>` : ''}${experiences.length ? experiences.map((role, roleIndex) => {
     const bullets = role.bullets ?? [];
     const open = profileOpen.has(roleIndex);
     return `<div class="profile-entry"><div class="profile-entry-icon">${icon('briefcase', 18)}</div><div class="profile-entry-body">${copy(role.title, 'title', 'is-heading')}${copy([role.company, role.client && `for ${role.client}`, role.location].filter(Boolean).join(' · '), 'company')}${copy(period(role), 'dates')}${role.description ? copy(role.description, 'description') : ''}${bullets.length ? `<ul class="profile-bullets">${(open ? bullets : bullets.slice(0, 3)).map(bullet => `<li>${copy(bullet, 'bullet')}</li>`).join('')}</ul>${bullets.length > 3 ? `<button class="link-button" data-toggle-role="${roleIndex}">${open ? 'Show less' : `Show all ${bullets.length}`}</button>` : ''}` : ''}</div></div>`;
@@ -767,7 +769,7 @@ document.addEventListener('click', event => { if (event.target.closest('#cv-sele
 
 function resumeEmpty() {
   if (resumeProblem === 'signed-out') return `<div class="resume-empty"><p>Sign in to see the CVs from your app.</p><button class="ghost" data-go-sign-in>Sign in on the Profile tab</button></div>`;
-  if (resumeProblem) return `<div class="resume-empty"><p>${esc(resumeProblem)}</p><button class="ghost" data-refresh-cvs>${icon('refresh', 17)}Try again</button></div>`;
+  if (resumeProblem) return `<div class="resume-empty"><p data-text-preview>${esc(resumeProblem)}</p><button class="ghost" data-refresh-cvs>${icon('refresh', 17)}Try again</button></div>`;
   if (loadingResumes) return '<div class="resume-empty"><p>Loading your CVs…</p></div>';
   return `<div class="resume-empty"><p>No CVs in Documents yet.</p><button class="ghost" data-open-documents>Open Documents</button></div>`;
 }
