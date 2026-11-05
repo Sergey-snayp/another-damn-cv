@@ -12,6 +12,9 @@ import {
   CertificationsForm, CustomSectionForm, EducationForm, ExperienceForm, HeaderForm, ProjectsForm, SkillsForm, SummaryForm,
 } from '../resume/studio/SectionForms';
 import { resumeFromProfile } from '../resume/studio/fromProfile';
+import { AssistantPanel } from '../resume/studio/AssistantPanel';
+import { AiSettingsForm } from '../resume/studio/AiSettingsForm';
+import type { ChatSuggestion, IssueSection, ResumeScore } from '../resume/studio/assistantApi';
 import '../resume/document.css';
 import '../resume/studio/studio.css';
 
@@ -125,7 +128,10 @@ export function ResumeEditor() {
   const failed = useRef<RenderedResume | null>(null);
   const message = useRef<string | undefined>(undefined);
 
-  const [tab, setTab] = useState<'editor' | 'layout'>('editor');
+  const [tab, setTab] = useState<'editor' | 'layout' | 'ai'>('editor');
+  const [rightOpen, setRightOpen] = useState(true);
+  const [score, setScore] = useState<ResumeScore | null>(null);
+  const [jobId, setJobId] = useState<string | null | undefined>(undefined);
   const [section, setSection] = useState<Section | null>(null);
   const [leftOpen, setLeftOpen] = useState(true);
   const [zoom, setZoom] = useState<number | 'fit-width' | 'fit-page'>('fit-width');
@@ -143,6 +149,7 @@ export function ResumeEditor() {
       const summary = list.find((item) => item.id === id);
       setName(summary?.name ?? 'Resume');
       if (summary?.updatedAt) setSavedAt(Date.parse(summary.updatedAt));
+      setJobId(summary?.jobId ?? null);
       // Not removed on read: StrictMode runs this twice in development. It is
       // removed once the import is kept or discarded.
       const pending = sessionStorage.getItem(`resume-draft:${id}`);
@@ -316,6 +323,39 @@ export function ResumeEditor() {
     }
   }
 
+  /** Applies one chat suggestion. A line edited since the suggestion asks first. */
+  function applySuggestion(suggestion: ChatSuggestion): boolean {
+    const current = draftRef.current;
+    if (!current) return false;
+    const now = suggestion.target === 'summary' ? current.summaries.default ?? ''
+      : suggestion.target === 'headline' ? current.contact?.headline ?? ''
+        : suggestion.target === 'bullet'
+          ? current.experiences.flatMap((role) => role.achievements).find((a) => a.lineageId === suggestion.lineageId)?.bullet
+          : '';
+    if (now === undefined) { alert('That bullet is no longer on the CV.'); return false; }
+    if (suggestion.target !== 'add-skill' && now.trim() !== suggestion.before.trim()
+      && !confirm('This text changed since the suggestion was made. Replace it anyway?')) return false;
+    change((d) => {
+      if (suggestion.target === 'summary') d.summaries = { ...d.summaries, default: suggestion.after };
+      else if (suggestion.target === 'headline') d.contact = { ...(d.contact ?? { firstName: '', lastName: '', email: '' }), headline: suggestion.after };
+      else if (suggestion.target === 'bullet') {
+        const bullet = d.experiences.flatMap((role) => role.achievements).find((a) => a.lineageId === suggestion.lineageId);
+        if (bullet) bullet.bullet = suggestion.after;
+      } else if (!d.skills.some((skill) => skill.name.toLowerCase() === suggestion.after.toLowerCase())) {
+        d.skills.push({ lineageId: newId(), name: suggestion.after, category: '' });
+      }
+    });
+    return true;
+  }
+
+  function issuesIn(section: Section) {
+    return score?.issues.filter((issue) => issue.section === section).length ?? 0;
+  }
+  const badge = (section: Section) => {
+    const count = issuesIn(section);
+    return count ? <span className="ra-badge" title={`${count} issue${count === 1 ? '' : 's'}`}>{count}</span> : null;
+  };
+
   if (error && !draft) return <div className="studio-message"><h1>Resume</h1><p className="error">{error}</p></div>;
   if (!draft) return <div className="studio-message"><h1>Resume</h1><p className="muted">Loading…</p></div>;
 
@@ -389,12 +429,13 @@ export function ResumeEditor() {
         </div>
       )}
 
-      <div className={`studio-body${leftOpen ? '' : ' left-closed'}`}>
+      <div className={`studio-body${leftOpen ? '' : ' left-closed'}${rightOpen ? '' : ' right-closed'}`}>
         {leftOpen && (
           <aside className="studio-left">
             <div className="studio-tabs">
               <button className={tab === 'editor' ? 'on' : ''} onClick={() => setTab('editor')}>Editor</button>
               <button className={tab === 'layout' ? 'on' : ''} onClick={() => setTab('layout')}>Layout</button>
+              <button className={tab === 'ai' ? 'on' : ''} onClick={() => setTab('ai')}>AI Settings</button>
             </div>
 
             {tab === 'editor' && section && (
@@ -423,6 +464,7 @@ export function ResumeEditor() {
                 <button className="studio-card fixed" onClick={() => setSection('header')}>
                   <span className="grip" aria-hidden />
                   <span className="text"><b>{LABELS.header}</b><span>{summaryOf('header', draft)}</span></span>
+                  {badge('header')}
                   <span className="chev">›</span>
                 </button>
 
@@ -447,6 +489,7 @@ export function ResumeEditor() {
                       onClick={(e) => { e.stopPropagation(); toggleHidden(key); }}>
                       {hidden.has(key) ? 'Show' : 'Hide'}
                     </button>
+                    {badge(key)}
                     <span className="chev">›</span>
                   </div>
                 ))}
@@ -455,6 +498,8 @@ export function ResumeEditor() {
                 <button className="studio-reset" onClick={() => void resetToProfile()}>↺ Reset to Profile</button>
               </div>
             )}
+
+            {tab === 'ai' && <AiSettingsForm resumeId={id} />}
 
             {tab === 'layout' && (
               <div className="studio-layout">
@@ -503,6 +548,9 @@ export function ResumeEditor() {
               if (document.fullscreenElement) void document.exitFullscreen();
               else void preview.current?.requestFullscreen();
             }}>⛶</button>
+            <button title={rightOpen ? 'Hide Resume Score and Chat' : 'Show Resume Score and Chat'} onClick={() => setRightOpen(!rightOpen)}>
+              {rightOpen ? '»' : '«'}
+            </button>
           </div>
           <div className="studio-canvas" ref={canvas}>
             <div className="studio-zoom" style={{ zoom: scale }} onClick={openFromPreview}>
@@ -510,6 +558,19 @@ export function ResumeEditor() {
             </div>
           </div>
         </main>
+
+        {rightOpen && jobId !== undefined && (
+          <aside className="studio-right">
+            <AssistantPanel
+              resumeId={id}
+              snapshot={loaded?.snapshot ?? 0}
+              defaultJobId={jobId}
+              onIssues={setScore}
+              onApply={applySuggestion}
+              onOpenSection={(key: IssueSection) => { setTab('editor'); setSection(key); setLeftOpen(true); }}
+            />
+          </aside>
+        )}
       </div>
     </div>
   );

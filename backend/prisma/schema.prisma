@@ -337,6 +337,8 @@ model Resume {
   currentSnapshotId String?
   /// The CV's design (template, accent, font, sizes) from the editor. The PDF is made with it.
   theme             Json?
+  /// How the editor's AI writes for this CV: tone and standing instructions.
+  aiSettings        Json?
   /// Materialised live state. Derived; never authored.
   current           Json?
   materialisedAt    DateTime?

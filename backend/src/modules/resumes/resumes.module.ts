@@ -17,6 +17,10 @@ import { PrismaResumeRepository } from './adapters/outbound/persistence/prisma-r
 import { ResumesController } from './adapters/inbound/http/resumes.controller';
 import { TailoringController } from './adapters/inbound/http/tailoring.controller';
 import { RewriteController } from './adapters/inbound/http/rewrite.controller';
+import { ResumeAssistantController } from './adapters/inbound/http/resume-assistant.controller';
+import { ResumeAssistant } from './application/use-cases/resume-assistant';
+import { ClaudeResumeChat } from './adapters/outbound/ai/claude-resume-chat';
+import { PrismaAiSettingsStore } from './adapters/outbound/persistence/prisma-ai-settings.store';
 import { CvImportController } from './adapters/inbound/http/cv-import.controller';
 import { ExtensionResumesController } from './adapters/inbound/http/extension-resumes.controller';
 import {
@@ -55,6 +59,7 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
     ResumesController,
     TailoringController,
     RewriteController,
+    ResumeAssistantController,
     CvImportController,
     ExtensionResumesController,
     ExtensionResumePdfController,
@@ -114,10 +119,21 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
       },
     },
     {
+      provide: ResumeAssistant,
+      inject: [RESUMES_API, JOBS_API, PrismaService, ClaudeProcessRunner],
+      useFactory: (resumes: ResumesApi, jobs: JobsApi, database: PrismaService, runner: ClaudeProcessRunner) =>
+        new ResumeAssistant(
+          resumes,
+          new PublicTailoringJobReader(jobs),
+          new PrismaAiSettingsStore(database),
+          new ClaudeResumeChat(runner),
+        ),
+    },
+    {
       provide: RewriteResumeLine,
-      inject: [RESUMES_API, ClaudeProcessRunner],
-      useFactory: (resumes: ResumesApi, runner: ClaudeProcessRunner) =>
-        new RewriteResumeLine(resumes, new ClaudeLineRewriter(runner)),
+      inject: [RESUMES_API, ClaudeProcessRunner, ResumeAssistant],
+      useFactory: (resumes: ResumesApi, runner: ClaudeProcessRunner, assistant: ResumeAssistant) =>
+        new RewriteResumeLine(resumes, new ClaudeLineRewriter(runner), assistant),
     },
     {
       provide: IMPORT_CV,
