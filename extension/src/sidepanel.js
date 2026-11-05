@@ -134,7 +134,7 @@ addEventListener('unhandledrejection', event => { if (isStaleError(event.reason)
 document.addEventListener('click', event => { if (!alive() && !event.target.closest('#close-panel')) { event.stopImmediatePropagation(); event.preventDefault(); showStale(); } }, true);
 let profile = {}, scan = null, currentTab = null, filling = false, refreshId = 0;
 let copyValues = [];
-let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, pickerOpen = { resume: false }, pageDisconnected = false;
+let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, pageDisconnected = false;
 let match = null, matchUrl = null, matchKeywords = null, matchRun = 0, improving = false;
 // The last Autofill result for this page: summary, notes and required fields still empty.
 let fillReport = null;
@@ -684,37 +684,110 @@ $('profile-overview').addEventListener('click', async event => {
   }
 });
 
-// CVs come from the app's Documents. The Resume tab lists them; the Autofill
-// card switches between them. Autofill uploads the chosen one as a PDF.
-function cvDetails(item) {
-  return [item.targetRole, item.tailoredForJob ? 'Tailored for a job' : '', `edited ${new Date(item.updatedAt).toLocaleDateString()}`].filter(Boolean).join(' · ');
+// CVs come from the app's Documents. The Resume tab chooses one with a
+// dropdown, as in Simplify: one line with the CV's name, and a list that opens
+// over the panel (so nothing below moves), with a search box, the default CV
+// first, and each CV's match score for the job on the page (70% and more).
+// Autofill uploads the chosen CV as a PDF.
+let cvMenu = { open: false, query: '', active: 0 };
+const cvMenuNode = document.createElement('div');
+cvMenuNode.className = 'cv-menu';
+cvMenuNode.id = 'cv-menu';
+cvMenuNode.hidden = true;
+cvMenuNode.innerHTML = `<input class="cv-search" id="cv-search" type="search" placeholder="Search your CVs" aria-label="Search your CVs" autocomplete="off" role="combobox" aria-controls="cv-options" aria-expanded="true"><ul class="cv-options" id="cv-options" role="listbox" aria-label="Your CVs"></ul>`;
+document.body.append(cvMenuNode);
+
+/** The CVs to list: the default first, then the rest as the app orders them; filtered by the search. */
+function cvOptions() {
+  const query = cvMenu.query.trim().toLowerCase();
+  const items = [...resumes.items].sort((a, b) => Number(Boolean(b.isPrimary)) - Number(Boolean(a.isPrimary)));
+  return query ? items.filter(item => item.name.toLowerCase().includes(query)) : items;
 }
-/** namesOnly: the Resume tab shows CV names and nothing else. */
-function resumeRows({ namesOnly = false } = {}) {
-  return resumes.items.map(item => {
+function renderCvOptions() {
+  const options = cvOptions();
+  cvMenu.active = Math.min(cvMenu.active, Math.max(0, options.length - 1));
+  $('cv-options').innerHTML = options.length ? options.map((item, index) => {
     const chosen = item.id === resumes.chosen?.id;
-    if (namesOnly) return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong title="${esc(item.name)}">${esc(item.name)}</strong></span></button></li>`;
-    return `<li class="resume-row${chosen ? ' is-active' : ''}"><button class="resume-pick" data-pick="${esc(item.id)}" aria-pressed="${chosen}"><span class="radio" aria-hidden="true"></span><span class="resume-meta"><strong title="${esc(item.name)}">${esc(item.name)}</strong><small>${esc(cvDetails(item))}</small></span>${item.isPrimary ? '<span class="badge">Primary</span>' : ''}</button></li>`;
-  }).join('');
+    const score = match?.scores?.[item.id];
+    return `<li role="option" id="cv-option-${index}" aria-selected="${chosen}" class="cv-option${index === cvMenu.active ? ' is-active' : ''}"><button type="button" data-pick="${esc(item.id)}" tabindex="-1"><span class="cv-check" aria-hidden="true">${chosen ? icon('check', 14) : ''}</span><span class="cv-option-name" title="${esc(item.name)}">${esc(item.name)}${item.isPrimary ? ' <small>(default)</small>' : ''}</span>${score >= 70 ? `<span class="cv-option-score" title="Matches ${score}% of this job's keywords">${score}%</span>` : ''}</button></li>`;
+  }).join('') : '<li class="cv-empty">No CVs found</li>';
+  $('cv-search').setAttribute('aria-activedescendant', options.length ? `cv-option-${cvMenu.active}` : '');
+  $('cv-options').querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
 }
+/** Under the CV button, as wide as the panel allows. */
+function placeCvMenu() {
+  const button = $('cv-select');
+  if (!button || cvMenuNode.hidden) return;
+  const box = button.getBoundingClientRect();
+  const width = Math.min(Math.max(box.width, 280), innerWidth - 24);
+  cvMenuNode.style.width = `${width}px`;
+  cvMenuNode.style.left = `${Math.max(12, Math.min(box.left, innerWidth - width - 12))}px`;
+  cvMenuNode.style.top = `${box.bottom + 6}px`;
+  cvMenuNode.style.maxHeight = `${Math.max(160, innerHeight - box.bottom - 18)}px`;
+}
+function openCvMenu() {
+  if (!resumes.items.length) return;
+  cvMenu = { open: true, query: '', active: Math.max(0, cvOptions().findIndex(item => item.id === resumes.chosen?.id)) };
+  $('cv-search').value = '';
+  cvMenuNode.hidden = false;
+  $('cv-select')?.setAttribute('aria-expanded', 'true');
+  renderCvOptions();
+  placeCvMenu();
+  $('cv-search').focus();
+}
+function closeCvMenu(focusButton = false) {
+  if (!cvMenu.open) return;
+  cvMenu.open = false;
+  cvMenuNode.hidden = true;
+  $('cv-select')?.setAttribute('aria-expanded', 'false');
+  if (focusButton) $('cv-select')?.focus();
+}
+$('cv-search').addEventListener('input', event => { cvMenu.query = event.target.value; cvMenu.active = 0; renderCvOptions(); });
+$('cv-search').addEventListener('keydown', event => {
+  const options = cvOptions();
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    cvMenu.active = (cvMenu.active + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % Math.max(1, options.length);
+    renderCvOptions();
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    if (options[cvMenu.active]) void switchCv(options[cvMenu.active].id);
+  } else if (event.key === 'Escape') {
+    // Only the list closes, not the panel.
+    event.preventDefault(); event.stopPropagation();
+    closeCvMenu(true);
+  } else if (event.key === 'Tab') closeCvMenu();
+});
+document.addEventListener('pointerdown', event => {
+  if (cvMenu.open && !cvMenuNode.contains(event.target) && !event.target.closest('#cv-select')) closeCvMenu();
+}, true);
+document.querySelector('main').addEventListener('scroll', placeCvMenu, { passive: true });
+addEventListener('resize', placeCvMenu);
+document.addEventListener('click', event => { if (event.target.closest('#cv-select')) { if (cvMenu.open) closeCvMenu(); else openCvMenu(); } });
+
 function resumeEmpty() {
   if (resumeProblem === 'signed-out') return `<div class="resume-empty"><p>Sign in to see the CVs from your app.</p><button class="ghost" data-go-sign-in>Sign in on the Profile tab</button></div>`;
   if (resumeProblem) return `<div class="resume-empty"><p>${esc(resumeProblem)}</p><button class="ghost" data-refresh-cvs>${icon('refresh', 17)}Try again</button></div>`;
   if (loadingResumes) return '<div class="resume-empty"><p>Loading your CVs…</p></div>';
   return `<div class="resume-empty"><p>No CVs in Documents yet.</p><button class="ghost" data-open-documents>Open Documents</button></div>`;
 }
-/** The chosen CV, with a button that opens the list to switch (Resume tab). */
-function cvPicker(where) {
+/** The chosen CV: its name as a dropdown button, and Preview resume. */
+function cvPicker() {
   const chosen = resumes.chosen;
   if (!chosen) return resumeEmpty();
-  const many = resumes.items.length > 1, open = many && pickerOpen[where];
-  const namesOnly = where === 'resume';
-  const note = preparingPdf ? 'Making the PDF…' : 'Autofill uploads this CV';
-  return `<div class="document-selection resume-current"><button class="resume-switch" data-toggle-picker="${where}" ${many ? `aria-expanded="${open}" aria-controls="picker-${where}"` : 'disabled'} title="${many ? 'Change CV' : 'Add more CVs in the app to switch'}"><span><strong class="cv-name" title="${esc(chosen.name)}">${esc(chosen.name)}</strong>${namesOnly ? '' : `<small>${chosen.isPrimary ? '<span class="badge">Primary</span>' : ''}${esc(note)}</small>`}</span>${many ? `<span class="switch-label">Change${icon('chevron', 15)}</span>` : ''}</button><button class="icon-button" data-open-cv="${esc(chosen.id)}" title="Open in app" aria-label="Open ${esc(chosen.name)} in the app">${icon('link', 18)}</button></div>
-    ${open ? `<ul class="resume-list" id="picker-${where}" aria-label="Choose a CV">${resumeRows({ namesOnly })}</ul>` : ''}`;
+  const note = preparingPdf ? 'Making the PDF…' : 'Autofill uploads this CV.';
+  return `<div class="cv-select-row">
+      <button class="cv-select" id="cv-select" type="button" aria-haspopup="listbox" aria-expanded="${cvMenu.open}" aria-controls="cv-menu" title="Change CV">
+        <span class="cv-select-name" title="${esc(chosen.name)}">${esc(chosen.name)}${chosen.isPrimary ? ' <small>(default)</small>' : ''}</span>
+        <span class="cv-select-chevron" aria-hidden="true">${icon('chevron', 14)}</span>
+      </button>
+      <button class="link-button cv-preview" type="button" data-open-cv="${esc(chosen.id)}">${icon('eye', 16)}Preview resume</button>
+    </div>
+    <p class="cv-note">${esc(note)}</p>`;
 }
 function renderResume() {
-  $('resume-picker').innerHTML = cvPicker('resume');
+  $('resume-picker').innerHTML = cvPicker();
+  if (cvMenu.open) { renderCvOptions(); placeCvMenu(); }
   $('refresh-cvs').disabled = loadingResumes;
 }
 function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); }
@@ -736,27 +809,48 @@ async function preparePdf() {
   finally { preparingPdf = false; rerenderResumes(); }
 }
 document.addEventListener('click', event => {
-  const target = event.target.closest('[data-pick],[data-open-cv],[data-refresh-cvs],[data-go-sign-in],[data-open-documents],[data-toggle-picker]');
+  const target = event.target.closest('[data-pick],[data-open-cv],[data-refresh-cvs],[data-go-sign-in],[data-open-documents]');
   if (!target) return;
-  if (target.dataset.togglePicker) {
-    const where = target.dataset.togglePicker;
-    pickerOpen[where] = !pickerOpen[where]; rerenderResumes();
-    document.querySelector(`[data-toggle-picker="${where}"]`)?.focus();
-    return;
-  }
   if (target.dataset.openCv) { void chrome.tabs.create({ url: cvUrl(target.dataset.openCv) }); return; }
   if ('refreshCvs' in target.dataset) { void loadResumes(); return; }
   if ('openDocuments' in target.dataset) { void openApp('/documents'); return; }
   if ('goSignIn' in target.dataset) { selectTab('profile'); document.querySelector('.account-card').open = true; return; }
-  void (async () => {
-    try {
-      pickerOpen = { resume: false };
-      await chooseResume(target.dataset.pick);
-      resumes = await cachedResumes(); rerenderResumes();
-      await preparePdf();
-    } catch { status('resume-status', 'Could not switch CVs. Try again.', 'error'); }
-  })();
+  void switchCv(target.dataset.pick);
 });
+/**
+ * Makes another CV the one Autofill uploads. When Autofill already uploaded a
+ * CV to the form on this page, the new one replaces it there too (as in
+ * Simplify), and the saved job records it.
+ */
+async function switchCv(id) {
+  closeCvMenu(true);
+  const before = resumes.chosen?.id;
+  if (!id || id === before) return;
+  try {
+    await chooseResume(id);
+    resumes = await cachedResumes(); rerenderResumes(); void rescore();
+    await preparePdf();
+    await replaceUploadedCv();
+  } catch { status('resume-status', 'Could not switch CVs. Try again.', 'error'); }
+}
+async function replaceUploadedCv() {
+  const tab = currentTab, chosen = resumes.chosen;
+  if (!chosen || !lastApplication || lastApplication.url !== tab?.url || !lastApplication.resumeId || lastApplication.resumeId === chosen.id) return;
+  let replaced = 0, kept = 0;
+  try {
+    const file = await pdfFor(chosen);
+    for (const frameId of formFrames.length ? formFrames : [0]) {
+      const reply = await askFrame(frameId, { type: 'replace-cv', dataUrl: file.dataUrl, fileName: file.fileName }, tab);
+      replaced += reply?.replaced ?? 0; kept += reply?.kept ?? 0;
+    }
+  } catch (error) { status('resume-status', `The form still has the old CV: ${error.message}`, 'error'); return; }
+  if (replaced) {
+    lastApplication.resumeId = chosen.id;
+    await recordOnSavedJob(tab.url);
+    status('resume-status', `${chosen.name} is now uploaded to the form, in place of the old CV.`, 'success');
+  }
+  if (kept) status('resume-status', `This form keeps the old CV. Remove it in the form, then upload ${chosen.name} yourself.`, 'error');
+}
 
 // ─── Keyword match card ───────────────────────────────────────────────────
 // On a job description page, scores how many of the posting's keywords each CV
@@ -800,7 +894,8 @@ async function rescore(run = ++matchRun) {
         // Suggest another CV only when it is clearly better, not one keyword ahead.
         const best = scored.filter(item => item.id !== chosen.id).sort((a, b) => b.score - a.score)[0];
         const better = best && best.score >= chosen.score + 10 ? { id: best.id, name: best.name, score: best.score, matched: best.matched.length } : null;
-        next = { chosen, better };
+        // Every CV's score, for the Resume tab's CV list.
+        next = { chosen, better, scores: Object.fromEntries(scored.map(item => [item.id, item.score])) };
       }
     } catch { /* signed out or app unreachable: no card */ }
   }
@@ -943,7 +1038,7 @@ for (const button of document.querySelectorAll('[data-close-dialog]')) button.ad
 $('report').addEventListener('click', () => { $('report-text').value = ['CV Autofill ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });
 $('copy-report').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('report-text').value); status('report-status', 'Copied. You can paste this into your feedback.', 'success'); } catch { $('report-text').select(); status('report-status', 'Select and copy the report manually.', 'error'); } });
 $('close-panel').addEventListener('click', closePanel);
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && !document.querySelector('dialog[open]')) closePanel(); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !cvMenu.open) closePanel(); });
 chrome.storage.onChanged.addListener((_changes, area) => { if (area === 'local') void refresh(); });
 chrome.tabs.onUpdated.addListener((id, info) => { if (id === currentTab?.id && (info.status === 'complete' || info.url)) void refresh(); });
 void refresh();

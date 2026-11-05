@@ -559,6 +559,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ questions: Fields.detectQuestions(Fields.detectFields().found) });
     return false;
   }
+  if (message.type === 'replace-cv') {
+    // The person chose another CV after Autofill uploaded one: put the new one in its place.
+    // A file field takes the new file; an upload box that already holds a file is left alone
+    // (most only add files), and its icon says to replace the CV by hand.
+    void (async () => {
+      let replaced = 0, kept = 0;
+      for (const field of Fields.detectFields().found.filter((item) => item.key === 'resume')) {
+        try {
+          if (field.kind === 'file') {
+            if (await Filler.attachFile(field.element, message.dataUrl, message.fileName)) {
+              replaced++;
+              await Marks?.show([{ element: field.element, status: 'ok', reason: `Your CV attached: ${message.fileName}` }]);
+            }
+          } else if (field.kind === 'drop') {
+            if (Fields.zoneDone(field.element)) {
+              kept++;
+              await Marks?.show([{ element: field.element, status: 'check', reason: `This upload box keeps the old CV. Remove it, then upload ${message.fileName}.` }]);
+            } else if ((await Filler.dropFile(field.element, message.dataUrl, message.fileName)).filled) {
+              replaced++;
+              await Marks?.show([{ element: field.element, status: 'ok', reason: `Your CV attached: ${message.fileName}` }]);
+            }
+          }
+        } catch { /* leave this field as it is */ }
+      }
+      sendResponse({ replaced, kept });
+    })();
+    return true;
+  }
   if (message.type === 'job-details') {
     // For the panel's "Save job" form: what the page says about the job, checked by the person before saving.
     const context = scan().context;

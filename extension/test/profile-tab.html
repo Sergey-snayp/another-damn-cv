@@ -14,13 +14,15 @@
       --allow-file-access-from-files --virtual-time-budget=30000 \
       --dump-dom "file://$PWD/test/profile-tab.html" | grep -o '<pre id="result">.*</pre>'
   Run it again with ?applied for the "already applied" banner, and with
-  ?form for the form's messages when the page shows no company or location.
+  ?form for the form's messages when the page shows no company or location,
+  and ?cvs for the Resume tab's CV dropdown and switching after Autofill.
 -->
 <script>
   const store = {
     auth: { syncToken: 'token', user: { name: 'Sergey Proniuk', email: 'sergeypronyuk@gmail.com' } },
     profile: { firstName: 'Sergey', lastName: 'Proniuk', email: 'sergeypronyuk@gmail.com', phone: '+16728880334', location: 'Vancouver, BC, Canada', linkedin: 'linkedin.com/in/sp', workArrangements: 'remote,hybrid' },
     appResumes: [{ id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }],
+    cvPdf: { resumeId: 'cv1', updatedAt: '2026-11-01', dataUrl: 'data:application/pdf;base64,MASTER' },
     autofillDefaults: [{ id: 'd1', kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }],
   };
   const sentToPage = [], opened = [], captured = [], recorded = [];
@@ -28,25 +30,33 @@
   const APPLIED_MODE = location.search.includes('applied');
   // ?form: the page shows no company, so Add opens the short form first.
   const FORM_MODE = location.search.includes('form');
+  // ?cvs: three CVs and a job posting; the Resume tab's CV dropdown, and switching after Autofill uploaded a CV.
+  const CVS_MODE = location.search.includes('cvs');
+  const JOB_TEXT = 'Backend Developer\nWe are hiring a backend engineer. Responsibilities: build services in Node.js and TypeScript with PostgreSQL, Docker and Kafka. Requirements: 5 years of experience.';
   let lookupReply = APPLIED_MODE ? { job: { id: 'j9', status: 'interview', appliedAt: '2026-11-02T10:00:00.000Z', companyLogo: null } } : { job: null }, failNextCapture = '';
   const noop = () => {};
   const event = { addListener: noop, removeListener: noop };
+  if (CVS_MODE) {
+    store.appResumes = [{ id: 'cv3', name: 'Frontend CV', isPrimary: false, updatedAt: '2026-11-01' }, { id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }, { id: 'cv2', name: 'Backend CV', isPrimary: false, updatedAt: '2026-11-01' }];
+  }
+  const CV_TEXTS = { cv1: 'Node.js TypeScript', cv2: 'Node.js TypeScript PostgreSQL Docker Kafka', cv3: 'React' };
   window.chrome = {
-    runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async (message) => (message?.type === 'panel-tab' ? { tabId: 1 } : null) },
+    runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async (message) => (message?.type === 'panel-tab' ? { tabId: 1 } : message?.type === 'make-cv-pdf' ? { dataUrl: 'data:application/pdf;base64,OTHER' } : null) },
     storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => { Object.assign(store, values); }, remove: async (keys) => { for (const key of [].concat(keys)) delete store[key]; } }, onChanged: event },
     tabs: {
       get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: async (options) => { opened.push(options.url); },
       sendMessage: async (_tab, message) => {
         sentToPage.push(message);
-        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [{ key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
+        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [...(CVS_MODE ? [{ key: 'resume', kind: 'file', group: 'Documents' }] : []), { key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
         if (message.type === 'job-details') return { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', url: 'https://jobs.example.com/apply', location: FORM_MODE ? '' : 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time', description: 'Build payment APIs.', country: 'Poland' };
         if (message.type === 'questions') return { questions: [{ id: '7', question: 'How did you hear about us?', kind: 'text', value: 'https://another-damn.cv' }, { id: '8', question: 'Why Acme?', kind: 'textarea', value: '' }] };
+        if (message.type === 'replace-cv') return { replaced: 1, kept: 0 };
         if (message.type === 'fill') return { filled: 3, failures: [], notes: [], missing: [] };
         return null;
       },
     },
     permissions: { request: async () => true },
-    scripting: { executeScript: async ({ func }) => (func ? [{ result: { url: 'https://jobs.example.com/apply', pageTitle: 'Engineer', text: 'Engineer at Acme' } }] : []) },
+    scripting: { executeScript: async ({ func }) => (func ? [{ result: CVS_MODE ? { url: 'https://jobs.example.com/apply', pageTitle: 'Backend Developer', text: JOB_TEXT, jsonLd: [{ '@type': 'JobPosting', title: 'Backend Developer', description: JOB_TEXT }] } : { url: 'https://jobs.example.com/apply', pageTitle: 'Engineer', text: 'Engineer at Acme' } }] : []) },
     webNavigation: { getAllFrames: async () => [{ frameId: 0, url: 'https://jobs.example.com/apply' }] },
     identity: { getRedirectURL: () => 'https://test.chromiumapp.org/' },
   };
@@ -71,6 +81,8 @@
     if (path === '/api/extension/profile/career/resume/cv1') return reply(view('Paymorrow', 'CV School'));
     if (path === '/api/extension/defaults') return reply(store.autofillDefaults);
     if (path === '/api/extension/resumes') return reply(store.appResumes);
+    const cvText = path.match(/^\/api\/extension\/resumes\/([^/]+)\/text$/);
+    if (cvText) return reply({ id: cvText[1], text: CV_TEXTS[cvText[1]] ?? '' });
     return new Response('{}', { status: 404 });
   };
 </script>
@@ -85,6 +97,52 @@
     document.body.insertAdjacentHTML('afterbegin', new DOMParser().parseFromString(markup, 'text/html').body.innerHTML.replace(/<script[\s\S]*?<\/script>/g, ''));
     await import('../src/sidepanel.js');
     await wait(1500);
+    if (CVS_MODE) {
+      const closed = [];
+      addEventListener('message', (message) => { if (message.data?.type === 'adcv-panel-close') closed.push(true); });
+      document.getElementById('fill').click(); // Autofill uploads Master CV.
+      await wait(800);
+      expect(sentToPage.some((message) => message.type === 'fill' && message.profile.resumeFileName === 'Master CV.pdf'), 'Autofill uploads the default CV');
+      document.querySelector('.tab[data-panel="resume"]').click();
+      await wait(100);
+      const select = document.getElementById('cv-select');
+      expect(/Master CV/.test(select.textContent) && /\(default\)/.test(select.textContent), `the dropdown shows the chosen CV, marked default (got "${select.textContent.trim()}")`);
+      expect(/Preview resume/.test(document.getElementById('resume-picker').textContent), 'with a Preview resume link');
+      const status = document.getElementById('resume-status');
+      const before = status.getBoundingClientRect().top;
+      select.click();
+      await wait(100);
+      const menu = document.getElementById('cv-menu');
+      expect(!menu.hidden && getComputedStyle(menu).position === 'fixed', 'the list opens over the panel');
+      expect(status.getBoundingClientRect().top === before, `nothing below moves (status was at ${before}, now ${status.getBoundingClientRect().top})`);
+      const names = [...menu.querySelectorAll('.cv-option-name')].map((node) => node.textContent);
+      expect(JSON.stringify(names) === JSON.stringify(['Master CV (default)', 'Frontend CV', 'Backend CV']), `the default CV comes first (got ${JSON.stringify(names)})`);
+      const scoreOf = (name) => [...menu.querySelectorAll('.cv-option')].find((node) => node.textContent.includes(name))?.querySelector('.cv-option-score')?.textContent ?? null;
+      expect(scoreOf('Backend CV') === '100%' && scoreOf('Master CV') === null && scoreOf('Frontend CV') === null, `scores show from 70% (got Backend ${scoreOf('Backend CV')}, Master ${scoreOf('Master CV')}, Frontend ${scoreOf('Frontend CV')})`);
+      expect(menu.querySelector('[aria-selected="true"]')?.textContent.includes('Master CV'), 'the chosen CV is marked');
+      expect(document.activeElement?.id === 'cv-search', 'the search box has the focus');
+      const search = document.getElementById('cv-search');
+      search.value = 'back';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(JSON.stringify([...menu.querySelectorAll('.cv-option-name')].map((node) => node.textContent)) === '["Backend CV"]', 'the search box narrows the list');
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await wait(800);
+      expect(menu.hidden && /Backend CV/.test(document.getElementById('cv-select').textContent) && store.chosenResumeId === 'cv2', `Enter chooses it and closes the list (chosen ${store.chosenResumeId})`);
+      const replace = sentToPage.find((message) => message.type === 'replace-cv');
+      expect(replace?.fileName === 'Backend CV.pdf' && replace?.dataUrl === 'data:application/pdf;base64,OTHER', `the new CV replaces the one Autofill uploaded (sent ${JSON.stringify(replace)})`);
+      expect(/Backend CV is now uploaded to the form/.test(status.textContent), `and the panel says so (got "${status.textContent}")`);
+      document.getElementById('cv-select').click();
+      await wait(50);
+      document.getElementById('cv-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      document.getElementById('cv-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await wait(50);
+      expect(document.getElementById('cv-menu').hidden && !closed.length, `Esc closes the list, not the panel (panel closed: ${closed.length})`);
+      document.getElementById('cv-select').click();
+      await wait(50);
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      expect(document.getElementById('cv-menu').hidden, 'a click outside closes the list');
+      throw Object.assign(new Error('done'), { done: true });
+    }
     if (FORM_MODE) {
       document.getElementById('job-save').click();
       await wait(200);

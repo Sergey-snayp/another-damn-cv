@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — switching the CV after Autofill uploaded one</title>
+<!--
+  The panel asks the page to put the newly chosen CV in place of the one
+  Autofill uploaded. A file field takes the new file and its icon stays
+  green; an upload box that already holds a file is left alone, and its
+  icon says to replace the CV by hand.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/replace-cv.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  let listener = null;
+  window.chrome = {
+    runtime: { id: 'test', getURL: (p) => `chrome-extension://test/${p}`, onMessage: { addListener: (fn) => { listener = fn; } }, sendMessage: async () => ({}) },
+    storage: { local: { get: async () => ({ animateFill: false }), set: async () => {} }, onChanged: { addListener() {} } },
+  };
+</script>
+<body>
+<form id="with-input">
+  <label for="first">First name</label><input id="first" name="first_name">
+  <label for="cv">Resume/CV</label><input id="cv" type="file" name="resume">
+</form>
+<script src="../src/sites.js"></script><script src="../src/fields.js"></script><script src="../src/filler.js"></script><script src="../src/marks.js"></script>
+<script src="../src/logo.js"></script><script src="../src/job-details.js"></script><script src="../src/job-form.js"></script><script src="../src/content.js"></script>
+<script>
+addEventListener('load', () => setTimeout(async () => {
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const M = window.CVAutofillMarks, $ = (id) => document.getElementById(id);
+  const PDF = 'data:application/pdf;base64,JVBERi0xLjQK';
+  const fromPanel = { url: 'chrome-extension://test/src/sidepanel.html' };
+  const ask = (message) => new Promise((resolve) => { if (!listener(message, fromPanel, resolve)) resolve(null); });
+  try {
+    await window.CVAutofillFiller.attachFile($('cv'), PDF, 'Master CV.pdf');
+    expect($('cv').files[0]?.name === 'Master CV.pdf', 'the first CV is uploaded');
+    const reply = await ask({ type: 'replace-cv', dataUrl: PDF, fileName: 'Backend CV.pdf' });
+    expect(reply?.replaced === 1 && reply?.kept === 0, `the file field takes the new CV (reply ${JSON.stringify(reply)})`);
+    expect($('cv').files.length === 1 && $('cv').files[0].name === 'Backend CV.pdf', `only the new CV is in the field (got ${[...$('cv').files].map((file) => file.name)})`);
+    expect(M.statusOf($('cv')) === 'ok' && /Backend CV\.pdf/.test(M.reasonOf($('cv')) ?? ''), 'its icon is green and names the new CV');
+
+    // An upload box that already holds the old CV.
+    document.body.insertAdjacentHTML('beforeend', `<form id="with-zone"><div data-controller="forms--inputs--upload" id="zone"><label for="zone-url">Upload CV</label>
+      <div class="dz-clickable-area">Drop your file</div><div class="previews"><div class="dz-preview dz-success">Master CV.pdf</div></div>
+      <input type="text" class="hidden" disabled name="candidate[resume_remote_url]" id="zone-url" value="https://uploads.example/Master CV.pdf"></div></form>`);
+    $('with-input').remove();
+    const kept = await ask({ type: 'replace-cv', dataUrl: PDF, fileName: 'Backend CV.pdf' });
+    expect(kept?.replaced === 0 && kept?.kept === 1, `an upload box with a file is left alone (reply ${JSON.stringify(kept)})`);
+    expect(M.statusOf($('zone')) === 'check' && /Remove it, then upload Backend CV\.pdf/.test(M.reasonOf($('zone')) ?? ''), `and its icon says what to do (got ${M.statusOf($('zone'))}: "${M.reasonOf($('zone'))}")`);
+  } catch (error) { problems.push(`threw: ${error.stack}`); }
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+}, 800));
+</script>
+</body>
