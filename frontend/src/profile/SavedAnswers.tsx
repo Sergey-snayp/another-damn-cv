@@ -60,7 +60,7 @@ export function SavedAnswers() {
         <h2 id="saved-answers-heading">Saved answers</h2>
       </div>
       <p className="profile-muted">
-        Answers to application questions, saved from the extension with <strong>Save answers from this form</strong>.
+        Answers to application questions, saved in the extension from a question's icon on the form.
         Autofill uses them when the same or a similar question appears again.
       </p>
       {error && (

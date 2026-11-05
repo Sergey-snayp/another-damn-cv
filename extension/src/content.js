@@ -128,7 +128,7 @@ function explain(element) {
       : 'Consent is yours to give. Choose it, or switch on Settings → Acknowledge required privacy notices.';
   }
   if (Fields.detectQuestions().some((question) => question.id === element.dataset.adcvField)) {
-    return 'The company\'s own question. Click to answer it and save the answer, or use "Draft with AI" in the panel.';
+    return 'The company\'s own question. Click to answer it and save the answer for next time.';
   }
   return 'Autofill did not recognise this field. Fill it yourself.';
 }
@@ -555,23 +555,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'questions') {
     sendResponse({ questions: Fields.detectQuestions(Fields.detectFields().found) });
     return false;
-  }
-  if (message.type === 'fill-draft') {
-    // An AI draft the person asked for with "Draft with AI". Marked until they edit it.
-    const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(message.id))}"]`);
-    if (!element) { sendResponse({ filled: false }); return false; }
-    void (async () => {
-      const hooks = Marks?.fillHooks(await Marks.animationMode());
-      const field = { element, kind: message.kind };
-      const token = await hooks?.before?.(field);
-      const result = await Filler.fillAnswer(element, message.kind, message.value).catch(() => ({ filled: false }));
-      const mark = result.filled ? { element: result.element ?? element, status: 'check', reason: 'AI draft: review it before submitting' } : null;
-      await hooks?.after?.(field, mark, token);
-      hooks?.end();
-      if (mark) await Marks?.show([mark]);
-      sendResponse({ filled: result.filled });
-    })();
-    return true;
   }
   if (message.type === 'check-required') {
     const missing = missingWithReasons();

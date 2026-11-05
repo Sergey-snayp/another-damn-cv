@@ -3,8 +3,9 @@ import { NotSignedInError } from './jobs.js';
 
 /**
  * Saved answers to application questions, stored on your account. Autofill
- * asks for matches to the form's questions; "Save answers from this form"
- * stores what you typed. Matching rules live on the server (answers module).
+ * asks for matches to the form's questions. Answers are saved from a
+ * question's icon on the form.
+ * Matching rules live on the server (answers module).
  */
 async function post(path, body) {
   const { auth } = await chrome.storage.local.get('auth');
@@ -34,9 +35,4 @@ export function matchAnswers(company, questions) {
 
 export function saveAnswers(company, answers) {
   return post('', { company, answers });
-}
-
-/** An AI draft for one question: { answer, needsInput }. Runs Claude on the server. */
-export function draftAnswer(request) {
-  return post('/draft', request);
 }

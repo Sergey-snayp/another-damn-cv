@@ -86,12 +86,6 @@ ul.fields li:last-child { border: 0; }
 .copy-value:hover { color: var(--color-text); background: var(--color-accent-soft); }
 .copy-value.is-heading { font-size: 16px; font-weight: 600; color: var(--color-text); }
 .sticky-action { position: sticky; bottom: -18px; margin: 8px -1px 0; padding: 14px 0 10px; background: var(--color-surface); border-top: 1px solid var(--color-border); z-index: 1; }
-.capture-card { margin-top: 20px; background: var(--color-background); }
-.capture-heading { display: flex; align-items: flex-start; gap: 12px; }
-.capture-heading h2 { font-size: 14px; margin-bottom: 5px; }
-.capture-heading p { margin-top: 0; font-size: 11px; }
-.send-status { font-size: 12px; color: var(--color-muted); margin-top: 9px; overflow-wrap: anywhere; }
-.send-status:empty { display: none; } .send-status a { display: inline-block; margin-top: 5px; color: var(--color-text); font-weight: 600; }
 footer { display: flex; align-items: center; justify-content: center; flex: none; gap: 7px; padding: 11px 14px; border-top: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-muted); font-size: 10px; }
 dialog { max-width: calc(100vw - 28px); width: 380px; max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 17px; padding: 20px; color: var(--color-text); background: var(--color-surface); box-shadow: 0 14px 50px var(--color-shadow-strong); }
 dialog::backdrop { background: var(--color-overlay); }
@@ -173,25 +167,7 @@ dialog textarea { resize: vertical; margin-bottom: 15px; }
 .still-empty li button:hover { background: var(--color-accent-soft); }
 .still-empty li button span { flex: none; color: var(--color-muted); font-size: 11px; }
 .still-empty .ghost { min-height: 36px; padding: 6px 10px; font-size: 12px; }
-.answers-card h2 { margin-bottom: 8px; }
-.answer-picks { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
-.answer-picks label { display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px; border: 1px solid var(--color-border); border-radius: 10px; cursor: pointer; }
-.answer-picks input { margin-top: 3px; accent-color: var(--color-text); }
-.answer-picks span { min-width: 0; }
-.answer-picks strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
-.answer-picks small { display: block; color: var(--color-muted); font-size: 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
-.answers-card .actions { display: flex; gap: 8px; margin-top: 10px; }
-.questions-card h2 { margin-bottom: 8px; }
-.question-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
-.question-list > li { padding: 12px; border: 1px solid var(--color-border); border-radius: 11px; min-width: 0; }
-.question-list strong { display: block; font-size: 13px; margin-bottom: 8px; overflow-wrap: anywhere; }
 .ghost.small { width: auto; min-height: 34px; padding: 6px 12px; font-size: 12px; }
-.draft-state { margin: 6px 0 0; font-size: 12px; color: var(--color-muted); }
-.draft-state.error { color: var(--color-error); }
-.draft-text { margin: 0; padding: 10px 12px; border-left: 3px dashed var(--color-accent-border); background: var(--color-background); border-radius: 0 8px 8px 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.draft-needs { margin: 8px 0 0; padding-left: 18px; font-size: 12px; }
-.draft-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.questions-card > .ghost { width: auto; }
 .field select { display: block; width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); font-size: 13px; }
 .eligibility-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
 .eligibility-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; font-size: 13px; }
