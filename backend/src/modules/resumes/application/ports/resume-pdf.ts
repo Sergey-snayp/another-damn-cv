@@ -8,6 +8,7 @@ export interface StoredPdf {
 export interface ResumePdfStore {
   theme(resumeId: string): Promise<unknown>;
   setTheme(resumeId: string, theme: unknown): Promise<void>;
+  rename(resumeId: string, name: string): Promise<void>;
   find(resumeId: string): Promise<StoredPdf | null>;
   save(resumeId: string, pdf: StoredPdf): Promise<void>;
 }

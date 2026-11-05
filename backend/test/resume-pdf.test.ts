@@ -45,6 +45,7 @@ function setup(snapshot = 1) {
         theme = next;
         return Promise.resolve();
       },
+      rename: () => Promise.resolve(),
       find: () => Promise.resolve(kept),
       save: (_id, pdf) => {
         kept = pdf;

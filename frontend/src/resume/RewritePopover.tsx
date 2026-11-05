@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface RewriteResult {
   original: string;
@@ -68,7 +69,8 @@ export function RewritePopover({ resumeId, text, context, kind, onAccept, onClos
 
   const unchanged = result && result.suggestion.trim() === result.original.trim();
 
-  return (
+  // Drawn at the page's top level, so the zoomed CV preview does not shrink it.
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
       <div className="rewrite" ref={boxRef} onClick={(e) => e.stopPropagation()}>
@@ -137,6 +139,7 @@ export function RewritePopover({ resumeId, text, context, kind, onAccept, onClos
 
         {error && <p className="error small">{error}</p>}
       </div>
-    </>
+    </>,
+    document.fullscreenElement ?? document.body,
   );
 }

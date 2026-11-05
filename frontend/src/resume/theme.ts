@@ -6,6 +6,20 @@ export interface ResumeTheme {
   fontSize: number;
   lineHeight: number;
   sectionGap: number;
+  /** The editor's order of the CV's sections (the header always comes first). */
+  sectionOrder?: string[];
+  /** Sections left out of the CV and its PDF. */
+  hiddenSections?: string[];
+}
+
+/** The sections a CV can show, in their usual order. */
+export const SECTION_KEYS = ['summary', 'experience', 'education', 'skills'] as const;
+export type SectionKey = (typeof SECTION_KEYS)[number];
+
+/** The saved order, with any section it does not mention added at the end. */
+export function sectionOrder(theme: ResumeTheme): SectionKey[] {
+  const saved = (theme.sectionOrder ?? []).filter((key): key is SectionKey => (SECTION_KEYS as readonly string[]).includes(key));
+  return [...new Set([...saved, ...SECTION_KEYS])];
 }
 
 export const DEFAULT_THEME: ResumeTheme = {

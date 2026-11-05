@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { RenderedResume } from '../resumeApi';
 import { Editable } from './Editable';
 import { RewritePopover } from './RewritePopover';
 import { DiffText } from './DiffText';
 import type { Change } from '../resumeApi';
-import { themeVars, type ResumeTheme } from './theme';
+import { sectionOrder, themeVars, type ResumeTheme, type SectionKey } from './theme';
 
 const newId = () => crypto.randomUUID();
 
@@ -47,43 +47,10 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
   const contact = resume.contact ?? { firstName: '', lastName: '', email: '' };
   const links = [contact.linkedin, contact.github, contact.website].filter(Boolean);
 
-  return (
-    <div
-      className={`page tpl-${theme.template}${readOnly ? ' read-only' : ''}`}
-      style={themeVars(theme)}
-    >
-
-      <header className="doc-head">
-        <h1>
-          <Editable value={contact.firstName} placeholder="First"
-            onChange={(v) => onChange((d) => { d.contact = { ...contact, firstName: v }; })} />
-          {' '}
-          <Editable value={contact.lastName} placeholder="Last"
-            onChange={(v) => onChange((d) => { d.contact = { ...contact, lastName: v }; })} />
-        </h1>
-
-        <div className="doc-contact">
-          <Editable value={contact.email} placeholder="email@example.com"
-            onChange={(v) => onChange((d) => { d.contact = { ...contact, email: v }; })} />
-          <span className="sep">·</span>
-          <Editable value={contact.phone ?? ''} placeholder="phone"
-            onChange={(v) => onChange((d) => { d.contact = { ...contact, phone: v }; })} />
-          <span className="sep">·</span>
-          <Editable value={contact.location ?? ''} placeholder="City, Country"
-            onChange={(v) => onChange((d) => { d.contact = { ...contact, location: v }; })} />
-        </div>
-
-        <div className="doc-contact">
-          <Editable value={contact.linkedin ?? ''} placeholder="linkedin.com/in/…"
-            onChange={(v) => onChange((d) => { d.contact = { ...contact, linkedin: v }; })} />
-          {links.length > 0 && <span className="sep">·</span>}
-          <Editable value={contact.github ?? ''} placeholder="github.com/…"
-            onChange={(v) => onChange((d) => { d.contact = { ...contact, github: v }; })} />
-        </div>
-      </header>
-
-      {/* ── summary ─────────────────────────────────────────────────────── */}
-      <section className="doc-section">
+  // Each section, drawn in the order the editor saved; hidden ones are left out.
+  const sections: Record<SectionKey, React.ReactNode> = {
+    summary: (
+      <section className="doc-section" data-section="summary">
         <h2>
           Summary
           {!readOnly && resume.summaries.default && (
@@ -108,9 +75,9 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
               onChange={(v) => onChange((d) => { d.summaries = { ...d.summaries, default: v }; })}
             />}
       </section>
-
-      {/* ── experience ──────────────────────────────────────────────────── */}
-      <section className="doc-section">
+    ),
+    experience: (
+      <section className="doc-section" data-section="experience">
         <h2>Experience</h2>
 
         {resume.experiences.map((role, i) => (
@@ -210,9 +177,9 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
           d.experiences.push({ company: '', title: '', from: '', achievements: [] } as never);
         })}>+ role</button>
       </section>
-
-      {/* ── education ───────────────────────────────────────────────────── */}
-      <section className="doc-section">
+    ),
+    education: (
+      <section className="doc-section" data-section="education">
         <h2>Education</h2>
 
         {resume.educations.map((row, i) => (
@@ -243,20 +210,9 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
           d.educations.push({ institution: '', degree: '', from: '' } as never);
         })}>+ education</button>
       </section>
-
-      {rewriting && resumeId && (
-        <RewritePopover
-          resumeId={resumeId}
-          text={rewriting.text}
-          context={rewriting.context}
-          kind={rewriting.kind}
-          onAccept={(next) => onChange((d) => rewriting.apply(next, d))}
-          onClose={() => setRewriting(null)}
-        />
-      )}
-
-      {/* ── skills ──────────────────────────────────────────────────────── */}
-      <section className="doc-section">
+    ),
+    skills: (
+      <section className="doc-section" data-section="skills">
         <h2>Skills</h2>
         <div className="doc-skills">
           {resume.skills.map((skill, i) => (
@@ -278,6 +234,58 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
           })}>+</button>
         </div>
       </section>
+    ),
+  };
+  const hidden = new Set(theme.hiddenSections ?? []);
+
+  return (
+    <div
+      className={`page tpl-${theme.template}${readOnly ? ' read-only' : ''}`}
+      style={themeVars(theme)}
+    >
+
+      <header className="doc-head" data-section="header">
+        <h1>
+          <Editable value={contact.firstName} placeholder="First"
+            onChange={(v) => onChange((d) => { d.contact = { ...contact, firstName: v }; })} />
+          {' '}
+          <Editable value={contact.lastName} placeholder="Last"
+            onChange={(v) => onChange((d) => { d.contact = { ...contact, lastName: v }; })} />
+        </h1>
+
+        <div className="doc-contact">
+          <Editable value={contact.email} placeholder="email@example.com"
+            onChange={(v) => onChange((d) => { d.contact = { ...contact, email: v }; })} />
+          <span className="sep">·</span>
+          <Editable value={contact.phone ?? ''} placeholder="phone"
+            onChange={(v) => onChange((d) => { d.contact = { ...contact, phone: v }; })} />
+          <span className="sep">·</span>
+          <Editable value={contact.location ?? ''} placeholder="City, Country"
+            onChange={(v) => onChange((d) => { d.contact = { ...contact, location: v }; })} />
+        </div>
+
+        <div className="doc-contact">
+          <Editable value={contact.linkedin ?? ''} placeholder="linkedin.com/in/…"
+            onChange={(v) => onChange((d) => { d.contact = { ...contact, linkedin: v }; })} />
+          {links.length > 0 && <span className="sep">·</span>}
+          <Editable value={contact.github ?? ''} placeholder="github.com/…"
+            onChange={(v) => onChange((d) => { d.contact = { ...contact, github: v }; })} />
+        </div>
+      </header>
+
+      {sectionOrder(theme).filter((key) => !hidden.has(key)).map((key) => <Fragment key={key}>{sections[key]}</Fragment>)}
+
+      {rewriting && resumeId && (
+        <RewritePopover
+          resumeId={resumeId}
+          text={rewriting.text}
+          context={rewriting.context}
+          kind={rewriting.kind}
+          onAccept={(next) => onChange((d) => rewriting.apply(next, d))}
+          onClose={() => setRewriting(null)}
+        />
+      )}
+
     </div>
   );
 }

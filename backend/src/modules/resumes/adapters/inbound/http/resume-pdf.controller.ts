@@ -5,6 +5,7 @@ import {
   Get,
   Inject,
   Param,
+  Patch,
   Put,
   Query,
   Res,
@@ -32,8 +33,13 @@ export const resumeThemeSchema = z
     fontSize: z.number().min(6).max(20),
     lineHeight: z.number().min(0.8).max(3),
     sectionGap: z.number().min(0).max(80),
+    /** The editor's section order and the sections hidden from the CV ("summary", "experience", …). */
+    sectionOrder: z.array(z.string().min(1).max(60)).max(40).optional(),
+    hiddenSections: z.array(z.string().min(1).max(60)).max(40).optional(),
   })
   .strict();
+
+export const renameSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
 
 @Catch(PdfUnavailableError)
 class PdfErrorFilter implements ExceptionFilter {
@@ -72,8 +78,22 @@ export class ResumePdfController {
     return { theme: await this.pdfs.setTheme(userId, id, theme) };
   }
 
-  @Get(':id/pdf') async pdf(@CurrentUser() userId: string, @Param('id') id: string, @Res() res: Response) {
-    sendPdf(res, await this.pdfs.file(userId, id), 'inline');
+  @Get(':id/pdf') async pdf(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Query('download') download: string | undefined,
+    @Res() res: Response,
+  ) {
+    sendPdf(res, await this.pdfs.file(userId, id), download ? 'attachment' : 'inline');
+  }
+
+  /** The editor's ✎ on the CV name. */
+  @Patch(':id/name') async rename(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(renameSchema)) body: { name: string },
+  ) {
+    return { name: await this.pdfs.rename(userId, id, body.name) };
   }
 }
 

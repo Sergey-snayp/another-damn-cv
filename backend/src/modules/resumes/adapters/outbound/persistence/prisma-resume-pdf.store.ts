@@ -18,6 +18,10 @@ export class PrismaResumePdfStore implements ResumePdfStore {
     });
   }
 
+  async rename(resumeId: string, name: string): Promise<void> {
+    await this.db.resume.update({ where: { id: resumeId }, data: { name } });
+  }
+
   async find(resumeId: string): Promise<StoredPdf | null> {
     const row = await this.db.resumePdf.findUnique({ where: { resumeId } });
     return row ? { version: row.version, fileName: row.fileName, pdf: Buffer.from(row.pdf) } : null;

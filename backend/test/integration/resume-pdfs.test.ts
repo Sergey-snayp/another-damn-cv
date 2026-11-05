@@ -145,3 +145,44 @@ test('the server keeps each CV as a PDF, and the extension downloads it', async 
   assert.match(app.headers.get('content-disposition') ?? '', /^inline/);
   assert.equal(printed.length, before + 1, 'the app preview uses the kept PDF');
 });
+
+test('the editor renames a CV and keeps its section order with the design', async () => {
+  const cv = (await (
+    await call('/resumes', { method: 'POST', user: owner.user.id, body: { name: 'Old name' } })
+  ).json()) as { id: string };
+  const renamed = await call(`/resumes/${cv.id}/name`, {
+    method: 'PATCH',
+    user: owner.user.id,
+    body: { name: '  Backend CV  ' },
+  });
+  assert.deepEqual(await renamed.json(), { name: 'Backend CV' });
+  assert.equal(
+    (await call(`/resumes/${cv.id}/name`, { method: 'PATCH', user: other.user.id, body: { name: 'Mine' } }))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await call(`/resumes/${cv.id}/name`, { method: 'PATCH', user: owner.user.id, body: { name: ' ' } }))
+      .status,
+    400,
+  );
+  const list = (await (await call('/resumes', { user: owner.user.id })).json()) as {
+    id: string;
+    name: string;
+  }[];
+  assert.equal(list.find((row) => row.id === cv.id)?.name, 'Backend CV');
+  const design = {
+    ...theme,
+    sectionOrder: ['experience', 'summary', 'skills', 'education'],
+    hiddenSections: ['skills'],
+  };
+  assert.equal(
+    (await call(`/resumes/${cv.id}/theme`, { method: 'PUT', user: owner.user.id, body: design })).status,
+    200,
+  );
+  assert.deepEqual(
+    ((await (await call(`/resumes/${cv.id}/theme`, { user: owner.user.id })).json()) as { theme: unknown })
+      .theme,
+    design,
+  );
+});

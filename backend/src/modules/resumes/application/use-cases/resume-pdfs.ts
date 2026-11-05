@@ -32,6 +32,13 @@ export class ResumePdfs {
     return theme;
   }
 
+  /** A new name for the CV (the editor's ✎). The PDF's file name comes from the person's name, so it stays. */
+  async rename(userId: string, id: string, name: string): Promise<string> {
+    await this.resumes.assertOwned(userId, id);
+    await this.store.rename(id, name.trim());
+    return name.trim();
+  }
+
   /** The current PDF, made now when the kept one is missing or out of date. */
   async file(userId: string, id: string): Promise<StoredPdf> {
     const cv = await this.resumes.current(userId, id);
