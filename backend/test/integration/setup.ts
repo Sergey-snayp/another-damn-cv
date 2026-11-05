@@ -30,6 +30,8 @@ if (!name.endsWith('_test')) {
 }
 process.env.DATABASE_URL = url;
 process.env.SESSION_SECRET ??= 'integration-test-secret';
+// No real Chrome in integration tests: saving a CV would print its PDF in the background.
+process.env.PDF_RENDERING = 'off';
 
 /** Creates the test database if needed and applies any pending migrations. */
 export function migrateTestDatabase(): void {

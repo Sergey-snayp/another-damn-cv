@@ -22,10 +22,9 @@
     auth: { syncToken: 'token', user: { name: 'Sergey Proniuk', email: 'sergeypronyuk@gmail.com' } },
     profile: { firstName: 'Sergey', lastName: 'Proniuk', email: 'sergeypronyuk@gmail.com', phone: '+16728880334', location: 'Vancouver, BC, Canada', linkedin: 'linkedin.com/in/sp', workArrangements: 'remote,hybrid' },
     appResumes: [{ id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }],
-    cvPdf: { resumeId: 'cv1', updatedAt: '2026-11-01', dataUrl: 'data:application/pdf;base64,MASTER' },
     autofillDefaults: [{ id: 'd1', kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }],
   };
-  const sentToPage = [], opened = [], captured = [], recorded = [];
+  const sentToPage = [], opened = [], captured = [], recorded = [], madePdfs = [], downloadedPdfs = [];
   // ?applied: the page's job was saved and applied to before the panel opened.
   const APPLIED_MODE = location.search.includes('applied');
   // ?form: the page shows no company, so Add opens the short form first.
@@ -41,7 +40,7 @@
   }
   const CV_TEXTS = { cv1: 'Node.js TypeScript', cv2: 'Node.js TypeScript PostgreSQL Docker Kafka', cv3: 'React' };
   window.chrome = {
-    runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async (message) => (message?.type === 'panel-tab' ? { tabId: 1 } : message?.type === 'make-cv-pdf' ? { dataUrl: 'data:application/pdf;base64,OTHER' } : null) },
+    runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async (message) => { if (message?.type === 'make-cv-pdf') madePdfs.push(message.url); return message?.type === 'panel-tab' ? { tabId: 1 } : null; } },
     storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => { Object.assign(store, values); }, remove: async (keys) => { for (const key of [].concat(keys)) delete store[key]; } }, onChanged: event },
     tabs: {
       get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: async (options) => { opened.push(options.url); },
@@ -81,6 +80,9 @@
     if (path === '/api/extension/profile/career/resume/cv1') return reply(view('Paymorrow', 'CV School'));
     if (path === '/api/extension/defaults') return reply(store.autofillDefaults);
     if (path === '/api/extension/resumes') return reply(store.appResumes);
+    // The server keeps each CV's PDF; the extension downloads it.
+    const cvPdf = path.match(/^\/api\/extension\/resumes\/([^/]+)\/pdf$/);
+    if (cvPdf) { downloadedPdfs.push(cvPdf[1]); return new Response(new TextEncoder().encode(`%PDF-1.4 ${cvPdf[1]}`), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="Sergey_Proniuk_Resume.pdf"' } }); }
     const cvText = path.match(/^\/api\/extension\/resumes\/([^/]+)\/text$/);
     if (cvText) return reply({ id: cvText[1], text: CV_TEXTS[cvText[1]] ?? '' });
     return new Response('{}', { status: 404 });
@@ -102,7 +104,9 @@
       addEventListener('message', (message) => { if (message.data?.type === 'adcv-panel-close') closed.push(true); });
       document.getElementById('fill').click(); // Autofill uploads Master CV.
       await wait(800);
-      expect(sentToPage.some((message) => message.type === 'fill' && message.profile.resumeFileName === 'Master CV.pdf'), 'Autofill uploads the default CV');
+      const fillMessage = sentToPage.find((message) => message.type === 'fill');
+      expect(fillMessage?.profile.resumeFileName === 'Sergey_Proniuk_Resume.pdf' && fillMessage?.profile.resumeDataUrl === `data:application/pdf;base64,${btoa('%PDF-1.4 cv1')}` && downloadedPdfs.includes('cv1'),
+        `Autofill uploads the default CV's PDF, downloaded from the server (got ${fillMessage?.profile.resumeFileName})`);
       document.querySelector('.tab[data-panel="resume"]').click();
       await wait(100);
       const select = document.getElementById('cv-select');
@@ -129,7 +133,7 @@
       await wait(800);
       expect(menu.hidden && /Backend CV/.test(document.getElementById('cv-select').textContent) && store.chosenResumeId === 'cv2', `Enter chooses it and closes the list (chosen ${store.chosenResumeId})`);
       const replace = sentToPage.find((message) => message.type === 'replace-cv');
-      expect(replace?.fileName === 'Backend CV.pdf' && replace?.dataUrl === 'data:application/pdf;base64,OTHER', `the new CV replaces the one Autofill uploaded (sent ${JSON.stringify(replace)})`);
+      expect(replace?.fileName === 'Sergey_Proniuk_Resume.pdf' && replace?.dataUrl === `data:application/pdf;base64,${btoa('%PDF-1.4 cv2')}`, `the new CV's PDF from the server replaces the one Autofill uploaded (sent ${JSON.stringify(replace)?.slice(0, 160)})`);
       expect(/Backend CV is now uploaded to the form/.test(status.textContent), `and the panel says so (got "${status.textContent}")`);
       document.getElementById('cv-select').click();
       await wait(50);
@@ -141,6 +145,21 @@
       await wait(50);
       document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
       expect(document.getElementById('cv-menu').hidden, 'a click outside closes the list');
+
+      // As in Simplify, the PDF is a file on the server: switching never opens a tab to make one.
+      const pick = async (name) => {
+        document.getElementById('cv-select').click();
+        await wait(50);
+        [...document.querySelectorAll('#cv-menu [data-pick]')].find((button) => button.textContent.includes(name)).click();
+        await wait(500);
+      };
+      await pick('Master CV');
+      await pick('Frontend CV');
+      expect(!madePdfs.length && !opened.some((url) => /\/documents\//.test(url)) && store.chosenResumeId === 'cv3', `switching CVs opens nothing (tabs opened: ${JSON.stringify(opened)})`);
+      expect(!('cvPdf' in store) && !('cvPdfs' in store), 'no PDFs are kept in the extension');
+      document.querySelector('#resume-picker [data-open-cv]').click();
+      await wait(50);
+      expect(opened.at(-1) === 'http://localhost:5173/api/resumes/cv3/pdf', `Preview resume opens the PDF from the server (opened ${opened.at(-1)})`);
       throw Object.assign(new Error('done'), { done: true });
     }
     if (FORM_MODE) {

@@ -13,8 +13,11 @@ import { TailorReview } from './pages/TailorReview';
 import { InterviewPrep } from './pages/InterviewPrep';
 import { InterviewWorkspace } from './pages/InterviewWorkspace';
 import { InterviewReference } from './pages/InterviewReference';
+import { PrintResume } from './pages/PrintResume';
 
 export function App() {
+  // The server's Chrome prints CVs from here with a signed link: no sign-in, no app chrome.
+  if (window.location.pathname.startsWith('/print/resumes/')) return <PrintResume />;
   return (
     <AuthProvider>
       <Gate />

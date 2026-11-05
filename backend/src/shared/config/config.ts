@@ -25,6 +25,15 @@ export const config = {
   databaseUrl: required('DATABASE_URL'),
   sessionSecret: required('SESSION_SECRET'),
   frontendUrl: optional('FRONTEND_URL', 'http://localhost:5173'),
+  /** "off" stops the server from printing CV PDFs (integration tests use a stand-in). */
+  pdfRendering: optional('PDF_RENDERING', 'on'),
+  /** Chrome the server prints CV PDFs with (puppeteer-core brings none of its own). */
+  chromePath: optional(
+    'CHROME_PATH',
+    process.platform === 'darwin'
+      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+      : '/usr/bin/google-chrome',
+  ),
 
   /**
    * Only the client id is needed. We use Google's ID-token flow: the browser

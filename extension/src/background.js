@@ -117,10 +117,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
     return true;
   }
-  if (message?.type === 'make-cv-pdf' && fromPanel) {
-    makeCvPdf(String(message.url ?? '')).then((dataUrl) => sendResponse({ dataUrl }), (error) => sendResponse({ error: error.message }));
-    return true;
-  }
   // The tab's address, not the frame's: an embedded form lives on another site.
   if (message?.type === 'steps-state' && fromContent) {
     armedSteps(tabId, sender.tab.url).then((armed) => sendResponse({ armed: Boolean(armed) }), () => sendResponse({ armed: false }));
@@ -213,7 +209,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
  */
 async function removeLocalPdfs() {
   const all = await chrome.storage.local.get(null);
-  const keys = Object.keys(all).filter((key) => key === 'resumes' || key === 'activeResumeId' || key.startsWith('resume:'));
+  // PDFs the extension made itself before 0.35.0: CV PDFs now come from the server.
+  const keys = Object.keys(all).filter((key) => key === 'resumes' || key === 'activeResumeId' || key === 'cvPdf' || key === 'cvPdfs' || key.startsWith('resume:'));
   if (all.profile && ('resumeDataUrl' in all.profile || 'resumeFileName' in all.profile)) {
     const { resumeDataUrl: _pdf, resumeFileName: _name, ...profile } = all.profile;
     await chrome.storage.local.set({ profile });
@@ -279,71 +276,3 @@ async function saveJobFromMenu(tab) {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === SAVE_JOB_MENU && Number.isInteger(tab?.id)) void saveJobFromMenu(tab);
 });
-
-// ─── CV PDFs ────────────────────────────────────────────────────────────────
-// The app makes PDFs only through the browser's print. To upload a CV, open its
-// app page in a background tab, where you are already signed in and your CV
-// style is stored, and save it as a PDF the same way Print / PDF does. Chrome
-// shows its "started debugging this browser" bar while this runs.
-
-const APP_URL = 'http://localhost:5173'; // Same as APP_URL in src/jobs.js.
-
-/** Resolves 'ready' once the CV has drawn, 'login' when the app wants a sign-in. */
-const CV_READY = `new Promise((resolve) => {
-  const started = Date.now();
-  let loginSince = 0;
-  (function check() {
-    if (document.querySelector('.docwrap .page')) {
-      document.fonts.ready.then(() => setTimeout(() => resolve('ready'), 400));
-      return;
-    }
-    // The sign-in screen can flash while the session loads; only a lasting one counts.
-    if (document.querySelector('.login')) { loginSince ||= Date.now(); if (Date.now() - loginSince > 2000) return resolve('login'); }
-    else loginSince = 0;
-    if (Date.now() - started > 20000) return resolve('timeout');
-    setTimeout(check, 200);
-  })();
-})`;
-
-function waitForLoad(tabId) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error('The app did not open in time. Is it running?')); }, 20000);
-    function listener(id, info) {
-      if (id !== tabId || info.status !== 'complete') return;
-      clearTimeout(timer); chrome.tabs.onUpdated.removeListener(listener); resolve();
-    }
-    chrome.tabs.onUpdated.addListener(listener);
-    chrome.tabs.get(tabId).then((tab) => { if (tab.status === 'complete') listener(tabId, { status: 'complete' }); }, () => {});
-  });
-}
-
-async function printCv(url) {
-  if (!url.startsWith(`${APP_URL}/documents/`)) throw new Error('This is not a CV page.');
-  const tab = await chrome.tabs.create({ url, active: false });
-  const target = { tabId: tab.id };
-  let attached = false;
-  try {
-    await waitForLoad(tab.id);
-    await chrome.debugger.attach(target, '1.3');
-    attached = true;
-    const { result } = await chrome.debugger.sendCommand(target, 'Runtime.evaluate', { expression: CV_READY, awaitPromise: true, returnByValue: true });
-    if (result?.value === 'login') throw new Error('Sign in to the app in this browser, then try again.');
-    if (result?.value !== 'ready') throw new Error('The CV did not load in time. Is the app running?');
-    const { data } = await chrome.debugger.sendCommand(target, 'Page.printToPDF', { printBackground: true, preferCSSPageSize: true });
-    return `data:application/pdf;base64,${data}`;
-  } catch (error) {
-    if (/debugger|detached|canceled/i.test(error?.message || '')) throw new Error('Chrome stopped making the PDF. Try again, and leave the debugging bar open until it finishes.');
-    throw error;
-  } finally {
-    if (attached) await chrome.debugger.detach(target).catch(() => {});
-    await chrome.tabs.remove(tab.id).catch(() => {});
-  }
-}
-
-// One PDF at a time: two panels asking at once would fight over the debugger.
-let pdfQueue = Promise.resolve();
-function makeCvPdf(url) {
-  const run = pdfQueue.then(() => printCv(url));
-  pdfQueue = run.catch(() => {});
-  return run;
-}

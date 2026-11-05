@@ -3,7 +3,7 @@ import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { resumeApi, type RenderedResume, type Snapshot, type SnapshotDiff } from '../resumeApi';
 import { DiffPanel } from '../resume/DiffPanel';
 import { ResumeDocument } from '../resume/ResumeDocument';
-import { DEFAULT_THEME, type ResumeTheme } from '../resume/theme';
+import { useResumeTheme } from '../resume/useResumeTheme';
 import '../resume/document.css';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-CA', {
@@ -76,14 +76,7 @@ function SnapshotHistory({ id, navigate, requested }: { id: string; navigate: (t
   const [resume, setResume] = useState<RenderedResume | null>(null);
   const [diff, setDiff] = useState<SnapshotDiff | null>(null);
   const [tab, setTab] = useState<'changes' | 'document'>('changes');
-  const [theme] = useState<ResumeTheme>(() => {
-    try {
-      const stored = localStorage.getItem(`resume-theme:${id}`);
-      return stored ? { ...DEFAULT_THEME, ...JSON.parse(stored) } : DEFAULT_THEME;
-    } catch {
-      return DEFAULT_THEME;
-    }
-  });
+  const theme = useResumeTheme(id);
   const [error, setError] = useState<string | null>(null);
   const [reverting, setReverting] = useState(false);
 

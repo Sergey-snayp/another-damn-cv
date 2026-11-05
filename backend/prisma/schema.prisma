@@ -335,6 +335,8 @@ model Resume {
   tailoring      Json?
 
   currentSnapshotId String?
+  /// The CV's design (template, accent, font, sizes) from the editor. The PDF is made with it.
+  theme             Json?
   /// Materialised live state. Derived; never authored.
   current           Json?
   materialisedAt    DateTime?
@@ -343,6 +345,7 @@ model Resume {
   updatedAt DateTime @updatedAt
 
   profile         Profile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  pdf             ResumePdf?
   job             Job?                 @relation(fields: [jobId], references: [id], onDelete: SetNull)
   snapshots       Snapshot[]
   contacts        ContactInformation[]
@@ -524,4 +527,19 @@ model SummaryVariant {
   @@index([resumeId, supersededInSnapshot])
   @@index([lineageId])
   @@map("summary_variants")
+}
+
+/// The CV as a PDF file, as the extension uploads it to applications. Made on
+/// the server from the CV's print page and design, and made again when either
+/// changes: `version` is the CV version and a fingerprint of the design.
+model ResumePdf {
+  resumeId  String   @id
+  version   String
+  fileName  String
+  pdf       Bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@map("resume_pdfs")
 }

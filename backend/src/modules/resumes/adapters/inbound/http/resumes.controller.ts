@@ -18,6 +18,7 @@ import { VERSIONED_TABLES, type VersionedTable } from '../../../domain/resume';
 import { RESUMES_API } from '../../../resumes.tokens';
 import { ResumeErrorFilter } from './resume-error.filter';
 import { ResumeOwnerGuard } from './resume-owner.guard';
+import { ResumePdfs } from '../../../application/use-cases/resume-pdfs';
 import {
   createResumeSchema,
   saveResumeSchema,
@@ -29,7 +30,10 @@ import {
 @UseGuards(AuthGuard, ResumeOwnerGuard)
 @UseFilters(ResumeErrorFilter)
 export class ResumesController {
-  constructor(@Inject(RESUMES_API) private readonly resumes: ResumesApi) {}
+  constructor(
+    @Inject(RESUMES_API) private readonly resumes: ResumesApi,
+    @Inject(ResumePdfs) private readonly pdfs: ResumePdfs,
+  ) {}
   @Get() list(@CurrentUser() userId: string) {
     return this.resumes.list(userId);
   }
@@ -42,13 +46,16 @@ export class ResumesController {
   @Get(':id') read(@CurrentUser() userId: string, @Param('id') id: string) {
     return this.resumes.current(userId, id);
   }
-  @Post(':id/save') save(
+  @Post(':id/save') async save(
     @CurrentUser() userId: string,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(saveResumeSchema)) body: SaveResumeInput,
   ) {
     const { message, ...changes } = body;
-    return this.resumes.save(userId, id, changes, message);
+    const saved = await this.resumes.save(userId, id, changes, message);
+    // A new version: its PDF is made in the background, ready for the extension.
+    this.pdfs.refresh(userId, id);
+    return saved;
   }
   @Get(':id/snapshots') snapshots(@CurrentUser() userId: string, @Param('id') id: string) {
     return this.resumes.snapshots(userId, id);

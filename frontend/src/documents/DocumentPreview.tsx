@@ -5,7 +5,7 @@ import {
   type ResumeSummary,
 } from '../resumeApi';
 import { ResumeDocument } from '../resume/ResumeDocument';
-import { DEFAULT_THEME, type ResumeTheme } from '../resume/theme';
+import { useResumeTheme } from '../resume/useResumeTheme';
 import { DocumentIcon } from './DocumentIcon';
 import '../resume/document.css';
 
@@ -41,16 +41,7 @@ export function DocumentPreview({ row }: { row: ResumeSummary }) {
     localDraft(row.id),
   );
   const [failed, setFailed] = useState(false);
-  const [theme] = useState<ResumeTheme>(() => {
-    try {
-      const stored = localStorage.getItem(`resume-theme:${row.id}`);
-      return stored
-        ? ({ ...DEFAULT_THEME, ...JSON.parse(stored) } as ResumeTheme)
-        : DEFAULT_THEME;
-    } catch {
-      return DEFAULT_THEME;
-    }
-  });
+  const theme = useResumeTheme(row.id);
 
   useEffect(() => {
     const element = frame.current;

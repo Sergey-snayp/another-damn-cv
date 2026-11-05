@@ -4,20 +4,14 @@ import { APP_URL, NotSignedInError } from './jobs.js';
 /**
  * Your CVs from the app's Documents, which one Autofill uploads, and its PDF.
  *
- * The list comes from the API with the sync token. The PDF is made by the
- * background worker, which saves the app's own CV page exactly as Print / PDF
- * does (src/background.js, makeCvPdf). That keeps the CV style you chose in the
- * app, which lives only in this browser.
+ * As in Simplify, each CV's PDF is a file kept on the server (made there from
+ * the CV and its design). The extension only downloads it: nothing opens in
+ * the browser to make it.
  *
  * Storage (chrome.storage.local):
  *   appResumes        last fetched list, so the panel can draw before the API answers
  *   chosenResumeId    the CV Autofill uploads; the primary CV when unset
- *   cvPdf             { resumeId, updatedAt, dataUrl } for the chosen CV
  */
-
-export function cvUrl(id) {
-  return `${APP_URL}/documents/${encodeURIComponent(id)}`;
-}
 
 /** Cached list and choice, without a network call. */
 export async function cachedResumes() {
@@ -51,25 +45,39 @@ export function chooseResume(id) {
   return chrome.storage.local.set({ chosenResumeId: id });
 }
 
-/** True when the stored PDF matches this version of the CV. */
-export async function hasFreshPdf(resume) {
-  const { cvPdf } = await chrome.storage.local.get('cvPdf');
-  return cvPdf?.resumeId === resume.id && cvPdf.updatedAt === resume.updatedAt && Boolean(cvPdf.dataUrl);
+/** The CV's PDF in the app, for "Preview resume" (the app's own sign-in). */
+export function pdfUrl(id) {
+  return `${APP_URL}/api/resumes/${encodeURIComponent(id)}/pdf`;
+}
+
+function toDataUrl(bytes) {
+  let binary = '';
+  const view = new Uint8Array(bytes);
+  for (let start = 0; start < view.length; start += 0x8000) binary += String.fromCharCode(...view.subarray(start, start + 0x8000));
+  return `data:application/pdf;base64,${btoa(binary)}`;
 }
 
 /**
- * The PDF for this CV, made now if the stored one is missing or older than the
- * CV. Making one opens the CV in a background tab for a few seconds.
+ * The CV's PDF from the server, with the server's file name
+ * ("Sergey_Proniuk_Resume.pdf"). The server makes it when the CV or its design
+ * changed; otherwise it sends the kept file at once.
  */
 export async function pdfFor(resume) {
-  const { cvPdf } = await chrome.storage.local.get('cvPdf');
-  if (cvPdf?.resumeId === resume.id && cvPdf.updatedAt === resume.updatedAt && cvPdf.dataUrl) {
-    return { dataUrl: cvPdf.dataUrl, fileName: fileNameFor(resume) };
+  const { auth } = await chrome.storage.local.get('auth');
+  if (!auth?.syncToken) throw new NotSignedInError();
+  let response;
+  try {
+    response = await fetch(`${API_URL}/api/extension/resumes/${encodeURIComponent(resume.id)}/pdf`, { headers: { Authorization: `Bearer ${auth.syncToken}` } });
+  } catch {
+    throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`);
   }
-  const result = await chrome.runtime.sendMessage({ type: 'make-cv-pdf', url: cvUrl(resume.id) });
-  if (!result?.dataUrl) throw new Error(result?.error || 'Could not make the CV PDF.');
-  await chrome.storage.local.set({ cvPdf: { resumeId: resume.id, updatedAt: resume.updatedAt, dataUrl: result.dataUrl } });
-  return { dataUrl: result.dataUrl, fileName: fileNameFor(resume) };
+  if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(typeof body.message === 'string' ? body.message : `Server returned ${response.status}.`);
+  }
+  const fileName = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? fileNameFor(resume);
+  return { dataUrl: toDataUrl(await response.arrayBuffer()), fileName };
 }
 
 export function fileNameFor(resume) {

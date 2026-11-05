@@ -19,6 +19,16 @@ import { TailoringController } from './adapters/inbound/http/tailoring.controlle
 import { RewriteController } from './adapters/inbound/http/rewrite.controller';
 import { CvImportController } from './adapters/inbound/http/cv-import.controller';
 import { ExtensionResumesController } from './adapters/inbound/http/extension-resumes.controller';
+import {
+  ExtensionResumePdfController,
+  PrintResumeController,
+  ResumePdfController,
+} from './adapters/inbound/http/resume-pdf.controller';
+import { PrismaResumePdfStore } from './adapters/outbound/persistence/prisma-resume-pdf.store';
+import { HmacPrintTokens } from './adapters/outbound/pdf/print-tokens';
+import { PuppeteerPdfRenderer } from './adapters/outbound/pdf/puppeteer-pdf.renderer';
+import { ResumePdfs } from './application/use-cases/resume-pdfs';
+import { config } from '../../shared/config/config';
 import { ImportCv } from './application/use-cases/import-cv';
 import { CvDocumentTextExtractor } from './adapters/outbound/documents/document-text.extractor';
 import { ClaudeCvTranscriber } from './adapters/outbound/ai/import/claude-cv.transcriber';
@@ -36,7 +46,9 @@ import {
   TAILORING_API,
   TAILORING_GENERATOR,
   IMPORT_CV,
+  PDF_RENDERER,
 } from './resumes.tokens';
+import type { PdfRenderer } from './application/ports/resume-pdf';
 @Module({
   imports: [DatabaseModule, ProfileDirectoryModule, AuthModule, AiModule, JobDirectoryModule],
   controllers: [
@@ -45,8 +57,31 @@ import {
     RewriteController,
     CvImportController,
     ExtensionResumesController,
+    ExtensionResumePdfController,
+    ResumePdfController,
+    PrintResumeController,
   ],
   providers: [
+    {
+      provide: PDF_RENDERER,
+      useFactory: (): PdfRenderer =>
+        config.pdfRendering === 'off'
+          ? { render: () => Promise.reject(new Error('PDF rendering is off on this server.')) }
+          : new PuppeteerPdfRenderer(config.chromePath),
+    },
+    {
+      provide: ResumePdfs,
+      inject: [RESUMES_API, PrismaService, PDF_RENDERER],
+      useFactory: (resumes: ResumesApi, database: PrismaService, renderer: PdfRenderer) =>
+        new ResumePdfs(
+          resumes,
+          new PrismaResumePdfStore(database),
+          renderer,
+          new HmacPrintTokens(config.sessionSecret),
+          (id, token) =>
+            `${config.frontendUrl}/print/resumes/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`,
+        ),
+    },
     {
       provide: RESUME_REPOSITORY,
       inject: [PrismaService],

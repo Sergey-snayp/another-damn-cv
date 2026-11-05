@@ -4,8 +4,8 @@ import { resumeApi, type RenderedResume } from '../resumeApi';
 import { ResumeDocument } from '../resume/ResumeDocument';
 import { ImportButton } from '../resume/ImportButton';
 import { StylePanel } from '../resume/StylePanel';
-import { DEFAULT_THEME, type ResumeTheme } from '../resume/theme';
 import '../resume/document.css';
+import { useEditableResumeTheme } from '../resume/useResumeTheme';
 
 /**
  * Edits live in local state and reach the server only on Save.
@@ -18,25 +18,14 @@ export function ResumeEditor() {
 
   const [loaded, setLoaded] = useState<RenderedResume | null>(null);
   const [draft, setDraft] = useState<RenderedResume | null>(null);
-  const [theme, setTheme] = useState<ResumeTheme>(DEFAULT_THEME);
+  // The design is kept on the server with the CV: the server makes the CV's PDF with it.
+  const [theme, setTheme] = useEditableResumeTheme(id);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => { void load(); }, [id]);
-
-  // The theme is presentation, not career data — it belongs to this browser.
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`resume-theme:${id}`);
-      if (stored) setTheme({ ...DEFAULT_THEME, ...JSON.parse(stored) });
-    } catch { /* a missing or unreadable theme is not an error */ }
-  }, [id]);
-
-  useEffect(() => {
-    try { localStorage.setItem(`resume-theme:${id}`, JSON.stringify(theme)); } catch { /* ignore */ }
-  }, [id, theme]);
 
   async function load() {
     try {

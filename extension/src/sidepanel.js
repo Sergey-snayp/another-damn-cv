@@ -1,7 +1,7 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
 import { captureTab, jobUrl, lookupJob, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
-import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
+import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { matchAnswers } from './answers.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
@@ -134,7 +134,7 @@ addEventListener('unhandledrejection', event => { if (isStaleError(event.reason)
 document.addEventListener('click', event => { if (!alive() && !event.target.closest('#close-panel')) { event.stopImmediatePropagation(); event.preventDefault(); showStale(); } }, true);
 let profile = {}, scan = null, currentTab = null, filling = false, refreshId = 0;
 let copyValues = [];
-let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, preparingPdf = false, pageDisconnected = false;
+let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, pageDisconnected = false;
 let match = null, matchUrl = null, matchKeywords = null, matchRun = 0, improving = false;
 // The last Autofill result for this page: summary, notes and required fields still empty.
 let fillReport = null;
@@ -477,7 +477,7 @@ async function runFill() {
     if (resumes.chosen && groupOn('resume') && scan?.fields.some(field => field.key === 'resume')) {
       try {
         try { resumes = await fetchResumes(); } catch { /* use the cached list */ }
-        if (!(await hasFreshPdf(resumes.chosen))) status('fill-status', 'Making a PDF of your CV…');
+        status('fill-status', 'Getting your CV…');
         file = await pdfFor(resumes.chosen);
       } catch (error) { cvProblem = `CV not attached: ${error.message}`; }
       status('fill-status', 'Filling…');
@@ -775,7 +775,7 @@ function resumeEmpty() {
 function cvPicker() {
   const chosen = resumes.chosen;
   if (!chosen) return resumeEmpty();
-  const note = preparingPdf ? 'Making the PDF…' : 'Autofill uploads this CV.';
+  const note = 'Autofill uploads this CV.';
   return `<div class="cv-select-row">
       <button class="cv-select" id="cv-select" type="button" aria-haspopup="listbox" aria-expanded="${cvMenu.open}" aria-controls="cv-menu" title="Change CV">
         <span class="cv-select-name" title="${esc(chosen.name)}">${esc(chosen.name)}${chosen.isPrimary ? ' <small>(default)</small>' : ''}</span>
@@ -799,19 +799,10 @@ async function loadResumes() {
   catch (error) { resumeProblem = error instanceof NotSignedInError ? 'signed-out' : error.message; }
   finally { loadingResumes = false; rerenderResumes(); }
 }
-/** Makes the chosen CV's PDF now, so pressing Autofill later is instant. */
-async function preparePdf() {
-  const chosen = resumes.chosen; if (!chosen || preparingPdf) return;
-  if (await hasFreshPdf(chosen)) { status('resume-status', `${chosen.name} is ready for Autofill.`, 'success'); return; }
-  preparingPdf = true; rerenderResumes(); status('resume-status', `Making a PDF of ${chosen.name}…`);
-  try { await pdfFor(chosen); status('resume-status', `${chosen.name} is ready for Autofill.`, 'success'); }
-  catch (error) { status('resume-status', error.message, 'error'); }
-  finally { preparingPdf = false; rerenderResumes(); }
-}
 document.addEventListener('click', event => {
   const target = event.target.closest('[data-pick],[data-open-cv],[data-refresh-cvs],[data-go-sign-in],[data-open-documents]');
   if (!target) return;
-  if (target.dataset.openCv) { void chrome.tabs.create({ url: cvUrl(target.dataset.openCv) }); return; }
+  if (target.dataset.openCv) { void chrome.tabs.create({ url: pdfUrl(target.dataset.openCv) }); return; }
   if ('refreshCvs' in target.dataset) { void loadResumes(); return; }
   if ('openDocuments' in target.dataset) { void openApp('/documents'); return; }
   if ('goSignIn' in target.dataset) { selectTab('profile'); document.querySelector('.account-card').open = true; return; }
@@ -829,7 +820,7 @@ async function switchCv(id) {
   try {
     await chooseResume(id);
     resumes = await cachedResumes(); rerenderResumes(); void rescore();
-    await preparePdf();
+    status('resume-status', `Autofill now uploads ${resumes.chosen?.name ?? 'this CV'}.`, 'success');
     await replaceUploadedCv();
   } catch { status('resume-status', 'Could not switch CVs. Try again.', 'error'); }
 }
