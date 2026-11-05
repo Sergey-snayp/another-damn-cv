@@ -217,11 +217,12 @@ const WORK_TYPE_NAMES = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' 
 function workTypesText() { return String(profile.workArrangements ?? '').split(',').map(kind => WORK_TYPE_NAMES[kind]).filter(Boolean).join(', '); }
 function relocationText() { return Object.entries(relocationMap(autofillDefaults)).map(([country, answer]) => `${country || 'Anywhere'}: ${answer}`).join(', '); }
 // Sections the person opened stay open when the panel redraws (after a save, a rescan…).
-const keptOpen = new Set();
+const keptOpen = new Set(['resume']);
 document.addEventListener('toggle', event => {
   const section = event.target.closest?.('[data-keep-open]');
   if (!section) return;
   if (section.open) keptOpen.add(section.dataset.keepOpen); else keptOpen.delete(section.dataset.keepOpen);
+  if (!section.open && section.querySelector('[data-cv-select][aria-expanded="true"]')) closeCvMenu();
 }, true);
 
 // ─── The job card ────────────────────────────────────────────────────────
@@ -458,7 +459,7 @@ function renderAutofill() {
   }
   if (!scan || !scan.fields?.length) {
     const opener = scan?.canOpenForm ? `<button class="primary" id="open-form">${icon('file')}Open application form</button>` : '';
-    host.innerHTML = `${pageCard()}${autofillCvCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'Open the form to start Autofill.' : scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${matchCard()}`;
+    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'Open the form to start Autofill.' : scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${autofillCvCard()}`;
     $('rescan-empty').addEventListener('click', refresh);
     $('open-form')?.addEventListener('click', openForm);
     return;
@@ -467,10 +468,10 @@ function renderAutofill() {
   const groups = new Map();
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
-  host.innerHTML = `${pageCard()}<section class="card autofill-workspace" aria-label="Autofill this application">${autofillCvCard(true)}
-    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><p class="hint">${ready} of ${scan.fields.length} fields ready · Review before submitting</p><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div></section>
+  host.innerHTML = `${pageCard()}
+    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><p class="hint">${ready} of ${scan.fields.length} fields ready · Review before submitting</p><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
     ${eligibilityCard()}
-    ${matchCard()}
+    ${autofillCvCard()}
     <details class="card autofill-detail" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check', 18)}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
   $('add-details')?.addEventListener('click', () => void openApp('/profile'));
@@ -816,13 +817,12 @@ function cvPicker(id = 'cv-select') {
       <button class="cv-select" id="${id}" data-cv-select type="button" aria-haspopup="listbox" aria-expanded="${expanded}" aria-controls="cv-menu" aria-label="Change CV: ${esc(chosen.name)}" ${filling || switchingCv ? 'disabled' : ''}>
         <span class="cv-select-copy"><span class="cv-select-name" title="${esc(chosen.name)}">${esc(chosen.name)}</span></span>
         <span class="cv-select-chevron" aria-hidden="true">${icon('chevron', 14)}</span>
-      </button>
+      </button><button class="cv-preview" type="button" data-open-cv="${esc(chosen.id)}" aria-label="Preview resume" title="Preview resume">${icon('eye', 18)}</button>
     </div>
-    <div class="cv-picker-actions"><span class="cv-badge">PDF${chosen.isPrimary ? ' · Default' : ''}</span><button class="link-button cv-preview" type="button" data-open-cv="${esc(chosen.id)}">${icon('eye', 16)}Preview resume</button></div>
     ${long ? `<details class="cv-full-name"><summary>Full CV name</summary><p>${esc(chosen.name)}</p></details>` : ''}`;
 }
-function autofillCvCard(embedded = false) {
-  return `<div class="${embedded ? '' : 'card '}autofill-cv-card"><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div>${!groupOn('resume') ? '<p class="cv-note">CV uploads are off in Settings.</p>' : ''}<div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div></div>`;
+function autofillCvCard() {
+  return `<details class="card resume-card" data-keep-open="resume" ${keptOpen.has('resume') ? 'open' : ''}><summary>${icon('file', 20)}Resume</summary><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div>${!groupOn('resume') ? '<p class="cv-note">CV uploads are off in Settings.</p>' : ''}<div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div>${resumes.chosen ? matchCard() : ''}</details>`;
 }
 function renderResume() {
   $('resume-picker').innerHTML = cvPicker();
@@ -896,19 +896,32 @@ async function replaceUploadedCv() {
 // On a job description page, scores how many of the posting's keywords each CV
 // mentions (src/match.js). Keywords only: it does not judge experience depth.
 function matchCard() {
-  if (!match) return '';
+  if (!match) return '<p class="resume-match-empty">Open a job description to see your CV’s keyword match.</p>';
   const { score, matched, missing } = match.chosen;
   const label = matchLabel(score), total = matched.length + missing.length;
+  const circumference = 2 * Math.PI * 30;
+  const coverage = circumference * .75 * score / 100;
+  const expanded = keptOpen.has('keywords');
   const keywords = [...matched.map(name => `<li class="kw has">${icon('check', 13)}${esc(name)}</li>`), ...missing.map(name => `<li class="kw missing">${esc(name)}</li>`)].join('');
-  return `<details class="card autofill-detail match-card match-${label.toLowerCase()}" aria-label="Keyword match" data-keep-open="match" ${keptOpen.has('match') ? 'open' : ''}>
-    <summary><span class="match-heading"><strong>${label} keyword match</strong><span>${matched.length} of ${total} keywords</span></span><span class="match-score" aria-label="Keyword match ${score}%">${score}%</span></summary>
-    <p class="hint">Keyword coverage only. Check the job requirements too.</p>
+  return `<div class="resume-match" aria-label="Keyword match"><div class="resume-match-summary">
+    <div class="resume-gauge" role="img" aria-label="Keyword match ${score}%"><svg viewBox="0 0 76 76" aria-hidden="true"><defs><linearGradient id="resume-gauge-colors" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="var(--color-accent-hover)"/><stop offset="50%" stop-color="var(--color-accent)"/><stop offset="100%" stop-color="var(--color-success)"/></linearGradient></defs><circle class="resume-gauge-track" cx="38" cy="38" r="30" stroke-dasharray="${circumference * .75} ${circumference * .25}" transform="rotate(135 38 38)"/><circle class="resume-gauge-value" cx="38" cy="38" r="30" stroke-dasharray="${coverage} ${circumference - coverage}" transform="rotate(135 38 38)" ${score ? '' : 'visibility="hidden"'}/></svg><span>${score}</span></div>
+    <div class="resume-match-copy"><strong>${label} Resume Match</strong><button class="match-keyword-link" type="button" data-show-keywords aria-expanded="${expanded}" aria-controls="resume-keywords">Matches <b>${matched.length} out of ${total} keywords</b><span aria-hidden="true">→</span></button></div>
+    </div><div id="resume-keywords" ${expanded ? '' : 'hidden'}><p class="hint">Keyword coverage only. Check the job requirements too.</p>
     ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p><span class="cv-inline" title="${esc(match.better.name)}">${esc(match.better.name)}</span> matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
     <div class="keywords"><p class="group">Keywords from the posting</p><ul>${keywords}</ul></div>
-    <button class="ghost" id="improve-match">Improve my match${icon('chevron', 17)}</button>
+    </div><button class="tailor-button" id="improve-match" ${improving ? 'disabled' : ''}>${icon('edit', 18)}Tailor Resume</button>
     <div class="status" id="match-status" role="status"></div>
-  </details>`;
+  </div>`;
 }
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-show-keywords]');
+  if (!button) return;
+  const body = $('resume-keywords');
+  const open = body.hidden;
+  body.hidden = !open;
+  button.setAttribute('aria-expanded', String(open));
+  if (open) keptOpen.add('keywords'); else keptOpen.delete('keywords');
+});
 /** Reads the page once per address; rescoring after a CV switch reuses the keywords. */
 async function updateMatch() {
   const tab = currentTab, run = ++matchRun;

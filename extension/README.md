@@ -406,9 +406,11 @@ Keep this view compact and calm:
   Below its title, show **Company · Posted date**. Use the page's explicit
   posting date or the saved job's posting date; omit it when unavailable.
   Keep its original calendar day when a timestamp uses a different time zone.
-- Group CV choice, PDF preview, and Autofill in one card. Autofill is the main action.
-- Keep errors and missing required fields visible. Put routine fill notes,
-  keyword matching, and field previews in expandable sections.
+- Autofill is the main action. Below it, a collapsible **Resume** card groups
+  CV choice, a separate PDF preview icon, the real keyword-match gauge, and
+  **Tailor Resume**. Tailoring opens the existing workflow in the app.
+- Keep errors and missing required fields visible. Show keyword details when
+  the match count is clicked; routine fill notes and field previews also expand.
 - Keep sections open after a redraw. Use space and thin dividers to separate
   tasks, rather than adding more boxes or smaller text.
 
@@ -423,7 +425,8 @@ Display labels and previews use a shared **64-character limit** in
 previews and Profile cards. Long text ends in `…`; hover to read the full text.
 CV pickers instead shorten the middle, so similar names keep their distinctive
 endings. The selected name uses small, single-line text with an ellipsis;
-dropdown options wrap. PDF/default labels and Preview stay below the name.
+dropdown options wrap. The PDF preview icon stays at the right of the name;
+the default CV is marked in the dropdown list.
 Open **Full CV name** to read or copy the complete selected name; the search
 list also shows the focused option's complete name below its options.
 The full-name views are deliberate exceptions to the preview limit.
