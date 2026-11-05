@@ -807,7 +807,7 @@ function cvPicker(id = 'cv-select') {
   const long = previewCvName(chosen.name) !== chosen.name;
   return `<div class="cv-select-row">
       <button class="cv-select" id="${id}" data-cv-select type="button" aria-haspopup="listbox" aria-expanded="${expanded}" aria-controls="cv-menu" aria-label="Change CV: ${esc(chosen.name)}" ${filling || switchingCv ? 'disabled' : ''}>
-        <span class="cv-select-copy"><span class="cv-select-label">${switchingCv ? 'Switching CV…' : 'Selected CV · Change'}</span><span class="cv-select-name" title="${esc(chosen.name)}">${esc(chosen.name)}</span></span>
+        <span class="cv-select-copy"><span class="cv-select-name" title="${esc(chosen.name)}">${esc(chosen.name)}</span></span>
         <span class="cv-select-chevron" aria-hidden="true">${icon('chevron', 14)}</span>
       </button>
     </div>

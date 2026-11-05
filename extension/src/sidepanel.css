@@ -231,7 +231,6 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .cv-select { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
 .cv-select:hover, .cv-select[aria-expanded="true"] { border-color: var(--color-accent-border, var(--color-text)); }
 .cv-select-copy { flex: 1; min-width: 0; }
-.cv-select-label { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 500; color: var(--color-muted); }
 .cv-select-name { display: block; line-height: 1.45; overflow-wrap: anywhere; white-space: normal; }
 .cv-select:disabled { cursor: wait; opacity: .65; }
 .cv-picker-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; }
@@ -272,7 +271,6 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 #panel-autofill .autofill-workspace { padding: 16px; }
 .autofill-workspace .cv-select { background: var(--color-background); border-color: transparent; padding: 10px 12px; }
 .autofill-workspace .cv-select:hover, .autofill-workspace .cv-select[aria-expanded=true] { border-color: var(--color-border); }
-.autofill-workspace .cv-select-label { font-size: 12px; margin-bottom: 4px; }
 .autofill-workspace .cv-picker-actions { margin: 6px 0 0; }
 .autofill-workspace .cv-preview { min-height: 28px; }
 .autofill-workspace .fill-block { margin: 16px 0 0; }
