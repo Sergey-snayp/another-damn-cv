@@ -970,7 +970,7 @@ function improveMatch() {
       const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) });
       savedJob = { url: tab.url, job, checkedAt: Date.now() };
       await chrome.tabs.create({ url: `${jobUrl(job.id)}?tailorFrom=${encodeURIComponent(chosen.id)}` });
-      status('match-status', 'Saved. In the app, press "Tailor resume for this job" to improve your CV.', 'success');
+      status('match-status', '');
     } catch (error) {
       if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
       status('match-status', error.message, 'error');
