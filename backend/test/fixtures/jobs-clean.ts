@@ -22,6 +22,7 @@ export function exampleJob(changes: Partial<Job> = {}): Job {
     canonicalUrl: 'https://jobs.example.com/1',
     title: 'Engineer',
     company: 'Example',
+    companyLogo: null,
     location: null,
     remote: null,
     employmentType: null,

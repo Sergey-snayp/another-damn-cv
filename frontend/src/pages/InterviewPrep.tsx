@@ -113,7 +113,7 @@ function InterviewJobCard({ job }: { job: JobSummary }) {
   return (
     <article className="interview-job-card" aria-label={`${job.company || 'Company not added'} — ${jobName(job)}`}>
       <div className="interview-job-card-top">
-        <CompanyAvatar company={job.company} />
+        <CompanyAvatar company={job.company} logo={job.companyLogo} />
         <span className={`interview-job-stage ${job.status}`}>{STATUS_LABELS[job.status]}</span>
       </div>
       <p className="interview-job-company">{job.company || 'Company not added'}</p>

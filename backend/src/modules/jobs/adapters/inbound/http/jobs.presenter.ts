@@ -12,6 +12,7 @@ export function presentJob(job: PublicJob) {
     url: job.url,
     title: job.title,
     company: job.company,
+    companyLogo: job.companyLogo ?? null,
     location: job.location,
     remote: job.remote,
     employmentType: job.employmentType,

@@ -538,7 +538,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   if (message.type === 'scan') {
-    sendResponse(scan());
+    // The logo only for the panel: finding it reads the page's images, too much for every page change.
+    const result = scan();
+    const { logo, domain } = window.CVAutofillLogo?.find(result.context.company) ?? {};
+    sendResponse({ ...result, context: { ...result.context, logo: logo ?? null, logoDomain: domain ?? null } });
     return false;
   }
 

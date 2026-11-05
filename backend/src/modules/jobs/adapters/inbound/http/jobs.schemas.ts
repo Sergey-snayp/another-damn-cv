@@ -31,8 +31,17 @@ export const captureSchema = z.object({
       'That page carries too much structured data to save.',
     )
     .optional(),
+  /** The company's logo the extension found on the page: a web address only. */
+  companyLogo: z
+    .string()
+    .max(2_000)
+    .refine((value) => /^https?:\/\//i.test(value), 'The logo must be a web address.')
+    .optional(),
 });
 export type CaptureInput = z.infer<typeof captureSchema>;
+
+/** The extension's check: is this page's job already saved? */
+export const lookupQuerySchema = z.object({ url: z.string().min(1).max(4_000) });
 
 /** A posting pasted into the web app. */
 export const manualJobSchema = z.object({

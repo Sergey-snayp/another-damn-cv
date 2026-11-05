@@ -8,6 +8,7 @@ import type {
   StructuredJobReader,
 } from './application/ports/job-page-reader';
 import type { ResumeLinkReader } from './application/ports/resume-link-reader';
+import { FindCapturedJob } from './application/use-cases/find-captured-job';
 import { CaptureJob } from './application/use-cases/capture-job';
 import { CreateManualJob } from './application/use-cases/create-manual-job';
 import { DeleteJob } from './application/use-cases/delete-job';
@@ -81,6 +82,11 @@ export const jobsProviders: Provider[] = [
     useFactory: (repository: JobRepository, structured: StructuredJobReader, scheduler: JobReadScheduler) =>
       new CaptureJob(repository, structured, scheduler),
     inject: [JOB_REPOSITORY, STRUCTURED_JOB_READER, JOB_READ_SCHEDULER],
+  },
+  {
+    provide: FindCapturedJob,
+    useFactory: (repository: JobRepository) => new FindCapturedJob(repository),
+    inject: [JOB_REPOSITORY],
   },
   {
     provide: CreateManualJob,

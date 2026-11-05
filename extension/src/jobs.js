@@ -79,6 +79,21 @@ export async function sendCapture(capture) {
   return response.json();
 }
 
+/** The saved job for a page address, or null: the panel's job card shows "Saved" for it. */
+export async function lookupJob(url) {
+  const { auth } = await chrome.storage.local.get('auth');
+  if (!auth?.syncToken) throw new NotSignedInError();
+  let response;
+  try {
+    response = await fetch(`${API_URL}/api/jobs/lookup?url=${encodeURIComponent(url)}`, { headers: { Authorization: `Bearer ${auth.syncToken}` } });
+  } catch {
+    throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`);
+  }
+  if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
+  if (!response.ok) throw new Error(`Server returned ${response.status}.`);
+  return (await response.json()).job ?? null;
+}
+
 export class NotSignedInError extends Error {
   constructor() {
     super('Sign in first: open the Profile tab.');

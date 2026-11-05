@@ -26,11 +26,6 @@ p { line-height: 1.6; } .muted { color: var(--color-muted); font-size: 12px; }
 .card h2 { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .card p { margin: 8px 0 16px; color: var(--color-muted); font-size: 12px; }
 .soft-card,.notice { background: var(--color-background); }
-.page-card { display: flex; align-items: flex-start; gap: 12px; padding: 18px; box-shadow: 0 3px 8px var(--color-shadow-soft); }
-.company-avatar { display: grid; place-items: center; width: 42px; height: 42px; flex: none; background: var(--color-accent-soft); border: 1px solid var(--color-border); border-radius: 12px; font-weight: 700; font-size: 16px; }
-.page-card h2 { margin: 0 0 7px; font-size: 18px; overflow-wrap: anywhere; }
-.page-card p { margin: 0; overflow-wrap: anywhere; }
-.page-card .page-site { font-size: 11px; }
 .primary,.ghost { display: inline-flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 46px; padding: 12px; border: 1px solid transparent; border-radius: 12px; font-size: 14px; font-weight: 650; text-decoration: none; }
 .primary { color: var(--color-text); background: var(--color-accent); }
 .primary:hover:not(:disabled) { background: var(--color-accent-hover); }
@@ -196,3 +191,23 @@ dialog textarea { resize: vertical; margin-bottom: 15px; }
 .copy-value.chip { display: inline-block; width: auto; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-text); font-size: 12px; }
 .link-button { padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 12px; font-weight: 600; text-decoration: underline; cursor: pointer; }
 p.small { font-size: 12px; margin: -8px 0 8px; }
+
+/* The job card: logo, posting, and Save job / Saved · Open in app. */
+.page-card { display: flex; align-items: flex-start; gap: 12px; padding: 18px; box-shadow: 0 3px 8px var(--color-shadow-soft); }
+.company-avatar { display: grid; place-items: center; width: 46px; height: 46px; flex: none; overflow: hidden; background: var(--color-accent-soft); border: 1px solid var(--color-border); border-radius: 12px; font-weight: 700; font-size: 18px; }
+.company-avatar img { width: 100%; height: 100%; object-fit: contain; background: #fff; padding: 4px; box-sizing: border-box; }
+.page-card-body { display: flex; flex-direction: column; min-width: 0; }
+.page-card-title { margin: 0 0 7px; font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+.page-card-company { overflow-wrap: anywhere; color: var(--color-muted); }
+.page-card .page-site { font-size: 11px; color: var(--color-muted); overflow-wrap: anywhere; }
+.job-add { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin: -6px 0 14px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); color: var(--color-text); font-size: 14px; font-weight: 700; }
+.job-add:hover { background: var(--color-accent-soft); }
+.job-adding { display: grid; place-items: center; min-height: 48px; margin: -6px 0 14px; border-radius: 12px; background: var(--color-border); color: var(--color-muted); font-size: 14px; font-weight: 700; }
+.job-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -6px 0 14px; padding: 10px 14px; border-radius: 12px; font-size: 13px; }
+.job-banner > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.job-banner > span:has(> svg) { flex-direction: row; align-items: center; gap: 6px; }
+.job-banner small { color: var(--color-muted); font-size: 12px; overflow-wrap: anywhere; }
+.job-banner .link-button { flex: none; font-size: 13px; }
+.job-banner.is-added { background: var(--color-success-soft, #e7f9f0); color: var(--color-success, #15803d); }
+.job-banner.is-saved, .job-banner.is-applied { background: var(--color-accent-soft); }
+.job-banner.is-error { background: var(--color-error-soft, #fff1f2); color: var(--color-error, #9f1239); }

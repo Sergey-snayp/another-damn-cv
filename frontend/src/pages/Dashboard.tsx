@@ -58,6 +58,9 @@ export function Dashboard() {
   const inFlight = useRef(new Set<string>());
   const [exporting, setExporting] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
+  // Applications waiting for the delete confirmation.
+  const [deleting, setDeleting] = useState<JobSummary[] | null>(null);
+  const deleteDialog = useRef<HTMLDialogElement>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const archiveDialog = useRef<HTMLDialogElement>(null);
@@ -126,6 +129,11 @@ export function Dashboard() {
     if (confirmAll) dialog?.showModal();
     else dialog?.close();
   }, [confirmAll]);
+  useEffect(() => {
+    const dialog = deleteDialog.current;
+    if (deleting) dialog?.showModal();
+    else dialog?.close();
+  }, [deleting]);
 
   const change = (patch: Partial<DashboardPreferences>) =>
     setPreferences((current) => ({ ...current, ...patch }));
@@ -212,6 +220,30 @@ export function Dashboard() {
       unlock([job.id]);
     }
   }
+  /** Deletes applications for good, one request each. Ones that fail stay on the board. */
+  async function removeJobs(jobs: JobSummary[]) {
+    const ids = jobs.map((job) => job.id).filter((id) => !inFlight.current.has(id));
+    if (!ids.length) return;
+    lock(ids);
+    setError(null);
+    const removed: string[] = [];
+    try {
+      for (const id of ids) {
+        await jobsApi.remove(id);
+        removed.push(id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete this application.');
+    } finally {
+      setRows((current) => current?.filter((row) => !removed.includes(row.id)) ?? current);
+      setSelected((current) => new Set([...current].filter((id) => !removed.includes(id))));
+      unlock(ids);
+      if (removed.length) {
+        const only = jobs.find((job) => job.id === removed[0]);
+        setNotice({ text: removed.length === 1 && only ? `Deleted ${jobName(only)}.` : `Deleted ${removed.length} applications.` });
+      }
+    }
+  }
   async function updatePreferences(
     ids: string[],
     edit: { favorite?: boolean; archived?: boolean },
@@ -278,6 +310,7 @@ export function Dashboard() {
       void updatePreferences([job.id], { favorite: !job.isFavorite }),
     onArchive: (job) =>
       void updatePreferences([job.id], { archived: !job.archivedAt }),
+    onDelete: (job) => setDeleting([job]),
     busyIds,
     managing,
     selected,
@@ -593,6 +626,15 @@ export function Dashboard() {
           </button>
           <button
             type="button"
+            className="is-danger"
+            disabled={!selectedCount || busyIds.size > 0}
+            onClick={() => setDeleting((rows ?? []).filter((row) => selected.has(row.id)))}
+          >
+            <DashboardIcon name="trash" size={17} />
+            Delete selected
+          </button>
+          <button
+            type="button"
             className="dashboard-manage-done"
             onClick={() => {
               setManaging(false);
@@ -716,6 +758,50 @@ export function Dashboard() {
             }}
           >
             {scope === 'archived' ? 'Restore all' : 'Archive all'}
+          </button>
+        </footer>
+      </dialog>
+      <dialog
+        className="dashboard-dialog"
+        ref={deleteDialog}
+        aria-labelledby="delete-jobs-title"
+        onCancel={(event) => {
+          event.preventDefault();
+          setDeleting(null);
+        }}
+      >
+        <header>
+          <h2 id="delete-jobs-title">
+            {deleting?.length === 1 ? 'Delete this application?' : `Delete ${deleting?.length ?? 0} applications?`}
+          </h2>
+          <button
+            type="button"
+            className="dashboard-icon-button"
+            aria-label="Close delete confirmation"
+            onClick={() => setDeleting(null)}
+          >
+            <DashboardIcon name="close" />
+          </button>
+        </header>
+        <p>
+          {deleting?.length === 1 && deleting[0] ? `"${jobName(deleting[0])}" and its` : 'These applications and their'} interview prep
+          and status history are deleted for good. CVs tailored for {deleting?.length === 1 ? 'it' : 'them'} stay in
+          Documents. To keep {deleting?.length === 1 ? 'it' : 'them'} out of the way instead, use Archive.
+        </p>
+        <footer>
+          <button type="button" className="dashboard-control" onClick={() => setDeleting(null)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="dashboard-control dashboard-danger"
+            onClick={() => {
+              const jobs = deleting ?? [];
+              setDeleting(null);
+              void removeJobs(jobs);
+            }}
+          >
+            Delete
           </button>
         </footer>
       </dialog>

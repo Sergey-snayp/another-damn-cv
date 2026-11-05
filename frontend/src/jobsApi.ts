@@ -63,6 +63,8 @@ export interface Job {
   url: string | null;
   title: string | null;
   company: string | null;
+  /** The company's logo found on the page by the extension; null shows initials. */
+  companyLogo: string | null;
   location: string | null;
   remote: boolean | null;
   employmentType: string | null;

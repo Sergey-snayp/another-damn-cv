@@ -28,6 +28,7 @@ export interface Job {
   canonicalUrl: string | null;
   title: string | null;
   company: string | null;
+  companyLogo: string | null;
   location: string | null;
   remote: boolean | null;
   employmentType: string | null;

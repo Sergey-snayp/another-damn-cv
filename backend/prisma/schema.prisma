@@ -88,6 +88,8 @@ model Job {
 
   title          String?
   company        String?
+  /// The company's logo as an image address, found on the page by the extension.
+  companyLogo    String?
   location       String?
   remote         Boolean?
   employmentType String?

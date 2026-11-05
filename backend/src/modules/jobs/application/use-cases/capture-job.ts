@@ -11,6 +11,7 @@ export interface CaptureInput {
   html?: string;
   text?: string;
   jsonLd?: unknown[];
+  companyLogo?: string;
 }
 
 export class CaptureJob {
@@ -37,6 +38,8 @@ export class CaptureJob {
       extraction: read.extraction,
       extractionError: read.extraction === 'failed' ? 'Nothing readable was captured from that page.' : null,
       capturedAt: this.now(),
+      // A save without a logo keeps the one found before.
+      ...(input.companyLogo ? { companyLogo: input.companyLogo } : {}),
       ...(existing && read.extraction === 'pending'
         ? {}
         : unprotectedFields(read.fields, new Set(existing?.editedFields))),

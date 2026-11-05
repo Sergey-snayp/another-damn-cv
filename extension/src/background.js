@@ -32,7 +32,7 @@ async function armedSteps(tabId, url) {
   return armed;
 }
 
-const PAGE_SCRIPTS = ['src/sites.js', 'src/fields.js', 'src/filler.js', 'src/marks.js', 'src/launcher.js', 'src/panel-host.js', 'src/job-form.js', 'src/content.js'];
+const PAGE_SCRIPTS = ['src/sites.js', 'src/fields.js', 'src/filler.js', 'src/marks.js', 'src/logo.js', 'src/launcher.js', 'src/panel-host.js', 'src/job-form.js', 'src/content.js'];
 const PANEL_URL = chrome.runtime.getURL('src/sidepanel.html');
 
 /** Pages where Chrome loads PAGE_SCRIPTS itself, from the manifest's match patterns. */

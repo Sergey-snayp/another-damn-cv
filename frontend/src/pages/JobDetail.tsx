@@ -6,6 +6,7 @@ import {
 } from '../jobsApi';
 import { resumeApi, type ResumeSummary } from '../resumeApi';
 import { ApplicationResume } from '../jobs/ApplicationResume';
+import { CompanyAvatar } from '../jobs/ApplicationCard';
 import { InterviewDateEditor } from '../interviews/InterviewDateEditor';
 
 type Draft = {
@@ -96,7 +97,7 @@ export function JobDetail() {
   return (
     <>
       <p className="crumb"><Link to="/dashboard">← Dashboard</Link></p>
-      <h1>{jobName(job)}</h1>
+      <h1 className="job-title-with-logo"><CompanyAvatar company={job.company} logo={job.companyLogo} />{jobName(job)}</h1>
 
       <p className="muted small job-meta">
         <span className={`badge ${job.status}`}>{STATUS_LABELS[job.status]}</span>

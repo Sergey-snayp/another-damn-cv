@@ -15,6 +15,7 @@ import {
 import { AuthGuard, CurrentUser, SyncTokenGuard } from '../../../../auth/http';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { CaptureJob } from '../../../application/use-cases/capture-job';
+import { FindCapturedJob } from '../../../application/use-cases/find-captured-job';
 import { CreateManualJob } from '../../../application/use-cases/create-manual-job';
 import { DeleteJob } from '../../../application/use-cases/delete-job';
 import { GetJob } from '../../../application/use-cases/get-job';
@@ -27,6 +28,7 @@ import {
   captureSchema,
   jobEditSchema,
   listQuerySchema,
+  lookupQuerySchema,
   manualJobSchema,
   undoStatusSchema,
   type CaptureInput,
@@ -47,6 +49,7 @@ export class JobsController {
     @Inject(UndoJobStatus) private readonly undoJobStatus: UndoJobStatus,
     @Inject(DeleteJob) private readonly deleteJob: DeleteJob,
     @Inject(CaptureJob) private readonly captureJob: CaptureJob,
+    @Inject(FindCapturedJob) private readonly findCapturedJob: FindCapturedJob,
     @Inject(CreateManualJob) private readonly createManualJob: CreateManualJob,
     @Inject(RereadJob) private readonly rereadJob: RereadJob,
   ) {}
@@ -59,6 +62,27 @@ export class JobsController {
   ) {
     const { job, created } = await this.captureJob.execute(userId, body);
     return { job: presentJob(job), created };
+  }
+
+  /** Whether the page's job is saved: the extension's job card shows "Saved". */
+  @Get('lookup')
+  @UseGuards(SyncTokenGuard)
+  async lookup(
+    @CurrentUser() userId: string,
+    @Query(new ZodValidationPipe(lookupQuerySchema)) query: { url: string },
+  ) {
+    const job = await this.findCapturedJob.execute(userId, query.url);
+    return {
+      job: job && {
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        companyLogo: job.companyLogo,
+        status: job.status,
+        appliedAt: job.appliedAt?.toISOString() ?? null,
+        capturedAt: job.capturedAt.toISOString(),
+      },
+    };
   }
 
   @Get()

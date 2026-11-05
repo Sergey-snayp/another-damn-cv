@@ -93,7 +93,7 @@ function Workspace({ id }: { id: string }) {
       ) : (
         <>
           <header className="interview-workspace-header">
-            <CompanyAvatar company={job.company} />
+            <CompanyAvatar company={job.company} logo={job.companyLogo} />
             <div><p>{job.company || 'Company not added'} <span className={`interview-job-stage ${job.status}`}>{STATUS_LABELS[job.status]}</span></p><h1>{jobName(job)}</h1><span>Interview preparation</span></div>
           </header>
           <nav className="interview-workspace-references" aria-label="Preparation references">

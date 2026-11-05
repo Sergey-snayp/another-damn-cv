@@ -16,12 +16,16 @@ export interface ApplicationActions {
   onMove(job: JobSummary, to: JobStatus): void;
   onFavorite(job: JobSummary): void;
   onArchive(job: JobSummary): void;
+  /** Asks to confirm, then deletes the application for good. */
+  onDelete(job: JobSummary): void;
   busyIds: Set<string>;
   managing: boolean;
   selected: Set<string>;
   onSelect(id: string): void;
 }
-export function CompanyAvatar({ company }: { company: string | null }) {
+export function CompanyAvatar({ company, logo }: { company: string | null; logo?: string | null }) {
+  // A logo that fails to load gives way to the initials.
+  const [broken, setBroken] = useState<string | null>(null);
   const name = company?.trim() || '?';
   const initials = name
     .split(/\s+/)
@@ -31,10 +35,14 @@ export function CompanyAvatar({ company }: { company: string | null }) {
     .toUpperCase();
   return (
     <span
-      className="application-company-avatar"
+      className={`application-company-avatar${logo && broken !== logo ? ' has-logo' : ''}`}
       aria-hidden="true"
     >
-      {initials}
+      {logo && broken !== logo ? (
+        <img src={logo} alt="" referrerPolicy="no-referrer" onError={() => setBroken(logo)} />
+      ) : (
+        initials
+      )}
     </span>
   );
 }
@@ -131,6 +139,18 @@ export function ApplicationMenu({
           {row.archivedAt ? 'Restore application' : 'Archive application'}
         </span>
       </button>
+      <button
+        type="button"
+        className="dashboard-menu-item is-danger"
+        disabled={busy}
+        onClick={() => {
+          actions.onDelete(row);
+          setOpen(false);
+        }}
+      >
+        <DashboardIcon name="trash" />
+        <span>Delete application</span>
+      </button>
     </Popover>
   );
 }
@@ -170,7 +190,7 @@ export function ApplicationCard({
       className={`application-card${lifted ? ' is-lifted' : ''}${actions?.selected.has(row.id) ? ' is-selected' : ''}`}
     >
       <div className="application-card-company">
-        <CompanyAvatar company={row.company} />
+        <CompanyAvatar company={row.company} logo={row.companyLogo} />
         <span title={row.company ?? ''}>
           {row.company || 'Company not added'}
         </span>

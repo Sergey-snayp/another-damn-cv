@@ -58,7 +58,7 @@ export function ApplicationList({
               )}
               <td>
                 <span className="application-list-company">
-                  <CompanyAvatar company={row.company} />
+                  <CompanyAvatar company={row.company} logo={row.companyLogo} />
                   <span>{row.company || 'Company not added'}</span>
                 </span>
               </td>

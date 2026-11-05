@@ -195,3 +195,43 @@ test('the extension reads the profile career and only its own CVs', async () => 
     404,
   );
 });
+
+test('a captured job keeps its logo, and the extension can tell it is saved', async () => {
+  const url = `https://job-boards.greenhouse.io/acme/jobs/${randomUUID()}?gh_src=x`;
+  const logo = 'https://recruiting.cdn.greenhouse.io/logos/acme.png';
+  const refused = await call('/jobs/capture', {
+    method: 'POST',
+    token: ownerToken,
+    body: { url, text: 'Engineer at Acme', companyLogo: 'javascript:alert(1)' },
+  });
+  assert.equal(refused.status, 400);
+  const saved = await call('/jobs/capture', {
+    method: 'POST',
+    token: ownerToken,
+    body: { url, text: 'Engineer at Acme', companyLogo: logo },
+  });
+  const { job } = (await saved.json()) as { job: { id: string; companyLogo: string } };
+  assert.equal(job.companyLogo, logo);
+  // Saved again without a logo: the one found before stays.
+  const again = (await (
+    await call('/jobs/capture', {
+      method: 'POST',
+      token: ownerToken,
+      body: { url, text: 'Engineer at Acme' },
+    })
+  ).json()) as { job: { companyLogo: string } };
+  assert.equal(again.job.companyLogo, logo);
+
+  const lookup = (await (
+    await call(`/jobs/lookup?url=${encodeURIComponent(url.replace('?gh_src=x', ''))}`, { token: ownerToken })
+  ).json()) as { job: { id: string; companyLogo: string } | null };
+  assert.equal(lookup.job?.id, job.id);
+  assert.equal(lookup.job?.companyLogo, logo);
+  assert.equal((lookup.job as unknown as { status: string }).status, 'saved');
+  assert.equal((lookup.job as unknown as { appliedAt: string | null }).appliedAt, null);
+  const stranger = (await (
+    await call(`/jobs/lookup?url=${encodeURIComponent(url)}`, { token: otherToken })
+  ).json()) as { job: unknown };
+  assert.equal(stranger.job, null);
+  assert.equal((await call(`/jobs/lookup?url=${encodeURIComponent(url)}`)).status, 401);
+});

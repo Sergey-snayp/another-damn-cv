@@ -1,5 +1,5 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
-import { captureTab, jobUrl, NotSignedInError, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
+import { captureTab, jobUrl, lookupJob, NotSignedInError, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
 import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
@@ -214,13 +214,87 @@ function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')
 const WORK_TYPE_NAMES = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
 function workTypesText() { return String(profile.workArrangements ?? '').split(',').map(kind => WORK_TYPE_NAMES[kind]).filter(Boolean).join(', '); }
 function relocationText() { return Object.entries(relocationMap(autofillDefaults)).map(([country, answer]) => `${country || 'Anywhere'}: ${answer}`).join(', '); }
+// ─── The job card ────────────────────────────────────────────────────────
+// The posting with its company's logo (src/logo.js finds it on the page; the
+// company site's icon from Google's favicon service when the page has none).
+// Below it, as in Simplify: "Add this job to the app", which shows "Adding…"
+// while it saves, then a banner: added, already saved, already applied (each
+// with View in app), or could not add (Try again). Nothing is saved unless
+// the person presses the button.
+let savedJob = { url: null, job: null, checkedAt: 0 }, jobBusy = false, jobAdded = false, jobProblem = '';
+const APPLIED = new Set(['applied', 'screening', 'interview', 'offer', 'accepted', 'rejected', 'declined']);
+/** The logo to show and save: the page's, the saved job's, or the company site's icon. */
+function jobLogo() {
+  const context = scan?.context ?? {};
+  if (context.logo) return context.logo;
+  if (savedJob.url === currentTab?.url && savedJob.job?.companyLogo) return savedJob.job.companyLogo;
+  return context.logoDomain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(context.logoDomain)}&sz=128` : null;
+}
+/** Whether this page's job is saved: on a new page, and again at most once a minute. */
+async function checkSaved(url) {
+  if (!url || (savedJob.url === url && Date.now() - savedJob.checkedAt < 60_000)) return;
+  if (savedJob.url !== url) { savedJob = { url, job: null, checkedAt: 0 }; jobAdded = false; jobProblem = ''; }
+  savedJob.checkedAt = Date.now();
+  try { const job = await lookupJob(url); if (savedJob.url === url) savedJob.job = job; }
+  catch { /* signed out or offline: the button offers saving, which explains */ }
+  if (!filling) renderAutofill();
+}
+function jobBanner() {
+  const saved = savedJob.url === currentTab?.url ? savedJob.job : null;
+  const view = '<button class="link-button" id="job-view">View in app</button>';
+  if (jobBusy) return '';
+  if (jobAdded && saved) return `<div class="job-banner is-added" role="status"><span>${icon('check', 16)}Added to your jobs!</span>${view}</div>`;
+  if (saved && (APPLIED.has(saved.status) || saved.appliedAt)) {
+    const date = saved.appliedAt ? new Date(saved.appliedAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    return `<div class="job-banner is-applied" role="status"><span><strong>You've already applied to this job</strong>${date ? `<small>Applied on ${esc(date)}</small>` : ''}</span>${view}</div>`;
+  }
+  if (saved) return `<div class="job-banner is-saved" role="status"><span>This job is already in your jobs</span>${view}</div>`;
+  if (jobProblem) return `<div class="job-banner is-error" role="alert"><span><strong>Couldn't add this job</strong><small>${esc(jobProblem)}</small></span><button class="link-button" id="job-save">Try again</button></div>`;
+  return '';
+}
 function pageCard() {
   if (!scan) return '';
   const title = scan.context?.title || 'Application form';
   const company = scan.context?.company || scan.host;
   const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
-  return `<div class="card page-card"><div class="company-avatar" aria-hidden="true">${esc(initials)}</div><div><h2>${esc(title)}</h2><p>${esc(company)}</p><p class="page-site">${esc(scan.host)}</p></div></div>`;
+  const logo = jobLogo();
+  const saved = savedJob.url === currentTab?.url && savedJob.job;
+  const button = jobBusy ? '<div class="job-adding" aria-live="polite">Adding to your jobs…</div>'
+    : saved || jobProblem ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
+  return `<div class="card page-card" id="job-card">
+    <span class="company-avatar" data-initials="${esc(initials)}">${logo ? `<img src="${esc(logo)}" alt="" referrerpolicy="no-referrer">` : esc(initials)}</span>
+    <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-company">${esc(company)}</span><span class="page-site">${esc(scan.host)}</span></span>
+  </div>${jobBanner()}${button}`;
 }
+/** Saves the posting with its logo. Only from the button. */
+function saveJob() {
+  const tab = currentTab;
+  if (jobBusy || !tab?.id) return;
+  const reason = unsendableReason(tab);
+  if (reason) { jobProblem = reason; renderAutofill(); return; }
+  const access = requestSiteAccess(tab); // Must start in the click's user gesture.
+  jobBusy = true; jobProblem = ''; renderAutofill();
+  void (async () => {
+    try {
+      if (!await access) { jobProblem = 'Access to this site was not allowed.'; return; }
+      const logo = jobLogo();
+      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) });
+      savedJob = { url: tab.url, job, checkedAt: Date.now() }; jobAdded = true;
+    } catch (error) {
+      if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
+      jobProblem = /Cannot access|cannot be scripted|Frame with ID/i.test(error.message) ? 'Chrome does not let extensions read this page.' : error.message;
+    } finally { jobBusy = false; renderAutofill(); }
+  })();
+}
+document.addEventListener('click', event => {
+  if (event.target.closest('#job-save')) saveJob();
+  else if (event.target.closest('#job-view') && savedJob.job) void chrome.tabs.create({ url: jobUrl(savedJob.job.id) });
+});
+// A logo that fails to load gives way to the company's initials.
+document.addEventListener('error', event => {
+  const image = event.target;
+  if (image?.tagName === 'IMG' && image.closest('.company-avatar')) image.replaceWith(document.createTextNode(image.parentElement.dataset.initials ?? ''));
+}, true);
 function renderAutofill() {
   const host = $('panel-autofill');
   if (!scan && pageDisconnected) {
@@ -597,7 +671,9 @@ function improveMatch() {
   void (async () => {
     try {
       if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
-      const { job } = await sendCapture(await captureTab(tab.id));
+      const logo = jobLogo();
+      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) });
+      savedJob = { url: tab.url, job, checkedAt: Date.now() };
       await chrome.tabs.create({ url: `${jobUrl(job.id)}?tailorFrom=${encodeURIComponent(chosen.id)}` });
       status('match-status', 'Saved. In the app, press "Tailor resume for this job" to improve your CV.', 'success');
     } catch (error) {
@@ -634,6 +710,7 @@ async function refresh() {
     const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
     if (sequence !== refreshId) return;
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
+    void checkSaved(tab?.url);
     fillGroups = stored.autofillGroups ?? {};
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
     diversityAnswers = stored.diversityAnswers ?? {};

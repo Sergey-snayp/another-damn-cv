@@ -13,6 +13,7 @@
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
       --allow-file-access-from-files --virtual-time-budget=30000 \
       --dump-dom "file://$PWD/test/profile-tab.html" | grep -o '<pre id="result">.*</pre>'
+  Run it again with ?applied for the "already applied" banner.
 -->
 <script>
   const store = {
@@ -21,22 +22,27 @@
     appResumes: [{ id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }],
     autofillDefaults: [{ id: 'd1', kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }],
   };
-  const sentToPage = [];
+  const sentToPage = [], opened = [], captured = [];
+  // ?applied: the page's job was saved and applied to before the panel opened.
+  const APPLIED_MODE = location.search.includes('applied');
+  let lookupReply = APPLIED_MODE ? { job: { id: 'j9', status: 'interview', appliedAt: '2026-11-02T10:00:00.000Z', companyLogo: null } } : { job: null }, failNextCapture = '';
   const noop = () => {};
   const event = { addListener: noop, removeListener: noop };
   window.chrome = {
     runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async (message) => (message?.type === 'panel-tab' ? { tabId: 1 } : null) },
     storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => { Object.assign(store, values); }, remove: async (keys) => { for (const key of [].concat(keys)) delete store[key]; } }, onChanged: event },
     tabs: {
-      get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: noop,
+      get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: async (options) => { opened.push(options.url); },
       sendMessage: async (_tab, message) => {
         sentToPage.push(message);
-        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: 'Acme' }, fields: [{ key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
+        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: 'Acme', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [{ key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
         if (message.type === 'questions') return { questions: [] };
         if (message.type === 'fill') return { filled: 3, failures: [], notes: [], missing: [] };
         return null;
       },
     },
+    permissions: { request: async () => true },
+    scripting: { executeScript: async ({ func }) => (func ? [{ result: { url: 'https://jobs.example.com/apply', pageTitle: 'Engineer', text: 'Engineer at Acme' } }] : []) },
     webNavigation: { getAllFrames: async () => [{ frameId: 0, url: 'https://jobs.example.com/apply' }] },
     identity: { getRedirectURL: () => 'https://test.chromiumapp.org/' },
   };
@@ -49,8 +55,13 @@
     ...extra,
   });
   const reply = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  window.fetch = async (url) => {
+  window.fetch = async (url, options = {}) => {
     const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path.startsWith('/api/jobs/lookup')) return reply(lookupReply);
+    if (path === '/api/jobs/capture') {
+      if (failNextCapture) { const message = failNextCapture; failNextCapture = ''; return new Response(JSON.stringify({ message }), { status: 500 }); }
+      const body = JSON.parse(options.body); captured.push(body); return reply({ job: { id: 'j1', companyLogo: body.companyLogo, status: 'saved', appliedAt: null }, created: true });
+    }
     if (path === '/api/extension/profile/career') return reply(view('Ciklum', 'Dnipro Institute of Infrastructure and Transport'));
     if (path === '/api/extension/profile/career/resume/cv1') return reply(view('Paymorrow', 'CV School'));
     if (path === '/api/extension/defaults') return reply(store.autofillDefaults);
@@ -69,6 +80,15 @@
     document.body.insertAdjacentHTML('afterbegin', new DOMParser().parseFromString(markup, 'text/html').body.innerHTML.replace(/<script[\s\S]*?<\/script>/g, ''));
     await import('../src/sidepanel.js');
     await wait(1500);
+    if (APPLIED_MODE) {
+      const text = document.getElementById('panel-autofill').textContent;
+      expect(/You've already applied to this job/.test(text) && /Applied on Nov 2, 2026/.test(text), `an applied job says so, with the date (got "${text.slice(0, 240)}")`);
+      expect(!document.querySelector('.job-add'), 'and offers no Add button');
+      document.getElementById('job-view').click();
+      await wait(100);
+      expect(opened.at(-1) === 'http://localhost:5173/jobs/j9', `View in app opens it (opened ${opened.at(-1)})`);
+      throw Object.assign(new Error('done'), { done: true });
+    }
     const overview = () => document.getElementById('profile-overview');
     const text = () => overview().textContent;
     expect(/Sergey Proniuk/.test(text()) && /Vancouver, BC, Canada/.test(text()) && /\+16728880334/.test(text()), 'the contact card shows name, location and phone');
@@ -78,6 +98,27 @@
     const active = () => overview().querySelector('[data-career-source].is-active')?.dataset.careerSource;
     expect(active() === 'profile', `the Profile is used when it has experience (active: ${active()})`);
     expect(overview().querySelectorAll('.profile-bullets li').length === 3 && /Show all 4/.test(text()), 'long bullet lists fold after three');
+
+    // The job card, as in Simplify: the logo, "Add this job to the app", then a banner.
+    const card = () => document.getElementById('job-card');
+    const panel = () => document.getElementById('panel-autofill').textContent;
+    expect(card()?.querySelector('img')?.getAttribute('src')?.startsWith('data:image/png'), `the job card shows the page's logo (got ${card()?.innerHTML.slice(0, 200)})`);
+    expect(/Add this job to the app/.test(panel()), 'an unsaved job offers "Add this job to the app"');
+    card().click();
+    await wait(300);
+    expect(!captured.length, 'clicking the card itself saves nothing');
+    lookupReply = { job: null };
+    failNextCapture = 'Server returned 500.';
+    document.getElementById('job-save').click();
+    await wait(600);
+    expect(/Couldn't add this job/.test(panel()) && /Try again/.test(panel()), `a failed save says so, with Try again (got "${panel().slice(0, 200)}")`);
+    document.getElementById('job-save').click(); // Try again
+    await wait(600);
+    expect(captured.at(-1)?.companyLogo?.startsWith('data:image/png') && captured.at(-1)?.url === 'https://jobs.example.com/apply', `saving sends the page with its logo (sent ${JSON.stringify(captured.at(-1))?.slice(0, 160)})`);
+    expect(/Added to your jobs!/.test(panel()) && !document.querySelector('.job-add'), `then "Added to your jobs!" and the button goes (got "${panel().slice(0, 200)}")`);
+    document.getElementById('job-view').click();
+    await wait(100);
+    expect(opened.at(-1) === 'http://localhost:5173/jobs/j1', `View in app opens the job (opened ${opened.at(-1)})`);
 
     // Autofill sends the current role and school from the Profile.
     document.getElementById('fill').click();
@@ -94,8 +135,8 @@
     await wait(800);
     fill = sentToPage.filter((message) => message.type === 'fill').at(-1);
     expect(fill?.profile.currentCompany === 'Paymorrow' && fill?.profile.school === 'CV School', `Autofill then takes them from the CV (sent ${JSON.stringify(fill && { currentCompany: fill.profile.currentCompany, school: fill.profile.school })})`);
-  } catch (error) { problems.push(`threw: ${error.stack}`); }
-  document.querySelector('.tab[data-panel="profile"]')?.click(); // Leaves the Profile tab open for a screenshot.
+  } catch (error) { if (!error.done) problems.push(`threw: ${error.stack}`); }
+  if (!location.search.includes('autofill')) document.querySelector('.tab[data-panel="profile"]')?.click(); // Leaves the Profile tab open for a screenshot (?autofill keeps the Autofill tab).
   const out = document.createElement('pre');
   out.id = 'result';
   out.textContent = JSON.stringify({ passed: problems.length === 0, problems });

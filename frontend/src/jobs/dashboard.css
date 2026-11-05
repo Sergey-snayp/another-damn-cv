@@ -1424,3 +1424,14 @@ body:has(.dashboard-page) {
     transition: none !important;
   }
 }
+
+/* A company logo found by the extension, in place of the initials. */
+.application-company-avatar.has-logo { background: #fff; border: 1px solid var(--color-border); overflow: hidden; }
+.application-company-avatar img { width: 100%; height: 100%; object-fit: contain; padding: 3px; box-sizing: border-box; }
+.job-title-with-logo { display: flex; align-items: center; gap: 12px; }
+.job-title-with-logo .application-company-avatar { flex: none; width: 40px; height: 40px; }
+
+/* Deleting applications: red, so it is not mistaken for Archive. */
+.dashboard-menu-item.is-danger,
+.dashboard-manage-bar button.is-danger { color: var(--color-error, #b91c1c); }
+.dashboard-control.dashboard-danger { background: var(--color-error, #b91c1c); border-color: var(--color-error, #b91c1c); color: #fff; }
