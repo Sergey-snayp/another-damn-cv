@@ -354,6 +354,9 @@ model Resume {
   educations      EducationEntry[]
   skills          SkillEntry[]
   summaries       SummaryVariant[]
+  projects        ProjectEntry[]
+  certifications  CertificationEntry[]
+  customSections  CustomSection[]
   applicationJobs Job[]                @relation("ApplicationResume")
 
   @@index([profileId])
@@ -383,6 +386,8 @@ model ContactInformation {
   firstName String  @default("")
   lastName  String  @default("")
   email     String  @default("")
+  /// One line under the name, such as "Senior Backend Engineer".
+  headline  String?
   phone     String?
   location  String?
   linkedin  String?
@@ -527,6 +532,73 @@ model SummaryVariant {
   @@index([resumeId, supersededInSnapshot])
   @@index([lineageId])
   @@map("summary_variants")
+}
+
+/// Projects and outside experience: open source, side projects, volunteering.
+model ProjectEntry {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  name     String
+  role     String?
+  link     String?
+  from     String?
+  to       String?
+  current  Boolean  @default(false)
+  bullets  String[]
+  position Int      @default(0)
+
+  createdInSnapshot    Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("project_entries")
+}
+
+model CertificationEntry {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  name     String
+  issuer   String?
+  date     String?
+  link     String?
+  position Int     @default(0)
+
+  createdInSnapshot    Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("certification_entries")
+}
+
+/// A section the person names, such as "Languages" or "Awards": text, bullets or both.
+model CustomSection {
+  id        String @id @default(uuid())
+  lineageId String
+  resumeId  String
+
+  title    String
+  text     String?
+  bullets  String[]
+  position Int      @default(0)
+
+  createdInSnapshot    Int
+  supersededInSnapshot Int?
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId, supersededInSnapshot])
+  @@index([lineageId])
+  @@map("custom_sections")
 }
 
 /// The CV as a PDF file, as the extension uploads it to applications. Made on

@@ -27,6 +27,8 @@ export interface Contact {
   firstName: string;
   lastName: string;
   email: string;
+  /** One line under the name, such as "Senior Backend Engineer". */
+  headline?: string | null;
   phone?: string | null;
   location?: string | null;
   linkedin?: string | null;
@@ -83,6 +85,36 @@ export interface Skill {
   position?: number;
 }
 
+export interface Project {
+  lineageId?: string;
+  name: string;
+  role?: string | null;
+  link?: string | null;
+  from?: string | null;
+  to?: string | null;
+  current?: boolean;
+  bullets: string[];
+  position?: number;
+}
+
+export interface Certification {
+  lineageId?: string;
+  name: string;
+  issuer?: string | null;
+  date?: string | null;
+  link?: string | null;
+  position?: number;
+}
+
+/** A section the person names, such as "Languages": text, bullets or both. */
+export interface CustomSection {
+  lineageId?: string;
+  title: string;
+  text?: string | null;
+  bullets: string[];
+  position?: number;
+}
+
 export interface RenderedResume {
   snapshot: number;
   contact: Contact | null;
@@ -90,6 +122,10 @@ export interface RenderedResume {
   educations: Education[];
   skills: Skill[];
   summaries: Record<string, string>;
+  /** Missing on CVs saved before these sections existed. */
+  projects?: Project[];
+  certifications?: Certification[];
+  customSections?: CustomSection[];
 }
 
 export interface ResumeSummary {
@@ -198,6 +234,9 @@ export const resumeApi = {
         educations: resume.educations,
         skills: resume.skills,
         summaries: Object.entries(resume.summaries).map(([variant, text]) => ({ variant, text })),
+        projects: resume.projects ?? [],
+        certifications: resume.certifications ?? [],
+        customSections: resume.customSections ?? [],
       }),
     }),
 

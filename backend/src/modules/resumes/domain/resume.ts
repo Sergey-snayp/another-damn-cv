@@ -5,6 +5,9 @@ export const VERSIONED_TABLES = [
   'educationEntry',
   'skillEntry',
   'summaryVariant',
+  'projectEntry',
+  'certificationEntry',
+  'customSection',
 ] as const;
 export type VersionedTable = (typeof VERSIONED_TABLES)[number];
 export interface VersionedRow {
@@ -19,11 +22,35 @@ export interface Contact extends VersionedRow {
   firstName: string;
   lastName: string;
   email: string;
+  headline?: string | null;
   phone: string | null;
   location: string | null;
   linkedin: string | null;
   github: string | null;
   website: string | null;
+}
+export interface Project extends VersionedRow {
+  name: string;
+  role: string | null;
+  link: string | null;
+  from: string | null;
+  to: string | null;
+  current: boolean;
+  bullets: string[];
+  position: number;
+}
+export interface Certification extends VersionedRow {
+  name: string;
+  issuer: string | null;
+  date: string | null;
+  link: string | null;
+  position: number;
+}
+export interface CustomSection extends VersionedRow {
+  title: string;
+  text: string | null;
+  bullets: string[];
+  position: number;
 }
 export interface Experience extends VersionedRow {
   company: string;
@@ -80,6 +107,10 @@ export interface RenderedResume {
   educations: Education[];
   skills: Skill[];
   summaries: Record<string, string>;
+  /** Missing on CVs saved before these sections existed. */
+  projects?: Project[];
+  certifications?: Certification[];
+  customSections?: CustomSection[];
 }
 type Entry = { lineageId?: string };
 export interface ResumeChanges {
@@ -87,6 +118,7 @@ export interface ResumeChanges {
     firstName: string;
     lastName: string;
     email: string;
+    headline?: string | null;
     phone?: string | null;
     location?: string | null;
     linkedin?: string | null;
@@ -145,6 +177,30 @@ export interface ResumeChanges {
     }
   >;
   summaries?: Array<Entry & { variant: string; text: string }>;
+  projects?: Array<
+    Entry & {
+      name: string;
+      role?: string | null;
+      link?: string | null;
+      from?: string | null;
+      to?: string | null;
+      current?: boolean;
+      bullets?: string[];
+      position?: number;
+    }
+  >;
+  certifications?: Array<
+    Entry & {
+      name: string;
+      issuer?: string | null;
+      date?: string | null;
+      link?: string | null;
+      position?: number;
+    }
+  >;
+  customSections?: Array<
+    Entry & { title: string; text?: string | null; bullets?: string[]; position?: number }
+  >;
 }
 export interface SectionRows {
   contact: Contact | null;
@@ -153,6 +209,9 @@ export interface SectionRows {
   educations: Education[];
   skills: Skill[];
   summaries: Summary[];
+  projects: Project[];
+  certifications: Certification[];
+  customSections: CustomSection[];
 }
 export interface ResumeRecord {
   id: string;

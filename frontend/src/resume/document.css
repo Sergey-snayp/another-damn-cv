@@ -51,6 +51,12 @@ textarea.editable { display: block; width: 100%; resize: none; overflow: hidden;
 
 .doc-summary { color: #222; }
 
+/* Read-only text in the sections edited from the editor's forms. */
+.doc-text { padding: 1px 2px; }
+.doc-link { color: #444; }
+.doc-paragraph { margin: 0; white-space: pre-wrap; color: #222; }
+.doc-headline { margin: -2px 0 5px; font-size: 1.05em; color: var(--r-accent); font-weight: 600; }
+
 .doc-role { margin-bottom: calc(var(--r-gap) * 0.7); }
 .doc-role:last-of-type { margin-bottom: 4px; }
 

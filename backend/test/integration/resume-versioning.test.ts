@@ -192,3 +192,55 @@ test('projection failure rolls back rows, snapshot and materialised content toge
     null,
   );
 });
+
+test('headline, projects, certifications and custom sections are versioned, copied and reverted', async () => {
+  const row = await resumes.create(userId, 'Sections');
+  const base = content();
+  const first = await resumes.save(userId, row.id, {
+    ...base,
+    contact: { ...base.contact!, headline: 'Senior Backend Engineer' },
+    projects: [
+      {
+        lineageId: randomUUID(),
+        name: 'Open-source queue',
+        role: 'Maintainer',
+        link: 'github.com/sam/queue',
+        from: '2022',
+        current: true,
+        bullets: ['Wrote the retry engine.', 'Reached 2k stars.'],
+      },
+    ],
+    certifications: [{ lineageId: randomUUID(), name: 'AWS Solutions Architect', issuer: 'Amazon', date: '2024-03' }],
+    customSections: [{ lineageId: randomUUID(), title: 'Languages', text: 'English, Polish', bullets: [] }],
+  });
+  assert.equal(first.contact?.headline, 'Senior Backend Engineer');
+  assert.deepEqual(first.projects?.[0].bullets, ['Wrote the retry engine.', 'Reached 2k stars.']);
+  assert.equal(first.certifications?.[0].issuer, 'Amazon');
+  assert.equal(first.customSections?.[0].title, 'Languages');
+
+  const same = await resumes.save(userId, row.id, toChanges(first));
+  assert.deepEqual(same, first, 'saving the same sections again changes nothing');
+
+  const edited = toChanges(first);
+  edited.projects![0].bullets = ['Wrote the retry engine.'];
+  edited.certifications = [];
+  await resumes.save(userId, row.id, edited);
+  const diff = await resumes.diff(userId, row.id, 2);
+  assert.deepEqual(
+    diff.changes.map((change) => [change.section, change.kind]),
+    [
+      ['Project', 'changed'],
+      ['Certification', 'removed'],
+    ],
+  );
+
+  const reverted = await resumes.revertTo(userId, row.id, 1);
+  assert.deepEqual(reverted.projects?.[0].bullets, first.projects?.[0].bullets);
+  assert.equal(reverted.certifications?.[0].lineageId, first.certifications?.[0].lineageId);
+
+  const copy = await resumes.create(userId, 'Sections copy');
+  const copied = await resumes.save(userId, copy.id, copyOf(reverted, randomUUID));
+  assert.notEqual(copied.projects?.[0].lineageId, reverted.projects?.[0].lineageId);
+  assert.equal(copied.customSections?.[0].text, 'English, Polish');
+  assert.equal(copied.contact?.headline, 'Senior Backend Engineer');
+});

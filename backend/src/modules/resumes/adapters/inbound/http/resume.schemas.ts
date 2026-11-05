@@ -20,6 +20,7 @@ export const contactInputSchema = z.object({
   firstName: text,
   lastName: text,
   email: text,
+  headline: nullableText,
   phone: nullableText,
   location: nullableText,
   linkedin: nullableText,
@@ -84,6 +85,37 @@ export const summaryInputSchema = z.object({
   text,
 });
 
+const bullets = z.array(z.string().max(2_000)).max(40).optional();
+
+export const projectInputSchema = z.object({
+  ...versioned,
+  name: text,
+  role: nullableText,
+  link: nullableText,
+  from: nullableText,
+  to: nullableText,
+  current: z.boolean().optional(),
+  bullets,
+  position,
+});
+
+export const certificationInputSchema = z.object({
+  ...versioned,
+  name: text,
+  issuer: nullableText,
+  date: nullableText,
+  link: nullableText,
+  position,
+});
+
+export const customSectionInputSchema = z.object({
+  ...versioned,
+  title: text,
+  text: nullableText,
+  bullets,
+  position,
+});
+
 /** One save. Sections left out are untouched; a section sent is the whole section. */
 export const resumeChangesSchema = z.object({
   contact: contactInputSchema.optional(),
@@ -92,6 +124,9 @@ export const resumeChangesSchema = z.object({
   educations: z.array(educationInputSchema).optional(),
   skills: z.array(skillInputSchema).optional(),
   summaries: z.array(summaryInputSchema).optional(),
+  projects: z.array(projectInputSchema).max(50).optional(),
+  certifications: z.array(certificationInputSchema).max(50).optional(),
+  customSections: z.array(customSectionInputSchema).max(20).optional(),
 });
 export type ResumeChanges = z.infer<typeof resumeChangesSchema>;
 

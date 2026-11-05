@@ -188,6 +188,18 @@
 }
 .sf-chip button:hover { color: var(--color-error); background: var(--color-error-soft); }
 
+.sf-remove-section {
+  margin-top: 22px; padding: 7px 10px; font: inherit; font-size: 12px; font-weight: 600; color: var(--color-error);
+  background: none; border: 1px solid var(--color-error-border); border-radius: 7px; cursor: pointer;
+}
+.sf-remove-section:hover { background: var(--color-error-soft); }
+
+.studio-add-section {
+  padding: 11px; font: inherit; font-weight: 600; color: var(--color-text);
+  background: none; border: 1px dashed var(--color-border); border-radius: 10px; cursor: pointer;
+}
+.studio-add-section:hover { border-color: var(--color-text); }
+
 /* ── layout tab ──────────────────────────────────────────────────────────── */
 
 .studio-layout { padding: 14px; }

@@ -80,6 +80,7 @@ export function HeaderForm({ resume, onChange }: { resume: RenderedResume; onCha
     <div className="sf-grid">
       <Field label="First name" value={contact.firstName} onChange={set('firstName')} />
       <Field label="Last name" value={contact.lastName} onChange={set('lastName')} />
+      <Field label="Headline" value={contact.headline ?? ''} onChange={set('headline')} placeholder="Senior Backend Engineer" wide />
       <Field label="Email" value={contact.email} onChange={set('email')} placeholder="email@example.com" />
       <Field label="Phone" value={contact.phone ?? ''} onChange={set('phone')} />
       <Field label="Location" value={contact.location ?? ''} onChange={set('location')} placeholder="City, Country" wide />
@@ -280,6 +281,173 @@ export function SkillsForm({ resume, onChange }: { resume: RenderedResume; onCha
         ))}
         {resume.skills.length === 0 && <p className="sf-count">No skills yet.</p>}
       </div>
+    </>
+  );
+}
+
+/** Bullets kept as plain lines: add, edit, move and remove. */
+function BulletList({ bullets, onChange, placeholder }: {
+  bullets: string[];
+  onChange(next: string[]): void;
+  placeholder: string;
+}) {
+  const set = (mutate: (list: string[]) => void) => {
+    const next = [...bullets];
+    mutate(next);
+    onChange(next);
+  };
+  return (
+    <>
+      <p className="sf-label">Bullets</p>
+      {bullets.map((bullet, j) => (
+        <div className="sf-bullet" key={j}>
+          <textarea rows={2} value={bullet} placeholder={placeholder}
+            onChange={(e) => set((list) => { list[j] = e.target.value; })} />
+          <span className="sf-tools vertical">
+            <button type="button" title="Move up" disabled={j === 0} onClick={() => set((list) => move(list, j, -1))}>↑</button>
+            <button type="button" title="Move down" disabled={j === bullets.length - 1} onClick={() => set((list) => move(list, j, 1))}>↓</button>
+            <button type="button" className="danger" title="Remove bullet" onClick={() => set((list) => { list.splice(j, 1); })}>×</button>
+          </span>
+        </div>
+      ))}
+      <button type="button" className="sf-add" onClick={() => set((list) => { list.push(''); })}>+ Add bullet</button>
+    </>
+  );
+}
+
+export function ProjectsForm({ resume, onChange }: { resume: RenderedResume; onChange: Change }) {
+  const projects = resume.projects ?? [];
+  const [open, setOpen] = useState<number | null>(projects.length === 1 ? 0 : null);
+  const edit = (mutate: (list: NonNullable<RenderedResume['projects']>) => void) =>
+    onChange((d) => { d.projects ??= []; mutate(d.projects); });
+  return (
+    <>
+      <p className="sf-count" style={{ margin: '0 0 12px' }}>Open source, side projects, volunteering and other work outside your jobs.</p>
+      {projects.map((project, i) => {
+        const set = (key: 'name' | 'role' | 'link' | 'from' | 'to') => (value: string) =>
+          edit((list) => { list[i]![key] = value; });
+        return (
+          <div className={`sf-item${open === i ? ' open' : ''}`} key={project.lineageId ?? i}>
+            <div className="sf-item-head">
+              <button type="button" className="sf-item-title" onClick={() => setOpen(open === i ? null : i)}>
+                <b>{project.name || 'New project'}</b>
+                <span>{[project.role, [project.from, project.current ? 'Present' : project.to].filter(Boolean).join(' – ')].filter(Boolean).join(' · ')}</span>
+              </button>
+              <RowTools index={i} count={projects.length} removeLabel="Remove project"
+                onMove={(step) => { edit((list) => move(list, i, step)); setOpen(null); }}
+                onRemove={() => {
+                  if (!confirm(`Remove ${project.name || 'this project'}?`)) return;
+                  edit((list) => { list.splice(i, 1); });
+                  setOpen(null);
+                }} />
+            </div>
+            {open === i && (
+              <div className="sf-item-body">
+                <div className="sf-grid">
+                  <Field label="Name" value={project.name} onChange={set('name')} wide />
+                  <Field label="Your role" value={project.role ?? ''} onChange={set('role')} placeholder="Maintainer" />
+                  <Field label="Link" value={project.link ?? ''} onChange={set('link')} placeholder="github.com/…" />
+                  <Field label="Start" value={project.from ?? ''} onChange={set('from')} placeholder="2023-11" />
+                  {project.current
+                    ? <label className="sf-field"><span>End</span><input value="Present" disabled /></label>
+                    : <Field label="End" value={project.to ?? ''} onChange={set('to')} placeholder="2025-04" />}
+                  <label className="sf-check wide">
+                    <input type="checkbox" checked={Boolean(project.current)}
+                      onChange={(e) => edit((list) => {
+                        list[i]!.current = e.target.checked;
+                        if (e.target.checked) list[i]!.to = '';
+                      })} />
+                    Still going
+                  </label>
+                </div>
+                <BulletList bullets={project.bullets} placeholder="What you built, and what it did."
+                  onChange={(next) => edit((list) => { list[i]!.bullets = next; })} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <button type="button" className="sf-add big" onClick={() => {
+        edit((list) => { list.push({ lineageId: newId(), name: '', role: '', link: '', from: '', to: '', current: false, bullets: [] }); });
+        setOpen(projects.length);
+      }}>+ Add project</button>
+    </>
+  );
+}
+
+export function CertificationsForm({ resume, onChange }: { resume: RenderedResume; onChange: Change }) {
+  const items = resume.certifications ?? [];
+  const [open, setOpen] = useState<number | null>(items.length === 1 ? 0 : null);
+  const edit = (mutate: (list: NonNullable<RenderedResume['certifications']>) => void) =>
+    onChange((d) => { d.certifications ??= []; mutate(d.certifications); });
+  return (
+    <>
+      {items.map((item, i) => {
+        const set = (key: 'name' | 'issuer' | 'date' | 'link') => (value: string) =>
+          edit((list) => { list[i]![key] = value; });
+        return (
+          <div className={`sf-item${open === i ? ' open' : ''}`} key={item.lineageId ?? i}>
+            <div className="sf-item-head">
+              <button type="button" className="sf-item-title" onClick={() => setOpen(open === i ? null : i)}>
+                <b>{item.name || 'New certification'}</b>
+                <span>{[item.issuer, item.date].filter(Boolean).join(' · ')}</span>
+              </button>
+              <RowTools index={i} count={items.length} removeLabel="Remove certification"
+                onMove={(step) => { edit((list) => move(list, i, step)); setOpen(null); }}
+                onRemove={() => {
+                  if (!confirm(`Remove ${item.name || 'this certification'}?`)) return;
+                  edit((list) => { list.splice(i, 1); });
+                  setOpen(null);
+                }} />
+            </div>
+            {open === i && (
+              <div className="sf-item-body sf-grid">
+                <Field label="Name" value={item.name} onChange={set('name')} placeholder="AWS Solutions Architect" wide />
+                <Field label="Issuer" value={item.issuer ?? ''} onChange={set('issuer')} placeholder="Amazon Web Services" />
+                <Field label="Date" value={item.date ?? ''} onChange={set('date')} placeholder="2024-03" />
+                <Field label="Link" value={item.link ?? ''} onChange={set('link')} placeholder="Credential URL" wide />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <button type="button" className="sf-add big" onClick={() => {
+        edit((list) => { list.push({ lineageId: newId(), name: '', issuer: '', date: '', link: '' }); });
+        setOpen(items.length);
+      }}>+ Add certification</button>
+    </>
+  );
+}
+
+/** One custom section: its title, a paragraph and bullets. */
+export function CustomSectionForm({ resume, lineageId, onChange, onRemoved }: {
+  resume: RenderedResume;
+  lineageId: string;
+  onChange: Change;
+  onRemoved(): void;
+}) {
+  const item = (resume.customSections ?? []).find((entry) => entry.lineageId === lineageId);
+  if (!item) return <p className="sf-count">This section was removed.</p>;
+  const edit = (mutate: (section: NonNullable<RenderedResume['customSections']>[number]) => void) =>
+    onChange((d) => {
+      const found = d.customSections?.find((entry) => entry.lineageId === lineageId);
+      if (found) mutate(found);
+    });
+  return (
+    <>
+      <div className="sf-grid">
+        <Field label="Section title" value={item.title} placeholder="Languages, Awards, Publications…" wide
+          onChange={(value) => edit((section) => { section.title = value; })} />
+        <Field label="Text" value={item.text ?? ''} multiline placeholder="A paragraph, or leave empty and use bullets."
+          onChange={(value) => edit((section) => { section.text = value; })} />
+      </div>
+      <BulletList bullets={item.bullets} placeholder="One point."
+        onChange={(next) => edit((section) => { section.bullets = next; })} />
+      <button type="button" className="sf-remove-section" onClick={() => {
+        if (!confirm(`Remove the section "${item.title || 'Untitled'}"?`)) return;
+        onChange((d) => { d.customSections = (d.customSections ?? []).filter((entry) => entry.lineageId !== lineageId); });
+        onRemoved();
+      }}>Remove this section</button>
     </>
   );
 }

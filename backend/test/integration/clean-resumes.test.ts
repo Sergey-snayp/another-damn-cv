@@ -89,11 +89,19 @@ test('new use cases read frozen legacy rows and JSON and preserve history and di
       },
     ],
   });
-  assert.deepEqual(await resumes.atSnapshot(owner.user.id, row.id, 1), first);
+  // Read again from the rows, a legacy CV shows the sections added later as empty.
+  const withNewSections = {
+    ...first,
+    contact: first.contact && { ...first.contact, headline: null },
+    projects: [],
+    certifications: [],
+    customSections: [],
+  };
+  assert.deepEqual(await resumes.atSnapshot(owner.user.id, row.id, 1), withNewSections);
   const reverted = await resumes.revertTo(owner.user.id, row.id, 1);
   assert.equal(reverted.snapshot, 3);
   assert.equal(reverted.summaries.default, 'Engineer.');
-  assert.deepEqual(await resumes.rebuild(owner.user.id, row.id), { ...first, snapshot: 3 });
+  assert.deepEqual(await resumes.rebuild(owner.user.id, row.id), { ...withNewSections, snapshot: 3 });
 });
 
 test('new application ownership checks protect reads, saves and proposal operations', async () => {

@@ -12,14 +12,28 @@ export interface ResumeTheme {
   hiddenSections?: string[];
 }
 
-/** The sections a CV can show, in their usual order. */
-export const SECTION_KEYS = ['summary', 'experience', 'education', 'skills'] as const;
-export type SectionKey = (typeof SECTION_KEYS)[number];
+/** The sections every CV has, in their usual order. Custom sections are "custom:<id>". */
+export const SECTION_KEYS = ['summary', 'experience', 'projects', 'education', 'certifications', 'skills'] as const;
+export type BuiltInSection = (typeof SECTION_KEYS)[number];
+export type SectionKey = BuiltInSection | `custom:${string}`;
 
-/** The saved order, with any section it does not mention added at the end. */
-export function sectionOrder(theme: ResumeTheme): SectionKey[] {
-  const saved = (theme.sectionOrder ?? []).filter((key): key is SectionKey => (SECTION_KEYS as readonly string[]).includes(key));
-  return [...new Set([...saved, ...SECTION_KEYS])];
+export const customKey = (lineageId: string): SectionKey => `custom:${lineageId}`;
+
+/**
+ * The saved order of the CV's sections. A section the saved order does not
+ * mention goes after the section it usually follows, so sections added later
+ * land in their usual place; custom sections go at the end.
+ */
+export function sectionOrder(theme: ResumeTheme, customIds: string[] = []): SectionKey[] {
+  const known: SectionKey[] = [...SECTION_KEYS, ...customIds.map(customKey)];
+  const order = [...new Set((theme.sectionOrder ?? []).filter((key): key is SectionKey => known.includes(key as SectionKey)))];
+  SECTION_KEYS.forEach((key, index) => {
+    if (order.includes(key)) return;
+    const before = SECTION_KEYS.slice(0, index).reverse().find((previous) => order.includes(previous));
+    order.splice(before ? order.indexOf(before) + 1 : 0, 0, key);
+  });
+  for (const key of known) if (!order.includes(key)) order.push(key);
+  return order;
 }
 
 export const DEFAULT_THEME: ResumeTheme = {

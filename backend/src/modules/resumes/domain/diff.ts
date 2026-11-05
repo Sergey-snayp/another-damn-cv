@@ -48,6 +48,13 @@ const SECTIONS: Array<{ table: VersionedTable; name: string; label: (row: Versio
   },
   { table: 'skillEntry', name: 'Skill', label: (r) => display(r.name) },
   { table: 'summaryVariant', name: 'Summary', label: (r) => display(r.variant) },
+  { table: 'projectEntry', name: 'Project', label: (r) => display(r.name) },
+  {
+    table: 'certificationEntry',
+    name: 'Certification',
+    label: (r) => [display(r.name), display(r.issuer)].filter(Boolean).join(' — '),
+  },
+  { table: 'customSection', name: 'Section', label: (r) => display(r.title) },
 ];
 function display(value: unknown): string {
   if (Array.isArray(value)) return value.map(display).join(', ');

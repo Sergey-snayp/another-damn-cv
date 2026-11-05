@@ -8,6 +8,9 @@ const ORDERED_TABLES = new Set<VersionedTable>([
   'achievement',
   'educationEntry',
   'skillEntry',
+  'projectEntry',
+  'certificationEntry',
+  'customSection',
 ]);
 const NATURAL_KEY: Partial<Record<VersionedTable, string>> = { summaryVariant: 'variant' };
 export class SaveResume {
@@ -40,6 +43,9 @@ export class SaveResume {
       ['educationEntry', changes.educations],
       ['skillEntry', changes.skills],
       ['summaryVariant', changes.summaries],
+      ['projectEntry', changes.projects],
+      ['certificationEntry', changes.certifications],
+      ['customSection', changes.customSections],
     ];
     let touched = changes.contact ? await this.applySingle(tx, id, next, changes.contact) : false;
     for (const [table, entries] of sections)

@@ -4,7 +4,7 @@ import { Editable } from './Editable';
 import { RewritePopover } from './RewritePopover';
 import { DiffText } from './DiffText';
 import type { Change } from '../resumeApi';
-import { sectionOrder, themeVars, type ResumeTheme, type SectionKey } from './theme';
+import { sectionOrder, themeVars, type BuiltInSection, type ResumeTheme } from './theme';
 
 const newId = () => crypto.randomUUID();
 
@@ -47,8 +47,49 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
   const contact = resume.contact ?? { firstName: '', lastName: '', email: '' };
   const links = [contact.linkedin, contact.github, contact.website].filter(Boolean);
 
+  const projects = resume.projects ?? [];
+  const certifications = resume.certifications ?? [];
+  const customs = resume.customSections ?? [];
+  const span = (from?: string | null, to?: string | null, current?: boolean) =>
+    [from, current ? 'Present' : to].filter(Boolean).join(' – ');
+
   // Each section, drawn in the order the editor saved; hidden ones are left out.
-  const sections: Record<SectionKey, React.ReactNode> = {
+  // Projects, certifications and custom sections are edited in the editor's
+  // forms and left off the CV while empty.
+  const sections: Record<BuiltInSection, React.ReactNode> = {
+    projects: projects.length > 0 && (
+      <section className="doc-section" data-section="projects">
+        <h2>Projects</h2>
+        {projects.map((project, i) => (
+          <article className={`doc-role${markOf(project.lineageId)}`} key={project.lineageId ?? i}>
+            <div className="doc-roleline">
+              <span className="doc-company doc-text"><b>{project.name || 'Project'}</b></span>
+              {project.role && <><span className="doc-sep">|</span><span className="doc-text">{project.role}</span></>}
+              {project.link && <><span className="doc-sep">|</span><span className="doc-text doc-link">{project.link}</span></>}
+              <span className="doc-dates">{span(project.from, project.to, project.current)}</span>
+            </div>
+            {project.bullets.some((bullet) => bullet.trim()) && (
+              <ul className="doc-bullets">
+                {project.bullets.filter((bullet) => bullet.trim()).map((bullet, j) => <li key={j}><span>{bullet}</span></li>)}
+              </ul>
+            )}
+          </article>
+        ))}
+      </section>
+    ),
+    certifications: certifications.length > 0 && (
+      <section className="doc-section" data-section="certifications">
+        <h2>Certifications</h2>
+        {certifications.map((item, i) => (
+          <div className={`doc-roleline${markOf(item.lineageId)}`} key={item.lineageId ?? i}>
+            <span className="doc-company doc-text"><b>{item.name || 'Certification'}</b></span>
+            {item.issuer && <><span className="doc-sep">|</span><span className="doc-text">{item.issuer}</span></>}
+            {item.link && <><span className="doc-sep">|</span><span className="doc-text doc-link">{item.link}</span></>}
+            <span className="doc-dates">{item.date}</span>
+          </div>
+        ))}
+      </section>
+    ),
     summary: (
       <section className="doc-section" data-section="summary">
         <h2>
@@ -238,6 +279,21 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
   };
   const hidden = new Set(theme.hiddenSections ?? []);
 
+  const custom = (lineageId: string) => {
+    const item = customs.find((entry) => entry.lineageId === lineageId);
+    const bullets = item?.bullets.filter((bullet) => bullet.trim()) ?? [];
+    if (!item || (!item.text?.trim() && !bullets.length)) return null;
+    return (
+      <section className={`doc-section${markOf(item.lineageId)}`} data-section={`custom:${lineageId}`}>
+        <h2>{item.title || 'Section'}</h2>
+        {item.text?.trim() && <p className="doc-text doc-paragraph">{item.text}</p>}
+        {bullets.length > 0 && (
+          <ul className="doc-bullets">{bullets.map((bullet, j) => <li key={j}><span>{bullet}</span></li>)}</ul>
+        )}
+      </section>
+    );
+  };
+
   return (
     <div
       className={`page tpl-${theme.template}${readOnly ? ' read-only' : ''}`}
@@ -252,6 +308,8 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
           <Editable value={contact.lastName} placeholder="Last"
             onChange={(v) => onChange((d) => { d.contact = { ...contact, lastName: v }; })} />
         </h1>
+
+        {contact.headline?.trim() && <div className="doc-headline">{contact.headline}</div>}
 
         <div className="doc-contact">
           <Editable value={contact.email} placeholder="email@example.com"
@@ -273,7 +331,13 @@ export function ResumeDocument({ resume, theme, onChange, readOnly, resumeId, ch
         </div>
       </header>
 
-      {sectionOrder(theme).filter((key) => !hidden.has(key)).map((key) => <Fragment key={key}>{sections[key]}</Fragment>)}
+      {sectionOrder(theme, customs.flatMap((entry) => (entry.lineageId ? [entry.lineageId] : [])))
+        .filter((key) => !hidden.has(key))
+        .map((key) => (
+          <Fragment key={key}>
+            {key.startsWith('custom:') ? custom(key.slice('custom:'.length)) : sections[key as BuiltInSection]}
+          </Fragment>
+        ))}
 
       {rewriting && resumeId && (
         <RewritePopover

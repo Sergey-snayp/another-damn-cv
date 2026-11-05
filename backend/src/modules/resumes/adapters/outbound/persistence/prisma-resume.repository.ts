@@ -14,6 +14,9 @@ import {
   type Education,
   type Skill,
   type Summary,
+  type Project,
+  type Certification,
+  type CustomSection,
   type RenderedResume,
   type ResumeRecord,
   type ResumeSummary,
@@ -61,6 +64,11 @@ class PrismaResumeTransaction implements ResumeTransaction {
       educations: mappedRows<Education>(await table(this.client, 'educationEntry').findMany(ordered)),
       skills: mappedRows<Skill>(await table(this.client, 'skillEntry').findMany(ordered)),
       summaries: mappedRows<Summary>(await table(this.client, 'summaryVariant').findMany({ where })),
+      projects: mappedRows<Project>(await table(this.client, 'projectEntry').findMany(ordered)),
+      certifications: mappedRows<Certification>(
+        await table(this.client, 'certificationEntry').findMany(ordered),
+      ),
+      customSections: mappedRows<CustomSection>(await table(this.client, 'customSection').findMany(ordered)),
     };
   }
   liveRows(resumeId: string, name: VersionedTable): Promise<VersionedRow[]> {

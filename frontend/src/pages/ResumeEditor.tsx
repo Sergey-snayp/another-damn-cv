@@ -6,22 +6,36 @@ import { resumeApi, type RenderedResume } from '../resumeApi';
 import { ResumeDocument } from '../resume/ResumeDocument';
 import { ImportButton } from '../resume/ImportButton';
 import { StylePanel } from '../resume/StylePanel';
-import { sectionOrder, type SectionKey } from '../resume/theme';
+import { customKey, sectionOrder, type SectionKey } from '../resume/theme';
 import { useEditableResumeTheme } from '../resume/useResumeTheme';
-import { EducationForm, ExperienceForm, HeaderForm, SkillsForm, SummaryForm } from '../resume/studio/SectionForms';
+import {
+  CertificationsForm, CustomSectionForm, EducationForm, ExperienceForm, HeaderForm, ProjectsForm, SkillsForm, SummaryForm,
+} from '../resume/studio/SectionForms';
 import { resumeFromProfile } from '../resume/studio/fromProfile';
 import '../resume/document.css';
 import '../resume/studio/studio.css';
 
 type Section = 'header' | SectionKey;
 
-const LABELS: Record<Section, string> = {
+const LABELS: Record<string, string> = {
   header: 'Resume Header',
   summary: 'Summary',
   experience: 'Experience',
+  projects: 'Projects & Outside Experience',
   education: 'Education',
+  certifications: 'Certifications',
   skills: 'Skills',
 };
+
+const customId = (section: Section) => (section.startsWith('custom:') ? section.slice('custom:'.length) : null);
+const customIds = (resume: RenderedResume) =>
+  (resume.customSections ?? []).flatMap((entry) => (entry.lineageId ? [entry.lineageId] : []));
+
+function labelOf(section: Section, resume: RenderedResume): string {
+  const id = customId(section);
+  if (!id) return LABELS[section] ?? section;
+  return resume.customSections?.find((entry) => entry.lineageId === id)?.title.trim() || 'Untitled section';
+}
 
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
@@ -40,10 +54,19 @@ function withIds(resume: RenderedResume) {
   }
   for (const row of resume.educations) row.lineageId ??= newId();
   for (const skill of resume.skills) skill.lineageId ??= newId();
+  for (const row of resume.projects ?? []) row.lineageId ??= newId();
+  for (const row of resume.certifications ?? []) row.lineageId ??= newId();
+  for (const row of resume.customSections ?? []) row.lineageId ??= newId();
 }
 
 function summaryOf(section: Section, resume: RenderedResume): string {
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const id = customId(section);
+  if (id) {
+    const item = resume.customSections?.find((entry) => entry.lineageId === id);
+    const bullets = item?.bullets.filter((bullet) => bullet.trim()).length ?? 0;
+    return bullets ? plural(bullets, 'bullet') : item?.text?.trim() ? 'Text' : 'Empty, left off the CV';
+  }
   switch (section) {
     case 'header': {
       const c = resume.contact;
@@ -56,6 +79,15 @@ function summaryOf(section: Section, resume: RenderedResume): string {
     case 'experience': return plural(resume.experiences.length, 'role');
     case 'education': return plural(resume.educations.length, 'entry').replace('entrys', 'entries');
     case 'skills': return plural(resume.skills.length, 'skill');
+    case 'projects': {
+      const n = resume.projects?.length ?? 0;
+      return n ? plural(n, 'project') : 'Empty, left off the CV';
+    }
+    case 'certifications': {
+      const n = resume.certifications?.length ?? 0;
+      return n ? plural(n, 'certification') : 'Empty, left off the CV';
+    }
+    default: return '';
   }
 }
 
@@ -268,15 +300,16 @@ export function ResumeEditor() {
 
   function dropOn(target: SectionKey) {
     if (!dragging || dragging === target) return;
-    const order = sectionOrder(theme).filter((key) => key !== dragging);
+    const current = sectionOrder(theme, draft ? customIds(draft) : []);
+    const order = current.filter((key) => key !== dragging);
     order.splice(order.indexOf(target), 0, dragging);
-    if (order.join() !== sectionOrder(theme).join()) setOrder(order);
+    if (order.join() !== current.join()) setOrder(order);
   }
 
   /** A click on the CV opens the form for the section clicked. */
   function openFromPreview(e: MouseEvent<HTMLDivElement>) {
     const key = (e.target as HTMLElement).closest<HTMLElement>('[data-section]')?.dataset.section as Section | undefined;
-    if (key && key in LABELS) {
+    if (key && (key in LABELS || customId(key))) {
       setTab('editor');
       setSection(key);
       setLeftOpen(true);
@@ -286,7 +319,7 @@ export function ResumeEditor() {
   if (error && !draft) return <div className="studio-message"><h1>Resume</h1><p className="error">{error}</p></div>;
   if (!draft) return <div className="studio-message"><h1>Resume</h1><p className="muted">Loading…</p></div>;
 
-  const order = sectionOrder(theme);
+  const order = sectionOrder(theme, customIds(draft));
   const hidden = new Set(theme.hiddenSections ?? []);
   const status = held ? 'Not saved yet'
     : saving ? 'Saving…'
@@ -295,13 +328,25 @@ export function ResumeEditor() {
           : savedAt ? savedAgo(savedAt, now) : `Version ${draft.snapshot}`;
   const empty = draft.experiences.length === 0 && draft.snapshot === 0;
 
-  const form = section && {
+  const forms: Record<string, React.ReactNode> = {
     header: <HeaderForm resume={draft} onChange={change} />,
     summary: <SummaryForm resume={draft} resumeId={id} onChange={change} />,
     experience: <ExperienceForm resume={draft} resumeId={id} onChange={change} />,
+    projects: <ProjectsForm resume={draft} onChange={change} />,
     education: <EducationForm resume={draft} onChange={change} />,
+    certifications: <CertificationsForm resume={draft} onChange={change} />,
     skills: <SkillsForm resume={draft} onChange={change} />,
-  }[section];
+  };
+  const openCustom = section && customId(section);
+  const form = section && (openCustom
+    ? <CustomSectionForm key={openCustom} resume={draft} lineageId={openCustom} onChange={change} onRemoved={() => setSection(null)} />
+    : forms[section]);
+
+  function addCustomSection() {
+    const lineageId = newId();
+    change((d) => { d.customSections = [...(d.customSections ?? []), { lineageId, title: 'New section', text: '', bullets: [] }]; });
+    setSection(customKey(lineageId));
+  }
 
   return (
     <div className="studio">
@@ -355,7 +400,7 @@ export function ResumeEditor() {
             {tab === 'editor' && section && (
               <div className="studio-form">
                 <button className="studio-back" onClick={() => setSection(null)}>← All sections</button>
-                <h2>{LABELS[section]}</h2>
+                <h2>{labelOf(section, draft)}</h2>
                 {form}
               </div>
             )}
@@ -395,7 +440,7 @@ export function ResumeEditor() {
                     onKeyDown={(e) => { if (e.key === 'Enter') setSection(key); }}>
                     <span className="grip" title="Drag to reorder">⋮⋮</span>
                     <span className="text">
-                      <b>{LABELS[key]}</b>
+                      <b>{labelOf(key, draft)}</b>
                       <span>{hidden.has(key) ? 'Hidden from the CV' : summaryOf(key, draft)}</span>
                     </span>
                     <button className="eye" title={hidden.has(key) ? 'Show on the CV' : 'Hide from the CV'}
@@ -406,6 +451,7 @@ export function ResumeEditor() {
                   </div>
                 ))}
 
+                <button className="studio-add-section" onClick={addCustomSection}>+ Add Custom Section</button>
                 <button className="studio-reset" onClick={() => void resetToProfile()}>↺ Reset to Profile</button>
               </div>
             )}
@@ -419,7 +465,7 @@ export function ResumeEditor() {
                     <div className="row-vis" key={key}>
                       <label>
                         <input type="checkbox" checked={!hidden.has(key)} onChange={() => toggleHidden(key)} />
-                        {LABELS[key]}
+                        {labelOf(key, draft)}
                       </label>
                       <span className="sf-tools">
                         <button title="Move up" disabled={index === 0} onClick={() => {

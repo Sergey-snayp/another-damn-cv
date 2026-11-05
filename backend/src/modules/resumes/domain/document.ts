@@ -30,6 +30,9 @@ export function assemble(number: number, rows: SectionRows): RenderedResume {
     educations: rows.educations,
     skills: rows.skills,
     summaries: Object.fromEntries(rows.summaries.map((summary) => [summary.variant, summary.text])),
+    projects: rows.projects,
+    certifications: rows.certifications,
+    customSections: rows.customSections,
   };
 }
 export function toChanges(resume: RenderedResume): ResumeChanges {
@@ -44,6 +47,9 @@ export function toChanges(resume: RenderedResume): ResumeChanges {
     educations: resume.educations.map((entry) => withoutBookkeeping(entry, true)),
     skills: resume.skills.map((entry) => withoutBookkeeping(entry, true)),
     summaries: Object.entries(resume.summaries).map(([variant, text]) => ({ variant, text })),
+    projects: resume.projects?.map((entry) => withoutBookkeeping(entry, true)),
+    certifications: resume.certifications?.map((entry) => withoutBookkeeping(entry, true)),
+    customSections: resume.customSections?.map((entry) => withoutBookkeeping(entry, true)),
   } as ResumeChanges;
 }
 export function differs(existing: VersionedRow, content: Record<string, unknown>): boolean {
@@ -71,5 +77,8 @@ export function copyOf(from: RenderedResume, generateId: () => string): ResumeCh
     educations: changes.educations?.map((entry) => ({ ...entry, lineageId: undefined })),
     skills: changes.skills?.map((entry) => ({ ...entry, lineageId: undefined })),
     summaries: changes.summaries,
+    projects: changes.projects?.map((entry) => ({ ...entry, lineageId: undefined })),
+    certifications: changes.certifications?.map((entry) => ({ ...entry, lineageId: undefined })),
+    customSections: changes.customSections?.map((entry) => ({ ...entry, lineageId: undefined })),
   };
 }
