@@ -47,6 +47,22 @@
     return null;
   }
 
+  /** Only a date explicitly labelled as the job's posting date, never an update/expiry date. */
+  function postedAt() {
+    const nodes = document.querySelectorAll('[itemprop~="datePosted" i], meta[name="datePosted" i], meta[property="job:posted_time" i]');
+    const values = [posting()?.datePosted, ...Array.from(nodes, node => node.getAttribute('content') || node.getAttribute('datetime') || node.textContent)];
+    for (const value of values) {
+      if (typeof value !== 'string') continue;
+      const text = clean(value);
+      const day = text.match(/^(\d{4}-\d{2}-\d{2})(?:$|T\d{2}:\d{2})/)?.[1];
+      if (!day) continue;
+      // Keep the posting's calendar date; converting midnight UTC to local time can lose a day.
+      const parsed = new Date(`${day}T00:00:00Z`);
+      if (Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === day) return day;
+    }
+    return null;
+  }
+
   function locationFrom(job) {
     const places = [].concat(job?.jobLocation ?? []).map((place) => {
       const address = place?.address ?? place;
@@ -144,5 +160,5 @@
     };
   }
 
-  window.CVAutofillJobDetails = { read, salaryInText, typeOf };
+  window.CVAutofillJobDetails = { read, postedAt, salaryInText, typeOf };
 })();

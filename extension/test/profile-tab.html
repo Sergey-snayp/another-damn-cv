@@ -31,6 +31,7 @@
   const FORM_MODE = location.search.includes('form');
   // ?cvs: three CVs and a job posting; the Resume tab's CV dropdown, and switching after Autofill uploaded a CV.
   const CVS_MODE = location.search.includes('cvs');
+  const POSTED_MODE = location.search.includes('posted');
   const JOB_TEXT = 'Backend Developer\nWe are hiring a backend engineer. Responsibilities: build services in Node.js and TypeScript with PostgreSQL, Docker and Kafka. Requirements: 5 years of experience.';
   let lookupReply = APPLIED_MODE ? { job: { id: 'j9', status: 'interview', appliedAt: '2026-11-02T10:00:00.000Z', companyLogo: null } } : { job: null }, failNextCapture = '';
   const noop = () => {};
@@ -46,7 +47,7 @@
       get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: async (options) => { opened.push(options.url); },
       sendMessage: async (_tab, message) => {
         sentToPage.push(message);
-        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [...(CVS_MODE ? [{ key: 'resume', kind: 'file', group: 'Documents' }] : []), { key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
+        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', ...(POSTED_MODE && { postedAt: '2026-11-04T00:00:00Z' }), logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [...(CVS_MODE ? [{ key: 'resume', kind: 'file', group: 'Documents' }] : []), { key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
         if (message.type === 'job-details') return { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', url: 'https://jobs.example.com/apply', location: FORM_MODE ? '' : 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time', description: 'Build payment APIs.', country: 'Poland' };
         if (message.type === 'questions') return { questions: [{ id: '7', question: 'How did you hear about us?', kind: 'text', value: 'https://another-damn.cv' }, { id: '8', question: 'Why Acme?', kind: 'textarea', value: '' }] };
         if (message.type === 'replace-cv') return { replaced: 1, kept: 0 };
@@ -99,6 +100,9 @@
     document.body.insertAdjacentHTML('afterbegin', new DOMParser().parseFromString(markup, 'text/html').body.innerHTML.replace(/<script[\s\S]*?<\/script>/g, ''));
     await import('../src/sidepanel.js');
     await wait(1500);
+    const postedDate = document.querySelector('#job-card time');
+    expect(POSTED_MODE ? postedDate?.textContent === 'Posted Nov 4, 2026' && postedDate.dateTime === '2026-11-04' : !postedDate, 'the company row shows a real posting date, without inventing one or shifting UTC midnight');
+    expect(!document.querySelector('#job-card .page-site'), 'the company row replaces the website address');
     // ?layout keeps the initial state for visual checks of the real panel.
     if (new URLSearchParams(location.search).has('layout')) throw Object.assign(new Error('done'), { done: true });
     if (CVS_MODE) {

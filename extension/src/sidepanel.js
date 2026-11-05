@@ -323,14 +323,21 @@ function pageCard() {
   const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
   const logo = jobLogo();
   const saved = savedJob.url === currentTab?.url && savedJob.job;
+  const posted = postingDate(scan.context?.postedAt ?? (saved ? saved.postedAt : null));
   const form = jobForm && !saved && !jobBusy ? jobFormHtml() : '';
   const button = jobBusy ? '<div class="job-adding" aria-live="polite">Adding to your jobs…</div>'
     : jobFormLoading ? '<div class="job-adding" aria-live="polite">Reading the job…</div>'
       : saved || jobProblem || jobForm ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
   return `<section class="job-context" aria-label="Current job"><div class="page-card" id="job-card">
     <span class="company-avatar" data-initials="${esc(initials)}">${logo ? `<img src="${esc(logo)}" alt="" referrerpolicy="no-referrer">` : esc(initials)}</span>
-    <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-company">${esc(company)}</span><span class="page-site">${esc(scan.host)}</span></span>
+    <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-meta"><span class="page-card-company" title="${esc(company)}">${esc(company)}</span>${posted ? `<span class="posted-date"><span aria-hidden="true">·</span> <time datetime="${posted.day}">Posted ${posted.label}</time></span>` : ''}</span></span>
   </div><div class="job-context-actions">${jobBanner()}${button}</div></section>${form}`;
+}
+function postingDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value)) return null;
+  const day = value.slice(0, 10), date = new Date(`${day}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== day) return null;
+  return { day, label: date.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) };
 }
 /** "Add this job to the app": opens the "Save job" form, filled from the page. Nothing is saved yet. */
 async function onAddJob() {

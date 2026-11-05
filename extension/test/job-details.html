@@ -18,13 +18,39 @@
     {
       name: 'structured data',
       html: `<script type="application/ld+json">${JSON.stringify({
-        '@context': 'https://schema.org', '@type': 'JobPosting', title: 'Backend Developer', employmentType: ['FULL_TIME'],
+        '@context': 'https://schema.org', '@type': 'JobPosting', title: 'Backend Developer', employmentType: ['FULL_TIME'], datePosted: '2026-11-04T00:00:00Z',
         description: `<p>${LONG}</p><ul><li>Node.js</li></ul>`,
         jobLocation: { '@type': 'Place', address: { addressLocality: 'Warsaw', addressCountry: { name: 'Poland' } } },
         baseSalary: { '@type': 'MonetaryAmount', currency: 'PLN', value: { '@type': 'QuantitativeValue', minValue: 15000, maxValue: 20000, unitText: 'MONTH' } },
       })}<\/script><h1>Backend Developer</h1>`,
       want: { location: 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time' },
       description: /content creators[\s\S]*Node\.js/,
+      postedAt: '2026-11-04',
+    },
+    {
+      name: 'posting date in a graph, with invalid JSON before it',
+      html: `<script type="application/ld+json">invalid<\/script><script type="application/ld+json">${JSON.stringify({ '@graph': [{ '@type': ['JobPosting'], datePosted: '2026-11-03T23:30:00-08:00' }] })}<\/script>`,
+      want: {}, postedAt: '2026-11-03',
+    },
+    {
+      name: 'explicit posting-date microdata',
+      html: '<time itemprop="datePosted" datetime="2026-10-29">October 29</time>',
+      want: {}, postedAt: '2026-10-29',
+    },
+    {
+      name: 'explicit posting-date metadata',
+      html: '<meta name="datePosted" content="2026-10-28">',
+      want: {}, postedAt: '2026-10-28',
+    },
+    {
+      name: 'an impossible date is not a posting date',
+      html: '<script type="application/ld+json">{"@type":"JobPosting","datePosted":"2026-02-30"}<\/script>',
+      want: {}, postedAt: null,
+    },
+    {
+      name: 'update, expiry and article dates are not job posting dates',
+      html: '<script type="application/ld+json">{"@type":"JobPosting","dateModified":"2026-11-04","validThrough":"2026-12-01"}<\/script><meta property="article:published_time" content="2026-11-03"><time datetime="2026-11-02">Updated yesterday</time>',
+      want: {}, postedAt: null,
     },
     {
       name: 'a Greenhouse page without structured data',
@@ -66,6 +92,8 @@
     frame.addEventListener('load', () => {
       try {
         const got = frame.contentWindow.CVAutofillJobDetails.read();
+        const postedAt = frame.contentWindow.CVAutofillJobDetails.postedAt();
+        if (postedAt !== (item.postedAt ?? null)) problems.push(`${item.name}: posting date is ${JSON.stringify(postedAt)}, wanted ${JSON.stringify(item.postedAt ?? null)}`);
         for (const [key, value] of Object.entries(item.want)) if (got[key] !== value) problems.push(`${item.name}: ${key} is ${JSON.stringify(got[key])}, wanted ${JSON.stringify(value)}`);
         if (item.description && !item.description.test(got.description)) problems.push(`${item.name}: description is "${got.description.slice(0, 120)}"`);
         if (item.notDescription?.test(got.description)) problems.push(`${item.name}: the description includes the application form`);

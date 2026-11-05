@@ -264,6 +264,9 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .copy-value.chip[data-text-limited] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cv-option-score { flex: none; font-size: 12px; font-weight: 600; color: var(--color-success, var(--color-text)); }
 .cv-empty { padding: 10px 8px; font-size: 13px; color: var(--color-muted); }
+.page-card-meta { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.page-card-meta .page-card-company { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.posted-date { flex: none; font-size: 11px; color: var(--color-muted); white-space: nowrap; }
 
 /* Autofill density: fewer containers, one primary action, room between tasks.
    Keep these scoped so Profile, Resume, and Settings keep their own layouts. */

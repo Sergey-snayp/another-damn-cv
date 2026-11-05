@@ -403,6 +403,9 @@ Add to `CATEGORIES` in `src/fields.js`, add its label and group in
 Keep this view compact and calm:
 
 - Show the current job as a small header, with Save or View in app nearby.
+  Below its title, show **Company · Posted date**. Use the page's explicit
+  posting date or the saved job's posting date; omit it when unavailable.
+  Keep its original calendar day when a timestamp uses a different time zone.
 - Group CV choice, PDF preview, and Autofill in one card. Autofill is the main action.
 - Keep errors and missing required fields visible. Put routine fill notes,
   keyword matching, and field previews in expandable sections.
