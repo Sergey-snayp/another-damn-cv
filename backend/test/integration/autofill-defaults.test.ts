@@ -335,3 +335,107 @@ test('a saved job takes its name from the page until the page is read, and typed
     ['Backend developer', 'Acme', 'Warsaw', ['company', 'location', 'title']],
   );
 });
+
+test('the job form saves every field as checked, and Applied moves the job with its date', async () => {
+  type Saved = {
+    job: {
+      title: string;
+      company: string;
+      location: string;
+      salary: string;
+      salaryMin: number;
+      salaryMax: number;
+      salaryCurrency: string;
+      salaryPeriod: string;
+      employmentType: string;
+      description: string;
+      notes: string;
+      status: string;
+      appliedAt: string | null;
+      url: string;
+      editedFields: string[];
+    };
+  };
+  const page = `https://job-boards.greenhouse.io/boxinc/jobs/${randomUUID()}`;
+  const missing = await call('/jobs/capture', {
+    method: 'POST',
+    token: ownerToken,
+    body: { url: page, text: 'A posting', details: { title: 'Engineer', company: 'Box', location: ' ' } },
+  });
+  assert.equal(missing.status, 400);
+  assert.match(((await missing.json()) as { message: string }).message, /Please enter a location/);
+
+  const saved = (await (
+    await call('/jobs/capture', {
+      method: 'POST',
+      token: ownerToken,
+      body: {
+        url: page,
+        text: 'A posting',
+        details: {
+          title: 'Software Engineer III',
+          company: 'Box',
+          location: 'Warsaw, Poland',
+          salaryMin: 120000,
+          salaryMax: 90000,
+          salaryCurrency: 'pln',
+          salaryPeriod: 'year',
+          employmentType: 'Full-time',
+          description: 'Build content creation tools.',
+          notes: 'Ask about the team.',
+          status: 'applied',
+          url: `${page}?from=form`,
+        },
+      },
+    })
+  ).json()) as Saved;
+  const job = saved.job;
+  assert.deepEqual(
+    [
+      job.title,
+      job.company,
+      job.location,
+      job.salaryMin,
+      job.salaryMax,
+      job.salaryCurrency,
+      job.salaryPeriod,
+    ],
+    ['Software Engineer III', 'Box', 'Warsaw, Poland', 90000, 120000, 'PLN', 'year'],
+  );
+  assert.equal(job.salary, '90,000 – 120,000 PLN / year');
+  assert.deepEqual(
+    [job.employmentType, job.description, job.notes, job.url],
+    ['Full-time', 'Build content creation tools.', 'Ask about the team.', `${page}?from=form`],
+  );
+  assert.equal(job.status, 'applied');
+  assert.ok(job.appliedAt);
+  assert.deepEqual([...job.editedFields].sort(), [
+    'company',
+    'description',
+    'employmentType',
+    'location',
+    'salary',
+    'title',
+  ]);
+});
+
+test('notes can be changed on the job page', async () => {
+  const { job } = (await (
+    await call('/jobs/capture', {
+      method: 'POST',
+      token: ownerToken,
+      body: {
+        url: `https://jobs.example.com/${randomUUID()}`,
+        text: 'A posting',
+        details: { title: 'Engineer', company: 'Acme', location: 'Remote', notes: 'First' },
+      },
+    })
+  ).json()) as { job: { id: string } };
+  const edited = await call(`/jobs/${job.id}`, {
+    method: 'PATCH',
+    user: owner.user.id,
+    body: { notes: 'Second' },
+  });
+  assert.equal(edited.status, 200);
+  assert.equal(((await edited.json()) as { notes: string }).notes, 'Second');
+});

@@ -69,6 +69,13 @@ export interface Job {
   remote: boolean | null;
   employmentType: string | null;
   salary: string | null;
+  /** Salary range from the extension's "Save job" form; `salary` shows it as text. */
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  salaryCurrency?: string | null;
+  salaryPeriod?: 'year' | 'month' | 'week' | 'day' | 'hour' | null;
+  /** Your own notes on this job. */
+  notes?: string | null;
   postedAt: string | null;
   description: string | null;
   pageTitle: string | null;
@@ -92,7 +99,7 @@ export type JobDetail = Job & { history: StatusEvent[] };
 export type JobSummary = Omit<Job, 'description'> & { tailoredResumeId: string | null };
 
 export type JobEdit = Partial<Pick<Job,
-  'title' | 'company' | 'location' | 'remote' | 'employmentType' | 'salary' | 'description' | 'status' | 'interview'>>;
+  'title' | 'company' | 'location' | 'remote' | 'employmentType' | 'salary' | 'description' | 'notes' | 'status' | 'interview'>>;
 
 export interface ManualJob {
   description: string;

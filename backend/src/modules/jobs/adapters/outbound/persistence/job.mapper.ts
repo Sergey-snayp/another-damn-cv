@@ -5,6 +5,7 @@ export function jobFromRow(row: StoredJob): Job {
   const { interviewDate, interviewTime, interviewTimeZone, applicationAnswers, ...fields } = row;
   return {
     ...fields,
+    salaryPeriod: fields.salaryPeriod as Job['salaryPeriod'],
     applicationAnswers: Array.isArray(applicationAnswers)
       ? (applicationAnswers as unknown as ApplicationAnswer[])
       : null,

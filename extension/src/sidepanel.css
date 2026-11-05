@@ -211,7 +211,18 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .job-banner.is-added { background: var(--color-success-soft, #e7f9f0); color: var(--color-success, #15803d); }
 .job-banner.is-saved, .job-banner.is-applied { background: var(--color-accent-soft); }
 .job-banner.is-error { background: var(--color-error-soft, #fff1f2); color: var(--color-error, #9f1239); }
-.job-form { display: grid; gap: 4px; margin: -6px 0 14px; padding: 14px; }
-.job-form-intro { margin: 0 0 6px; font-size: 13px; color: var(--color-muted); }
-.job-form .field small { font-weight: 400; color: var(--color-muted); }
-.job-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* "Save job" form, filled from the page (as in Simplify). */
+.job-form { display: grid; gap: 2px; margin: -6px 0 14px; padding: 16px; }
+.job-form-head { margin-bottom: 10px; }
+.job-form-head strong { display: block; font-size: 15px; }
+.job-form-head p { margin: 4px 0 0; font-size: 12px; color: var(--color-muted); }
+.job-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.job-form .field { margin-bottom: 10px; min-width: 0; }
+.job-form textarea { display: block; width: 100%; margin-top: 6px; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); font: inherit; font-size: 13px; resize: vertical; }
+.job-form-part { margin: 0 0 10px; }
+.job-form-part small { display: block; margin-top: 2px; font-size: 11px; color: var(--color-muted); }
+.job-form-toggle { padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+.job-form-toggle span { font-weight: 400; color: var(--color-muted); }
+.job-form .status.error { margin: 0 0 8px; }
+.job-form-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 4px; }
+.job-form-actions button { width: 100%; }

@@ -94,6 +94,14 @@ model Job {
   remote         Boolean?
   employmentType String?
   salary         String?
+  /// Salary range from the extension's job form; `salary` stays the text read from the page.
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?
+  /// year, month, week, day or hour.
+  salaryPeriod   String?
+  /// The person's own notes on this job.
+  notes          String?
   postedAt       DateTime?
   description    String?
 

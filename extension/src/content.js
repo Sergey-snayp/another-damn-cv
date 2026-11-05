@@ -559,6 +559,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ questions: Fields.detectQuestions(Fields.detectFields().found) });
     return false;
   }
+  if (message.type === 'job-details') {
+    // For the panel's "Save job" form: what the page says about the job, checked by the person before saving.
+    const context = scan().context;
+    let details = {};
+    try { details = window.CVAutofillJobDetails?.read() ?? {}; } catch { /* the form opens with what is known */ }
+    sendResponse({ title: context.title, company: context.company, url: location.href, ...details });
+    return false;
+  }
   if (message.type === 'check-required') {
     const missing = missingWithReasons();
     void Marks?.showMissing(missing);

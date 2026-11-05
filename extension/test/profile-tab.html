@@ -14,7 +14,7 @@
       --allow-file-access-from-files --virtual-time-budget=30000 \
       --dump-dom "file://$PWD/test/profile-tab.html" | grep -o '<pre id="result">.*</pre>'
   Run it again with ?applied for the "already applied" banner, and with
-  ?form for the short form when the page shows no company.
+  ?form for the form's messages when the page shows no company or location.
 -->
 <script>
   const store = {
@@ -39,6 +39,7 @@
       sendMessage: async (_tab, message) => {
         sentToPage.push(message);
         if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [{ key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
+        if (message.type === 'job-details') return { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', url: 'https://jobs.example.com/apply', location: FORM_MODE ? '' : 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time', description: 'Build payment APIs.', country: 'Poland' };
         if (message.type === 'questions') return { questions: [{ id: '7', question: 'How did you hear about us?', kind: 'text', value: 'https://another-damn.cv' }, { id: '8', question: 'Why Acme?', kind: 'textarea', value: '' }] };
         if (message.type === 'fill') return { filled: 3, failures: [], notes: [], missing: [] };
         return null;
@@ -86,17 +87,22 @@
     await wait(1500);
     if (FORM_MODE) {
       document.getElementById('job-save').click();
-      await wait(100);
-      const form = document.getElementById('job-form');
-      expect(form && form.querySelector('[name="title"]').value === 'Engineer' && form.querySelector('[name="company"]').value === '', 'Add opens the form, with the title found on the page');
-      expect(!captured.length, 'nothing is saved before the form is sent');
-      const company = form.querySelector('[name="company"]');
-      company.value = 'Acme Corp';
-      company.dispatchEvent(new Event('input', { bubbles: true }));
+      await wait(200);
+      let form = document.getElementById('job-form');
+      expect(form && form.querySelector('[name="title"]').value === 'Engineer' && form.querySelector('[name="company"]').value === '', 'Add opens the form, with what the page shows');
       form.requestSubmit();
+      await wait(100);
+      expect(/Please enter a company\./.test(document.getElementById('panel-autofill').textContent) && !captured.length, 'a missing company stops the save, with Simplify\'s message');
+      const type = (name, value) => { const input = document.querySelector(`#job-form [name="${name}"]`); input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); };
+      type('company', 'Acme Corp');
+      document.getElementById('job-form').requestSubmit();
+      await wait(100);
+      expect(/Please enter a location\./.test(document.getElementById('panel-autofill').textContent) && !captured.length, 'then a missing location');
+      type('location', 'Remote');
+      document.getElementById('job-form').requestSubmit();
       await wait(600);
-      expect(JSON.stringify(captured.at(-1)?.hints) === JSON.stringify({ title: 'Engineer', company: 'Acme Corp', confirmed: true }), `the typed details are sent as confirmed (sent ${JSON.stringify(captured.at(-1)?.hints)})`);
-      expect(/Added to your jobs!/.test(document.getElementById('panel-autofill').textContent) && !document.getElementById('job-form'), 'then the job is added and the form closes');
+      expect(captured.at(-1)?.details?.company === 'Acme Corp' && captured.at(-1)?.details?.location === 'Remote', `then it saves what was typed (sent ${JSON.stringify(captured.at(-1)?.details)})`);
+      expect(/Added to your jobs!/.test(document.getElementById('panel-autofill').textContent) && !document.getElementById('job-form'), 'and the form closes');
       throw Object.assign(new Error('done'), { done: true });
     }
     if (APPLIED_MODE) {
@@ -129,11 +135,29 @@
     lookupReply = { job: null };
     failNextCapture = 'Server returned 500.';
     document.getElementById('job-save').click();
+    await wait(300);
+    expect(!captured.length, '"Add this job to the app" opens the form and saves nothing yet');
+    const form = document.getElementById('job-form');
+    const value = (name) => form.querySelector(`[name="${name}"]`)?.value;
+    expect(value('company') === 'Acme' && value('title') === 'Engineer' && value('location') === 'Warsaw, Poland' && value('salaryMin') === '15000' && value('salaryMax') === '20000'
+      && value('salaryCurrency') === 'PLN' && value('salaryPeriod') === 'month' && value('employmentType') === 'Full-time' && value('status') === 'saved' && value('url') === 'https://jobs.example.com/apply',
+      `the form is filled from the page (got ${JSON.stringify(Object.fromEntries([...form.elements].filter((input) => input.name).map((input) => [input.name, input.value])))})`);
+    expect(/Auto-detected description available/.test(form.textContent) && !form.querySelector('[name="description"]'), 'the description is found but closed, as in Simplify');
+    form.querySelector('[data-job-toggle="notes"]').click();
+    await wait(50);
+    const notes = document.querySelector('#job-form [name="notes"]');
+    notes.value = 'Ask about the team.';
+    notes.dispatchEvent(new Event('input', { bubbles: true }));
+    const status = document.querySelector('#job-form [name="status"]');
+    status.value = 'applied';
+    status.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('job-form').requestSubmit();
     await wait(600);
     expect(/Couldn't add this job/.test(panel()) && /Try again/.test(panel()), `a failed save says so, with Try again (got "${panel().slice(0, 200)}")`);
     document.getElementById('job-retry').click(); // Try again
     await wait(600);
-    expect(JSON.stringify(captured.at(-1)?.hints) === JSON.stringify({ title: 'Engineer', company: 'Acme' }), `a normal save sends the title and company seen on the page (sent ${JSON.stringify(captured.at(-1)?.hints)})`);
+    expect(JSON.stringify(captured.at(-1)?.details) === JSON.stringify({ title: 'Engineer', company: 'Acme', location: 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time', description: 'Build payment APIs.', notes: 'Ask about the team.', status: 'applied', url: 'https://jobs.example.com/apply' }),
+      `the form's values are saved, notes and status too (sent ${JSON.stringify(captured.at(-1)?.details)})`);
     expect(captured.at(-1)?.companyLogo?.startsWith('data:image/png') && captured.at(-1)?.url === 'https://jobs.example.com/apply', `saving sends the page with its logo (sent ${JSON.stringify(captured.at(-1))?.slice(0, 160)})`);
     expect(/Added to your jobs!/.test(panel()) && !document.querySelector('.job-add'), `then "Added to your jobs!" and the button goes (got "${panel().slice(0, 200)}")`);
     document.getElementById('job-view').click();

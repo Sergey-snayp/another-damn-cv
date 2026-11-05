@@ -11,11 +11,11 @@ import { InterviewDateEditor } from '../interviews/InterviewDateEditor';
 
 type Draft = {
   title: string; company: string; location: string;
-  employmentType: string; salary: string; description: string;
+  employmentType: string; salary: string; description: string; notes: string;
   remote: '' | 'yes' | 'no';
 };
 
-const TEXT_FIELDS = ['title', 'company', 'location', 'employmentType', 'salary', 'description'] as const;
+const TEXT_FIELDS = ['title', 'company', 'location', 'employmentType', 'salary', 'description', 'notes'] as const;
 
 function toDraft(job: Job): Draft {
   return {
@@ -25,6 +25,7 @@ function toDraft(job: Job): Draft {
     employmentType: job.employmentType ?? '',
     salary: job.salary ?? '',
     description: job.description ?? '',
+    notes: job.notes ?? '',
     remote: job.remote === null ? '' : job.remote ? 'yes' : 'no',
   };
 }
@@ -184,6 +185,10 @@ export function JobDetail() {
         <label className="field">
           <span>Description</span>
           <textarea rows={18} value={draft.description} onChange={set('description')} />
+        </label>
+        <label className="field">
+          <span>Notes</span>
+          <textarea rows={4} value={draft.notes} onChange={set('notes')} placeholder="Your own notes on this job" />
         </label>
 
         {job.postedAt && <p className="muted tiny">Posted {new Date(job.postedAt).toLocaleDateString('en-CA')}</p>}

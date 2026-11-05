@@ -6,6 +6,7 @@ import { JOB_STATUSES } from '../../../domain/job';
 import { z } from 'zod';
 import { optionalText } from '../../../../../shared/http/text.schema';
 import { CAPTURE_LIMITS } from '../../../domain/capture-limits';
+import { SALARY_PERIODS } from '../../../domain/job';
 
 /** Statuses as the API spells them: lowercase. */
 export const STATUS_NAMES = JOB_STATUSES;
@@ -36,6 +37,31 @@ export const captureSchema = z.object({
     .string()
     .max(2_000)
     .refine((value) => /^https?:\/\//i.test(value), 'The logo must be a web address.')
+    .optional(),
+  /**
+   * The extension's job form: what the person checked or typed before saving.
+   * Every value given counts as edited, so a later page read keeps it.
+   */
+  details: z
+    .object({
+      title: z.string().trim().min(1, 'Please enter a position title.').max(500),
+      company: z.string().trim().min(1, 'Please enter a company.').max(300),
+      location: z.string().trim().min(1, 'Please enter a location.').max(300),
+      salaryMin: z.number().int().min(0).max(100_000_000).nullable().optional(),
+      salaryMax: z.number().int().min(0).max(100_000_000).nullable().optional(),
+      salaryCurrency: z.string().trim().max(10).nullable().optional(),
+      salaryPeriod: z.enum(SALARY_PERIODS).nullable().optional(),
+      employmentType: z.string().trim().max(100).nullable().optional(),
+      description: z.string().max(CAPTURE_LIMITS.text).nullable().optional(),
+      notes: z.string().max(10_000).nullable().optional(),
+      status: z.enum(['saved', 'applied']).optional(),
+      url: z
+        .string()
+        .max(4_000)
+        .refine((value) => /^https?:\/\//i.test(value), 'The job link must be a web address.')
+        .optional(),
+    })
+    .strict()
     .optional(),
   /** Title, company and location seen on the page, or typed in the extension's form (confirmed). */
   hints: z
@@ -87,6 +113,7 @@ export const jobEditSchema = z.object({
   employmentType: optionalText(FIELD_MAX, 'Employment type'),
   salary: optionalText(FIELD_MAX, 'Salary'),
   description: optionalText(CAPTURE_LIMITS.text, 'Description'),
+  notes: optionalText(10_000, 'Notes'),
   remote: z.boolean('remote must be true, false or null.').nullable().optional(),
   status: status.optional(),
   interview: z

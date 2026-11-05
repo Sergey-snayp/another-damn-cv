@@ -10,6 +10,8 @@ export interface JobEdit {
   employmentType?: string | null;
   salary?: string | null;
   description?: string | null;
+  /** Your own notes on the job; page reads never write them. */
+  notes?: string | null;
   remote?: boolean | null;
   status?: JobStatus;
   interview?: InterviewSchedule | null;

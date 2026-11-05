@@ -33,6 +33,11 @@ export interface Job {
   remote: boolean | null;
   employmentType: string | null;
   salary: string | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string | null;
+  salaryPeriod: SalaryPeriod | null;
+  notes: string | null;
   postedAt: Date | null;
   description: string | null;
   pageTitle: string | null;
@@ -118,4 +123,25 @@ export function cleanAnswers(items: ApplicationAnswer[]): ApplicationAnswer[] {
     if (question && answer) byQuestion.set(question.toLowerCase(), { question, answer });
   }
   return [...byQuestion.values()].slice(0, 100);
+}
+
+export const SALARY_PERIODS = ['year', 'month', 'week', 'day', 'hour'] as const;
+export type SalaryPeriod = (typeof SALARY_PERIODS)[number];
+
+/** "90,000 – 110,000 USD / year": the salary text for a range typed in the extension's form. */
+export function salaryText(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  currency: string | null | undefined,
+  period: SalaryPeriod | null | undefined,
+): string | null {
+  const low = typeof min === 'number' ? min : null;
+  const high = typeof max === 'number' ? max : null;
+  if (low === null && high === null) return null;
+  const amount = (value: number) => value.toLocaleString('en-US');
+  const range =
+    low !== null && high !== null && low !== high
+      ? `${amount(low)} – ${amount(high)}`
+      : amount((low ?? high) as number);
+  return [range, currency, period ? `/ ${period}` : ''].filter(Boolean).join(' ');
 }

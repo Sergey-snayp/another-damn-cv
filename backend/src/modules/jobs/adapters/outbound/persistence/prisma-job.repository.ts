@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient, type JobExtraction } from '@prisma/client';
 import { JobConflictError, JobInputError, JobNotFoundError } from '../../../application/errors';
-import { APPLIED_STATUSES } from '../../../domain/job';
+import { APPLIED_STATUSES, type SalaryPeriod } from '../../../domain/job';
 import type {
   ApplicationDraft,
   ApplicationPreferences,
@@ -45,6 +45,7 @@ export class PrismaJobRepository implements JobRepository, JobReadingRepository,
       source: lower(row.source),
       status: lower(row.status),
       extraction: lower(row.extraction),
+      salaryPeriod: row.salaryPeriod as SalaryPeriod | null,
     }));
   }
 

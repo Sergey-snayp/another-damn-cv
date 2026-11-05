@@ -1,6 +1,13 @@
 import { canonicalUrl } from '../../domain/canonical-url';
 import { normalizeJobText, unprotectedFields } from '../../domain/captured-fields.policy';
-import type { Job, JobExtraction, JobFields } from '../../domain/job';
+import {
+  APPLIED_STATUSES,
+  salaryText,
+  type Job,
+  type JobExtraction,
+  type JobFields,
+  type SalaryPeriod,
+} from '../../domain/job';
 import { JobInputError } from '../errors';
 import type { JobReadScheduler, StructuredJobReader } from '../ports/job-page-reader';
 import type { JobChanges, JobRepository } from '../ports/job-repository';
@@ -18,6 +25,23 @@ export interface CaptureInput {
    * them, so they count as edited and a later page read keeps them.
    */
   hints?: { title?: string; company?: string; location?: string; confirmed?: boolean };
+  /** The extension's job form, checked by the person: every value counts as edited. */
+  details?: JobDetails;
+}
+
+export interface JobDetails {
+  title: string;
+  company: string;
+  location: string;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  salaryCurrency?: string | null;
+  salaryPeriod?: SalaryPeriod | null;
+  employmentType?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  status?: 'saved' | 'applied';
+  url?: string;
 }
 
 const HINTED = ['title', 'company', 'location'] as const;
@@ -63,8 +87,9 @@ export class CaptureJob {
         changes[key] = hint;
       }
     }
-    if (input.hints?.confirmed) changes.editedFields = [...edited];
-    const job = existing
+    if (input.details) this.applyDetails(input.details, changes, edited);
+    if (input.hints?.confirmed || input.details) changes.editedFields = [...edited];
+    let job = existing
       ? await this.jobs.update(userId, existing.id, changes)
       : await this.jobs.create({
           ...changes,
@@ -74,8 +99,53 @@ export class CaptureJob {
           extraction: read.extraction,
           editedFields: changes.editedFields ?? [],
         });
+    // "Applied" in the form: moved like a status change in the app, with its date.
+    if (input.details?.status === 'applied' && !APPLIED_STATUSES.includes(job.status)) {
+      job = await this.jobs.update(
+        userId,
+        job.id,
+        { status: 'applied' },
+        { from: job.status, to: 'applied' },
+      );
+    }
     if (job.extraction === 'pending') this.scheduler.enqueue(job.id);
     return { job, created: !existing };
+  }
+
+  private applyDetails(details: JobDetails, changes: JobChanges, edited: Set<string>) {
+    const text = (value: string | null | undefined) => value?.trim() || null;
+    changes.title = details.title.trim();
+    changes.company = details.company.trim();
+    changes.location = details.location.trim();
+    for (const key of ['title', 'company', 'location'] as const) edited.add(key);
+    if (details.employmentType !== undefined) {
+      changes.employmentType = text(details.employmentType);
+      edited.add('employmentType');
+    }
+    if (details.description !== undefined && text(details.description)) {
+      changes.description = text(details.description);
+      edited.add('description');
+    }
+    if (details.notes !== undefined) changes.notes = text(details.notes);
+    if (details.url) changes.url = details.url;
+    const low = details.salaryMin ?? null;
+    const high = details.salaryMax ?? null;
+    if (low !== null || high !== null) {
+      const [min, max] = low !== null && high !== null && low > high ? [high, low] : [low, high];
+      Object.assign(changes, {
+        salaryMin: min,
+        salaryMax: max,
+        salaryCurrency: text(details.salaryCurrency)?.toUpperCase() ?? null,
+        salaryPeriod: details.salaryPeriod ?? null,
+        salary: salaryText(
+          min,
+          max,
+          text(details.salaryCurrency)?.toUpperCase(),
+          details.salaryPeriod ?? null,
+        ),
+      });
+      edited.add('salary');
+    }
   }
 
   private firstRead(

@@ -224,8 +224,16 @@ function relocationText() { return Object.entries(relocationMap(autofillDefaults
 let savedJob = { url: null, job: null, checkedAt: 0 }, jobBusy = false, jobAdded = false, jobProblem = '';
 // What the last Autofill used on a page: { url, resumeId, answers }. Recorded on the job when it is saved.
 let lastApplication = null;
-// The short form shown before saving when the page's title or company is unknown: { title, company, location }.
-let jobForm = null, jobHints = {};
+// "Save job" form, as in Simplify: filled from the page, checked by the person, then saved.
+// { title, company, location, salaryMin, salaryMax, salaryCurrency, salaryPeriod,
+//   employmentType, description, notes, status, url, open: { description, notes }, error }
+let jobForm = null, jobPayload = {}, jobFormLoading = false;
+const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary'];
+const PAY_PERIODS = [['year', 'Yearly'], ['month', 'Monthly'], ['week', 'Weekly'], ['day', 'Daily'], ['hour', 'Hourly']];
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'PLN', 'UAH', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'AUD', 'NZD', 'INR', 'JPY', 'SGD', 'ILS'];
+const EURO = new Set(['Germany', 'France', 'Netherlands', 'Belgium', 'Spain', 'Portugal', 'Italy', 'Austria', 'Ireland', 'Finland', 'Estonia', 'Latvia', 'Lithuania', 'Greece', 'European Union']);
+const COUNTRY_CURRENCY = { Poland: 'PLN', 'United States': 'USD', Canada: 'CAD', 'United Kingdom': 'GBP', Ukraine: 'UAH', Switzerland: 'CHF', Sweden: 'SEK', Norway: 'NOK', Denmark: 'DKK', 'Czech Republic': 'CZK', Australia: 'AUD', 'New Zealand': 'NZD', India: 'INR', Japan: 'JPY', Singapore: 'SGD', Israel: 'ILS' };
+const currencyFor = country => COUNTRY_CURRENCY[country] ?? (EURO.has(country) ? 'EUR' : null);
 const jobTitleOnPage = () => (scan?.context?.title && scan.context.title !== 'Application form' ? scan.context.title : '');
 /** The company's questions on the page that have an answer: [{ question, answer }]. */
 async function answersOnPage(tab) {
@@ -275,6 +283,29 @@ function jobBanner() {
   if (jobProblem) return `<div class="job-banner is-error" role="alert"><span><strong>Couldn't add this job</strong><small>${esc(jobProblem)}</small></span><button class="link-button" id="job-retry">Try again</button></div>`;
   return '';
 }
+function jobFormHtml() {
+  const form = jobForm;
+  const field = (name, label, value, attrs = '') => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(value ?? '')}" ${attrs}></label>`;
+  const select = (name, label, options, value, empty = '') => `<label class="field"><span>${label}</span><select name="${name}">${empty ? `<option value="">${esc(empty)}</option>` : ''}${options.map(([optionValue, optionLabel]) => `<option value="${esc(optionValue)}" ${String(value ?? '') === optionValue ? 'selected' : ''}>${esc(optionLabel)}</option>`).join('')}</select></label>`;
+  const currency = form.salaryCurrency || 'USD';
+  const currencies = [...new Set([currency, ...CURRENCIES])].map(code => [code, code]);
+  const toggle = (part, label, has) => `<button type="button" class="job-form-toggle" data-job-toggle="${part}" aria-expanded="${form.open[part]}">${label} <span>— ${form.open[part] ? 'Click to collapse' : has ? 'Click to edit' : 'Click to add'}</span></button>`;
+  return `<form class="card job-form" id="job-form" novalidate>
+    <div class="job-form-head"><strong>Save job</strong><p>Save this job in your app. The details come from the page: check them and change anything that is wrong.</p></div>
+    ${field('company', 'Company', form.company, 'placeholder="Company" autocomplete="off"')}
+    ${field('title', 'Position Title', form.title, 'placeholder="Title" autocomplete="off"')}
+    ${field('location', 'Location', form.location, 'placeholder="Location" autocomplete="off"')}
+    <div class="job-form-row">${field('salaryMin', `Min. Salary (${esc(currency)})`, form.salaryMin, 'type="number" min="0" inputmode="numeric" placeholder="Min. Salary"')}${field('salaryMax', `Max. Salary (${esc(currency)})`, form.salaryMax, 'type="number" min="0" inputmode="numeric" placeholder="Max. Salary"')}</div>
+    <div class="job-form-row">${select('salaryCurrency', 'Currency', currencies, currency)}${select('salaryPeriod', 'Period', PAY_PERIODS, form.salaryPeriod || 'year')}</div>
+    ${select('employmentType', 'Job Type', JOB_TYPES.map(type => [type, type]), form.employmentType, 'Choose a type')}
+    <div class="job-form-part">${toggle('description', 'Job Description', form.description)}${!form.open.description && form.description ? '<small>Auto-detected description available.</small>' : ''}${form.open.description ? `<textarea name="description" rows="8" placeholder="ex. This role requires a strong understanding of React and Node.js.">${esc(form.description)}</textarea>` : ''}</div>
+    <div class="job-form-part">${toggle('notes', 'Notes', form.notes)}${!form.open.notes && form.notes ? '<small>Notes added.</small>' : ''}${form.open.notes ? `<textarea name="notes" rows="4" placeholder="Notes">${esc(form.notes)}</textarea>` : ''}</div>
+    ${select('status', 'Application Status', [['saved', 'Saved'], ['applied', 'Applied']], form.status)}
+    ${field('url', 'Job Posting URL', form.url, 'type="url" placeholder="URL"')}
+    ${form.error ? `<p class="status error" role="alert">${esc(form.error)}</p>` : ''}
+    <div class="job-form-actions"><button type="button" class="ghost small" id="job-form-cancel">Cancel</button><button type="submit" class="primary small" id="job-form-save">Save Job</button></div>
+  </form>`;
+}
 function pageCard() {
   if (!scan) return '';
   const title = scan.context?.title || 'Application form';
@@ -282,37 +313,71 @@ function pageCard() {
   const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
   const logo = jobLogo();
   const saved = savedJob.url === currentTab?.url && savedJob.job;
-  const form = jobForm && !saved && !jobBusy ? `<form class="card job-form" id="job-form">
-      <p class="job-form-intro">We could not read all the job details. Check them, then save.</p>
-      ${[['title', 'Title', 'Backend Developer'], ['company', 'Company', 'Acme'], ['location', 'Location', 'Warsaw, Poland']].map(([key, label, hint]) => `<label class="field"><span>${label}${key === 'location' ? ' <small>(optional)</small>' : ''}</span><input name="${key}" value="${esc(jobForm[key])}" placeholder="${hint}" ${key === 'location' ? '' : 'required'}></label>`).join('')}
-      <div class="job-form-actions"><button type="button" class="ghost small" id="job-form-cancel">Cancel</button><button type="submit" class="primary small" id="job-form-save">Save job</button></div>
-    </form>` : '';
+  const form = jobForm && !saved && !jobBusy ? jobFormHtml() : '';
   const button = jobBusy ? '<div class="job-adding" aria-live="polite">Adding to your jobs…</div>'
-    : saved || jobProblem || jobForm ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
+    : jobFormLoading ? '<div class="job-adding" aria-live="polite">Reading the job…</div>'
+      : saved || jobProblem || jobForm ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
   return `<div class="card page-card" id="job-card">
     <span class="company-avatar" data-initials="${esc(initials)}">${logo ? `<img src="${esc(logo)}" alt="" referrerpolicy="no-referrer">` : esc(initials)}</span>
     <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-company">${esc(company)}</span><span class="page-site">${esc(scan.host)}</span></span>
   </div>${jobBanner()}${form}${button}`;
 }
-/**
- * "Add this job to the app": saves at once when the page shows the title and
- * company, otherwise opens the short form first.
- */
-function onAddJob() {
-  const company = scan?.context?.company ?? '';
-  if (jobTitleOnPage() && company) { saveJob({ title: jobTitleOnPage(), company }); return; }
-  jobForm = { title: jobTitleOnPage(), company, location: '' };
-  jobProblem = '';
+/** "Add this job to the app": opens the "Save job" form, filled from the page. Nothing is saved yet. */
+async function onAddJob() {
+  if (jobFormLoading || jobBusy) return;
+  const tab = currentTab;
+  jobFormLoading = true; jobProblem = ''; renderAutofill();
+  const found = (await askPage({ type: 'job-details' }, tab).catch(() => null)) ?? {};
+  jobFormLoading = false;
+  if (tab !== currentTab) { renderAutofill(); return; }
+  jobForm = {
+    title: found.title && found.title !== 'Application form' ? found.title : jobTitleOnPage(),
+    company: found.company || scan?.context?.company || '',
+    location: found.location || '',
+    salaryMin: found.salaryMin ?? '', salaryMax: found.salaryMax ?? '',
+    salaryCurrency: found.salaryCurrency || currencyFor(found.country) || currencyFor(profile.country) || 'USD',
+    salaryPeriod: found.salaryPeriod || 'year',
+    employmentType: found.employmentType || '',
+    description: found.description || '',
+    notes: '',
+    status: 'saved',
+    url: found.url || tab?.url || '',
+    open: { description: false, notes: false },
+    error: '',
+  };
   renderAutofill();
-  document.querySelector(`#job-form input[name="${jobForm.title ? 'company' : 'title'}"]`)?.focus();
+  const first = ['company', 'title', 'location'].find(name => !jobForm[name]) ?? 'company';
+  document.querySelector(`#job-form [name="${first}"]`)?.focus();
+}
+/** The form's values for the app, or a message about what is missing (Simplify's wording). */
+function jobFormDetails(form) {
+  const text = value => String(value ?? '').trim();
+  const number = value => (text(value) === '' || !Number.isFinite(Number(value)) ? null : Math.round(Number(value)));
+  if (!text(form.company)) return { error: 'Please enter a company.' };
+  if (!text(form.title)) return { error: 'Please enter a position title.' };
+  if (!text(form.location)) return { error: 'Please enter a location.' };
+  if (text(form.url) && !/^https?:\/\//i.test(text(form.url))) return { error: 'Please enter the job link as a web address (https://…).' };
+  const salaryMin = number(form.salaryMin), salaryMax = number(form.salaryMax);
+  return {
+    details: {
+      title: text(form.title), company: text(form.company), location: text(form.location),
+      salaryMin, salaryMax,
+      salaryCurrency: salaryMin !== null || salaryMax !== null ? text(form.salaryCurrency) || null : null,
+      salaryPeriod: salaryMin !== null || salaryMax !== null ? form.salaryPeriod || 'year' : null,
+      employmentType: text(form.employmentType) || null,
+      description: text(form.description) || null,
+      notes: text(form.notes) || null,
+      status: form.status === 'applied' ? 'applied' : 'saved',
+      ...(text(form.url) && { url: text(form.url) }),
+    },
+  };
 }
 /**
- * Saves the posting with its logo. Only from the button or the form. `hints`
- * are the title and company seen on the page; `confirmed` when the person
- * typed them, so the app keeps them.
+ * Saves the posting with its logo. Only from the form ("Save Job") or Try
+ * again. `payload` is { details } from the form; the app keeps those values.
  */
-function saveJob(hints = {}) {
-  jobHints = hints;
+function saveJob(payload = {}) {
+  jobPayload = payload;
   const tab = currentTab;
   if (jobBusy || !tab?.id) return;
   const reason = unsendableReason(tab);
@@ -323,8 +388,7 @@ function saveJob(hints = {}) {
     try {
       if (!await access) { jobProblem = 'Access to this site was not allowed.'; return; }
       const logo = jobLogo();
-      const known = Object.fromEntries(Object.entries(hints).filter(([, value]) => value !== '' && value !== undefined));
-      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...(Object.keys(known).length && { hints: known }) });
+      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...payload });
       savedJob = { url: tab.url, job, checkedAt: Date.now() }; jobAdded = true; jobForm = null;
       await recordOnSavedJob(tab.url, await answersOnPage(tab));
     } catch (error) {
@@ -340,21 +404,27 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   void checkSaved(message.url);
   return false;
 });
-document.addEventListener('input', event => {
-  const input = event.target.closest('#job-form input');
-  if (input && jobForm) jobForm[input.name] = input.value;
+// The form keeps what the person types, so a panel refresh does not lose it.
+for (const type of ['input', 'change']) document.addEventListener(type, event => {
+  const input = event.target.closest('#job-form [name]');
+  if (!input || !jobForm) return;
+  jobForm[input.name] = input.value;
+  if (input.name === 'salaryCurrency' && type === 'change') renderAutofill(); // The salary labels show the currency.
 });
 document.addEventListener('submit', event => {
-  if (!event.target.closest('#job-form')) return;
+  if (!event.target.closest('#job-form') || !jobForm) return;
   event.preventDefault();
-  const values = Object.fromEntries(['title', 'company', 'location'].map(key => [key, String(jobForm?.[key] ?? '').trim()]));
-  if (!values.title || !values.company) return;
-  saveJob({ ...values, confirmed: true });
+  const { details, error } = jobFormDetails(jobForm);
+  jobForm.error = error ?? '';
+  if (error) { renderAutofill(); document.querySelector(`#job-form [name="${/company/.test(error) ? 'company' : /title/.test(error) ? 'title' : /location/.test(error) ? 'location' : 'url'}"]`)?.focus(); return; }
+  saveJob({ details });
 });
 document.addEventListener('click', event => {
+  const toggle = event.target.closest('[data-job-toggle]');
+  if (toggle && jobForm) { jobForm.open[toggle.dataset.jobToggle] = !jobForm.open[toggle.dataset.jobToggle]; renderAutofill(); document.querySelector(`#job-form [name="${toggle.dataset.jobToggle}"]`)?.focus(); return; }
   if (event.target.closest('#job-form-cancel')) { jobForm = null; renderAutofill(); return; }
-  if (event.target.closest('#job-retry')) { saveJob(jobHints); return; }
-  if (event.target.closest('#job-save')) onAddJob();
+  if (event.target.closest('#job-retry')) { saveJob(jobPayload); return; }
+  if (event.target.closest('#job-save')) void onAddJob();
   else if (event.target.closest('#job-view') && savedJob.job) void chrome.tabs.create({ url: jobUrl(savedJob.job.id) });
 });
 // A logo that fails to load gives way to the company's initials.

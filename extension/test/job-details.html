@@ -1,0 +1,78 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — reading a job's details for the "Save job" form</title>
+<!--
+  Each case is a small job page in an iframe running src/job-details.js. The
+  details come from the posting's structured data when it has some, else
+  from the page: the location line, a salary range in the text, job type
+  words and the job's own text.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/job-details.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<body>
+<script>
+  const LONG = 'We build tools for content creators and need an engineer who cares about quality. '.repeat(4);
+  const CASES = [
+    {
+      name: 'structured data',
+      html: `<script type="application/ld+json">${JSON.stringify({
+        '@context': 'https://schema.org', '@type': 'JobPosting', title: 'Backend Developer', employmentType: ['FULL_TIME'],
+        description: `<p>${LONG}</p><ul><li>Node.js</li></ul>`,
+        jobLocation: { '@type': 'Place', address: { addressLocality: 'Warsaw', addressCountry: { name: 'Poland' } } },
+        baseSalary: { '@type': 'MonetaryAmount', currency: 'PLN', value: { '@type': 'QuantitativeValue', minValue: 15000, maxValue: 20000, unitText: 'MONTH' } },
+      })}<\/script><h1>Backend Developer</h1>`,
+      want: { location: 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time' },
+      description: /content creators[\s\S]*Node\.js/,
+    },
+    {
+      name: 'a Greenhouse page without structured data',
+      html: `<div class="job__title"><h1>Software Engineer III</h1><div class="job__location"><svg></svg>Warsaw, Poland</div></div>
+        <div class="job__description"><p>${LONG}</p><p>This is a full-time role.</p></div>
+        <form><label>First name<input name="first_name"></label><label for="location">Location<input id="location" class="location-input"></label></form>`,
+      want: { location: 'Warsaw, Poland', salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null, employmentType: 'Full-time' },
+      description: /content creators[\s\S]*full-time role/,
+      notDescription: /First name/,
+    },
+    {
+      name: 'a salary written in the text',
+      html: `<main><h1>Engineer</h1><p>${LONG}</p><p>Salary: $120,000 – $150,000 per year, plus equity. Contract to hire.</p></main>`,
+      want: { salaryMin: 120000, salaryMax: 150000, salaryCurrency: 'USD', salaryPeriod: 'year', employmentType: 'Contract' },
+    },
+    {
+      name: 'a Polish salary with "k"',
+      html: `<main><h1>Developer</h1><p>${LONG}</p><p>Wynagrodzenie: 15k – 20k zł / mies.</p></main>`,
+      want: { salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month' },
+    },
+    {
+      name: 'years are not a salary',
+      html: `<main><h1>Developer</h1><p>${LONG}</p><p>We grew a lot from 2015 – 2020.</p></main>`,
+      want: { salaryMin: null, salaryMax: null, salaryCurrency: null },
+    },
+  ];
+  const problems = [];
+  let pending = CASES.length;
+  const finish = () => {
+    const out = document.createElement('pre');
+    out.id = 'result';
+    out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+    document.body.prepend(out);
+  };
+  for (const item of CASES) {
+    const frame = document.createElement('iframe');
+    frame.style.width = '800px';
+    frame.srcdoc = `<!doctype html><meta charset="utf-8"><body>${item.html}<script src="../src/job-details.js"><\/script></body>`;
+    frame.addEventListener('load', () => {
+      try {
+        const got = frame.contentWindow.CVAutofillJobDetails.read();
+        for (const [key, value] of Object.entries(item.want)) if (got[key] !== value) problems.push(`${item.name}: ${key} is ${JSON.stringify(got[key])}, wanted ${JSON.stringify(value)}`);
+        if (item.description && !item.description.test(got.description)) problems.push(`${item.name}: description is "${got.description.slice(0, 120)}"`);
+        if (item.notDescription?.test(got.description)) problems.push(`${item.name}: the description includes the application form`);
+      } catch (error) { problems.push(`${item.name}: threw ${error.message}`); }
+      if (--pending === 0) finish();
+    });
+    document.body.append(frame);
+  }
+</script>
+</body>
