@@ -703,10 +703,9 @@ function matchCard() {
     <div class="match-top"><div><h2>${label} match</h2><p><strong>${matched.length} of ${total}</strong> keywords in <span class="cv-inline" title="${esc(resumes.chosen.name)}">${esc(resumes.chosen.name)}</span></p></div>
       <div class="ring" role="img" aria-label="Score ${score} of 100"><svg viewBox="0 0 72 72" width="72" height="72"><circle cx="36" cy="36" r="30" class="ring-track"/><circle cx="36" cy="36" r="30" class="ring-value" stroke-dasharray="${(RING * score) / 100} ${RING}" transform="rotate(-90 36 36)"/></svg><span>${score}</span></div></div>
     ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p><span class="cv-inline" title="${esc(match.better.name)}">${esc(match.better.name)}</span> matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
-    <details class="keywords"><summary>Keywords from the posting</summary><ul>${keywords}</ul></details>
+    <details class="keywords"><summary>Keywords from the posting</summary><p class="hint">Counts the posting's keywords found in your CV. It does not judge how deep your experience is.</p><ul>${keywords}</ul></details>
     <button class="primary" id="improve-match">Improve my match${icon('chevron', 17)}</button>
     <div class="status" id="match-status" role="status"></div>
-    <p class="hint">Counts the posting's keywords found in your CV. It does not judge how deep your experience is.</p>
   </section>`;
 }
 /** Reads the page once per address; rescoring after a CV switch reuses the keywords. */
@@ -754,7 +753,7 @@ function improveMatch() {
       if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
       const { job } = await sendCapture(await captureTab(tab.id));
       await chrome.tabs.create({ url: `${jobUrl(job.id)}?tailorFrom=${encodeURIComponent(chosen.id)}` });
-      status('match-status', `Saved. In the app, press "Tailor resume for this job" to improve ${chosen.name}.`, 'success');
+      status('match-status', 'Saved. In the app, press "Tailor resume for this job" to improve your CV.', 'success');
     } catch (error) {
       if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
       status('match-status', error.message, 'error');
