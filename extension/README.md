@@ -419,7 +419,8 @@ Display labels and previews use a shared **64-character limit** in
 `src/text-display.js`: job/company names, CV names, status messages, field
 previews and Profile cards. Long text ends in `…`; hover to read the full text.
 CV pickers instead shorten the middle, so similar names keep their distinctive
-endings. Names wrap, with PDF/default labels and Preview below the name.
+endings. The selected name uses small, single-line text with an ellipsis;
+dropdown options wrap. PDF/default labels and Preview stay below the name.
 Open **Full CV name** to read or copy the complete selected name; the search
 list also shows the focused option's complete name below its options.
 The full-name views are deliberate exceptions to the preview limit.
