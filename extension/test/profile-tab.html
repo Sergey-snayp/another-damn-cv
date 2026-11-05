@@ -13,7 +13,8 @@
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
       --allow-file-access-from-files --virtual-time-budget=30000 \
       --dump-dom "file://$PWD/test/profile-tab.html" | grep -o '<pre id="result">.*</pre>'
-  Run it again with ?applied for the "already applied" banner.
+  Run it again with ?applied for the "already applied" banner, and with
+  ?form for the short form when the page shows no company.
 -->
 <script>
   const store = {
@@ -22,9 +23,11 @@
     appResumes: [{ id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }],
     autofillDefaults: [{ id: 'd1', kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }],
   };
-  const sentToPage = [], opened = [], captured = [];
+  const sentToPage = [], opened = [], captured = [], recorded = [];
   // ?applied: the page's job was saved and applied to before the panel opened.
   const APPLIED_MODE = location.search.includes('applied');
+  // ?form: the page shows no company, so Add opens the short form first.
+  const FORM_MODE = location.search.includes('form');
   let lookupReply = APPLIED_MODE ? { job: { id: 'j9', status: 'interview', appliedAt: '2026-11-02T10:00:00.000Z', companyLogo: null } } : { job: null }, failNextCapture = '';
   const noop = () => {};
   const event = { addListener: noop, removeListener: noop };
@@ -35,8 +38,8 @@
       get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: async (options) => { opened.push(options.url); },
       sendMessage: async (_tab, message) => {
         sentToPage.push(message);
-        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: 'Acme', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [{ key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
-        if (message.type === 'questions') return { questions: [] };
+        if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', logo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [{ key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
+        if (message.type === 'questions') return { questions: [{ id: '7', question: 'How did you hear about us?', kind: 'text', value: 'https://another-damn.cv' }, { id: '8', question: 'Why Acme?', kind: 'textarea', value: '' }] };
         if (message.type === 'fill') return { filled: 3, failures: [], notes: [], missing: [] };
         return null;
       },
@@ -58,6 +61,7 @@
   window.fetch = async (url, options = {}) => {
     const path = String(url).replace(/^https?:\/\/[^/]+/, '');
     if (path.startsWith('/api/jobs/lookup')) return reply(lookupReply);
+    if (/^\/api\/jobs\/[^/]+\/application$/.test(path)) { recorded.push({ path, body: JSON.parse(options.body) }); return reply({}); }
     if (path === '/api/jobs/capture') {
       if (failNextCapture) { const message = failNextCapture; failNextCapture = ''; return new Response(JSON.stringify({ message }), { status: 500 }); }
       const body = JSON.parse(options.body); captured.push(body); return reply({ job: { id: 'j1', companyLogo: body.companyLogo, status: 'saved', appliedAt: null }, created: true });
@@ -80,6 +84,21 @@
     document.body.insertAdjacentHTML('afterbegin', new DOMParser().parseFromString(markup, 'text/html').body.innerHTML.replace(/<script[\s\S]*?<\/script>/g, ''));
     await import('../src/sidepanel.js');
     await wait(1500);
+    if (FORM_MODE) {
+      document.getElementById('job-save').click();
+      await wait(100);
+      const form = document.getElementById('job-form');
+      expect(form && form.querySelector('[name="title"]').value === 'Engineer' && form.querySelector('[name="company"]').value === '', 'Add opens the form, with the title found on the page');
+      expect(!captured.length, 'nothing is saved before the form is sent');
+      const company = form.querySelector('[name="company"]');
+      company.value = 'Acme Corp';
+      company.dispatchEvent(new Event('input', { bubbles: true }));
+      form.requestSubmit();
+      await wait(600);
+      expect(JSON.stringify(captured.at(-1)?.hints) === JSON.stringify({ title: 'Engineer', company: 'Acme Corp', confirmed: true }), `the typed details are sent as confirmed (sent ${JSON.stringify(captured.at(-1)?.hints)})`);
+      expect(/Added to your jobs!/.test(document.getElementById('panel-autofill').textContent) && !document.getElementById('job-form'), 'then the job is added and the form closes');
+      throw Object.assign(new Error('done'), { done: true });
+    }
     if (APPLIED_MODE) {
       const text = document.getElementById('panel-autofill').textContent;
       expect(/You've already applied to this job/.test(text) && /Applied on Nov 2, 2026/.test(text), `an applied job says so, with the date (got "${text.slice(0, 240)}")`);
@@ -112,18 +131,23 @@
     document.getElementById('job-save').click();
     await wait(600);
     expect(/Couldn't add this job/.test(panel()) && /Try again/.test(panel()), `a failed save says so, with Try again (got "${panel().slice(0, 200)}")`);
-    document.getElementById('job-save').click(); // Try again
+    document.getElementById('job-retry').click(); // Try again
     await wait(600);
+    expect(JSON.stringify(captured.at(-1)?.hints) === JSON.stringify({ title: 'Engineer', company: 'Acme' }), `a normal save sends the title and company seen on the page (sent ${JSON.stringify(captured.at(-1)?.hints)})`);
     expect(captured.at(-1)?.companyLogo?.startsWith('data:image/png') && captured.at(-1)?.url === 'https://jobs.example.com/apply', `saving sends the page with its logo (sent ${JSON.stringify(captured.at(-1))?.slice(0, 160)})`);
     expect(/Added to your jobs!/.test(panel()) && !document.querySelector('.job-add'), `then "Added to your jobs!" and the button goes (got "${panel().slice(0, 200)}")`);
     document.getElementById('job-view').click();
     await wait(100);
     expect(opened.at(-1) === 'http://localhost:5173/jobs/j1', `View in app opens the job (opened ${opened.at(-1)})`);
+    expect(recorded.at(-1)?.path === '/api/jobs/j1/application' && JSON.stringify(recorded.at(-1)?.body.answers) === JSON.stringify([{ question: 'How did you hear about us?', answer: 'https://another-damn.cv' }]),
+      `saving records the answers on the form, not the empty ones (recorded ${JSON.stringify(recorded.at(-1))})`);
 
     // Autofill sends the current role and school from the Profile.
     document.getElementById('fill').click();
     await wait(800);
     let fill = sentToPage.filter((message) => message.type === 'fill').at(-1);
+    expect(recorded.length === 2 && recorded[1].path === '/api/jobs/j1/application', `Autofill on a saved job adds the answers to it (recorded ${recorded.length})`);
+    expect(/added to this job in the app/.test(document.getElementById('panel-autofill').textContent), 'and says so after the fill');
     expect(fill?.profile.currentCompany === 'Ciklum' && fill?.profile.school === 'Dnipro Institute of Infrastructure and Transport', `Autofill takes the role and school from the Profile (sent ${JSON.stringify(fill && { currentCompany: fill.profile.currentCompany, school: fill.profile.school })})`);
 
     // Switch to the selected CV.

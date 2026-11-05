@@ -1,7 +1,7 @@
 import { canonicalUrl } from '../../domain/canonical-url';
-import { APPLIED_STATUSES, type JobStatus } from '../../domain/job';
+import { APPLIED_STATUSES, cleanAnswers, type ApplicationAnswer, type JobStatus } from '../../domain/job';
 import { JobInputError, JobNotFoundError } from '../errors';
-import type { JobRepository } from '../ports/job-repository';
+import type { JobChanges, JobRepository } from '../ports/job-repository';
 import type {
   ApplicationDraft,
   ApplicationPreferences,
@@ -99,6 +99,32 @@ export class SetApplicationResume {
     const snapshot = resumeId ? await this.resumes.savedSnapshot(userId, resumeId) : null;
     if (resumeId && !snapshot) throw new JobInputError('Choose one of your saved resumes.');
     return this.jobs.update(userId, id, { applicationResumeId: resumeId, applicationSnapshot: snapshot });
+  }
+}
+
+/**
+ * What the extension used on a saved job's form: the CV it uploaded and the
+ * answers to the company's questions. Recorded when the job is saved after
+ * Autofill, or when Autofill runs on a job saved before. Never saves a job.
+ */
+export class RecordApplication {
+  constructor(
+    private readonly jobs: Pick<JobRepository, 'findOwned' | 'update'>,
+    private readonly resumes: ApplicationResumeReader,
+  ) {}
+  async execute(userId: string, id: string, input: { resumeId?: string; answers?: ApplicationAnswer[] }) {
+    if (!(await this.jobs.findOwned(userId, id))) throw new JobNotFoundError();
+    const changes: JobChanges = {};
+    if (input.resumeId) {
+      const snapshot = await this.resumes.savedSnapshot(userId, input.resumeId);
+      if (!snapshot) throw new JobInputError('Choose one of your saved resumes.');
+      Object.assign(changes, { applicationResumeId: input.resumeId, applicationSnapshot: snapshot });
+    }
+    const answers = input.answers ? cleanAnswers(input.answers) : [];
+    if (answers.length) changes.applicationAnswers = answers;
+    return Object.keys(changes).length
+      ? this.jobs.update(userId, id, changes)
+      : (await this.jobs.findOwned(userId, id))!;
   }
 }
 

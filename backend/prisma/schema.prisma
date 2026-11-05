@@ -118,6 +118,9 @@ model Job {
   appliedAt           DateTime?
   applicationResumeId String?
   applicationSnapshot Int?
+  /// The company's questions and the person's answers when they applied, from
+  /// the extension: [{ question, answer }].
+  applicationAnswers  Json?
   /// Calendar date and optional wall time in the selected IANA time zone.
   interviewDate       String?
   interviewTime       String?

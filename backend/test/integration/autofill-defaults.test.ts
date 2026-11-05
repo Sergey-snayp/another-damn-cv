@@ -235,3 +235,103 @@ test('a captured job keeps its logo, and the extension can tell it is saved', as
   assert.equal(stranger.job, null);
   assert.equal((await call(`/jobs/lookup?url=${encodeURIComponent(url)}`)).status, 401);
 });
+
+test('the extension records the CV and answers used on a saved job, for its owner only', async () => {
+  const url = `https://jobs.example.com/apply/${randomUUID()}`;
+  const { job } = (await (
+    await call('/jobs/capture', {
+      method: 'POST',
+      token: ownerToken,
+      body: { url, text: 'Engineer at Acme' },
+    })
+  ).json()) as { job: { id: string } };
+  const cv = (await (
+    await call('/resumes', { method: 'POST', user: owner.user.id, body: { name: 'Applied CV' } })
+  ).json()) as { id: string };
+  await call(`/resumes/${cv.id}/save`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { summaries: [{ variant: 'default', text: 'Payments engineer.' }] },
+  });
+
+  const recorded = await call(`/jobs/${job.id}/application`, {
+    method: 'POST',
+    token: ownerToken,
+    body: {
+      resumeId: cv.id,
+      answers: [
+        { question: 'How did you hear about us?', answer: 'https://another-damn.cv' },
+        { question: 'Why Acme?', answer: '  ' },
+        { question: 'how did you hear about us?', answer: 'Twice' },
+      ],
+    },
+  });
+  assert.equal(recorded.status, 200);
+  const detail = (await (await call(`/jobs/${job.id}`, { user: owner.user.id })).json()) as {
+    applicationResumeId: string;
+    applicationSnapshot: number;
+    applicationAnswers: { question: string; answer: string }[];
+  };
+  assert.equal(detail.applicationResumeId, cv.id);
+  assert.ok(detail.applicationSnapshot > 0);
+  assert.deepEqual(detail.applicationAnswers, [{ question: 'how did you hear about us?', answer: 'Twice' }]);
+
+  // Answers only: the CV stays as it was.
+  await call(`/jobs/${job.id}/application`, {
+    method: 'POST',
+    token: ownerToken,
+    body: { answers: [{ question: 'Why Acme?', answer: 'Payments.' }] },
+  });
+  const again = (await (await call(`/jobs/${job.id}`, { user: owner.user.id })).json()) as {
+    applicationResumeId: string;
+    applicationAnswers: unknown[];
+  };
+  assert.equal(again.applicationResumeId, cv.id);
+  assert.deepEqual(again.applicationAnswers, [{ question: 'Why Acme?', answer: 'Payments.' }]);
+
+  assert.equal(
+    (await call(`/jobs/${job.id}/application`, { method: 'POST', token: otherToken, body: { answers: [] } }))
+      .status,
+    404,
+  );
+  const foreignCv = await call(`/jobs/${job.id}/application`, {
+    method: 'POST',
+    token: ownerToken,
+    body: { resumeId: randomUUID() },
+  });
+  assert.equal(foreignCv.status, 400);
+});
+
+test('a saved job takes its name from the page until the page is read, and typed values stay', async () => {
+  type Saved = {
+    job: { title: string | null; company: string | null; location: string | null; editedFields: string[] };
+  };
+  const seen = (await (
+    await call('/jobs/capture', {
+      method: 'POST',
+      token: ownerToken,
+      body: {
+        url: `https://jobs.example.com/${randomUUID()}`,
+        text: 'A posting',
+        hints: { title: 'Engineer', company: 'Box' },
+      },
+    })
+  ).json()) as Saved;
+  assert.deepEqual([seen.job.title, seen.job.company, seen.job.editedFields], ['Engineer', 'Box', []]);
+
+  const typed = (await (
+    await call('/jobs/capture', {
+      method: 'POST',
+      token: ownerToken,
+      body: {
+        url: `https://jobs.example.com/${randomUUID()}`,
+        text: 'A posting',
+        hints: { title: 'Backend developer', company: 'Acme', location: 'Warsaw', confirmed: true },
+      },
+    })
+  ).json()) as Saved;
+  assert.deepEqual(
+    [typed.job.title, typed.job.company, typed.job.location, [...typed.job.editedFields].sort()],
+    ['Backend developer', 'Acme', 'Warsaw', ['company', 'location', 'title']],
+  );
+});

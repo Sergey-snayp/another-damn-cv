@@ -12,7 +12,15 @@ export interface CaptureInput {
   text?: string;
   jsonLd?: unknown[];
   companyLogo?: string;
+  /**
+   * The title, company and location the extension saw on the page. Used when
+   * the page's own data has none. `confirmed`: the person typed or checked
+   * them, so they count as edited and a later page read keeps them.
+   */
+  hints?: { title?: string; company?: string; location?: string; confirmed?: boolean };
 }
+
+const HINTED = ['title', 'company', 'location'] as const;
 
 export class CaptureJob {
   constructor(
@@ -44,6 +52,18 @@ export class CaptureJob {
         ? {}
         : unprotectedFields(read.fields, new Set(existing?.editedFields))),
     };
+    const edited = new Set(existing?.editedFields);
+    for (const key of HINTED) {
+      const hint = input.hints?.[key]?.trim();
+      if (!hint) continue;
+      if (input.hints?.confirmed) {
+        changes[key] = hint;
+        edited.add(key);
+      } else if (!edited.has(key) && !(changes[key] ?? existing?.[key])) {
+        changes[key] = hint;
+      }
+    }
+    if (input.hints?.confirmed) changes.editedFields = [...edited];
     const job = existing
       ? await this.jobs.update(userId, existing.id, changes)
       : await this.jobs.create({
@@ -52,7 +72,7 @@ export class CaptureJob {
           source: 'extension',
           canonicalUrl: canonical,
           extraction: read.extraction,
-          editedFields: [],
+          editedFields: changes.editedFields ?? [],
         });
     if (job.extraction === 'pending') this.scheduler.enqueue(job.id);
     return { job, created: !existing };

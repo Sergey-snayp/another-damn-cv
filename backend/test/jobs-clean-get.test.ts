@@ -39,6 +39,7 @@ const row: StoredJob = {
   appliedAt: null,
   applicationResumeId: null,
   applicationSnapshot: null,
+  applicationAnswers: null,
   interviewDate: null,
   interviewTime: null,
   interviewTimeZone: null,
@@ -97,6 +98,7 @@ test('clean GetJob keeps the current detail response and scopes job and history 
     appliedAt: null,
     applicationResumeId: null,
     applicationSnapshot: null,
+    applicationAnswers: null,
     interview: null,
     history: [
       { id: 'event-2', from: 'applied', to: 'interview', at: '2026-10-01T12:34:56.000Z' },

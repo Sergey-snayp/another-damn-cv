@@ -1,5 +1,5 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
-import { captureTab, jobUrl, lookupJob, NotSignedInError, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
+import { captureTab, jobUrl, lookupJob, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
 import { cachedResumes, chooseResume, cvTexts, cvUrl, fetchResumes, fileNameFor, hasFreshPdf, pdfFor } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
@@ -222,6 +222,29 @@ function relocationText() { return Object.entries(relocationMap(autofillDefaults
 // with View in app), or could not add (Try again). Nothing is saved unless
 // the person presses the button.
 let savedJob = { url: null, job: null, checkedAt: 0 }, jobBusy = false, jobAdded = false, jobProblem = '';
+// What the last Autofill used on a page: { url, resumeId, answers }. Recorded on the job when it is saved.
+let lastApplication = null;
+// The short form shown before saving when the page's title or company is unknown: { title, company, location }.
+let jobForm = null, jobHints = {};
+const jobTitleOnPage = () => (scan?.context?.title && scan.context.title !== 'Application form' ? scan.context.title : '');
+/** The company's questions on the page that have an answer: [{ question, answer }]. */
+async function answersOnPage(tab) {
+  try { return (await questionsFromFrames(tab)).filter(item => item.value).map(item => ({ question: item.question, answer: item.value })); }
+  catch { return []; }
+}
+/**
+ * Adds the CV and answers to the page's job when it is saved. The answers are
+ * read again from the page, so ones typed after Autofill count too. Returns
+ * whether anything was recorded.
+ */
+async function recordOnSavedJob(url, answers = null) {
+  const job = savedJob.url === url ? savedJob.job : null;
+  if (!job) return false;
+  const used = lastApplication?.url === url ? lastApplication : null;
+  const record = { resumeId: used?.resumeId, answers: answers?.length ? answers : used?.answers ?? [] };
+  if (!record.resumeId && !record.answers.length) return false;
+  try { await recordApplication(job.id, record); return true; } catch { return false; }
+}
 const APPLIED = new Set(['applied', 'screening', 'interview', 'offer', 'accepted', 'rejected', 'declined']);
 /** The logo to show and save: the page's, the saved job's, or the company site's icon. */
 function jobLogo() {
@@ -233,7 +256,7 @@ function jobLogo() {
 /** Whether this page's job is saved: on a new page, and again at most once a minute. */
 async function checkSaved(url) {
   if (!url || (savedJob.url === url && Date.now() - savedJob.checkedAt < 60_000)) return;
-  if (savedJob.url !== url) { savedJob = { url, job: null, checkedAt: 0 }; jobAdded = false; jobProblem = ''; }
+  if (savedJob.url !== url) { savedJob = { url, job: null, checkedAt: 0 }; jobAdded = false; jobProblem = ''; jobForm = null; }
   savedJob.checkedAt = Date.now();
   try { const job = await lookupJob(url); if (savedJob.url === url) savedJob.job = job; }
   catch { /* signed out or offline: the button offers saving, which explains */ }
@@ -249,7 +272,7 @@ function jobBanner() {
     return `<div class="job-banner is-applied" role="status"><span><strong>You've already applied to this job</strong>${date ? `<small>Applied on ${esc(date)}</small>` : ''}</span>${view}</div>`;
   }
   if (saved) return `<div class="job-banner is-saved" role="status"><span>This job is already in your jobs</span>${view}</div>`;
-  if (jobProblem) return `<div class="job-banner is-error" role="alert"><span><strong>Couldn't add this job</strong><small>${esc(jobProblem)}</small></span><button class="link-button" id="job-save">Try again</button></div>`;
+  if (jobProblem) return `<div class="job-banner is-error" role="alert"><span><strong>Couldn't add this job</strong><small>${esc(jobProblem)}</small></span><button class="link-button" id="job-retry">Try again</button></div>`;
   return '';
 }
 function pageCard() {
@@ -259,15 +282,37 @@ function pageCard() {
   const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
   const logo = jobLogo();
   const saved = savedJob.url === currentTab?.url && savedJob.job;
+  const form = jobForm && !saved && !jobBusy ? `<form class="card job-form" id="job-form">
+      <p class="job-form-intro">We could not read all the job details. Check them, then save.</p>
+      ${[['title', 'Title', 'Backend Developer'], ['company', 'Company', 'Acme'], ['location', 'Location', 'Warsaw, Poland']].map(([key, label, hint]) => `<label class="field"><span>${label}${key === 'location' ? ' <small>(optional)</small>' : ''}</span><input name="${key}" value="${esc(jobForm[key])}" placeholder="${hint}" ${key === 'location' ? '' : 'required'}></label>`).join('')}
+      <div class="job-form-actions"><button type="button" class="ghost small" id="job-form-cancel">Cancel</button><button type="submit" class="primary small" id="job-form-save">Save job</button></div>
+    </form>` : '';
   const button = jobBusy ? '<div class="job-adding" aria-live="polite">Adding to your jobs…</div>'
-    : saved || jobProblem ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
+    : saved || jobProblem || jobForm ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
   return `<div class="card page-card" id="job-card">
     <span class="company-avatar" data-initials="${esc(initials)}">${logo ? `<img src="${esc(logo)}" alt="" referrerpolicy="no-referrer">` : esc(initials)}</span>
     <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-company">${esc(company)}</span><span class="page-site">${esc(scan.host)}</span></span>
-  </div>${jobBanner()}${button}`;
+  </div>${jobBanner()}${form}${button}`;
 }
-/** Saves the posting with its logo. Only from the button. */
-function saveJob() {
+/**
+ * "Add this job to the app": saves at once when the page shows the title and
+ * company, otherwise opens the short form first.
+ */
+function onAddJob() {
+  const company = scan?.context?.company ?? '';
+  if (jobTitleOnPage() && company) { saveJob({ title: jobTitleOnPage(), company }); return; }
+  jobForm = { title: jobTitleOnPage(), company, location: '' };
+  jobProblem = '';
+  renderAutofill();
+  document.querySelector(`#job-form input[name="${jobForm.title ? 'company' : 'title'}"]`)?.focus();
+}
+/**
+ * Saves the posting with its logo. Only from the button or the form. `hints`
+ * are the title and company seen on the page; `confirmed` when the person
+ * typed them, so the app keeps them.
+ */
+function saveJob(hints = {}) {
+  jobHints = hints;
   const tab = currentTab;
   if (jobBusy || !tab?.id) return;
   const reason = unsendableReason(tab);
@@ -278,16 +323,38 @@ function saveJob() {
     try {
       if (!await access) { jobProblem = 'Access to this site was not allowed.'; return; }
       const logo = jobLogo();
-      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) });
-      savedJob = { url: tab.url, job, checkedAt: Date.now() }; jobAdded = true;
+      const known = Object.fromEntries(Object.entries(hints).filter(([, value]) => value !== '' && value !== undefined));
+      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...(Object.keys(known).length && { hints: known }) });
+      savedJob = { url: tab.url, job, checkedAt: Date.now() }; jobAdded = true; jobForm = null;
+      await recordOnSavedJob(tab.url, await answersOnPage(tab));
     } catch (error) {
       if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
       jobProblem = /Cannot access|cannot be scripted|Frame with ID/i.test(error.message) ? 'Chrome does not let extensions read this page.' : error.message;
     } finally { jobBusy = false; renderAutofill(); }
   })();
 }
+// Saved from the right-click menu while the panel is open: show it as saved.
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type !== 'job-saved' || sender.tab || message.url !== currentTab?.url) return false;
+  savedJob.checkedAt = 0;
+  void checkSaved(message.url);
+  return false;
+});
+document.addEventListener('input', event => {
+  const input = event.target.closest('#job-form input');
+  if (input && jobForm) jobForm[input.name] = input.value;
+});
+document.addEventListener('submit', event => {
+  if (!event.target.closest('#job-form')) return;
+  event.preventDefault();
+  const values = Object.fromEntries(['title', 'company', 'location'].map(key => [key, String(jobForm?.[key] ?? '').trim()]));
+  if (!values.title || !values.company) return;
+  saveJob({ ...values, confirmed: true });
+});
 document.addEventListener('click', event => {
-  if (event.target.closest('#job-save')) saveJob();
+  if (event.target.closest('#job-form-cancel')) { jobForm = null; renderAutofill(); return; }
+  if (event.target.closest('#job-retry')) { saveJob(jobHints); return; }
+  if (event.target.closest('#job-save')) onAddJob();
   else if (event.target.closest('#job-view') && savedJob.job) void chrome.tabs.create({ url: jobUrl(savedJob.job.id) });
 });
 // A logo that fails to load gives way to the company's initials.
@@ -372,6 +439,9 @@ async function runFill() {
       notes: [...(result.notes ?? []), ...(result.fromAnswers ? [`${result.fromAnswers} filled from saved answers`] : []), ...answerNotes],
       missing: result.missing ?? [],
     };
+    // The CV this Autofill uploaded and the answers now on the form, for the saved job.
+    lastApplication = { url: target?.url, resumeId: file ? resumes.chosen?.id : undefined, answers: await answersOnPage(target) };
+    if (await recordOnSavedJob(target?.url)) fillReport.notes.push('Your CV and answers were added to this job in the app');
   } catch (error) { fillReport = { url: target?.url, text: error.message, kind: 'error', notes: [], missing: [] }; }
   finally { filling = false; renderAutofill(); }
   // Settings → "Draft unknown questions with AI": off unless the person switched it on.

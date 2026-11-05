@@ -94,6 +94,20 @@ export async function lookupJob(url) {
   return (await response.json()).job ?? null;
 }
 
+/** Records on a saved job the CV Autofill uploaded and the answers on the form. Never saves a job. */
+export async function recordApplication(jobId, { resumeId, answers }) {
+  const { auth } = await chrome.storage.local.get('auth');
+  if (!auth?.syncToken) throw new NotSignedInError();
+  const response = await fetch(`${API_URL}/api/jobs/${encodeURIComponent(jobId)}/application`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.syncToken}` },
+    body: JSON.stringify({ ...(resumeId && { resumeId }), ...(answers?.length && { answers: answers.slice(0, 200) }) }),
+  });
+  if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
+  if (!response.ok) throw new Error(`Server returned ${response.status}.`);
+  return response.json();
+}
+
 export class NotSignedInError extends Error {
   constructor() {
     super('Sign in first: open the Profile tab.');

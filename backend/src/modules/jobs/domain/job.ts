@@ -48,6 +48,8 @@ export interface Job {
   appliedAt: Date | null;
   applicationResumeId: string | null;
   applicationSnapshot: number | null;
+  /** The company's questions and your answers when you applied (from the extension). */
+  applicationAnswers: ApplicationAnswer[] | null;
   interview: InterviewSchedule | null;
 }
 
@@ -73,7 +75,10 @@ export interface JobDetail {
   history: JobStatusEvent[];
 }
 
-export type JobSummary = Omit<Job, 'html' | 'pageText' | 'structuredData' | 'description'>;
+export type JobSummary = Omit<
+  Job,
+  'html' | 'pageText' | 'structuredData' | 'description' | 'applicationAnswers'
+>;
 
 /** Fields learned from a page. A missing value clears an unprotected field. */
 export interface JobFields {
@@ -98,3 +103,19 @@ export const EDITABLE_FIELDS = [
 ] as const satisfies readonly (keyof JobFields)[];
 
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
+
+export interface ApplicationAnswer {
+  question: string;
+  answer: string;
+}
+
+/** Trimmed answers, blank ones and repeats left out, at most 100. */
+export function cleanAnswers(items: ApplicationAnswer[]): ApplicationAnswer[] {
+  const byQuestion = new Map<string, ApplicationAnswer>();
+  for (const item of items) {
+    const question = item.question.trim().replace(/\s+/g, ' ');
+    const answer = item.answer.trim();
+    if (question && answer) byQuestion.set(question.toLowerCase(), { question, answer });
+  }
+  return [...byQuestion.values()].slice(0, 100);
+}

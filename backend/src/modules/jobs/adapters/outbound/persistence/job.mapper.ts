@@ -1,10 +1,13 @@
 import type { Job as StoredJob, JobStatusEvent as StoredEvent } from '@prisma/client';
-import type { Job, JobStatus, JobStatusEvent } from '../../../domain/job';
+import type { ApplicationAnswer, Job, JobStatus, JobStatusEvent } from '../../../domain/job';
 
 export function jobFromRow(row: StoredJob): Job {
-  const { interviewDate, interviewTime, interviewTimeZone, ...fields } = row;
+  const { interviewDate, interviewTime, interviewTimeZone, applicationAnswers, ...fields } = row;
   return {
     ...fields,
+    applicationAnswers: Array.isArray(applicationAnswers)
+      ? (applicationAnswers as unknown as ApplicationAnswer[])
+      : null,
     interview: interviewFromRow({ interviewDate, interviewTime, interviewTimeZone }),
     source: lower(row.source),
     status: lower(row.status),

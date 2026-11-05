@@ -42,6 +42,7 @@ export function exampleJob(changes: Partial<Job> = {}): Job {
     appliedAt: null,
     applicationResumeId: null,
     applicationSnapshot: null,
+    applicationAnswers: null,
     interview: null,
     ...changes,
   };

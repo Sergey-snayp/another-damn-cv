@@ -81,6 +81,8 @@ export interface Job {
   appliedAt: string | null;
   applicationResumeId: string | null;
   applicationSnapshot: number | null;
+  /** The company's questions and your answers when you applied, from the extension. Job page only. */
+  applicationAnswers?: { question: string; answer: string }[] | null;
   interview: InterviewSchedule | null;
 }
 

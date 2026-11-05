@@ -36,7 +36,7 @@ export class PrismaJobRepository implements JobRepository, JobReadingRepository,
   async list(userId: string, status?: JobStatus) {
     const rows = await this.database.job.findMany({
       where: { userId, ...(status && { status: statusToRow(status) }) },
-      omit: { html: true, pageText: true, structuredData: true, description: true },
+      omit: { html: true, pageText: true, structuredData: true, description: true, applicationAnswers: true },
       orderBy: { updatedAt: 'desc' },
     });
     return rows.map(({ interviewDate, interviewTime, interviewTimeZone, ...row }) => ({
@@ -241,7 +241,7 @@ function applicationWriteError(error: unknown): unknown {
 }
 
 function changesToRow(changes: JobChanges) {
-  const { status, extraction, structuredData, interview, ...fields } = changes;
+  const { status, extraction, structuredData, interview, applicationAnswers, ...fields } = changes;
   return {
     ...fields,
     ...(interview !== undefined && {
@@ -253,6 +253,12 @@ function changesToRow(changes: JobChanges) {
     ...(extraction !== undefined && { extraction: extractionToRow(extraction) }),
     ...(structuredData !== undefined && {
       structuredData: structuredData === null ? Prisma.DbNull : (structuredData as Prisma.InputJsonValue),
+    }),
+    ...(applicationAnswers !== undefined && {
+      applicationAnswers:
+        applicationAnswers === null
+          ? Prisma.DbNull
+          : (applicationAnswers as unknown as Prisma.InputJsonValue),
     }),
   };
 }

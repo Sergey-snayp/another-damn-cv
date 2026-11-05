@@ -143,6 +143,21 @@ export function JobDetail() {
 
       <ApplicationResume job={job} onChanged={(next) => setJob((current) => current ? { ...current, ...next } : current)} />
 
+      {job.applicationAnswers?.length ? (
+        <section className="card application-answers" style={{ marginTop: 16 }}>
+          <h2>Your answers</h2>
+          <p className="muted small">What you answered on the application form, recorded by the extension.</p>
+          <dl>
+            {job.applicationAnswers.map((item) => (
+              <div key={item.question}>
+                <dt>{item.question}</dt>
+                <dd>{item.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
+
       <section className="card" style={{ marginTop: 16 }}>
         <InterviewDateEditor job={job} onSaved={(next) => setJob((current) => current ? { ...current, ...next } : current)} />
       </section>

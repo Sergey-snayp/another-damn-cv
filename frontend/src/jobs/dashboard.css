@@ -1435,3 +1435,9 @@ body:has(.dashboard-page) {
 .dashboard-menu-item.is-danger,
 .dashboard-manage-bar button.is-danger { color: var(--color-error, #b91c1c); }
 .dashboard-control.dashboard-danger { background: var(--color-error, #b91c1c); border-color: var(--color-error, #b91c1c); color: #fff; }
+
+/* The job page: answers recorded by the extension when you applied. */
+.application-answers h2 { margin: 0 0 4px; font-size: 16px; }
+.application-answers dl { display: grid; gap: 12px; margin: 12px 0 0; }
+.application-answers dt { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.application-answers dd { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--color-muted); }

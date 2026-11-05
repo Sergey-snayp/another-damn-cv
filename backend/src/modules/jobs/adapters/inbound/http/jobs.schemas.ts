@@ -37,8 +37,30 @@ export const captureSchema = z.object({
     .max(2_000)
     .refine((value) => /^https?:\/\//i.test(value), 'The logo must be a web address.')
     .optional(),
+  /** Title, company and location seen on the page, or typed in the extension's form (confirmed). */
+  hints: z
+    .object({
+      title: z.string().max(500).optional(),
+      company: z.string().max(300).optional(),
+      location: z.string().max(300).optional(),
+      confirmed: z.boolean().optional(),
+    })
+    .strict()
+    .optional(),
 });
 export type CaptureInput = z.infer<typeof captureSchema>;
+
+/** What the extension used on a saved job's form: the CV it uploaded and the answers. */
+export const recordApplicationSchema = z
+  .object({
+    resumeId: z.string().min(1).max(100).optional(),
+    answers: z
+      .array(z.object({ question: z.string().max(500), answer: z.string().max(5_000) }).strict())
+      .max(200)
+      .optional(),
+  })
+  .strict();
+export type RecordApplicationInput = z.infer<typeof recordApplicationSchema>;
 
 /** The extension's check: is this page's job already saved? */
 export const lookupQuerySchema = z.object({ url: z.string().min(1).max(4_000) });

@@ -211,3 +211,7 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .job-banner.is-added { background: var(--color-success-soft, #e7f9f0); color: var(--color-success, #15803d); }
 .job-banner.is-saved, .job-banner.is-applied { background: var(--color-accent-soft); }
 .job-banner.is-error { background: var(--color-error-soft, #fff1f2); color: var(--color-error, #9f1239); }
+.job-form { display: grid; gap: 4px; margin: -6px 0 14px; padding: 14px; }
+.job-form-intro { margin: 0 0 6px; font-size: 13px; color: var(--color-muted); }
+.job-form .field small { font-weight: 400; color: var(--color-muted); }
+.job-form-actions { display: flex; justify-content: flex-end; gap: 8px; }

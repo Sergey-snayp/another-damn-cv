@@ -29,6 +29,7 @@ export function presentJob(job: PublicJob) {
     appliedAt: job.appliedAt?.toISOString() ?? null,
     applicationResumeId: job.applicationResumeId ?? null,
     applicationSnapshot: job.applicationSnapshot ?? null,
+    applicationAnswers: job.applicationAnswers ?? null,
     interview: job.interview ?? null,
   };
 }
@@ -42,6 +43,10 @@ export function presentJobDetail(detail: JobDetail) {
 }
 
 export function presentJobSummary(job: JobSummary, tailoredResumeId: string | null) {
-  const { description: _description, ...summary } = presentJob({ ...job, description: null });
+  const {
+    description: _description,
+    applicationAnswers: _answers,
+    ...summary
+  } = presentJob({ ...job, description: null, applicationAnswers: null });
   return { ...summary, tailoredResumeId };
 }

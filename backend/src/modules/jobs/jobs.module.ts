@@ -13,6 +13,7 @@ import {
   AddApplication,
   ExportApplications,
   ImportApplications,
+  RecordApplication,
   SetApplicationResume,
   UpdateApplicationPreferences,
 } from './application/use-cases/manage-applications';
@@ -55,6 +56,12 @@ import { JOB_REPOSITORY, RESUME_LINK_READER } from './jobs.tokens';
       inject: [JOB_REPOSITORY, RESUMES_API],
       useFactory: (jobs: JobRepository, resumes: ResumesApi) =>
         new SetApplicationResume(jobs, new PublicApplicationResumeReader(resumes)),
+    },
+    {
+      provide: RecordApplication,
+      inject: [JOB_REPOSITORY, RESUMES_API],
+      useFactory: (jobs: JobRepository, resumes: ResumesApi) =>
+        new RecordApplication(jobs, new PublicApplicationResumeReader(resumes)),
     },
     {
       provide: RESUME_LINK_READER,

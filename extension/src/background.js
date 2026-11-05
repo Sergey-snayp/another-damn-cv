@@ -1,6 +1,6 @@
 import { matchAnswers, saveAnswers } from './answers.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
-import { NotSignedInError } from './jobs.js';
+import { captureTab, lookupJob, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
 
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
@@ -220,7 +220,65 @@ async function removeLocalPdfs() {
   }
   if (keys.length) await chrome.storage.local.remove(keys);
 }
-chrome.runtime.onInstalled.addListener(() => void removeLocalPdfs().catch((err) => console.error('[cv-autofill] cleanup failed', err)));
+chrome.runtime.onInstalled.addListener(() => {
+  void removeLocalPdfs().catch((err) => console.error('[cv-autofill] cleanup failed', err));
+  // Right-click on a page → "Save job to Another Damn CV".
+  chrome.contextMenus.removeAll(() => chrome.contextMenus.create({ id: SAVE_JOB_MENU, title: 'Save job to Another Damn CV', contexts: ['page'] }));
+});
+
+// ─── Save a job from the right-click menu ─────────────────────────────────
+// Saves the page's job without opening the panel, like Simplify's "Save job
+// to Simplify". The toolbar icon shows ✓ for two seconds when it worked (or
+// the job was saved before: never saved twice) and ! when it did not.
+// Signed out: ! and the panel opens, so the person can sign in.
+const SAVE_JOB_MENU = 'save-job';
+
+function flashBadge(tabId, ok) {
+  void chrome.action.setBadgeBackgroundColor({ tabId, color: ok ? '#15803d' : '#d93025' }).catch(() => {});
+  void chrome.action.setBadgeTextColor?.({ tabId, color: '#ffffff' })?.catch(() => {});
+  void chrome.action.setBadgeText({ tabId, text: ok ? '✓' : '!' }).catch(() => {});
+  setTimeout(() => void chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {}), 2500);
+}
+
+/** The page's title, company and logo, from the page scripts (src/logo.js, content.js). */
+async function pageDetails(tabId) {
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const context = typeof scan === 'function' ? scan().context : null;
+        const found = context && window.CVAutofillLogo ? window.CVAutofillLogo.find(context.company) : {};
+        return { title: context?.title ?? '', company: context?.company ?? '', logo: found.logo ?? null, domain: found.domain ?? null };
+      },
+    });
+    return result?.result ?? {};
+  } catch { return {}; }
+}
+
+async function saveJobFromMenu(tab) {
+  const tabId = tab.id;
+  if (unsendableReason(tab)) { flashBadge(tabId, false); return; }
+  try {
+    if (await lookupJob(tab.url)) { flashBadge(tabId, true); return; }
+    const details = await pageDetails(tabId);
+    const logo = details.logo || (details.domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(details.domain)}&sz=128` : null);
+    const hints = Object.fromEntries(Object.entries({ title: details.title, company: details.company }).filter(([, value]) => value));
+    await sendCapture({ ...await captureTab(tabId), ...(logo && { companyLogo: logo }), ...(Object.keys(hints).length && { hints }) });
+    flashBadge(tabId, true);
+    // An open panel on this page shows the job as saved.
+    void chrome.runtime.sendMessage({ type: 'job-saved', url: tab.url }).catch(() => {});
+  } catch (error) {
+    flashBadge(tabId, false);
+    if (error instanceof NotSignedInError) {
+      await setTabOpen(tabId, true);
+      try { await chrome.tabs.sendMessage(tabId, { type: 'panel-open' }, { frameId: 0 }); } catch { await injectPanel(tabId); }
+    }
+  }
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === SAVE_JOB_MENU && Number.isInteger(tab?.id)) void saveJobFromMenu(tab);
+});
 
 // ─── CV PDFs ────────────────────────────────────────────────────────────────
 // The app makes PDFs only through the browser's print. To upload a CV, open its

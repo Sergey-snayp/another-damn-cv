@@ -87,6 +87,7 @@ test('clean job detail matches the recorded response fields and history', async 
     appliedAt: row.appliedAt?.toISOString() ?? null,
     applicationResumeId: null,
     applicationSnapshot: null,
+    applicationAnswers: null,
     interview: null,
     history: [{ id: events[0].id, from: 'saved', to: 'interview', at: events[0].at.toISOString() }],
   };
@@ -136,6 +137,7 @@ test('capture maps JSON/nulls correctly and recapture preserves fields while pen
     appliedAt: null,
     applicationResumeId: null,
     applicationSnapshot: null,
+    applicationAnswers: null,
     interview: null,
   });
 });

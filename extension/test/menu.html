@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — right-click "Save job to Another Damn CV"</title>
+<!--
+  Runs the real background script against a stand-in for Chrome and the app.
+  The right-click item saves the page's job with its logo and the title and
+  company seen on the page, and the toolbar icon flashes ✓. A job saved
+  before is not saved twice. Signed out: ! and the panel opens.
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --allow-file-access-from-files --virtual-time-budget=15000 \
+      --dump-dom "file://$PWD/test/menu.html" | grep -o '<pre id="result">.*</pre>'
+-->
+<script>
+  const store = { auth: { syncToken: 'token' } };
+  const listeners = {}, badges = [], captured = [], toPage = [], menus = [];
+  let saved = null;
+  const event = (name) => ({ addListener: (fn) => { listeners[name] = fn; }, removeListener() {} });
+  window.chrome = {
+    runtime: {
+      id: 'test', getURL: (p) => `chrome-extension://test/${p}`, onMessage: event('runtime.onMessage'), onInstalled: event('runtime.onInstalled'),
+      getManifest: () => ({ version: 'test', content_scripts: [{ matches: ['https://*/*'], js: ['src/panel-host.js'] }] }),
+      sendMessage: async () => null,
+    },
+    storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => Object.assign(store, values), remove: async () => {} }, session: { get: async () => ({}), set: async () => {}, remove: async () => {} } },
+    action: { onClicked: event('action.onClicked'), setBadgeText: async (options) => { badges.push(options.text); }, setBadgeBackgroundColor: async () => {}, setBadgeTextColor: async () => {}, setTitle: async () => {} },
+    contextMenus: { removeAll: (done) => done?.(), create: (item) => menus.push(item), onClicked: event('contextMenus.onClicked') },
+    tabs: { onUpdated: event('tabs.onUpdated'), onRemoved: event('tabs.onRemoved'), sendMessage: async (_id, message) => { toPage.push(message.type); }, create: async () => ({ id: 9 }), get: async () => ({}) },
+    scripting: {
+      executeScript: async ({ func, files }) => {
+        if (files) return [];
+        const source = String(func);
+        if (source.includes('__cvCapture')) return [{ result: { url: 'https://job-boards.greenhouse.io/boxinc/jobs/1', pageTitle: 'Job Application for Engineer at Box', text: 'Engineer at Box' } }];
+        if (source.includes('CVAutofillLogo')) return [{ result: { title: 'Engineer', company: 'Box', logo: 'https://cdn.example/box-logo.png', domain: null } }];
+        return [{ result: false }];
+      },
+    },
+    debugger: { attach: async () => {}, detach: async () => {}, sendCommand: async () => ({}) },
+  };
+  const reply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  window.fetch = async (url, options = {}) => {
+    const path = String(url).replace(/^https?:\/\/[^/]+/, '');
+    if (path.startsWith('/api/jobs/lookup')) return reply({ job: saved });
+    if (path === '/api/jobs/capture') { const body = JSON.parse(options.body); captured.push(body); saved = { id: 'j1' }; return reply({ job: { id: 'j1' }, created: true }); }
+    return reply({}, 404);
+  };
+</script>
+<body>
+<script type="module">
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const tab = { id: 7, url: 'https://job-boards.greenhouse.io/boxinc/jobs/1' };
+  try {
+    await import('../src/background.js');
+    listeners['runtime.onInstalled']?.({ reason: 'update' });
+    await wait(50);
+    expect(menus.some((item) => item.id === 'save-job' && item.title === 'Save job to Another Damn CV' && item.contexts.includes('page')), `adds the right-click item (menus: ${JSON.stringify(menus)})`);
+
+    listeners['contextMenus.onClicked']({ menuItemId: 'save-job' }, tab);
+    await wait(300);
+    expect(captured.length === 1 && captured[0].companyLogo === 'https://cdn.example/box-logo.png' && JSON.stringify(captured[0].hints) === JSON.stringify({ title: 'Engineer', company: 'Box' }), `saves the job with its logo and the page's title and company (sent ${JSON.stringify(captured[0])})`);
+    expect(badges[0] === '✓', `the toolbar icon shows ✓ (badges: ${JSON.stringify(badges)})`);
+
+    listeners['contextMenus.onClicked']({ menuItemId: 'save-job' }, tab);
+    await wait(300);
+    expect(captured.length === 1 && badges.filter((text) => text === '✓').length === 2, 'a job saved before is not saved twice, and still shows ✓');
+
+    delete store.auth;
+    saved = null;
+    listeners['contextMenus.onClicked']({ menuItemId: 'save-job' }, { id: 8, url: 'https://jobs.example.com/2' });
+    await wait(300);
+    expect(badges.includes('!') && toPage.includes('panel-open'), `signed out: ! and the panel opens (badges ${JSON.stringify(badges)}, page ${JSON.stringify(toPage)})`);
+
+    listeners['contextMenus.onClicked']({ menuItemId: 'save-job' }, { id: 10, url: 'chrome://extensions' });
+    await wait(100);
+    expect(badges.filter((text) => text === '!').length === 2 && captured.length === 1, 'a page that cannot be saved shows ! and sends nothing');
+  } catch (error) { problems.push(`threw: ${error.stack}`); }
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.prepend(out);
+</script>
+</body>
