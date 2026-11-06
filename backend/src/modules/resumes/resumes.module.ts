@@ -20,7 +20,12 @@ import { RewriteController } from './adapters/inbound/http/rewrite.controller';
 import { ResumeAssistantController } from './adapters/inbound/http/resume-assistant.controller';
 import { ResumeAssistant } from './application/use-cases/resume-assistant';
 import { ClaudeResumeChat } from './adapters/outbound/ai/claude-resume-chat';
+import { ClaudeSkillTailor } from './adapters/outbound/ai/claude-skill.tailor';
+import { ClaudeSummaryWriter } from './adapters/outbound/ai/claude-summary.writer';
 import { PrismaAiSettingsStore } from './adapters/outbound/persistence/prisma-ai-settings.store';
+import { PrismaTechnologyNoteStore } from './adapters/outbound/persistence/prisma-technology-note.store';
+import { ClaudeTechnologyDescriber } from './adapters/outbound/ai/claude-technology.describer';
+import { DescribeTechnology } from './application/use-cases/describe-technology';
 import { CvImportController } from './adapters/inbound/http/cv-import.controller';
 import { ExtensionResumesController } from './adapters/inbound/http/extension-resumes.controller';
 import {
@@ -146,6 +151,18 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           new PrismaAiSettingsStore(database),
           new ClaudeResumeChat(runner),
           new ClaudeLineRewriter(runner),
+          new ClaudeSkillTailor(runner),
+          new ClaudeSummaryWriter(runner),
+        ),
+    },
+    {
+      provide: DescribeTechnology,
+      inject: [RESUMES_API, PrismaService, ClaudeProcessRunner],
+      useFactory: (resumes: ResumesApi, database: PrismaService, runner: ClaudeProcessRunner) =>
+        new DescribeTechnology(
+          resumes,
+          new PrismaTechnologyNoteStore(database),
+          new ClaudeTechnologyDescriber(runner),
         ),
     },
     {

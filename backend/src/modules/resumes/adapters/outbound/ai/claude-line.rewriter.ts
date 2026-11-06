@@ -6,6 +6,7 @@ import type {
   RewriteResult,
 } from '../../../application/use-cases/rewrite-resume-line';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
+import { WRITING_RULES, withoutEmDashes } from '../../../domain/cv-writing-guide';
 
 /**
  * Rewriting one piece of a resume.
@@ -19,18 +20,22 @@ import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-proces
  */
 const SYSTEM = `You rewrite one line of someone's CV.
 
-ABSOLUTE RULES — breaking any of these makes the output unusable:
-- Use ONLY facts present in the original text. Never add a technology, metric,
-  company, date, scale or outcome that is not already there.
-- If the user asks for something the original cannot support — "add numbers",
-  "make it sound more senior" — rewrite what you can and say plainly in
+ABSOLUTE RULES. Breaking any of these makes the output unusable:
+- Use ONLY facts present in the original text, or in a <cv_facts> block when one is
+  given. Never add a technology, metric, company, date, scale or outcome that is not
+  already there. A job posting is never a source of facts about the candidate.
+- If the user asks for something the original cannot support ("add numbers",
+  "make it sound more senior"), rewrite what you can and say plainly in
   "cannotDo" what you could not, and why.
 - Never inflate. "Helped build" does not become "led".
-- Keep it to one or two lines. Dense and concrete beats long.
+- Keep a bullet or headline to one or two lines, and a summary to three or four
+  sentences. Dense and concrete beats long.
 - Keep the candidate's voice. This is their claim, not your prose.
 
 What you SHOULD do: cut filler, lead with the outcome, use the vocabulary the
-user asked for when the underlying fact already matches, and prefer active verbs.`;
+user asked for when the underlying fact already matches, and prefer active verbs.
+
+${WRITING_RULES}`;
 
 export class ClaudeLineRewriter implements LineRewriter {
   constructor(private readonly llm: Pick<ClaudeProcessRunner, 'complete'>) {}
@@ -57,7 +62,11 @@ If the original already satisfies the request, return it unchanged and say so in
 cannotDo.`;
 
     const answer = readAnswer(await this.llm.complete(prompt, SYSTEM));
-    return { original: text, suggestion: answer.suggestion.trim() || text, cannotDo: answer.cannotDo };
+    return {
+      original: text,
+      suggestion: withoutEmDashes(answer.suggestion.trim()) || text,
+      cannotDo: answer.cannotDo,
+    };
   }
 }
 

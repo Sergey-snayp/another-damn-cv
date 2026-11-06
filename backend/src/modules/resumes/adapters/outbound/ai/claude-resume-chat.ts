@@ -3,6 +3,7 @@ import { firstJsonObject } from '../../../../../shared/ai/json';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
 import type { ResumeChatModel } from '../../../application/use-cases/resume-assistant';
 import type { RenderedResume } from '../../../domain/resume';
+import { BULLET_RULES, SUMMARY_RULES, WRITING_RULES } from '../../../domain/cv-writing-guide';
 
 /**
  * The editor's chat about one CV.
@@ -22,7 +23,14 @@ ABSOLUTE RULES:
 
 You may propose changes as suggestions. Each one replaces the summary, the
 headline or one bullet (by its id), or adds a skill the CV's text already shows.
-Propose only changes that answer the question, at most 6.`;
+Propose only changes that answer the question, at most 6. A summary follows the summary
+rules and a bullet the bullet rules below.
+
+${WRITING_RULES}
+
+${SUMMARY_RULES}
+
+${BULLET_RULES}`;
 
 function cvForPrompt(resume: RenderedResume): string {
   const lines: string[] = [];

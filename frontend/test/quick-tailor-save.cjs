@@ -41,7 +41,7 @@ async function editBulletControls(page, quick = false) {
   assert.notEqual(target.background, 'rgba(0, 0, 0, 0)');
   assert.notEqual(target.shadow, 'none', 'the exact bullet is outlined before removal');
   assert.equal(target.roleShadow, 'none', 'removing a bullet does not mark the entire experience');
-  assert.ok(target.label.includes('Remove bullet'));
+  assert.equal(target.label, 'none', 'a remove shows no text on hover');
   assert.equal((await bullets(first)).length, 2, 'hover is only a preview');
   if (quick) await page.screenshot({ path: '/private/tmp/job-agent-remove-bullet.png' });
   await page.click(remove);
@@ -90,10 +90,10 @@ async function editInlineSections(page) {
   await edit(skill, 'Discard this', 'Escape');
   assert.equal(await page.$eval(skill, element => element.textContent), 'Node.js', 'Escape restores the original skill');
   await edit(skill, 'TypeScript');
-  await edit('[data-section="skills"] [aria-label="Skill category"]', 'Languages');
-  await page.focus('[data-section="skills"] button[title="Remove Python"]');
+  await edit('[data-section="skills"] [aria-label="Skill type"]', 'Languages');
+  await page.focus('[data-section="skills"] button[aria-label="Remove skill: Python"]');
   await pause(160);
-  assert.notEqual(await page.$eval('[data-section="skills"] button[title="Remove Python"]', button => getComputedStyle(button.closest('.pro-skill')).boxShadow), 'none', 'removing a skill outlines only that skill');
+  assert.notEqual(await page.$eval('[data-section="skills"] button[aria-label="Remove skill: Python"]', button => getComputedStyle(button.closest('.pro-skill')).boxShadow), 'none', 'removing a skill outlines only that skill');
   await page.keyboard.press('Enter');
   await page.hover('[data-section="skills"] li');
   await page.hover('[data-section="skills"] .doc-add.inline');
@@ -101,6 +101,21 @@ async function editInlineSections(page) {
   await page.click('[data-section="skills"] .doc-add.inline');
   assert.equal(await page.evaluate(() => document.activeElement.closest('.pro-skill')?.dataset.added), 'true');
   await edit('[data-section="skills"] .pro-skill [contenteditable="true"]:empty', 'Rust');
+  // A new skills line: its type first (optional), Enter, then the skill.
+  await page.click('[data-control-key="add-skill"]');
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Skill type (optional)', 'a new skills line starts at its type');
+  await page.keyboard.type('Data');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Skill', 'Enter moves from the type to the skill');
+  await page.keyboard.type('Kafka');
+  await page.evaluate(() => document.activeElement.blur());
+  await page.waitForFunction(() => !document.querySelector('.pro-new-skill-line'));
+  // Left empty, a new line leaves nothing behind.
+  const skillCount = await page.$$eval('[data-section="skills"] .pro-skill', rows => rows.length);
+  await page.click('[data-control-key="add-skill"]');
+  await page.evaluate(() => document.activeElement.blur());
+  await page.waitForFunction(() => !document.querySelector('.pro-new-skill-line'));
+  assert.equal(await page.$$eval('[data-section="skills"] .pro-skill', rows => rows.length), skillCount, 'an empty new skills line is dropped');
 
   const field = label => `[data-section="education"] [aria-label="${label}"]`;
   await edit(field('Institution'), 'New University');
@@ -128,7 +143,7 @@ async function editInlineSections(page) {
   await page.click('[data-section="education"] > .doc-add');
   assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Institution', 'new education is focused in place');
   assert.equal(await page.$$eval('[data-section="education"] article', rows => rows.length), 3, 'education can be added directly on the CV');
-  await page.focus('[data-section="education"] article:last-of-type button[title="Remove education"]');
+  await page.focus('[data-section="education"] article:last-of-type button[aria-label^="Remove education"]');
   await pause(160);
   assert.notEqual(await page.$eval('[data-section="education"] article:last-of-type', row => getComputedStyle(row).boxShadow), 'none', 'the whole education entry is marked for removal');
   await page.keyboard.press('Enter');
@@ -144,6 +159,8 @@ function assertInlineChanges(resume, source) {
   assert.ok(!resume.skills.some(skill => skill.name === 'Python'));
   assert.ok(resume.skills.some(skill => skill.name === 'Rust' && skill.category === 'Languages'));
   assert.ok(resume.skills.some(skill => skill.name === 'AWS' && skill.category === 'Cloud'), 'other categories remain unchanged');
+  assert.ok(resume.skills.some(skill => skill.name === 'Kafka' && skill.category === 'Data'), 'a new line keeps its type');
+  assert.ok(!resume.skills.some(skill => !skill.name.trim()), 'no empty skills are saved');
   assert.deepEqual(resume.educations.map(row => [row.institution, row.degree, row.field, row.from, row.to]), [
     ['New University', 'Master of Science', 'Software Engineering', '2014-09', '2018-06'],
     ['EPAM', '', 'Advanced Node.js — Streams, Event Emitters, Microservices', '', ''],
@@ -163,7 +180,7 @@ function assertInlineChanges(resume, source) {
 async function check(browser, failure, fullEditor = false, historyMode = false) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1180, height: 880 });
-  const events = [], errors = [];
+  const events = [], errors = [], aiRequests = [];
   let fail = failure, cvSaved = false;
   let savedId = fullEditor ? 'copy-1' : null, createdDocuments = fullEditor ? 1 : 0;
   let resume = {
@@ -235,7 +252,11 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       if (pathname === '/api/jobs') return reply([]);
       if (pathname === '/api/jobs/job-1') return reply({ id: 'job-1', title: 'Engineer', company: 'Acme', description: 'Build Node.js services.' });
       if (pathname.endsWith('/score')) return reply({ score: historyMode ? 50 : null, keywords: historyMode ? { matched: ['Node.js'], missing: ['Docker'] } : null, issues: [], job: { id: 'job-1', title: 'Engineer', company: 'Acme' } });
-      if (pathname.endsWith('/tailor-line')) { await pause(150); return reply({ suggestion: 'Built services for Acme.', cannotDo: [] }); }
+      if (pathname.endsWith('/tailor-summary')) {
+        aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(150);
+        return reply({ original: '', summary: 'Built services for **Acme**.', wordCount: 4, mapping: [{ item: 'Node.js', type: 'required', evidence: 'NO EVIDENCE', employer: null }], gaps: ['Node.js'], decidingGap: 'Node.js', failedChecks: [{ id: 'word-count', name: 'Word count', ok: false, detail: '4 words; it must be 80 to 120.' }], attempts: 3 });
+      }
+      if (pathname.endsWith('/tailor-line')) { aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(150); return reply({ suggestion: 'Built services for Acme.', cannotDo: [] }); }
       if (pathname.endsWith('/save')) {
         events.push('save');
         await pause(100);
@@ -350,14 +371,25 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.ok((await page.$eval('[data-section="skills"]', element => element.textContent)).includes('Docker'));
 
       await page.click('[title="Tailor the summary for the job"]');
-      await page.waitForSelector('.qt-card .primary');
-      await page.click('.qt-card .primary');
-      assert.equal(await summaryText(), 'Built services for Acme.');
+      await page.waitForSelector('.qt-card .qt-generate');
+      await pause(200);
+      assert.equal(aiRequests.length, 0, 'the AI button opens the card; nothing is generated before Generate');
+      await page.type('.qt-request textarea', 'Make it shorter');
+      await page.click('.qt-card .qt-generate');
+      await page.waitForSelector('.qt-item .primary');
+      assert.equal(aiRequests.at(-1).instruction, 'Make it shorter', 'the request typed in the card goes to the AI');
+      const report = await page.$eval('.qt-item', element => element.innerText);
+      for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'How it answers the posting'])
+        assert.ok(report.includes(part), `the summary card shows: ${part}`);
+      await page.click('.qt-item .primary');
+      assert.equal(await summaryText(), 'Built services for Acme.', 'the summary goes in with its bold');
       await page.click(undo);
       assert.equal(await summaryText(), 'First edit.');
       await page.click(redo);
       assert.equal(await summaryText(), 'Built services for Acme.');
       await page.click('[title="Tailor the summary for the job"]');
+      await page.waitForSelector('.qt-card .qt-generate');
+      await page.click('.qt-card .qt-generate');
       await page.click(undo);
       await pause(200);
       assert.equal(await page.$('.qt-card'), null, 'Undo dismisses suggestions and ignores late responses');

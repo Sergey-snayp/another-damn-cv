@@ -1,11 +1,15 @@
 import { z } from 'zod';
 import { firstJsonObject } from '../../../../../../shared/ai/json';
 import { tidyLine } from '../../../../domain/tailoring/text';
+import { withoutEmDashes } from '../../../../domain/cv-writing-guide';
+
+/** One line as the CV will show it: spacing tidied, no em dashes (the writing guide). */
+const cvLine = (text: string) => withoutEmDashes(tidyLine(text));
 import type { TailoringCandidate, RetryCandidate } from '../../../../domain/tailoring/candidate';
 import type { PromptIds } from './prompt-ids';
 const answerBulletSchema = z.object({
   id: z.coerce.string(),
-  text: z.string().transform(tidyLine).catch(''),
+  text: z.string().transform(cvLine).catch(''),
   keep: z.unknown().transform((keep) => keep !== false),
   reason: z
     .string()
@@ -13,7 +17,7 @@ const answerBulletSchema = z.object({
     .catch(null),
 });
 const answerSchema = z.object({
-  summary: z.string().transform(tidyLine).catch(''),
+  summary: z.string().transform(cvLine).catch(''),
   roles: z
     .array(
       z
@@ -62,7 +66,7 @@ export function readCandidate(answer: string, ids: PromptIds): TailoringCandidat
 const retryAnswerSchema = z.object({
   lines: z
     .array(
-      z.object({ id: z.coerce.string(), text: z.string().transform(tidyLine) }).catch({ id: '', text: '' }),
+      z.object({ id: z.coerce.string(), text: z.string().transform(cvLine) }).catch({ id: '', text: '' }),
     )
     .catch([]),
 });

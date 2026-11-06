@@ -3,6 +3,12 @@ import type { Achievement, RenderedResume } from '../../../../domain/tailoring/r
 import { byPosition, summaryVariantOf } from '../../../../domain/tailoring/ordering';
 import type { JobForTailoring } from '../../../../domain/tailoring/types';
 import type { PromptIds } from './prompt-ids';
+import {
+  BULLET_COUNT_RULES,
+  BULLET_RULES,
+  SUMMARY_RULES,
+  WRITING_RULES,
+} from '../../../../domain/cv-writing-guide';
 
 export const TAILOR_SYSTEM = `You tailor a candidate's resume to one job posting.
 
@@ -31,13 +37,20 @@ What you SHOULD do:
   "cloud-native", "client stakeholders") wherever the fact honestly matches,
   and lead with the part this job cares about most.
 - Return a bullet unchanged only when no honest rewording makes it more relevant.
-- Keep each bullet under about 35 words. End every bullet with a period.
 - Order each role's bullets most relevant first.
 - Suggest hiding a bullet (keep: false) when it is irrelevant to this job or is
   not a real achievement (a heading, a duplicate), and say why in a few words.
   Keep at least two bullets per role when it has them.
-- Rewrite the summary for this job: 2-4 sentences, concrete, no buzzwords.
-- Always return the full text of every bullet, changed or not.`;
+- Rewrite the summary for this job, following the summary rules below.
+- Always return the full text of every bullet, changed or not.
+
+${WRITING_RULES}
+
+${SUMMARY_RULES}
+
+${BULLET_RULES}
+
+${BULLET_COUNT_RULES}`;
 
 /** Long postings are cut here; the requirements come first in practice. */
 const MAX_DESCRIPTION_CHARS = 20_000;

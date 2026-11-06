@@ -4,19 +4,51 @@ import { ResumeError } from '../errors';
 import { scoreResume, type ResumeScore } from '../../domain/resume-score';
 import {
   aiSettingsFrom,
+  checkedSkillGroups,
   checkedSuggestions,
   settingsForPrompt,
   type AiSettings,
   type ChatMessage,
   type ChatSuggestion,
   type RawSuggestion,
+  type SkillGroupInput,
+  type SkillGroupSuggestion,
 } from '../../domain/resume-assistant';
+import { resumeText } from '../../domain/resume-score';
+import { BULLET_RULES, DESCRIPTION_RULES, HEADLINE_RULES } from '../../domain/cv-writing-guide';
 import type { RenderedResume } from '../../domain/resume';
 import type { LineRewriter, RewriteResult } from './rewrite-resume-line';
+import { experienceRecord } from '../../domain/summary-checks';
+import { writeCheckedSummary, type CheckedSummary, type SummaryWriter } from './tailor-summary';
 
-const TAILOR_LINE = `Tailor this line for the job below. Use the job's words for things the line
-already shows, and put first what the job cares about. Do not add anything the
-line does not say: no new technology, number or responsibility.`;
+const TAILOR_LINE = `Tailor this line for the job below, so a recruiter for this job sees the match at once:
+- Lead with the part of the line this job cares about most.
+- Use the job's own words for what the line already shows (if the job says "event-driven"
+  and the line describes services fed by Kafka events, say event-driven).
+- Make it tighter and more concrete: an active verb first, no filler.
+- Keep every number, technology and fact the line has. Add none it does not have:
+  no new technology, number, scale or responsibility.
+Return your best tailored version. Return the line unchanged only if no honest
+improvement for this job exists, and say why in cannotDo.`;
+
+/** What each kind of line is told: the shared tailoring rules, then the guide for that kind. */
+const TAILOR_BY_KIND = {
+  bullet: `${TAILOR_LINE}\n\n${BULLET_RULES}`,
+  blurb: `${TAILOR_LINE}\n\n${DESCRIPTION_RULES}`,
+  headline: `${TAILOR_LINE}\n\n${HEADLINE_RULES}`,
+} as const;
+
+/**
+ * The person's own request from the card ("shorter", "stress the payments
+ * work"), added to the instruction. It can steer the wording, never the facts:
+ * the honesty rules of the system prompt still apply.
+ */
+function withRequest(instruction: string, request?: string): string {
+  const asked = request?.trim();
+  return asked
+    ? `${instruction}\n\nThe candidate's request for this change (follow it within the rules above): ${asked}`
+    : instruction;
+}
 
 /** The job to score or chat about: one from the tracker, or a title and description typed in. */
 export type JobChoice = { jobId: string } | { title?: string; description: string };
@@ -24,6 +56,16 @@ export type JobChoice = { jobId: string } | { title?: string; description: strin
 export interface AiSettingsStore {
   aiSettings(resumeId: string): Promise<unknown>;
   setAiSettings(resumeId: string, settings: AiSettings): Promise<void>;
+}
+
+export interface SkillTailor {
+  tailor(input: {
+    job: { title: string; description: string };
+    evidence: string;
+    groups: SkillGroupInput[];
+    elsewhere: string[];
+    settings: string;
+  }): Promise<{ groups: Array<{ category?: string; add?: string[] }>; cannotDo: string[] }>;
 }
 
 export interface ResumeChatModel {
@@ -50,24 +92,91 @@ export class ResumeAssistant {
     private readonly store: AiSettingsStore,
     private readonly model: ResumeChatModel,
     private readonly rewriter: LineRewriter,
+    private readonly skillTailor?: SkillTailor,
+    private readonly summaryWriter?: SummaryWriter,
   ) {}
+
+  /**
+   * Quick tailoring of the summary: written from the summary instructions with
+   * the posting and the experience record, checked in code, and sent back for
+   * a fix at most twice. Returns the best version with any checks it still fails.
+   */
+  async tailorSummary(
+    userId: string,
+    id: string,
+    input: { instruction?: string; job: JobChoice },
+  ): Promise<CheckedSummary & { original: string }> {
+    if (!this.summaryWriter) throw new ResumeError('invalid', 'Summary writing is not available.');
+    const resume = await this.resumes.current(userId, id);
+    const job = await this.job(userId, input.job);
+    const record = experienceRecord(resume);
+    const written = await writeCheckedSummary(
+      this.summaryWriter,
+      {
+        job: [
+          job.title && `Job title: ${job.title}`,
+          job.company && `Company: ${job.company}`,
+          job.description.slice(0, 20_000),
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        experience: record.text,
+        request: input.instruction,
+      },
+      record,
+    );
+    return { ...written, original: resume.summaries.default ?? '' };
+  }
+
+  /**
+   * Quick tailoring of skills lines: only skills the CV shows elsewhere are added,
+   * at the end of a line; nothing is reordered or dropped. Every name is checked.
+   */
+  async tailorSkills(
+    userId: string,
+    id: string,
+    input: { groups: SkillGroupInput[]; elsewhere: string[]; instruction?: string; job: JobChoice },
+  ): Promise<{ groups: SkillGroupSuggestion[]; cannotDo: string[] }> {
+    if (!this.skillTailor) throw new ResumeError('invalid', 'Skills tailoring is not available.');
+    const resume = await this.resumes.current(userId, id);
+    const job = await this.job(userId, input.job);
+    const evidence = resumeText(resume);
+    const answer = await this.skillTailor.tailor({
+      job: { title: job.title, description: job.description },
+      evidence,
+      groups: input.groups,
+      elsewhere: input.elsewhere,
+      settings: withRequest(await this.promptSettings(id), input.instruction),
+    });
+    return {
+      groups: checkedSkillGroups(input.groups, answer.groups, evidence, input.elsewhere),
+      cannotDo: answer.cannotDo.slice(0, 8),
+    };
+  }
 
   /** Quick tailoring: one line of the CV reworded for the job, for the person to accept or not. */
   async tailorLine(
     userId: string,
     id: string,
-    input: { text: string; kind: 'bullet' | 'summary' | 'headline'; context?: string; job: JobChoice },
+    input: {
+      text: string;
+      kind: 'bullet' | 'blurb' | 'headline';
+      context?: string;
+      instruction?: string;
+      job: JobChoice;
+    },
   ): Promise<RewriteResult> {
-    await this.resumes.assertOwned(userId, id);
     const job = await this.job(userId, input.job);
-    const context = [
-      input.context,
-      `The job: ${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 8_000)}`,
-      await this.promptSettings(id),
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-    return this.rewriter.rewrite({ text: input.text, kind: input.kind, instruction: TAILOR_LINE, context });
+    const jobText = `The job: ${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 8_000)}`;
+    await this.resumes.assertOwned(userId, id);
+    if (!input.text.trim()) throw new ResumeError('invalid', 'There is nothing to tailor yet.');
+    const context = [input.context, jobText, await this.promptSettings(id)].filter(Boolean).join('\n\n');
+    return this.rewriter.rewrite({
+      text: input.text,
+      kind: input.kind,
+      instruction: withRequest(TAILOR_BY_KIND[input.kind], input.instruction),
+      context,
+    });
   }
 
   async score(

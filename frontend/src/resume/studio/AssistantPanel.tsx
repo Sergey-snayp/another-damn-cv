@@ -9,6 +9,8 @@ import {
   type JobChoice,
   type ResumeScore,
 } from './assistantApi';
+import type { RenderedResume } from '../../resumeApi';
+import { useSkillCard } from '../SkillInfo';
 
 const SECTION_NAMES: Record<IssueSection, string> = {
   header: 'Header',
@@ -44,8 +46,10 @@ interface ChatEntry extends ChatMessage {
  * what to fix, a button that tailors the CV for that job, and a chat about
  * the CV whose suggestions you apply one by one.
  */
-export function AssistantPanel({ resumeId, snapshot, defaultJobId, onIssues, onApply, onOpenSection }: {
+export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIssues, onApply, onOpenSection }: {
   resumeId: string;
+  /** The CV as it is being edited, for the keyword cards' "Used in". */
+  resume?: RenderedResume | null;
   /** The saved version: the score is worked out again after each save. */
   snapshot: number;
   /** A tailored copy starts with its own job. */
@@ -57,6 +61,14 @@ export function AssistantPanel({ resumeId, snapshot, defaultJobId, onIssues, onA
 }) {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
+  /** Pointing at a job keyword shows what it is and where this CV uses it. */
+  const keywordCards = useSkillCard(resumeId, resume ?? null);
+  const keywordCard = (name: string) => ({
+    onMouseEnter: (event: React.MouseEvent<HTMLElement>) => keywordCards.point(name, event.currentTarget),
+    onMouseLeave: keywordCards.leave,
+    onFocus: (event: React.FocusEvent<HTMLElement>) => keywordCards.point(name, event.currentTarget),
+    onBlur: keywordCards.leave,
+  });
   const [choice, setChoice] = useState<JobChoice | null>(defaultJobId ? { jobId: defaultJobId } : null);
   const [picking, setPicking] = useState(!defaultJobId);
   const [mode, setMode] = useState<'tracker' | 'paste'>('tracker');
@@ -217,8 +229,8 @@ export function AssistantPanel({ resumeId, snapshot, defaultJobId, onIssues, onA
                 )}
                 {score.keywords && score.keywords.matched.length > 0 && (
                   <div className="ra-keywords">
-                    {score.keywords.matched.map((name) => <span key={name} className="ra-kw have">✓ {name}</span>)}
-                    {score.keywords.missing.map((name) => <span key={name} className="ra-kw miss">{name}</span>)}
+                    {score.keywords.matched.map((name) => <span key={name} className="ra-kw have" tabIndex={0} {...keywordCard(name)}>✓ {name}</span>)}
+                    {score.keywords.missing.map((name) => <span key={name} className="ra-kw miss" tabIndex={0} {...keywordCard(name)}>{name}</span>)}
                   </div>
                 )}
               </>
@@ -281,6 +293,7 @@ export function AssistantPanel({ resumeId, snapshot, defaultJobId, onIssues, onA
         </div>
         <p className="ra-muted tiny">It only rewords what your CV says. Nothing changes until you click Apply.</p>
       </section>
+      {keywordCards.card}
     </div>
   );
 }

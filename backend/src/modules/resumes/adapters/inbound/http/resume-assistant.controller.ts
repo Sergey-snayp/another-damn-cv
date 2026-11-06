@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
@@ -17,7 +18,8 @@ import { ResumeErrorFilter } from './resume-error.filter';
 import { TailoringErrorFilter } from './tailoring-error.filter';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { ResumeAssistant, type JobChoice } from '../../../application/use-cases/resume-assistant';
-import type { AiSettings, ChatMessage } from '../../../domain/resume-assistant';
+import { DescribeTechnology } from '../../../application/use-cases/describe-technology';
+import type { AiSettings, ChatMessage, SkillGroupInput } from '../../../domain/resume-assistant';
 
 const jobSchema = z.union([
   z.object({ jobId: z.string().min(1) }).strict(),
@@ -47,16 +49,37 @@ const chatSchema = z
 
 const tailorLineSchema = z
   .object({
-    text: z
-      .string('There is nothing to tailor yet.')
-      .trim()
-      .min(1, 'There is nothing to tailor yet.')
-      .max(5_000),
-    kind: z.enum(['bullet', 'summary', 'headline']),
+    text: z.string('There is nothing to tailor yet.').trim().max(5_000),
+    // "blurb": the line under a job's title that says what the work was about.
+    kind: z.enum(['bullet', 'blurb', 'headline']),
+    /** What the person asked for in the card, such as "shorter". */
+    instruction: z.string().trim().max(500).optional(),
     context: z.string().max(1_000).optional(),
     job: jobSchema,
   })
   .strict();
+
+const skillName = z.string().trim().min(1).max(80);
+const tailorSkillsSchema = z
+  .object({
+    groups: z
+      .array(z.object({ category: z.string().trim().max(60), skills: z.array(skillName).max(80) }).strict())
+      .min(1)
+      .max(20),
+    elsewhere: z.array(skillName).max(400).default([]),
+    instruction: z.string().trim().max(500).optional(),
+    job: jobSchema,
+  })
+  .strict();
+
+const tailorSummarySchema = z
+  .object({
+    instruction: z.string().trim().max(500).optional(),
+    job: jobSchema,
+  })
+  .strict();
+
+const technologySchema = z.string('Name a technology.').trim().min(1, 'Name a technology.').max(80);
 
 const settingsSchema = z
   .object({
@@ -70,7 +93,20 @@ const settingsSchema = z
 @UseGuards(AuthGuard, ResumeOwnerGuard)
 @UseFilters(ResumeErrorFilter, TailoringErrorFilter)
 export class ResumeAssistantController {
-  constructor(@Inject(ResumeAssistant) private readonly assistant: ResumeAssistant) {}
+  constructor(
+    @Inject(ResumeAssistant) private readonly assistant: ResumeAssistant,
+    @Inject(DescribeTechnology) private readonly technologies: DescribeTechnology,
+  ) {}
+
+  /** What a skill on the CV is: one sentence, written once by the AI and then saved. */
+  @Get(':id/technology')
+  technology(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Query('name', new ZodValidationPipe(technologySchema)) name: string,
+  ) {
+    return this.technologies.describe(userId, id, name);
+  }
 
   @Post(':id/score')
   @HttpCode(200)
@@ -98,9 +134,38 @@ export class ResumeAssistantController {
     @CurrentUser() userId: string,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(tailorLineSchema))
-    body: { text: string; kind: 'bullet' | 'summary' | 'headline'; context?: string; job: JobChoice },
+    body: {
+      text: string;
+      kind: 'bullet' | 'blurb' | 'headline';
+      context?: string;
+      instruction?: string;
+      job: JobChoice;
+    },
   ) {
     return this.assistant.tailorLine(userId, id, body);
+  }
+
+  /** The summary, written from the summary instructions and checked in code. */
+  @Post(':id/tailor-summary')
+  @HttpCode(200)
+  tailorSummary(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(tailorSummarySchema)) body: { instruction?: string; job: JobChoice },
+  ) {
+    return this.assistant.tailorSummary(userId, id, body);
+  }
+
+  /** Quick tailoring of skills lines; every skill returned is checked against the CV. */
+  @Post(':id/tailor-skills')
+  @HttpCode(200)
+  tailorSkills(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(tailorSkillsSchema))
+    body: { groups: SkillGroupInput[]; elsewhere: string[]; instruction?: string; job: JobChoice },
+  ) {
+    return this.assistant.tailorSkills(userId, id, body);
   }
 
   @Get(':id/ai-settings')

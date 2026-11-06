@@ -9,9 +9,11 @@
   min-height: 297mm;
   padding: 48px 56px;
   background: #fff;
-  border: 1px solid #e6e9ed;
+  /* The outline is a shadow, not a border: a border took 2px of the text's width on screen
+     (none in print), so a line that fits on paper wrapped in the preview. */
+  border: 0;
   border-radius: 3px;
-  box-shadow: 0 2px 14px rgba(16, 24, 40, 0.07);
+  box-shadow: 0 0 0 1px #e6e9ed, 0 2px 14px rgba(16, 24, 40, 0.07);
 
   font-family: var(--r-font);
   font-size: var(--r-size);
@@ -452,3 +454,112 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 @media print {
   .tpl-professional [data-edit-item], .tpl-professional [data-added], .tpl-professional .doc-bullets { background: none !important; box-shadow: none !important; }
 }
+
+/* A job's description: a paragraph under its title line, before the bullets. */
+.tpl-professional .doc-role-desc { position: relative; margin: 1px 0 1px; }
+.tpl-professional .doc-role-desc > .pro-text { display: block; }
+.tpl-professional .doc-role-desc > .doc-bulletmeta { opacity: 0; }
+.tpl-professional .doc-role-desc:is(:hover, :focus-within) > .doc-bulletmeta { opacity: 1; pointer-events: auto; }
+.tpl-professional:not(.read-only) .doc-role-desc:is(:hover, :focus-within) { background: var(--color-accent-soft); border-radius: 3px; }
+.tpl-professional .doc-add.pro-add-description { position: absolute; left: 0; top: 2.6em; z-index: 3; margin: 0; padding: 2px 8px; opacity: 0; }
+.tpl-professional .pro-editable-role:is(:hover, :focus-within) > .pro-add-description { opacity: 1; }
+@media print { .doc-role-desc { break-inside: avoid; break-after: avoid; } }
+
+/* A line's buttons (✦, add, remove) sit in a row just past the end of the text, at the
+   line's own height: they never cover the line, and never reach beside the next one.
+   Their names show on hover. */
+.tpl-professional .doc-bullets > li > .doc-bulletmeta,
+.tpl-professional .doc-role-desc > .doc-bulletmeta {
+  left: calc(100% + 6px); right: auto; top: -3px; flex-direction: row; gap: 2px; padding: 2px;
+}
+.tpl-professional .doc-bullets > li > .doc-bulletmeta > *,
+.tpl-professional .doc-role-desc > .doc-bulletmeta > * { width: 24px; height: 24px; margin: 0; padding: 3px; }
+
+/* A job's own buttons (✦, remove) make the same row on its title line. */
+.tpl-professional .doc-roleline > .doc-remove { left: calc(100% + 6px); right: auto; top: -3px; }
+.tpl-professional .doc-roleline:has(> .pro-tailor-role) > .doc-remove { left: calc(100% + 32px); }
+/* A skill's delete: a small badge at its top-right corner, covering as little of the line above as it can. */
+.tpl-professional .pro-skill > .doc-remove { width: 16px; height: 16px; padding: 1px; top: -11px; right: -9px; border-radius: 50%; }
+.tpl-professional .pro-skill > .doc-remove svg { width: 11px; height: 11px; }
+/* While typing in a line its buttons stay hidden: their column reaches past the line, and
+   left open it covered the next job's buttons. Pointing at the line, or keyboard focus on
+   one of its buttons, shows them. */
+.tpl-professional .doc-bullets li:focus-within:not(:hover):not(:has(> .doc-bulletmeta :focus-visible)) > .doc-bulletmeta,
+.tpl-professional .doc-role-desc:focus-within:not(:hover):not(:has(> .doc-bulletmeta :focus-visible)) > .doc-bulletmeta {
+  opacity: 0; pointer-events: none;
+}
+
+/* ── Editing: reaching a line's buttons, and what each button will touch ──────
+   The buttons sit in the right margin. Each column (and a job's own buttons)
+   reaches back over the end of its line with an invisible edge, so moving the
+   pointer from the text to a button never leaves the line and never hides it.
+   The edge belongs to the buttons, so it covers nothing else. */
+.tpl-professional:not(.read-only) .doc-bullets > li > .doc-bulletmeta::before,
+.tpl-professional:not(.read-only) .doc-role-desc > .doc-bulletmeta::before,
+.tpl-professional:not(.read-only) .doc-roleline > .pro-tailor-role::before,
+.tpl-professional:not(.read-only) .doc-roleline:not(:has(> .pro-tailor-role)) > .doc-remove::before {
+  content: ''; position: absolute; top: 0; bottom: 0; right: 100%; width: 14px;
+}
+/* A job's remove button shows while the pointer is anywhere on the job (and on that strip). */
+.tpl-professional:not(.read-only) :is(.pro-editable-role, .doc-education):hover > .doc-roleline > .doc-remove { opacity: 1; }
+
+/* Remove: red over everything it deletes. */
+.tpl-professional:not(.read-only) .doc-role-desc:has(> .doc-bulletmeta > .doc-remove:is(:hover, :focus-visible)),
+.tpl-professional:not(.read-only) [data-edit-item="skill-group"]:has(> .doc-bulletmeta > .doc-remove:is(:hover, :focus-visible)) {
+  background: var(--color-error-soft); box-shadow: 0 0 0 2px var(--color-error-border);
+}
+/* ✦: yellow over everything it would tailor (a line, a job, a section). */
+.tpl-professional:not(.read-only) :is([data-edit-item="bullet"], [data-edit-item="skill-group"], .doc-role-desc):has(> .doc-bulletmeta > .ai:is(:hover, :focus-visible)),
+.tpl-professional:not(.read-only) .pro-editable-role:has(> .doc-roleline > .ai:is(:hover, :focus-visible)),
+.tpl-professional:not(.read-only) .doc-section:has(> h2 .ai:is(:hover, :focus-visible)),
+.tpl-professional:not(.read-only) .doc-headline:has(> .ai:is(:hover, :focus-visible)) {
+  background: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  box-shadow: 0 0 0 2px var(--color-accent-hover);
+  border-radius: 3px;
+}
+/* Add: green where the new line goes (the job's "Add description" marks the job). */
+.tpl-professional:not(.read-only) .pro-editable-role:has(> .pro-add-description:is(:hover, :focus-visible)) > .doc-subline {
+  box-shadow: 0 2px 0 var(--color-success);
+}
+/* Every ✦ is yellow, as everywhere else in the app's AI. */
+.tpl-professional .ai.pro-tailor, .tpl-professional .doc-section > h2 > .ai {
+  width: 22px; height: 20px; padding: 0; border-radius: 6px; background: var(--color-accent); color: var(--color-text);
+}
+@media print {
+  .tpl-professional :is(.doc-section, .pro-editable-role, .doc-role-desc, .doc-headline, [data-edit-item]) { background: none !important; box-shadow: none !important; }
+}
+
+/* A section's delete sits in its heading next to the ✦ (or after the title when there is
+   none), and turns the whole section red while pointed at. */
+.tpl-professional .doc-section > h2 { position: relative; }
+.tpl-professional .doc-section > h2 > .pro-remove-section {
+  position: static; display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 20px; margin: 0 0 0 4px; padding: 0; border-radius: 6px; vertical-align: middle; opacity: 0;
+}
+/* A heading's ✦ shows while pointing anywhere in its section, like its delete. */
+.tpl-professional:not(.read-only) .doc-section:is(:hover, :focus-within) > h2 > .ai { opacity: 1; }
+.tpl-professional:not(.read-only) .doc-section:is(:hover, :focus-within) > h2 > .pro-remove-section,
+.tpl-professional .doc-section > h2 > .pro-remove-section:focus-visible { opacity: 1; }
+.tpl-professional:not(.read-only) .doc-section:has(> h2 > .pro-remove-section:is(:hover, :focus-visible)) {
+  background: var(--color-error-soft); box-shadow: 0 0 0 2px var(--color-error-border); border-radius: 3px;
+}
+
+/* The card shown while pointing at a skill: what it is and where the CV uses it. */
+.skill-info {
+  position: fixed; z-index: 60; width: 320px; max-width: calc(100vw - 16px); padding: 12px 14px;
+  background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 10px;
+  box-shadow: 0 10px 30px var(--color-shadow-strong); font: 13px/1.45 system-ui, -apple-system, sans-serif; pointer-events: none;
+}
+.skill-info p { margin: 0; }
+.skill-info-name { font-weight: 650; font-size: 14px; }
+.skill-info-text { margin-top: 4px !important; }
+.skill-info-loading { color: var(--color-muted); }
+.skill-info-label { margin-top: 10px !important; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--color-muted); }
+.skill-info-uses { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 7px; }
+.skill-info-uses li { display: grid; gap: 1px; }
+.skill-info-where { display: flex; justify-content: space-between; gap: 10px; }
+.skill-info-where b { font-weight: 600; }
+.skill-info-where span { flex-shrink: 0; color: var(--color-muted); font-size: 12px; }
+.skill-info-line { color: var(--color-muted); font-size: 12px; }
+.skill-info-more { color: var(--color-muted); font-size: 12px; }
+@media print { .skill-info { display: none !important; } }

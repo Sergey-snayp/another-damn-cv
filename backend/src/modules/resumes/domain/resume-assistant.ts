@@ -1,5 +1,6 @@
 import type { RenderedResume } from './resume';
 import { resumeText } from './resume-score';
+import { withoutEmDashes } from './cv-writing-guide';
 
 /** How the editor's AI writes for one CV. */
 export interface AiSettings {
@@ -70,7 +71,7 @@ export function checkedSuggestions(resume: RenderedResume, raw: RawSuggestion[])
   const text = resumeText(resume).toLowerCase();
   const skills = new Set(resume.skills.map((skill) => skill.name.trim().toLowerCase()));
   for (const item of raw) {
-    const after = (item.after ?? '').trim();
+    const after = withoutEmDashes((item.after ?? '').trim());
     const reason = (item.reason ?? '').trim().slice(0, 300);
     if (!after || after.length > 2_000) continue;
     if (item.target === 'summary') {
@@ -100,4 +101,59 @@ export function checkedSuggestions(resume: RenderedResume, raw: RawSuggestion[])
     if (out.length >= 8) break;
   }
   return out;
+}
+
+/** One line of the CV's skills section: "Core: TypeScript, Node.js". */
+export interface SkillGroupInput {
+  category: string;
+  skills: string[];
+}
+
+/** A skills line tailored for a job, for the person to use or not. */
+export interface SkillGroupSuggestion {
+  category: string;
+  /** The line as it was, in its order, with any new skills at the end. */
+  skills: string[];
+  /** Skills the CV shows elsewhere, brought into this line for the job. */
+  added: string[];
+  /** Always empty: tailoring only adds. Kept so older clients read the same shape. */
+  dropped: string[];
+}
+
+const sameSkill = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const escapeTerm = (term: string) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Whether the CV's own text names the skill, as a whole word. */
+export function shownIn(evidence: string, skill: string): boolean {
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeTerm(skill.trim())}(?![\\p{L}\\p{N}])`, 'iu').test(evidence);
+}
+
+/**
+ * Skills to add to each line, kept only within what the CV shows. A line keeps
+ * its skills in their order, and nothing is dropped: tailoring only adds. A
+ * skill may be added when the CV's text already names it, no line has it yet,
+ * and the line gets at most five. A line with nothing to add stays as it is.
+ */
+export function checkedSkillGroups(
+  groups: SkillGroupInput[],
+  raw: Array<{ category?: string; add?: string[]; skills?: string[] }>,
+  evidence: string,
+  elsewhere: string[],
+): SkillGroupSuggestion[] {
+  const used = [...elsewhere];
+  for (const group of groups) used.push(...group.skills);
+  const taken = new Set<string>();
+  return groups.map((group) => {
+    const answer = raw.find((item) => sameSkill(item.category ?? '', group.category));
+    const added: string[] = [];
+    for (const name of answer?.add ?? answer?.skills ?? []) {
+      const clean = String(name).trim().slice(0, 80);
+      if (!clean || added.length >= 5) continue;
+      if (used.some((skill) => sameSkill(skill, clean)) || taken.has(clean.toLowerCase())) continue;
+      if (!shownIn(evidence, clean)) continue;
+      added.push(clean);
+      taken.add(clean.toLowerCase());
+    }
+    return { category: group.category, skills: [...group.skills, ...added], added, dropped: [] };
+  });
 }

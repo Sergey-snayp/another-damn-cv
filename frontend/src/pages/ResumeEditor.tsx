@@ -250,9 +250,9 @@ export function ResumeEditor() {
   }, [draft !== null]);
 
   const scale = zoom === 'fit-width'
-    ? Math.min(1.25, Math.max(0.3, (canvasSize.width - 48) / PAGE_WIDTH))
+    ? Math.min(1.25, Math.max(0.3, (canvasSize.width - 108) / PAGE_WIDTH))
     : zoom === 'fit-page'
-      ? Math.max(0.3, Math.min((canvasSize.width - 48) / PAGE_WIDTH, (canvasSize.height - 48) / PAGE_HEIGHT))
+      ? Math.max(0.3, Math.min((canvasSize.width - 108) / PAGE_WIDTH, (canvasSize.height - 48) / PAGE_HEIGHT))
       : zoom;
   const zoomBy = (step: number) => setZoom(Math.round(Math.min(2, Math.max(0.3, scale + step)) * 10) / 10);
 
@@ -585,7 +585,8 @@ export function ResumeEditor() {
             <ScaledPage className="studio-zoom" scale={scale} onClick={openFromPreview}>
               {/* Drawn as the PDF's sheets, with the same page breaks. */}
               <PagedDocument watch={pagedWatch}>
-                <ResumeDocument resumeId={id} resume={draft} theme={theme} onChange={change} />
+                <ResumeDocument resumeId={id} resume={draft} theme={theme} onChange={change}
+                  onHideSection={(key) => setTheme({ ...theme, hiddenSections: [...new Set([...(theme.hiddenSections ?? []), key])] })} />
               </PagedDocument>
             </ScaledPage>
           </div>
@@ -595,6 +596,7 @@ export function ResumeEditor() {
           <aside className="studio-right">
             <AssistantPanel
               resumeId={id}
+              resume={draft}
               snapshot={loaded?.snapshot ?? 0}
               defaultJobId={jobId}
               onIssues={setScore}

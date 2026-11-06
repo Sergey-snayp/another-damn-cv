@@ -343,7 +343,7 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
   assert.match(prompt, /Payments Engineer at Paymorrow/);
   assert.match(prompt, /Docker and Kubernetes/);
   assert.match(prompt, /Engineer at Acme/);
-  assert.match(prompt, /Do not add anything the\s+line does not say/);
+  assert.match(prompt, /Add none it does not have/);
 });
 
 test('a CV can be deleted by its owner: its versions and PDF go, a job applied with it stays', async () => {
@@ -378,4 +378,240 @@ test('a CV can be deleted by its owner: its versions and PDF go, a job applied w
   assert.equal(kept.applicationResumeId, null, 'the job stays, without the deleted CV');
   const list = (await (await call('/resumes', { user: owner.user.id })).json()) as Array<{ id: string }>;
   assert.ok(!list.some((item) => item.id === id));
+});
+
+test('Quick Tailor skills: only adds, at the end of a line, and only what the CV shows', async () => {
+  const { id } = await cv();
+  answer = JSON.stringify({
+    groups: [
+      { category: 'Languages', add: ['Docker', 'TypeScript', 'Terraform', 'NestJS'] },
+      { category: 'Not a line on the CV', add: ['Go'] },
+    ],
+    cannotDo: ['Kafka is not on the CV.'],
+  });
+  const response = await call(`/resumes/${id}/tailor-skills`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: {
+      groups: [{ category: 'Languages', skills: ['Node.js', 'TypeScript', 'COBOL'] }],
+      elsewhere: ['NestJS'],
+      job: { description: JOB },
+    },
+  });
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as {
+    groups: Array<{ category: string; skills: string[]; added: string[]; dropped: string[] }>;
+    cannotDo: string[];
+  };
+  assert.deepEqual(body.groups, [
+    {
+      category: 'Languages',
+      // The line keeps its skills in their order. Docker is in a bullet of the CV: it comes in at the
+      // end. TypeScript is already there, Terraform is not on the CV, NestJS is on another line, and
+      // the unknown line is ignored.
+      skills: ['Node.js', 'TypeScript', 'COBOL', 'Docker'],
+      added: ['Docker'],
+      dropped: [],
+    },
+  ]);
+  assert.deepEqual(body.cannotDo, ['Kafka is not on the CV.']);
+  assert.match(prompts.at(-1)!, /Languages: Node\.js, TypeScript, COBOL/);
+  assert.equal(
+    (
+      await call(`/resumes/${id}/tailor-skills`, {
+        method: 'POST',
+        user: other.user.id,
+        body: { groups: [{ category: '', skills: ['a'] }], job: { description: JOB } },
+      })
+    ).status,
+    404,
+  );
+});
+
+test('Quick Tailor summary: written from the instructions, checked in code, failures sent back at most twice', async () => {
+  const { id } = await cv();
+  const before = prompts.length;
+  answer = JSON.stringify({
+    summary: 'Engineer — optimised **Node.js** APIs on **PostgreSQL** with **Docker**.',
+    word_count: 9,
+    mapping: [
+      { item: 'Node.js', type: 'required', evidence: 'optimised Node.js APIs', employer: 'Acme' },
+      { item: 'Kafka', type: 'required', evidence: 'NO EVIDENCE', employer: null },
+    ],
+    gaps: ['Kafka and event-driven systems'],
+    deciding_gap: 'Kafka and event-driven systems',
+  });
+  const response = await call(`/resumes/${id}/tailor-summary`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { instruction: 'Stress payments', job: { description: JOB } },
+  });
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as {
+    original: string;
+    summary: string;
+    wordCount: number;
+    mapping: unknown[];
+    gaps: string[];
+    decidingGap: string | null;
+    failedChecks: Array<{ id: string; name: string; detail?: string }>;
+    attempts: number;
+  };
+  assert.equal(body.original, 'Backend engineer.');
+  assert.equal(body.summary, 'Engineer — optimised **Node.js** APIs on **PostgreSQL** with **Docker**.');
+  assert.equal(body.wordCount, 8, 'counted in code');
+  assert.deepEqual(body.gaps, ['Kafka and event-driven systems']);
+  assert.equal(body.decidingGap, 'Kafka and event-driven systems');
+  assert.equal(body.mapping.length, 2);
+  assert.equal(body.attempts, 3, 'the same failures every time: 3 attempts, then stop');
+  assert.equal(prompts.length, before + 3);
+  const failed = body.failedChecks.map((check) => check.id);
+  for (const id of ['word-count', 'em-dash', 'us-spelling', 'opening']) assert.ok(failed.includes(id), id);
+
+  const first = prompts[before];
+  assert.match(first, /<job_description>[\s\S]*Node\.js and TypeScript[\s\S]*<\/job_description>/);
+  assert.match(
+    first,
+    /<experience>\nProfessional experience since 2020[\s\S]*<role employer="Acme"[\s\S]*Responsible for Node\.js APIs on PostgreSQL with Docker\.[\s\S]*<\/experience>/,
+  );
+  assert.match(first, /<candidate_request>\nStress payments/);
+  assert.match(prompts.at(-1)!, /<previous_answer>/);
+  assert.match(prompts.at(-1)!, /- No em dashes: 1 em dash/);
+
+  // Not valid JSON twice: an error to try again, not a broken summary.
+  answer = 'Sorry, I cannot.';
+  const broken = await call(`/resumes/${id}/tailor-summary`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { job: { description: JOB } },
+  });
+  assert.equal(broken.status, 503);
+  assert.match(((await broken.json()) as { message: string }).message, /did not return a valid summary/);
+  assert.equal(
+    (
+      await call(`/resumes/${id}/tailor-summary`, {
+        method: 'POST',
+        user: other.user.id,
+        body: { job: { description: JOB } },
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await call(`/resumes/${id}/tailor-line`, {
+        method: 'POST',
+        user: owner.user.id,
+        body: { text: 'Backend engineer.', kind: 'summary', job: { description: JOB } },
+      })
+    ).status,
+    400,
+    'summaries are written by the summary writer only',
+  );
+
+  // Each kind of line gets its own part of the writing guide.
+  answer = JSON.stringify({ suggestion: 'Built Node.js APIs.', cannotDo: [] });
+  for (const [kind, rules] of [
+    ['bullet', /HOW TO WRITE A BULLET/],
+    ['blurb', /HOW TO WRITE A JOB'S DESCRIPTION LINE/],
+    ['headline', /HOW TO WRITE THE HEADLINE/],
+  ] as const) {
+    const line = await call(`/resumes/${id}/tailor-line`, {
+      method: 'POST',
+      user: owner.user.id,
+      body: { text: 'Responsible for Node.js APIs.', kind, job: { description: JOB } },
+    });
+    assert.equal(line.status, 200, kind);
+    assert.match(prompts.at(-1)!, rules, kind);
+  }
+  const empty = await call(`/resumes/${id}/tailor-line`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { text: '  ', kind: 'bullet', job: { description: JOB } },
+  });
+  assert.equal(empty.status, 400);
+});
+
+test('Quick Tailor passes the request typed in the card to the AI, under the same rules', async () => {
+  const { id } = await cv();
+  answer = JSON.stringify({ suggestion: 'Built Node.js APIs.', cannotDo: [] });
+  const line = await call(`/resumes/${id}/tailor-line`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: {
+      text: 'Responsible for Node.js APIs.',
+      kind: 'bullet',
+      instruction: 'Make it shorter',
+      job: { description: JOB },
+    },
+  });
+  assert.equal(line.status, 200);
+  assert.match(
+    prompts.at(-1)!,
+    /The candidate's request for this change \(follow it within the rules above\): Make it shorter/,
+  );
+  assert.match(prompts.at(-1)!, /Add none it does not have/, 'the rules still come first');
+
+  answer = JSON.stringify({
+    groups: [{ category: 'Languages', add: [] }],
+    cannotDo: [],
+  });
+  const skills = await call(`/resumes/${id}/tailor-skills`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: {
+      groups: [{ category: 'Languages', skills: ['Node.js', 'TypeScript'] }],
+      instruction: 'Backend first',
+      job: { description: JOB },
+    },
+  });
+  assert.equal(skills.status, 200);
+  assert.deepEqual(
+    ((await skills.json()) as { groups: unknown[] }).groups,
+    [{ category: 'Languages', skills: ['Node.js', 'TypeScript'], added: [], dropped: [] }],
+    'nothing to add leaves the line exactly as it was',
+  );
+  assert.match(
+    prompts.at(-1)!,
+    /The candidate's request for this change \(follow it within the rules above\): Backend first/,
+  );
+  const tooLong = await call(`/resumes/${id}/tailor-line`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { text: 'Line.', kind: 'bullet', instruction: 'x'.repeat(501), job: { description: JOB } },
+  });
+  assert.equal(tooLong.status, 400);
+});
+
+test('a technology on the CV is described once by the AI, then read from the saved note', async () => {
+  const { id } = await cv();
+  const before = prompts.length;
+  answer = '"PostgreSQL is an open-source relational database for storing and querying structured data."';
+  const first = await call(`/resumes/${id}/technology?name=${encodeURIComponent(' PostgreSQL ')}`, {
+    user: owner.user.id,
+  });
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), {
+    name: 'PostgreSQL',
+    description: 'PostgreSQL is an open-source relational database for storing and querying structured data.',
+  });
+  assert.equal(prompts.length, before + 1);
+  assert.match(
+    prompts.at(-1)!,
+    /Engineer at Acme: Responsible for Node\.js APIs on PostgreSQL/,
+    'the CV line shows which one is meant',
+  );
+
+  answer = 'Something else entirely.';
+  const again = await call(`/resumes/${id}/technology?name=postgresql`, { user: owner.user.id });
+  assert.equal(
+    ((await again.json()) as { description: string }).description.startsWith('PostgreSQL is'),
+    true,
+  );
+  assert.equal(prompts.length, before + 1, 'a saved note is not written again');
+
+  assert.equal((await call(`/resumes/${id}/technology?name=`, { user: owner.user.id })).status, 400);
+  assert.equal((await call(`/resumes/${id}/technology?name=Kafka`, { user: other.user.id })).status, 404);
+  answer = '   ';
+  assert.equal((await call(`/resumes/${id}/technology?name=Kafka`, { user: owner.user.id })).status, 400);
 });

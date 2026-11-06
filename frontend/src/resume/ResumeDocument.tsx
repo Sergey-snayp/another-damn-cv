@@ -12,7 +12,13 @@ import { ProfessionalDocument } from './templates/ProfessionalDocument';
 export interface RewriteTarget {
   text: string;
   context?: string;
+  /** "bullet", "summary", "headline", or "skills" for one line of the skills section. */
   kind: string;
+  /** What the line is, in a list of suggestions: "Bullet 2", "Project", "Core". */
+  label?: string;
+  /** A skills line: its category and skills, tailored together. */
+  skills?: { category: string; names: string[] };
+  /** Puts the suggestion in the draft; for skills, `next` is the JSON list of names. */
   apply(next: string, draft: RenderedResume): void;
 }
 
@@ -23,7 +29,10 @@ export interface ResumeDocumentProps {
   readOnly?: boolean;
   resumeId?: string;
   changes?: Change[];
-  onTailor?(target: RewriteTarget, anchor: HTMLElement): void;
+  /** One line, or every line of a section at once. */
+  onTailor?(target: RewriteTarget | RewriteTarget[], anchor: HTMLElement): void;
+  /** Takes a whole section ("summary", "skills", "custom:<id>") off the CV; it can be shown again. */
+  onHideSection?(key: string): void;
 }
 
 /** The CV in its design. There is one for now ("professional"); new designs are added here. */

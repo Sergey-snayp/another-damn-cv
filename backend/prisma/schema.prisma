@@ -34,6 +34,7 @@ model User {
   interviewPractice     InterviewPractice[]
   savedAnswers          SavedAnswer[]
   autofillDefaults      AutofillDefault[]
+  technologyNotes       TechnologyNote[]
 
   @@map("users")
 }
@@ -618,4 +619,21 @@ model ResumePdf {
   resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
 
   @@map("resume_pdfs")
+}
+
+/// A one-sentence explanation of a technology on the person's CV ("Kafka: a
+/// distributed event-streaming platform"), written once by the AI and reused.
+/// `key` is the name lower-cased with spaces collapsed.
+model TechnologyNote {
+  id          String   @id @default(uuid())
+  userId      String
+  key         String
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@map("technology_notes")
 }

@@ -4,16 +4,9 @@ import { RewritePopover } from '../RewritePopover';
 import { DiffText } from '../DiffText';
 import { sectionOrder, themeVars, type BuiltInSection } from '../theme';
 import type { ResumeDocumentProps, RewriteTarget } from '../ResumeDocument';
+import { useSkillCard } from '../SkillInfo';
+import { MONTHS, monthYear, range } from '../dates';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "2024-10" → "Oct 2024"; anything else as written. */
-export function monthYear(value?: string | null): string {
-  const text = (value ?? '').trim();
-  const match = text.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
-  const month = match ? MONTHS[Number(match[2]) - 1] : undefined;
-  return match && month ? `${month} ${match[1]}` : text;
-}
 
 /** Keep dates typed as "Sep 2020" usable by the editor and education autofill. */
 function dateForSave(value: string): string {
@@ -27,10 +20,9 @@ function dateForSave(value: string): string {
   return text;
 }
 
-const range = (from?: string | null, to?: string | null, current?: boolean) =>
-  [monthYear(from), current ? 'Present' : monthYear(to)].filter(Boolean).join(' - ');
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 
 /**
  * The words set in bold, as in the CV this template copies: every skill on the
@@ -179,8 +171,10 @@ function DocumentControl({ action, label, title = label, description = label, on
   action: 'add' | 'remove'; label: string; title?: string; description?: string;
   onClick(): void; className?: string; compact?: boolean; controlKey?: string;
 }) {
+  // A remove shows no text on hover: the red outline already shows what it takes away.
+  const quiet = action === 'remove';
   return <button type="button" className={`doc-${action}${action === 'add' ? ' pro-add' : ''} ${className}`}
-    title={title} aria-label={description} data-control-label={compact ? label : undefined} data-control-key={controlKey} onClick={onClick}>
+    title={quiet ? undefined : title} aria-label={description} data-control-label={compact && !quiet ? label : undefined} data-control-key={controlKey} onClick={onClick}>
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={action === 'add' ? 'M12 5v14M5 12h14' : 'M3 6h18M8 6V3h8v3M6 6l1 15h10l1-15M10 11v6M14 11v6'} />
     </svg>
@@ -197,7 +191,7 @@ function BulletControls({ text, context, onAdd, onRemove, onRewrite, rewriteLabe
     {onRewrite && <button type="button" className="ai" title={rewriteLabel} onClick={onRewrite}>✦</button>}
     <DocumentControl action="add" compact label="Add bullet below" className="inline pro-insert"
       description={`Add a bullet below this one in ${context}`} onClick={onAdd} />
-    <DocumentControl action="remove" label="Remove bullet" description={`Remove bullet: ${text || 'empty bullet'} — ${context}`} onClick={onRemove} />
+    <DocumentControl action="remove" compact label="Remove bullet" description={`Remove bullet: ${text || 'empty bullet'} — ${context}`} onClick={onRemove} />
   </span>;
 }
 
@@ -208,7 +202,7 @@ function BulletControls({ text, context, onAdd, onRemove, onRewrite, rewriteLabe
  * bullets with the job's project first and skills set in bold; skills grouped
  * by category.
  */
-export function ProfessionalDocument({ resume: given, theme, onChange, readOnly, resumeId, changes, onTailor }: ResumeDocumentProps) {
+export function ProfessionalDocument({ resume: given, theme, onChange, readOnly, resumeId, changes, onTailor, onHideSection }: ResumeDocumentProps) {
   // A CV saved before a section existed, or still loading, may lack it.
   const resume = {
     ...given,
@@ -221,6 +215,14 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const root = useRef<HTMLDivElement>(null);
   const [added, setAdded] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ key: string } | null>(null);
+  /** A skill just added on a line of its own, so its type can be written first (optional). */
+  const [newSkillLine, setNewSkillLine] = useState<string | null>(null);
+  /** The untyped skills line is getting a type: its box shows at the start of the line. */
+  const [typingOther, setTypingOther] = useState(false);
+  /** Pointing at a skill shows what it is and where the CV uses it. */
+  const skillCard = useSkillCard(readOnly ? null : resumeId ?? null, resume);
+  /** A job whose empty description is being written: shown until it is left empty. */
+  const [describing, setDescribing] = useState<string | null>(null);
   useLayoutEffect(() => {
     if (!focusTarget || readOnly) return;
     const key = CSS.escape(focusTarget.key);
@@ -252,8 +254,58 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const rewriting = onTailor ? null : rewritingOwn;
   const ask = (target: RewriteTarget, event: React.MouseEvent<HTMLElement>) => {
     if (!onTailor) { setRewriting(target); return; }
-    onTailor(target, event.currentTarget.closest<HTMLElement>('li, .doc-section, .doc-head') ?? event.currentTarget);
+    // The card opens at the line holding the pressed ✦ (a summary's whole paragraph, so it stays readable).
+    const button = event.currentTarget;
+    const anchor = button.closest<HTMLElement>('li, .doc-headline, .doc-role-desc')
+      ?? (button.closest('h2') && button.closest<HTMLElement>('.doc-section')?.querySelector<HTMLElement>('.doc-summary'))
+      ?? button.closest<HTMLElement>('h2, .doc-roleline, .doc-head')
+      ?? button;
+    onTailor(target, anchor);
   };
+  /** Quick tailoring of a whole part (a job, a section): every line at once, the card under that part. */
+  const askAll = (targets: RewriteTarget[], event: React.MouseEvent<HTMLElement>) => {
+    if (!onTailor || !targets.length) return;
+    // At the job's title line or the section's heading: where the ✦ was pressed, not the end of the part.
+    onTailor(targets, event.currentTarget.closest<HTMLElement>('.doc-roleline, h2') ?? event.currentTarget);
+  };
+  /** A job's Project line and bullets, ready to tailor. */
+  const roleTargets = (i: number): RewriteTarget[] => {
+    const role = resume.experiences[i]!;
+    const context = `${role.title} at ${role.company}`;
+    const targets: RewriteTarget[] = [];
+    if ((role.blurb ?? '').trim()) targets.push({ text: role.blurb ?? '', context, kind: 'blurb', label: `${role.company || 'Job'} · Description`,
+      apply: (next, d) => { d.experiences[i]!.blurb = next; } });
+    role.achievements.forEach((bullet, j) => {
+      if (bullet.bullet.trim()) targets.push({ text: bullet.bullet, context, kind: 'bullet', label: `${role.company || 'Job'} · bullet ${j + 1}`,
+        apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; } });
+    });
+    return targets;
+  };
+  /** One skills line, tailored as a whole: reordered, maybe with skills the CV shows. */
+  const skillTarget = (category: string, indices: number[]): RewriteTarget => ({
+    text: indices.map((index) => resume.skills[index]!.name).filter((name) => name.trim()).join(', '),
+    kind: 'skills',
+    label: category || 'Skills',
+    skills: { category, names: indices.map((index) => resume.skills[index]!.name) },
+    apply: (next, d) => {
+      const names = JSON.parse(next) as string[];
+      const inLine = (skill: { category?: string }) => (skill.category ?? '').trim() === category;
+      const first = d.skills.findIndex(inLine);
+      const old = d.skills.filter(inLine);
+      const line = names.map((name) => old.find((skill) => skill.name.trim().toLowerCase() === name.toLowerCase())
+        ?? { lineageId: crypto.randomUUID(), name, category });
+      const rest = d.skills.filter((skill) => !inLine(skill));
+      rest.splice(first < 0 ? rest.length : Math.min(first, rest.length), 0, ...line);
+      d.skills = rest;
+    },
+  });
+  /** A section heading's delete: takes the whole section off this CV (it can be shown again). */
+  const removeSection = (key: string, title: string) => onHideSection && !readOnly
+    ? <DocumentControl action="remove" compact label={`Remove ${title}`} className="pro-remove-section"
+        description={`Remove the ${title} section from this CV`} onClick={() => onHideSection(key)} />
+    : null;
+  const tailorButton = (title: string, onClick: (event: React.MouseEvent<HTMLButtonElement>) => void, className = '') =>
+    onTailor && !readOnly ? <button type="button" className={`ai pro-tailor ${className}`} title={title} aria-label={title} onClick={onClick}>✦</button> : null;
   const bold = useMemo(() => boldPattern(resume), [given]);
 
   const changeFor = new Map((changes ?? []).map((change) => [change.lineageId, change]));
@@ -277,6 +329,8 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
           <RichText value={text} bold={bold} readOnly={readOnly} placeholder="What you did, and what it changed."
             onChange={value => onChange(draft => update(draft, index, value))} />
           {!readOnly && <BulletControls text={text} context={context}
+            rewriteLabel={onTailor ? 'Tailor this bullet for the job' : 'Rewrite with AI'}
+            onRewrite={text.trim() ? (event) => ask({ text, context, kind: 'bullet', apply: (next, d) => update(d, index, next) }, event) : undefined}
             onAdd={() => addItem(`${key}:bullet:${index + 1}`, draft => insert(draft, index + 1))}
             onRemove={() => removeItem(bullets.length > 1 ? `${key}:bullet:${Math.min(index, bullets.length - 2)}` : `add-bullet:${key}`, draft => remove(draft, index))} />}
         </li>
@@ -308,6 +362,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const groups = new Map<string, number[]>();
   for (const [index, skill] of resume.skills.entries()) {
     if (readOnly && !skill.name.trim()) continue;
+    if (!readOnly && skill.lineageId && skill.lineageId === newSkillLine) continue;
     const category = (skill.category ?? '').trim();
     groups.set(category, [...(groups.get(category) ?? []), index]);
   }
@@ -317,14 +372,15 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
       <section className="doc-section" data-section="summary">
         <h2>
           Professional Summary
-          {!readOnly && resume.summaries.default && (
-            <button className="ai" title={onTailor ? 'Tailor the summary for the job' : 'Rewrite with AI'}
+          {!readOnly && (resume.summaries.default || onTailor) && (
+            <button className="ai" title={onTailor ? (resume.summaries.default ? 'Tailor the summary for the job' : 'Write a summary for the job from your CV') : 'Rewrite with AI'}
               onClick={(event) => ask({
                 text: resume.summaries.default ?? '',
                 kind: 'summary',
                 apply: (next, d) => { d.summaries = { ...d.summaries, default: next }; },
               }, event)}>✦</button>
           )}
+          {removeSection('summary', 'Professional Summary')}
         </h2>
         <p className="doc-summary pro-justify">
           <RichText value={resume.summaries.default ?? ''} bold={bold} readOnly={readOnly}
@@ -335,7 +391,11 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     ) : null,
     experience: (
       <section className="doc-section" data-section="experience">
-        <h2 tabIndex={-1} data-control-key="experience-heading">Professional Experience</h2>
+        <h2 tabIndex={-1} data-control-key="experience-heading">
+          Professional Experience
+          {tailorButton('Tailor every job for this job posting', (event) => askAll(resume.experiences.flatMap((_, i) => roleTargets(i)), event))}
+          {removeSection('experience', 'Professional Experience')}
+        </h2>
         {resume.experiences.map((role, i) => (
           <article className={`doc-role pro-editable-role${markOf(role.lineageId)}`} key={role.lineageId ?? i} data-edit-item="role" data-edit-key={role.lineageId}>
             <div className="doc-roleline">
@@ -343,6 +403,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                 <RichText line value={role.company} placeholder="Company" bold={null} readOnly={readOnly} onChange={(v) => onChange((d) => { d.experiences[i]!.company = v; })} />
               </span>
               <span className="doc-dates">{range(role.from, role.to, role.current)}</span>
+              {tailorButton(`Tailor ${role.title || 'this job'} at ${role.company || 'this company'}: its project and bullets`, (event) => askAll(roleTargets(i), event), 'pro-tailor-role')}
               {!readOnly && (
                 <DocumentControl action="remove" label="Remove experience" title="Remove role" description={`Remove experience: ${role.title} at ${role.company}`}
                   onClick={() => removeItem(resume.experiences[i + 1]?.lineageId ?? resume.experiences[i - 1]?.lineageId ?? 'experience-heading', d => { d.experiences.splice(i, 1); })} />
@@ -355,13 +416,29 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
               </span>
               {role.location?.trim() && <span className="doc-place">{role.location}</span>}
             </div>
+            {/* The job's description: its own paragraph under the title line, before the bullets. */}
+            {((role.blurb ?? '').trim() || (!readOnly && describing === (role.lineageId ?? String(i)))) && (
+              <div className="doc-role-desc" data-edit-item="description" data-edit-key={`description:${role.lineageId ?? i}`}
+                onBlur={(event) => {
+                  // Left empty: the place closes again, so it takes no room on the page.
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.querySelector('.pro-text')?.textContent?.trim()) setDescribing(null);
+                }}>
+                <RichText value={role.blurb ?? ''} bold={bold} readOnly={readOnly} placeholder="What the role or project was: the product, the team, the scale."
+                  onChange={(v) => { onChange((d) => { d.experiences[i]!.blurb = v; }); if (!v.trim()) setDescribing(null); }} />
+                {!readOnly && <span className="doc-bulletmeta">
+                  {tailorButton('Tailor the description for the job', (event) => ask({ text: role.blurb ?? '', context: `${role.title} at ${role.company}`, kind: 'blurb',
+                    apply: (next, d) => { d.experiences[i]!.blurb = next; } }, event))}
+                  <DocumentControl action="remove" compact label="Remove description" description={`Remove the description of ${role.title} at ${role.company}`}
+                    onClick={() => { setDescribing(null); removeItem(`add-description:${role.lineageId ?? i}`, (d) => { d.experiences[i]!.blurb = ''; }); }} />
+                </span>}
+              </div>
+            )}
+            {!readOnly && !(role.blurb ?? '').trim() && describing !== (role.lineageId ?? String(i)) && (
+              <DocumentControl action="add" label="Add description" className="pro-add-description" controlKey={`add-description:${role.lineageId ?? i}`}
+                description={`Add a description to ${role.title} at ${role.company}`}
+                onClick={() => { setDescribing(role.lineageId ?? String(i)); setFocusTarget({ key: `description:${role.lineageId ?? i}` }); }} />
+            )}
             <ul className="doc-bullets">
-              {(role.blurb ?? '').trim() && (
-                <li>
-                  <RichText label="Project:" value={role.blurb ?? ''} bold={bold} readOnly={readOnly} placeholder="What the project is."
-                    onChange={(v) => onChange((d) => { d.experiences[i]!.blurb = v; })} />
-                </li>
-              )}
               {(role.achievements ?? []).map((bullet, j) => readOnly && !bullet.bullet.trim() ? null : (
                 <li key={bullet.lineageId ?? j} className={markOf(bullet.lineageId)} data-edit-item="bullet" data-edit-key={bullet.lineageId} data-added={added === bullet.lineageId || undefined}>
                   {readOnly && changeFor.get(bullet.lineageId ?? '')?.kind === 'changed'
@@ -389,12 +466,15 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     ),
     projects: projects.length > 0 && (
       <section className="doc-section" data-section="projects">
-        <h2>Projects</h2>
+        <h2>Projects{removeSection('projects', 'Projects')}</h2>
         {projects.map((project, i) => (
           <article className={`doc-role pro-editable-role${markOf(project.lineageId)}`} key={project.lineageId ?? i}>
             <div className="doc-roleline">
               <span className="doc-company"><b>{project.name || 'Project'}</b></span>
               <span className="doc-dates">{range(project.from, project.to, project.current)}</span>
+              {tailorButton(`Tailor ${project.name || 'this project'} for the job`, (event) => askAll(project.bullets.flatMap((text, j) => text.trim()
+                ? [{ text, context: project.name, kind: 'bullet', label: `${project.name || 'Project'} · bullet ${j + 1}`,
+                    apply: (next: string, d: RenderedResume) => { d.projects![i]!.bullets[j] = next; } }] : []), event), 'pro-tailor-role')}
             </div>
             {(project.role || project.link) && (
               <div className="doc-subline">
@@ -411,16 +491,23 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     ),
     skills: (groups.size > 0 || !readOnly) && (
       <section className="doc-section pro-section" data-section="skills">
-        <h2>Skills</h2>
+        <h2>
+          Skills
+          {tailorButton('Tailor every skills line for the job', (event) => askAll([...groups].map(([category, indices]) => skillTarget(category, indices)), event))}
+          {removeSection('skills', 'Skills')}
+        </h2>
         <ul className="doc-bullets">
           {[...groups].map(([category, indices]) => {
             const separator = indices.some((index) => resume.skills[index]!.name.includes(',')) ? ' | ' : ', ';
             return (
               <li key={category} data-edit-item="skill-group">
                 <span className="pro-text">
-                  {category && <b>
-                    <RichText line value={category} placeholder="Skill category" bold={null} readOnly={readOnly}
-                      onChange={(value) => onChange((d) => { for (const index of indices) d.skills[index]!.category = value.trim(); })} />
+                  {(category || (!readOnly && typingOther)) && <b>
+                    <span data-edit-key={category ? undefined : 'skill-type:other'}
+                      onBlur={(event) => { if (!category && !event.currentTarget.contains(event.relatedTarget as Node | null)) setTypingOther(false); }}>
+                      <RichText line value={category} placeholder="Skill type" bold={null} readOnly={readOnly}
+                        onChange={(value) => { onChange((d) => { for (const index of indices) d.skills[index]!.category = value.trim(); }); setTypingOther(false); }} />
+                    </span>
                     {': '}
                   </b>}
                   {indices.map((index, position) => {
@@ -428,7 +515,8 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                     return (
                       <Fragment key={skill.lineageId ?? index}>
                         {position > 0 && separator}
-                        <span className="pro-skill" data-edit-item="skill" data-edit-key={skill.lineageId} data-added={added === skill.lineageId || undefined}>
+                        <span className="pro-skill" data-edit-item="skill" data-edit-key={skill.lineageId} data-added={added === skill.lineageId || undefined}
+                          onMouseEnter={(event) => skillCard.point(skill.name, event.currentTarget, { notWhileTyping: true })} onMouseLeave={skillCard.leave} onFocus={skillCard.leave}>
                           <RichText line value={skill.name.trim()} placeholder="Skill" bold={null} readOnly={readOnly}
                             onChange={(value) => onChange((d) => { d.skills[index]!.name = value.trim(); })} />
                           {!readOnly && <DocumentControl action="remove" label="Remove skill" title={`Remove ${skill.name || 'skill'}`} description={`Remove skill: ${skill.name || 'empty skill'}`}
@@ -439,22 +527,71 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                   })}
                 </span>
                 {!readOnly && <span className="doc-bulletmeta">
-                  <DocumentControl action="add" label="Add skill" className="inline" description={`Add a skill to ${category || 'uncategorised skills'}`} onClick={() => {
+                  {tailorButton(`Tailor the ${category || 'skills'} line for the job`, (event) => ask(skillTarget(category, indices), event))}
+                  <DocumentControl action="add" compact label="Add skill" className="inline" description={`Add a skill at the end of ${category || 'the untyped skills'}`} onClick={() => {
                     const id = crypto.randomUUID(); addItem(id, d => { d.skills.push({ lineageId: id, name: '', category }); });
                   }} />
+                  {!category && <button type="button" className="doc-add pro-add inline pro-add-type" title="Add skill type"
+                    aria-label="Add a type, such as Languages, at the start of this skills line"
+                    onClick={() => { setTypingOther(true); setFocusTarget({ key: 'skill-type:other' }); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" />
+                    </svg>
+                  </button>}
                 </span>}
               </li>
             );
           })}
+          {/* A new line: its type first (optional), then the skill. Leaving it puts the skill on
+              the line of that type, or with the untyped skills; an empty skill goes away. */}
+          {!readOnly && newSkillLine && (() => {
+            const index = resume.skills.findIndex((skill) => skill.lineageId === newSkillLine);
+            const skill = resume.skills[index];
+            if (!skill) return null;
+            return (
+              <li data-edit-item="skill-group" className="pro-new-skill-line"
+                onBlur={(event) => {
+                  if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                  const id = newSkillLine;
+                  setNewSkillLine(null);
+                  // The line's own fields commit first (their blur runs before this one), and
+                  // both editors apply changes on top of the latest draft.
+                  onChange((d) => { d.skills = d.skills.filter((s) => s.lineageId !== id || s.name.trim()); });
+                }}>
+                <span className="pro-text">
+                  <b>
+                    <span data-edit-key={`skill-type:${newSkillLine}`} onKeyDownCapture={(event) => {
+                      // Enter goes on to the skill rather than leaving the line.
+                      if (event.key !== 'Enter') return;
+                      event.preventDefault(); event.stopPropagation();
+                      event.currentTarget.closest('li')?.querySelector<HTMLElement>('.pro-skill [contenteditable="true"]')?.focus();
+                    }}>
+                      <RichText line value={skill.category ?? ''} placeholder="Skill type (optional)" bold={null}
+                        onChange={(value) => onChange((d) => { const s = d.skills.find((x) => x.lineageId === newSkillLine); if (s) s.category = value.trim(); })} />
+                    </span>
+                    {': '}
+                  </b>
+                  <span className="pro-skill" data-edit-key={`skill-name:${newSkillLine}`}>
+                    <RichText line value={skill.name} placeholder="Skill" bold={null}
+                      onChange={(value) => onChange((d) => { const s = d.skills.find((x) => x.lineageId === newSkillLine); if (s) s.name = value.trim(); })} />
+                  </span>
+                </span>
+              </li>
+            );
+          })()}
         </ul>
-        {!readOnly && <DocumentControl action="add" label="Add skill" controlKey="add-skill" onClick={() => {
-          const id = crypto.randomUUID(); addItem(id, d => { d.skills.push({ lineageId: id, name: '', category: '' }); });
+        {!readOnly && <DocumentControl action="add" label="Add skill" controlKey="add-skill"
+          description="Add a skill on a new line, with an optional type such as Languages" onClick={() => {
+          const id = crypto.randomUUID();
+          setNewSkillLine(id);
+          onChange((d) => { d.skills.push({ lineageId: id, name: '', category: '' }); });
+          setFocusTarget({ key: `skill-type:${id}` });
         }} />}
       </section>
     ),
     education: (resume.educations.length > 0 || !readOnly) && (
       <section className="doc-section pro-section" data-section="education">
-        <h2>Education</h2>
+        <h2>Education{removeSection('education', 'Education')}</h2>
         {resume.educations.map((row, i) => (
           <article className={`doc-role doc-education${markOf(row.lineageId)}`} key={row.lineageId ?? i} data-edit-item="education" data-edit-key={row.lineageId} data-added={added === row.lineageId || undefined}>
             <div className="doc-roleline">
@@ -490,7 +627,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     ),
     certifications: certifications.length > 0 && (
       <section className="doc-section" data-section="certifications">
-        <h2>Certifications</h2>
+        <h2>Certifications{removeSection('certifications', 'Certifications')}</h2>
         {certifications.map((item, i) => (
           <article className={`doc-role doc-education${markOf(item.lineageId)}`} key={item.lineageId ?? i}>
             <div className="doc-roleline">
@@ -511,7 +648,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     if (!item || (readOnly && !item.text?.trim() && !item.bullets.some(text => text.trim()))) return null;
     return (
       <section className={`doc-section pro-editable-role${markOf(item.lineageId)}`} data-section={`custom:${lineageId}`}>
-        <h2>{item.title || 'Section'}</h2>
+        <h2>{item.title || 'Section'}{removeSection(`custom:${lineageId}`, item.title || 'this section')}</h2>
         {item.text?.trim() && <p className="doc-paragraph pro-justify">{rich(item.text, bold)}</p>}
         {textBullets(item.bullets, `custom:${lineageId}`, item.title || 'this section',
           (d, j, value) => { d.customSections!.find(row => row.lineageId === lineageId)!.bullets[j] = value; },
@@ -555,6 +692,8 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
             {key.startsWith('custom:') ? custom(key.slice('custom:'.length)) : sections[key as BuiltInSection]}
           </Fragment>
         ))}
+
+      {skillCard.card}
 
       {rewriting && resumeId && (
         <RewritePopover

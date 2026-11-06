@@ -5,9 +5,9 @@ const PAGE_HEIGHT = (297 * 96) / 25.4;
 const GAP = 28;
 
 /** The parts the print style keeps whole (break-inside: avoid), in reading order. */
-const BLOCKS = '.doc-head, .doc-section > h2, .doc-summary, .doc-roleline, .doc-subline, .doc-bullets > li, .doc-skills, .doc-paragraph';
+const BLOCKS = '.doc-head, .doc-section > h2, .doc-summary, .doc-roleline, .doc-subline, .doc-role-desc, .doc-bullets > li, .doc-skills, .doc-paragraph';
 /** Parts kept with what follows them (break-after: avoid). */
-const KEEP_WITH_NEXT = '.doc-section > h2, .doc-roleline, .doc-subline';
+const KEEP_WITH_NEXT = '.doc-section > h2, .doc-roleline, .doc-subline, .doc-role-desc';
 
 /**
  * The CV drawn as the sheets of its PDF: a part that would cross the bottom

@@ -63,7 +63,8 @@ test('line adapter fences source/context/instruction and keeps failures visible'
       assert.ok(prompt.includes('<original kind="summary">\nOriginal\n</original>'));
       assert.ok(prompt.includes('<context>\nContext\n</context>'));
       assert.ok(prompt.includes('<request>\nShorten\n</request>'));
-      assert.ok(system.includes('Use ONLY facts present in the original text.'));
+      assert.ok(system.includes('Use ONLY facts present in the original text, or in a <cv_facts> block'));
+      assert.ok(system.includes('No em dashes'), 'the writing guide applies to every rewrite');
       return Promise.resolve('{"suggestion":"Suggestion"}');
     },
   });

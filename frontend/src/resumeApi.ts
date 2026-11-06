@@ -290,6 +290,10 @@ export const resumeApi = {
   discardTailoring: (id: string) =>
     fetch(`/api/resumes/${id}/tailoring`, { method: 'DELETE', credentials: 'include' }).then(() => undefined),
 
+  /** What a technology is, in a sentence: written once by the AI, then saved on the server. */
+  technology: (id: string, name: string) =>
+    request<{ name: string; description: string }>(`/resumes/${encodeURIComponent(id)}/technology?name=${encodeURIComponent(name.trim())}`),
+
   history: (id: string, table: string, lineageId: string) =>
     request<Record<string, unknown>[]>(
       `/resumes/${id}/history?table=${table}&lineageId=${encodeURIComponent(lineageId)}`),
