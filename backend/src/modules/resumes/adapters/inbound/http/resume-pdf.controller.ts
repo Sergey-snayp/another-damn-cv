@@ -58,7 +58,7 @@ class PdfErrorFilter implements ExceptionFilter {
   }
 }
 
-function sendPdf(
+export function sendPdf(
   res: Response,
   file: { fileName: string; pdf: Buffer },
   disposition: 'inline' | 'attachment',

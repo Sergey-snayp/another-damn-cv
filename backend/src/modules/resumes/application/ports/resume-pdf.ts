@@ -18,6 +18,8 @@ export interface ResumePdfStore {
 /** Prints a page to PDF (the server's own Chrome). */
 export interface PdfRenderer {
   render(url: string): Promise<Buffer>;
+  /** A page the server built itself, such as a cover letter. */
+  renderHtml(html: string): Promise<Buffer>;
 }
 
 /** Short-lived links that let the server's Chrome open one CV's print page. */

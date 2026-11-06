@@ -657,6 +657,8 @@ async function fillWork(field, decision, state = {}) {
 /** The value for one field from the profile the panel sent. */
 function valueFor(field, profile) {
   if (field.key === 'resume') return profile.resumeDataUrl;
+  // The cover letter: its PDF for an upload box, its text for a text box.
+  if (field.key === 'coverLetter') return field.kind === 'file' || field.kind === 'drop' ? profile.coverLetterDataUrl : profile.coverLetterText;
   if (field.key === 'workArrangement' || field.key === 'willingToRelocate') return workDecision(field, profile).value;
   if (ELIGIBILITY.has(field.key)) return eligibilityValue(field, profile);
   // Address pickers search by place: "Toronto, Canada" finds a suggestion where
@@ -683,6 +685,12 @@ function markFor(field, result, profile) {
       ? { status: 'ok', reason: `Your CV attached: ${profile.resumeFileName ?? 'Resume.pdf'}` }
       : { status: 'check', reason: `Your CV: ${result.note}` };
   }
+  if (field.key === 'coverLetter') {
+    if (field.kind !== 'file' && field.kind !== 'drop') return { status: 'check', reason: 'Your cover letter. Read it before you submit.' };
+    return result.note === 'uploaded' || !result.note
+      ? { status: 'ok', reason: `Your cover letter attached: ${profile.coverLetterFileName ?? 'Cover_Letter.pdf'}` }
+      : { status: 'check', reason: `Your cover letter: ${result.note}` };
+  }
   if (result.note) return { status: 'check', reason: `Check this: ${result.note}` };
   // Worked here before: answered from the CV's employers, which may be incomplete.
   if (field.key === 'workedHereBefore') return { status: profile.workedHereBeforeSaved ? 'ok' : 'check', reason: profile.workedHereBeforeReason || 'From your CV. Check it.' };
@@ -702,7 +710,7 @@ const pageOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node
  */
 async function fillOne(field, profile, state = {}) {
   const value = valueFor(field, profile);
-  if (!value || (field.key === 'resume' && state.uploaded)) return { filled: false, skipped: true };
+  if (!value || (field.key === 'resume' && state.uploaded) || (field.key === 'coverLetter' && state.letterAttached)) return { filled: false, skipped: true };
   const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
   if (field.key === 'workArrangement' || field.key === 'willingToRelocate') {
     try {
@@ -723,8 +731,10 @@ async function fillOne(field, profile, state = {}) {
     }
   }
   try {
-    const result = field.diversity ? await fillDiversity(field, value) : await fillField(field, value, profile.resumeFileName);
+    const fileName = field.key === 'coverLetter' ? profile.coverLetterFileName ?? 'Cover_Letter.pdf' : profile.resumeFileName;
+    const result = field.diversity ? await fillDiversity(field, value) : await fillField(field, value, fileName);
     if (field.key === 'resume' && result.filled) state.uploaded = true;
+    if (field.key === 'coverLetter' && result.filled) state.letterAttached = true;
     const status = markFor(field, result, profile);
     return { filled: Boolean(result.filled), note: result.note ? `${label}: ${result.note}` : null, mark: status ? { element: field.element, ...status } : null };
   } catch (err) {

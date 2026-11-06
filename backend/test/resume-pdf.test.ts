@@ -77,6 +77,7 @@ function setup(snapshot = 1, applicationName: string | null = null) {
         if (fail) throw new Error('Chrome is not there');
         return Buffer.from(`%PDF ${rendered.length}`);
       },
+      renderHtml: () => Promise.reject(new Error('not used here')),
     },
     new HmacPrintTokens('secret'),
     (id, token) => `http://app/print/resumes/${id}?token=${token}`,

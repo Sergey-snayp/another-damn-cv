@@ -94,7 +94,7 @@ export function pdfUrl(id) {
   return `${APP_URL}/api/resumes/${encodeURIComponent(id)}/pdf`;
 }
 
-function toDataUrl(bytes) {
+export function toDataUrl(bytes) {
   let binary = '';
   const view = new Uint8Array(bytes);
   for (let start = 0; start < view.length; start += 0x8000) binary += String.fromCharCode(...view.subarray(start, start + 0x8000));

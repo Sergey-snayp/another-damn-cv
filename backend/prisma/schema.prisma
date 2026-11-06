@@ -35,6 +35,7 @@ model User {
   savedAnswers          SavedAnswer[]
   autofillDefaults      AutofillDefault[]
   technologyNotes       TechnologyNote[]
+  coverLetters          CoverLetter[]
 
   @@map("users")
 }
@@ -141,6 +142,7 @@ model Job {
   applicationResume Resume?               @relation("ApplicationResume", fields: [applicationResumeId], references: [id], onDelete: SetNull)
   preparation       InterviewPreparation?
   practice          InterviewPractice[]
+  coverLetters      CoverLetter[]
 
   @@unique([userId, canonicalUrl])
   @@index([userId, status, createdAt])
@@ -360,6 +362,7 @@ model Resume {
   projects        ProjectEntry[]
   certifications  CertificationEntry[]
   customSections  CustomSection[]
+  coverLetters    CoverLetter[]
   applicationJobs Job[]                @relation("ApplicationResume")
 
   @@index([profileId])
@@ -636,4 +639,26 @@ model TechnologyNote {
 
   @@unique([userId, key])
   @@map("technology_notes")
+}
+
+/// The cover letter for one job: written by the AI from a CV and the posting,
+/// edited by the person, printed to PDF when the extension attaches it.
+model CoverLetter {
+  id        String   @id @default(uuid())
+  userId    String
+  jobId     String
+  /// The CV it was written from; null once that CV is deleted.
+  resumeId  String?
+  text      String
+  /// "Sergey_Proniuk_Cover_Letter_Paymorrow.pdf"
+  fileName  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job    Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, jobId])
+  @@map("cover_letters")
 }

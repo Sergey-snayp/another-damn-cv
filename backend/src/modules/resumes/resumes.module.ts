@@ -26,6 +26,10 @@ import { PrismaAiSettingsStore } from './adapters/outbound/persistence/prisma-ai
 import { PrismaTechnologyNoteStore } from './adapters/outbound/persistence/prisma-technology-note.store';
 import { ClaudeTechnologyDescriber } from './adapters/outbound/ai/claude-technology.describer';
 import { DescribeTechnology } from './application/use-cases/describe-technology';
+import { CoverLetters } from './application/use-cases/cover-letters';
+import { PrismaCoverLetterStore } from './adapters/outbound/persistence/prisma-cover-letter.store';
+import { ClaudeCoverLetterWriter } from './adapters/outbound/ai/claude-cover-letter.writer';
+import { ExtensionCoverLettersController } from './adapters/inbound/http/extension-cover-letters.controller';
 import { CvImportController } from './adapters/inbound/http/cv-import.controller';
 import { ExtensionResumesController } from './adapters/inbound/http/extension-resumes.controller';
 import {
@@ -67,6 +71,7 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
     ResumeAssistantController,
     CvImportController,
     ExtensionResumesController,
+    ExtensionCoverLettersController,
     ExtensionResumePdfController,
     ResumePdfController,
     PrintResumeController,
@@ -76,7 +81,10 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
       provide: PDF_RENDERER,
       useFactory: (): PdfRenderer =>
         config.pdfRendering === 'off'
-          ? { render: () => Promise.reject(new Error('PDF rendering is off on this server.')) }
+          ? {
+              render: () => Promise.reject(new Error('PDF rendering is off on this server.')),
+              renderHtml: () => Promise.reject(new Error('PDF rendering is off on this server.')),
+            }
           : new PuppeteerPdfRenderer(config.chromePath),
     },
     {
@@ -153,6 +161,24 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           new ClaudeLineRewriter(runner),
           new ClaudeSkillTailor(runner),
           new ClaudeSummaryWriter(runner),
+        ),
+    },
+    {
+      provide: CoverLetters,
+      inject: [RESUMES_API, JOBS_API, PrismaService, ClaudeProcessRunner, PDF_RENDERER],
+      useFactory: (
+        resumes: ResumesApi,
+        jobs: JobsApi,
+        database: PrismaService,
+        runner: ClaudeProcessRunner,
+        pdf: PdfRenderer,
+      ) =>
+        new CoverLetters(
+          resumes,
+          new PublicTailoringJobReader(jobs),
+          new PrismaCoverLetterStore(database),
+          new ClaudeCoverLetterWriter(runner),
+          pdf,
         ),
     },
     {

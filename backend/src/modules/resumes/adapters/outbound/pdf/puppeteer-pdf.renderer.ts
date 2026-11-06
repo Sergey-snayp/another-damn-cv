@@ -18,6 +18,24 @@ export class PuppeteerPdfRenderer implements PdfRenderer {
     return run;
   }
 
+  renderHtml(html: string): Promise<Buffer> {
+    const run = this.queue.then(() => this.printHtml(html));
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  /** A self-contained page (its fonts from Google Fonts), printed once its fonts are in. */
+  private async printHtml(html: string): Promise<Buffer> {
+    const page = await (await this.chrome()).newPage();
+    try {
+      await page.setContent(html, { waitUntil: 'load', timeout: 30_000 });
+      await page.evaluate('document.fonts.ready');
+      return Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true }));
+    } finally {
+      await page.close().catch(() => undefined);
+    }
+  }
+
   private chrome(): Promise<Browser> {
     this.browser ??= puppeteer
       .launch({

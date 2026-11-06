@@ -5,6 +5,7 @@ import { observeTextPreviews, previewCvName } from './text-display.js';
 import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl, ResumeGoneError } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { matchAnswers } from './answers.js';
+import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
 import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
 
@@ -213,7 +214,7 @@ async function questionsFromFrames(tab = currentTab) {
   return (await askForms({ type: 'questions' }, tab)).flatMap(({ frameId, reply }) => (reply.questions ?? []).map(question => ({ ...question, id: frameKey(frameId, question.id) })));
 }
 
-function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return ''; if (key === 'heardAbout') return HEARD_ABOUT_ANSWER; if (CAREER_KEYS.includes(key) && careerAutofill()[key]) return careerAutofill()[key]; if (key === 'workArrangement') return workTypesText(); if (key === 'willingToRelocate') return relocationText(); return profile[key] ?? ''; }
+function valueFor(key) { if (!groupOn(key)) return ''; if (key.startsWith('eeo')) return diversityValue(key); if (key === 'resume') return resumes.chosen ? fileNameFor(resumes.chosen) : ''; if (key === 'coverLetter') return letterForPage()?.fileName ?? ''; if (key === 'heardAbout') return HEARD_ABOUT_ANSWER; if (CAREER_KEYS.includes(key) && careerAutofill()[key]) return careerAutofill()[key]; if (key === 'workArrangement') return workTypesText(); if (key === 'willingToRelocate') return relocationText(); return profile[key] ?? ''; }
 const WORK_TYPE_NAMES = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
 function workTypesText() { return String(profile.workArrangements ?? '').split(',').map(kind => WORK_TYPE_NAMES[kind]).filter(Boolean).join(', '); }
 function relocationText() { return Object.entries(relocationMap(autofillDefaults)).map(([country, answer]) => `${country || 'Anywhere'}: ${answer}`).join(', '); }
@@ -234,6 +235,12 @@ document.addEventListener('toggle', event => {
 let savedJob = { url: null, job: null, checkedAt: 0 }, jobBusy = false, jobProblem = '';
 // What the last Autofill used on a page: { url, resumeId, answers }. Recorded on the job when it is saved.
 let lastApplication = null;
+/**
+ * The saved job's cover letter (kept on the server). `busy` while the AI writes it;
+ * `attachedUrl` is the page Autofill last attached it to.
+ */
+let letter = { jobId: null, data: null, loading: false, busy: false, startedAt: 0, problem: '', notes: [], editing: false, draft: '', request: '', saving: false, attachedUrl: null };
+let letterTicker = null;
 // "Save job" form, as in Simplify: filled from the page, checked by the person, then saved.
 // { title, company, location, salaryMin, salaryMax, salaryCurrency, salaryPeriod,
 //   employmentType, description, notes, status, url, open: { description, notes }, error }
@@ -292,6 +299,7 @@ async function checkSaved(url) {
   savedJob.checkedAt = Date.now();
   try { const job = await lookupJob(url); if (savedJob.url === url) savedJob.job = job; }
   catch { /* signed out or offline: the button offers saving, which explains */ }
+  void loadLetter();
   if (!filling) renderAutofill();
 }
 function jobFormHtml() {
@@ -495,6 +503,128 @@ document.addEventListener('error', event => {
   const image = event.target;
   if (image?.tagName === 'IMG' && image.closest('.company-avatar')) image.replaceWith(document.createTextNode(image.parentElement.dataset.initials ?? ''));
 }, true);
+/** The letter of this page's saved job, once loaded. */
+function letterForPage() {
+  const job = savedJob.url === currentTab?.url ? savedJob.job : null;
+  return job && letter.jobId === job.id ? letter.data : null;
+}
+/** Reads the saved job's letter from the server, when the page's job changes. */
+async function loadLetter() {
+  const job = savedJob.url === currentTab?.url ? savedJob.job : null;
+  if (!job || letter.busy || letter.jobId === job.id) return;
+  letter = { ...letter, jobId: job.id, data: null, loading: true, problem: '', notes: [], editing: false };
+  try { const found = await coverLetterFor(job.id); if (letter.jobId === job.id) letter.data = found; }
+  catch (error) { if (letter.jobId === job.id && !(error instanceof NotSignedInError)) letter.problem = error.message; }
+  finally { if (letter.jobId === job.id) letter.loading = false; if (!filling) renderAutofill(); }
+}
+const letterSeconds = () => Math.max(0, Math.floor((Date.now() - letter.startedAt) / 1000));
+function letterWorkingText() {
+  const seconds = letterSeconds();
+  const step = seconds < 4 && !(savedJob.url === currentTab?.url && savedJob.job) ? 'Saving this job…'
+    : seconds < 25 ? 'Reading the job and your CV…' : 'Writing your cover letter…';
+  return `${step} ${seconds}s`;
+}
+function coverLetterCard() {
+  const own = letterForPage();
+  const asked = scan?.fields?.filter(field => field.key === 'coverLetter').length ?? 0;
+  const attached = own && letter.attachedUrl === currentTab?.url ? asked : 0;
+  const count = asked ? `<span class="summary-count">${icon('check', 14)}Filled (${attached}/${asked})</span>` : '';
+  const file = letter.loading ? '<span class="cover-name muted">Loading…</span>'
+    : own ? `<span class="cover-name" title="${esc(own.fileName)}">${esc(own.fileName)}</span>` : '<span class="cover-name muted">No cover letter yet</span>';
+  const editor = own && letter.editing ? `<div class="cover-editor"><textarea id="cover-text" rows="14" aria-label="Cover letter text">${esc(letter.draft)}</textarea>
+    <div class="cover-editor-actions"><button class="ghost small" data-cover-close>Close</button><button class="primary small-primary" data-cover-save ${letter.saving || letter.draft.trim() === own.text ? 'disabled' : ''}>${letter.saving ? 'Saving…' : 'Save changes'}</button></div></div>` : '';
+  const notes = letter.notes.length ? `<ul class="cover-notes">${letter.notes.map(note => `<li>${esc(note)}</li>`).join('')}</ul>` : '';
+  const generate = letter.busy
+    ? `<button class="cover-generate is-working" disabled aria-busy="true"><span class="cover-spinner" aria-hidden="true"></span><span id="cover-working">${esc(letterWorkingText())}</span></button>`
+    : `<button class="cover-generate" data-cover-generate ${resumes.chosen ? '' : 'disabled'}>${icon('edit', 18)}${own ? 'Generate again' : 'Generate Cover Letter'}</button>`;
+  return `<details class="card cover-card" data-keep-open="cover" ${keptOpen.has('cover') || letter.busy || letter.editing ? 'open' : ''}><summary>${icon('edit', 20)}Cover Letter${count}</summary>
+    <p class="cover-hint">Boost your application with a tailored cover letter${resumes.chosen ? `, written from <b>${esc(previewCvName(resumes.chosen.name))}</b>` : ''}${resumes.chosen && /\.$/.test(resumes.chosen.name.trim()) ? '' : '.'}</p>
+    <div class="cover-file">${icon('file', 18)}${file}<button class="cover-view" data-cover-view ${own ? '' : 'disabled'} title="${letter.editing ? 'Hide the letter' : 'Read and edit the letter'}" aria-label="${letter.editing ? 'Hide the letter' : 'Read and edit the letter'}" aria-pressed="${letter.editing}">${icon('eye', 18)}</button></div>
+    ${editor}
+    <input id="cover-request" class="cover-request" placeholder="What should it stress? (optional)" maxlength="500" value="${esc(letter.request)}" ${letter.busy ? 'disabled' : ''}>
+    ${generate}
+    <div class="status ${letter.problem ? 'error' : ''}" role="status">${esc(letter.problem)}</div>${notes}
+  </details>`;
+}
+/**
+ * Writes the letter for this page's job. The job is saved first when it is
+ * not yet (its description is what the letter answers); `access` is the site
+ * permission asked for in the click itself.
+ */
+async function generateLetter(access) {
+  if (letter.busy) return;
+  const tab = currentTab;
+  const chosen = resumes.chosen;
+  if (!chosen) { letter.problem = 'Choose a CV first: the letter is written from it.'; renderAutofill(); return; }
+  letter = { ...letter, busy: true, startedAt: Date.now(), problem: '', notes: [], editing: false };
+  keptOpen.add('cover');
+  renderAutofill();
+  clearInterval(letterTicker);
+  letterTicker = setInterval(() => { const text = $('cover-working'); if (text) text.textContent = letterWorkingText(); }, 1000);
+  try {
+    let job = savedJob.url === tab?.url ? savedJob.job : null;
+    if (!job) {
+      const reason = unsendableReason(tab);
+      if (reason) throw new Error(reason);
+      if (!await access) throw new Error('Access to this site was not allowed.');
+      const logo = jobLogo();
+      job = (await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) })).job;
+      if (tab?.url === currentTab?.url) savedJob = { url: tab.url, job, checkedAt: Date.now() };
+    }
+    letter.jobId = job.id;
+    // A job just saved may still be being read: its description arrives within seconds.
+    let written = null;
+    for (let attempt = 0; !written; attempt++) {
+      try { written = await generateCoverLetter(job.id, chosen.id, letter.request); }
+      catch (error) {
+        if (attempt >= 8 || !/still being read|no description yet/i.test(error.message)) throw error;
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+    if (letter.jobId !== job.id) return;
+    const { cannotClaim = [], warnings = [], ...data } = written;
+    letter.data = data;
+    letter.notes = [...cannotClaim.map(item => `Not claimed, not on your CV: ${item}`), ...warnings];
+    letter.attachedUrl = null;
+  } catch (error) {
+    if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
+    letter.problem = /Cannot access|cannot be scripted|Frame with ID/i.test(error.message) ? 'Chrome does not let extensions read this page.' : error.message;
+  } finally {
+    clearInterval(letterTicker); letterTicker = null;
+    letter.busy = false;
+    if (!filling) renderAutofill();
+  }
+}
+async function saveLetterEdit() {
+  const own = letterForPage();
+  if (!own || letter.saving) return;
+  letter.saving = true; renderAutofill();
+  try { letter.data = await saveCoverLetter(letter.jobId, letter.draft); letter.problem = ''; letter.attachedUrl = null; }
+  catch (error) { letter.problem = error.message; }
+  finally { letter.saving = false; renderAutofill(); }
+}
+document.addEventListener('click', event => {
+  const target = event.target.closest('[data-cover-generate],[data-cover-view],[data-cover-save],[data-cover-close]');
+  if (!target) return;
+  if ('coverGenerate' in target.dataset) {
+    const tab = currentTab;
+    const saved = savedJob.url === tab?.url && savedJob.job;
+    // Asked here, inside the click, as Chrome requires for a site permission.
+    void generateLetter(saved ? Promise.resolve(true) : requestSiteAccess(tab));
+    return;
+  }
+  if ('coverView' in target.dataset) { letter.editing = !letter.editing; letter.draft = letterForPage()?.text ?? ''; renderAutofill(); if (letter.editing) $('cover-text')?.focus(); return; }
+  if ('coverSave' in target.dataset) { void saveLetterEdit(); return; }
+  if ('coverClose' in target.dataset) { letter.editing = false; renderAutofill(); }
+});
+document.addEventListener('input', event => {
+  if (event.target.id === 'cover-request') letter.request = event.target.value;
+  if (event.target.id === 'cover-text') {
+    letter.draft = event.target.value;
+    const save = document.querySelector('[data-cover-save]');
+    if (save && !letter.saving) save.disabled = letter.draft.trim() === (letterForPage()?.text ?? '');
+  }
+});
 function renderAutofill() {
   const host = $('panel-autofill');
   if (!scan && pageDisconnected) {
@@ -504,7 +634,7 @@ function renderAutofill() {
   }
   if (!scan || !scan.fields?.length) {
     const opener = scan?.canOpenForm ? `<button class="primary" id="open-form">${icon('file')}Open application form</button>` : '';
-    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'Open the form to start Autofill.' : scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${autofillCvCard()}`;
+    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'Open the form to start Autofill.' : scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${autofillCvCard()}${coverLetterCard()}`;
     $('rescan-empty').addEventListener('click', refresh);
     $('open-form')?.addEventListener('click', openForm);
     return;
@@ -517,6 +647,7 @@ function renderAutofill() {
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
     ${eligibilityCard()}
     ${autofillCvCard()}
+    ${coverLetterCard()}
     <details class="card autofill-detail" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check', 18)}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
   $('fill').addEventListener('click', runFill);
   $('add-details')?.addEventListener('click', () => void openApp('/profile'));
@@ -548,6 +679,18 @@ async function runFill() {
       }
       status('fill-status', 'Filling…');
     }
+    // The saved job's cover letter: its PDF for an upload box, its text for a text box.
+    let coverLetter = {}, letterProblem = '';
+    const ownLetter = letterForPage();
+    if (groupOn('coverLetter') && ownLetter && scan?.fields.some(field => field.key === 'coverLetter')) {
+      try {
+        status('fill-status', 'Getting your cover letter…');
+        const file = scan.fields.some(field => field.key === 'coverLetter' && (field.kind === 'file' || field.kind === 'drop'))
+          ? await coverLetterPdf(letter.jobId, ownLetter.fileName) : null;
+        coverLetter = { coverLetterText: ownLetter.text, coverLetterDataUrl: file?.dataUrl, coverLetterFileName: file?.fileName ?? ownLetter.fileName };
+      } catch (error) { letterProblem = `Cover letter not attached: ${error.message}`; }
+      status('fill-status', 'Filling…');
+    }
     // Fields in groups switched off in Settings are sent empty, so they stay as they are.
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
@@ -558,7 +701,7 @@ async function runFill() {
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     // Groups switched off, by field, so a still-empty field can say which setting left it empty.
     const offKeys = Object.fromEntries(FILL_GROUPS.filter(group => group.keys.length && !groupOn(group.keys[0])).flatMap(group => group.keys.map(key => [key, group.label])));
-    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, eligibility, acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}) };
+    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, ...coverLetter, eligibility, acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}) };
     // Each frame holding the form fills in turn; their results add up to one report.
     let result = null;
     for (const frameId of formFrames.length ? formFrames : [0]) {
@@ -575,6 +718,8 @@ async function runFill() {
       void chrome.runtime.sendMessage({ type: 'arm-steps', host: new URL(target.url).host, company: scan?.context?.company ?? '', profile: payload, useAnswers: fillGroups.answers !== false }).catch(() => {});
     }
     if (cvProblem && result) result.failures.push(cvProblem);
+    if (letterProblem && result) result.failures.push(letterProblem);
+    if (result && coverLetter.coverLetterText) letter.attachedUrl = target?.url ?? null;
     if (!result) throw new Error(pageDisconnected ? 'The extension was updated. Reload this page, then try again.' : 'Lost contact with the page. Reload it and try again.');
     fillReport = {
       url: target?.url,
