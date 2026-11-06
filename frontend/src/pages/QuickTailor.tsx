@@ -104,6 +104,36 @@ function SummaryReportView({ report }: { report: SummaryReport }) {
   );
 }
 
+/** Seconds since \`active\` turned on; 0 while off. */
+function useElapsed(active: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    setSeconds(0);
+    if (!active) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return seconds;
+}
+
+/** What the AI is doing, so a long wait never looks like nothing is happening. */
+function WorkingStatus({ seconds, summary, skills, progress }: {
+  seconds: number; summary: boolean; skills: boolean; progress: string | null;
+}) {
+  const step = !summary ? (progress ?? 'Tailoring this for the job…')
+    : seconds < 20 ? 'Reading the job and your experience…'
+      : seconds < 50 ? 'Writing the summary and checking it against the 10 rules…'
+        : 'Fixing what the checks found. A summary can take up to 2 minutes.';
+  return (
+    <p className="qt-working-status" role="status">
+      <span className="qt-spinner" aria-hidden="true" />
+      <span>{step}{skills && !summary ? ' Skills take up to 30 seconds.' : ''}</span>
+      <span className="qt-elapsed">{seconds}s</span>
+    </p>
+  );
+}
+
 /** "**Kafka**" shows as Kafka in the card's comparison; the CV draws the bold itself. */
 const unmarked = (text: string) => text.replace(/\*\*/g, '');
 /** "**Kafka**" in bold, as it will print. */
@@ -462,6 +492,16 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     decide(ready.map((item) => item.key), 'used');
   }
 
+  // While the AI works: a running timer in the card, and the part being tailored pulses on the CV.
+  const working = Boolean(tailoring?.items.some((item) => item.busy));
+  const elapsed = useElapsed(working);
+  const workingAnchor = working ? tailoring?.anchor : undefined;
+  useEffect(() => {
+    if (!workingAnchor) return;
+    workingAnchor.classList.add('qt-working');
+    return () => workingAnchor.classList.remove('qt-working');
+  }, [workingAnchor]);
+
   if (!jobId) return <div className="studio-message"><h1>Quick tailoring</h1><p className="error">Open this page from a job: the job is missing.</p></div>;
   if (error) return <div className="studio-message"><h1>Quick tailoring</h1><p className="error">{error}</p></div>;
   if (!draft) return <div className="studio-message"><h1>Quick tailoring</h1><p className="muted">Loading…</p></div>;
@@ -586,15 +626,15 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                     <button key={request} type="button" onClick={() => setTailoring((t) => t && { ...t, request: t.request.trim() ? `${t.request.trim()}; ${request.toLowerCase()}` : request })}>{request}</button>
                   ))}
                 </div>
-                <button className="primary qt-generate" disabled={waiting > 0 || saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">
-                  {waiting > 0 ? 'Generating…' : tailoring.stage === 'compose' ? '✦ Generate' : '✦ Generate again'}
+                <button className={`primary qt-generate${waiting > 0 ? ' is-working' : ''}`} disabled={waiting > 0 || saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">
+                  {waiting > 0 ? <><span className="qt-spinner" aria-hidden="true" /> Generating…</> : tailoring.stage === 'compose' ? '✦ Generate' : '✦ Generate again'}
                 </button>
               </div>
               {waiting > 0 && (
-                <p className="ra-muted" role="status">
-                  {many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : 'Tailoring this for the job…'}
-                  {tailoring.items.some((item) => item.busy && item.target.kind === 'skills') && ' Skills take up to 30 seconds.'}
-                </p>
+                <WorkingStatus seconds={elapsed}
+                  summary={tailoring.items.some((item) => item.busy && item.target.kind === 'summary')}
+                  skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
+                  progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
               )}
               {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
               {tailoring.stage === 'generated' && <div className="qt-items">
@@ -603,7 +643,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   return (
                     <div key={item.key} className={`qt-item${item.decided ? ` is-${item.decided}` : ''}`}>
                       {many && <p className="qt-item-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
-                      {item.busy && <p className="ra-muted">…</p>}
+                      {item.busy && <div className="qt-skeleton" aria-hidden="true"><span /><span /><span /></div>}
                       {item.error && <p className="ra-error">{item.error}</p>}
                       {item.after !== undefined && (
                         <>

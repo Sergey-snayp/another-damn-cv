@@ -567,3 +567,34 @@
 .qt-report-mapping tr.none td:nth-child(2) { color: var(--color-error); }
 .qt-report-type { display: inline-block; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 700; background: var(--color-border); }
 .qt-report-type.required { background: var(--color-accent); }
+
+/* While the AI works: a spinner, a pulsing button, placeholder lines, and the part being tailored pulsing on the CV. */
+.qt-spinner {
+  display: inline-block; width: 13px; height: 13px; flex-shrink: 0; vertical-align: -2px;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; border-radius: 50%;
+  animation: qt-spin .8s linear infinite;
+}
+.qt-generate.is-working { display: inline-flex; align-items: center; gap: 8px; opacity: 1; animation: qt-button-pulse 1.6s ease-in-out infinite; }
+.qt-working-status { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12px; color: var(--color-text); }
+.qt-working-status .qt-elapsed { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--color-muted); }
+.qt-skeleton { display: grid; gap: 7px; padding: 4px 0; }
+.qt-skeleton span {
+  height: 10px; border-radius: 5px;
+  background: linear-gradient(90deg, var(--color-border) 0%, color-mix(in srgb, var(--color-accent) 45%, var(--color-surface)) 50%, var(--color-border) 100%);
+  background-size: 200% 100%; animation: qt-shimmer 1.4s ease-in-out infinite;
+}
+.qt-skeleton span:nth-child(2) { width: 92%; }
+.qt-skeleton span:nth-child(3) { width: 64%; }
+.qt-working { animation: qt-line-pulse 1.4s ease-in-out infinite; border-radius: 3px; }
+@keyframes qt-spin { to { transform: rotate(360deg); } }
+@keyframes qt-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+@keyframes qt-button-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 70%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent); } }
+@keyframes qt-line-pulse {
+  0%, 100% { background-color: color-mix(in srgb, var(--color-accent) 14%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 30%, transparent); }
+  50% { background-color: color-mix(in srgb, var(--color-accent) 42%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 55%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qt-spinner, .qt-generate.is-working, .qt-skeleton span { animation: none; }
+  .qt-working { animation: none; background-color: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+}
+@media print { .qt-working { animation: none !important; background: none !important; box-shadow: none !important; } }
