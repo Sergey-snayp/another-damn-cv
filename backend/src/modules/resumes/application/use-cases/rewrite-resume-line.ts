@@ -2,7 +2,7 @@ export interface RewriteInput {
   text: string;
   instruction: string;
   context?: string;
-  kind?: 'bullet' | 'summary' | 'blurb';
+  kind?: 'bullet' | 'summary' | 'blurb' | 'headline';
 }
 
 export interface RewriteResult {

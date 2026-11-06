@@ -33,6 +33,17 @@ export class TailoringController {
   ) {
     return this.tailoring.tailorForJob(userId, id, body.sourceResumeId);
   }
+  /** Quick tailoring works on the job's own copy of the CV, as full tailoring does. */
+  @Post('jobs/:id/tailor-copy')
+  @HttpCode(200)
+  copy(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(tailorSchema)) body: TailorInput,
+  ) {
+    return this.tailoring.copyForJob(userId, id, body.sourceResumeId);
+  }
+
   @Get('resumes/:id/tailoring')
   @UseGuards(ResumeOwnerGuard)
   pending(@CurrentUser() userId: string, @Param('id') id: string) {

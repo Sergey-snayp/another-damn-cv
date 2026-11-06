@@ -21,7 +21,7 @@ const SECTION_NAMES: Record<IssueSection, string> = {
 };
 
 /** A half-circle gauge: 0–100. */
-function Gauge({ score }: { score: number }) {
+export function Gauge({ score }: { score: number }) {
   const angle = Math.PI * (1 - score / 100);
   const x = 60 + 48 * Math.cos(angle);
   const y = 60 - 48 * Math.sin(angle);

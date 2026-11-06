@@ -27,12 +27,15 @@ import { ResumeOwnerGuard } from './resume-owner.guard';
 /** The editor's design: the same fields as the app's ResumeTheme. */
 export const resumeThemeSchema = z
   .object({
-    template: z.enum(['classic', 'compact']),
+    // One design for now; older designs saved before are shown in this one.
+    template: z.enum(['professional']),
     accent: z.string().regex(/^#[0-9a-f]{3,8}$/i),
     fontFamily: z.string().min(1).max(200),
     fontSize: z.number().min(6).max(20),
     lineHeight: z.number().min(0.8).max(3),
     sectionGap: z.number().min(0).max(80),
+    /** The name's size on the CV, in points. */
+    nameSize: z.number().min(16).max(48).optional(),
     /** The editor's section order and the sections hidden from the CV ("summary", "experience", …). */
     sectionOrder: z.array(z.string().min(1).max(60)).max(40).optional(),
     hiddenSections: z.array(z.string().min(1).max(60)).max(40).optional(),

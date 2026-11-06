@@ -140,6 +140,12 @@ export function Documents() {
     return () => clearInterval(timer);
   }, [importing]);
 
+  // CVs the type filter hides, so the page can say so instead of looking empty.
+  const hiddenByType = (rows ?? []).filter((row) => {
+    const generated = Boolean(row.jobId || row.sourceResumeId);
+    return (preferences.type === 'mine' && generated) || (preferences.type === 'generated' && !generated);
+  }).length;
+
   const visible = useMemo(() => {
     const search = query.trim().toLocaleLowerCase();
     const matches = (rows ?? []).filter((row) => {
@@ -178,6 +184,26 @@ export function Documents() {
         [row.id]: !(current.pins[row.id] ?? row.isPrimary),
       },
     }));
+  }
+
+  /** Deletes after asking; the CV, its versions and its PDF are gone for good. */
+  async function remove(ids: string[]) {
+    const names = (rows ?? []).filter((row) => ids.includes(row.id)).map((row) => row.name);
+    if (!names.length) return;
+    const what = names.length === 1 ? `"${names[0]}"` : `${names.length} resumes`;
+    if (!confirm(`Delete ${what}? Its versions and PDF are deleted too. This cannot be undone.`)) return;
+    setError(null);
+    const failed: string[] = [];
+    for (const id of ids) {
+      try {
+        await resumeApi.remove(id);
+      } catch {
+        failed.push(id);
+      }
+    }
+    setRows((current) => current && current.filter((row) => !ids.includes(row.id) || failed.includes(row.id)));
+    setSelected(new Set(failed));
+    if (failed.length) setError(`${failed.length === 1 ? 'One resume' : `${failed.length} resumes`} could not be deleted. Try again.`);
   }
 
   function openCreate(trigger: HTMLElement) {
@@ -368,9 +394,23 @@ export function Documents() {
             <DocumentIcon name="star" size={15} />
             Pin selected
           </button>
+          <button type="button" className="documents-danger" onClick={() => void remove([...selected])}>
+            <DocumentIcon name="trash" size={15} />
+            Delete selected
+          </button>
           <button type="button" onClick={() => setSelected(new Set())}>
             Clear selection
           </button>
+        </div>
+      )}
+
+      {hiddenByType > 0 && (
+        <div className="documents-hidden-note" role="status">
+          <span>
+            {hiddenByType === 1 ? '1 resume is' : `${hiddenByType} resumes are`} hidden by the filter
+            {preferences.type === 'mine' ? ': made for a job by tailoring.' : ': your own resumes.'}
+          </span>
+          <button type="button" onClick={() => setPreferences((current) => ({ ...current, type: 'all' }))}>Show all</button>
         </div>
       )}
 
@@ -500,6 +540,17 @@ export function Documents() {
                     <DocumentIcon name="star" filled={pinned} />
                     <span>{pinned ? 'Unpin resume' : 'Pin to top'}</span>
                   </button>
+                  <button
+                    type="button"
+                    className="documents-menu-item documents-danger"
+                    onClick={() => {
+                      closePanel();
+                      void remove([row.id]);
+                    }}
+                  >
+                    <DocumentIcon name="trash" />
+                    <span>Delete</span>
+                  </button>
                 </DocumentPopover>
                 <p className="documents-card-meta">
                   <time
@@ -509,7 +560,7 @@ export function Documents() {
                     {timeAgo(row.updatedAt)}
                   </time>
                   <span aria-hidden="true">·</span>
-                  <span>{row.currentSnapshotId ? 'Resume' : 'Draft'}</span>
+                  <span>{!row.currentSnapshotId ? 'Draft' : row.jobId || row.sourceResumeId ? 'For a job' : 'Resume'}</span>
                 </p>
               </div>
             </article>

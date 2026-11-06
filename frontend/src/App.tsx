@@ -10,6 +10,7 @@ import { Profile } from './pages/Profile';
 import { ResumeEditor } from './pages/ResumeEditor';
 import { ResumeHistory } from './pages/ResumeHistory';
 import { TailorReview } from './pages/TailorReview';
+import { QuickTailor, QuickTailorStart } from './pages/QuickTailor';
 import { InterviewPrep } from './pages/InterviewPrep';
 import { InterviewWorkspace } from './pages/InterviewWorkspace';
 import { InterviewReference } from './pages/InterviewReference';
@@ -45,6 +46,9 @@ function Gate() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* The extension's Quick Tailor opens these in a popup window over the job page: no app bar. */}
+        <Route path="popup/jobs/:id/quick-tailor" element={<div className="popup-frame"><QuickTailorStart popup /></div>} />
+        <Route path="popup/documents/:id/quick" element={<div className="popup-frame"><QuickTailor popup /></div>} />
         <Route element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="home" element={<Navigate to="/" replace />} />
@@ -59,8 +63,10 @@ function Gate() {
           <Route path="documents/:id" element={<ResumeEditor />} />
           <Route path="documents/:id/history" element={<ResumeHistory />} />
           <Route path="documents/:id/tailor" element={<TailorReview />} />
+          <Route path="documents/:id/quick" element={<QuickTailor />} />
           <Route path="jobs" element={<Navigate to="/dashboard" replace />} />
           <Route path="jobs/:id" element={<JobDetail />} />
+          <Route path="jobs/:id/quick-tailor" element={<QuickTailorStart />} />
           <Route path="tracker" element={<Navigate to="/dashboard" replace />} />
           <Route path="profile" element={<Profile />} />
           <Route path="*" element={<Navigate to="/" replace />} />

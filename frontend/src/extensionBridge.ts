@@ -92,3 +92,21 @@ export function pushProfile(profile: unknown, timeoutMs = 1500): Promise<boolean
     window.postMessage({ type: PROFILE, profile }, window.location.origin);
   });
 }
+
+const RESUMES_CHANGED = 'CV_PLATFORM_RESUMES_CHANGED';
+const USE_RESUME = 'CV_PLATFORM_USE_RESUME';
+
+/**
+ * Tells the extension a CV changed (saved, renamed, redesigned, made, deleted),
+ * as Simplify's site tells its extension: the panel then fetches the list,
+ * texts and PDFs again from the server. Only the fact crosses over, never data.
+ * Posting with no extension listening does nothing.
+ */
+export function notifyResumesChanged(resumeId?: string): void {
+  window.postMessage({ type: RESUMES_CHANGED, ...(resumeId ? { resumeId } : {}) }, window.location.origin);
+}
+
+/** Has the extension's Autofill use this CV, as Simplify's builder does after tailoring for a job. */
+export function useResumeInExtension(resumeId: string): void {
+  window.postMessage({ type: USE_RESUME, resumeId }, window.location.origin);
+}

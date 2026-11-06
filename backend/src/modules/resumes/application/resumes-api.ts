@@ -44,6 +44,10 @@ export function createResumesApi(
     assertOwned: (userId, id) => assertOwned(repository, userId, id),
     list: (userId) => list.execute({ userId }),
     create: (userId, name, targetRole) => create.execute({ userId, name, targetRole }),
+    remove: async (userId, id) => {
+      await assertOwned(repository, userId, id);
+      await repository.remove(id);
+    },
     current: (userId, id) => read.execute({ userId, id }),
     atSnapshot: (userId, id, number) => snapshot.execute({ userId, id, number }),
     history: (userId, id, table, lineageId) => history.execute({ userId, id, table, lineageId }),

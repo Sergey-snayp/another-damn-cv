@@ -67,7 +67,7 @@ after(async () => {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const theme = {
-  template: 'classic',
+  template: 'professional',
   accent: '#134e4a',
   fontFamily: 'Georgia, serif',
   fontSize: 10.5,

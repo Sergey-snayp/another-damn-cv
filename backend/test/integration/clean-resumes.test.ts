@@ -92,7 +92,7 @@ test('new use cases read frozen legacy rows and JSON and preserve history and di
   // Read again from the rows, a legacy CV shows the sections added later as empty.
   const withNewSections = {
     ...first,
-    contact: first.contact && { ...first.contact, headline: null },
+    contact: first.contact && { ...first.contact, headline: null, openToRelocation: false },
     projects: [],
     certifications: [],
     customSections: [],

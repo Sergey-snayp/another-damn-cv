@@ -16,6 +16,17 @@ const PING = 'CV_PLATFORM_PING';
 const READY = 'CV_PLATFORM_EXTENSION_READY';
 const PROFILE = 'CV_PLATFORM_PROFILE';
 const ACK = 'CV_PLATFORM_PROFILE_ACK';
+// A CV changed in the app, or the app says which CV Autofill should use (as
+// Simplify's site does after tailoring). Only ids cross over: the panel then
+// fetches everything from the server itself.
+const RESUMES_CHANGED = 'CV_PLATFORM_RESUMES_CHANGED';
+const USE_RESUME = 'CV_PLATFORM_USE_RESUME';
+const isResumeId = (value) => typeof value === 'string' && /^[\w-]{1,80}$/.test(value);
+
+/** Tells the extension's open panels; none open is normal. */
+function tellPanels(message) {
+  chrome.runtime.sendMessage(message).catch(() => {});
+}
 
 console.log('[cv-autofill] bridge injected on', location.origin);
 
@@ -47,6 +58,18 @@ window.addEventListener('message', async (event) => {
   // announcement would be lost.
   if (message.type === PING) {
     announce();
+    return;
+  }
+
+  if (message.type === RESUMES_CHANGED) {
+    tellPanels({ type: 'app-resumes-changed', ...(isResumeId(message.resumeId) ? { resumeId: message.resumeId } : {}) });
+    return;
+  }
+
+  if (message.type === USE_RESUME && isResumeId(message.resumeId)) {
+    // Stored even with no panel open, so the next one uses it.
+    await chrome.storage.local.set({ chosenResumeId: message.resumeId });
+    tellPanels({ type: 'app-use-resume', resumeId: message.resumeId });
     return;
   }
 

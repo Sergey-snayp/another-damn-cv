@@ -390,6 +390,8 @@ model ContactInformation {
   email     String  @default("")
   /// One line under the name, such as "Senior Backend Engineer".
   headline  String?
+  /// Shows "Open for relocation" after the location.
+  openToRelocation Boolean @default(false)
   phone     String?
   location  String?
   linkedin  String?

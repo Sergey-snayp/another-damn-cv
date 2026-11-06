@@ -1,17 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { careerApi } from '../profile/careerApi';
 import { resumeApi, type RenderedResume } from '../resumeApi';
+import { notifyResumesChanged } from '../extensionBridge';
 import { ResumeDocument } from '../resume/ResumeDocument';
+import { PagedDocument, ScaledPage } from '../resume/PagedDocument';
 import { ImportButton } from '../resume/ImportButton';
-import { StylePanel } from '../resume/StylePanel';
 import { customKey, sectionOrder, type SectionKey } from '../resume/theme';
 import { useEditableResumeTheme } from '../resume/useResumeTheme';
 import {
   CertificationsForm, CustomSectionForm, EducationForm, ExperienceForm, HeaderForm, ProjectsForm, SkillsForm, SummaryForm,
 } from '../resume/studio/SectionForms';
 import { resumeFromProfile } from '../resume/studio/fromProfile';
+import { NameSizeControl } from '../resume/studio/NameSizeControl';
 import { AssistantPanel } from '../resume/studio/AssistantPanel';
 import { AiSettingsForm } from '../resume/studio/AiSettingsForm';
 import type { ChatSuggestion, IssueSection, ResumeScore } from '../resume/studio/assistantApi';
@@ -81,7 +83,10 @@ function summaryOf(section: Section, resume: RenderedResume): string {
     }
     case 'experience': return plural(resume.experiences.length, 'role');
     case 'education': return plural(resume.educations.length, 'entry').replace('entrys', 'entries');
-    case 'skills': return plural(resume.skills.length, 'skill');
+    case 'skills': {
+      const groups = new Set(resume.skills.map((skill) => (skill.category ?? '').trim()).filter(Boolean)).size;
+      return plural(resume.skills.length, 'skill') + (groups ? ` in ${plural(groups, 'category').replace('categorys', 'categories')}` : '');
+    }
     case 'projects': {
       const n = resume.projects?.length ?? 0;
       return n ? plural(n, 'project') : 'Empty, left off the CV';
@@ -109,6 +114,9 @@ function savedAgo(at: number, now: number) {
  */
 export function ResumeEditor() {
   const { id = '' } = useParams();
+  // "Full tailoring" in the extension opens the editor with its job chosen.
+  const [searchParams] = useSearchParams();
+  const jobParam = searchParams.get('job');
 
   const [loaded, setLoaded] = useState<RenderedResume | null>(null);
   const [draft, setDraft] = useState<RenderedResume | null>(null);
@@ -149,7 +157,7 @@ export function ResumeEditor() {
       const summary = list.find((item) => item.id === id);
       setName(summary?.name ?? 'Resume');
       if (summary?.updatedAt) setSavedAt(Date.parse(summary.updatedAt));
-      setJobId(summary?.jobId ?? null);
+      setJobId(jobParam ?? summary?.jobId ?? null);
       // Not removed on read: StrictMode runs this twice in development. It is
       // removed once the import is kept or discarded.
       const pending = sessionStorage.getItem(`resume-draft:${id}`);
@@ -168,6 +176,7 @@ export function ResumeEditor() {
   }
 
   const dirty = Boolean(loaded && draft && JSON.stringify(loaded) !== JSON.stringify(draft));
+  const pagedWatch = useMemo(() => [draft, theme], [draft, theme]);
 
   function change(mutate: (d: RenderedResume) => void) {
     setDraft((current) => {
@@ -257,6 +266,7 @@ export function ResumeEditor() {
         body: JSON.stringify({ name: next }),
       });
       if (!response.ok) throw new Error(`${response.status}`);
+      notifyResumesChanged(id);
     } catch {
       setName(before);
       setSaveError('Could not rename the CV.');
@@ -442,6 +452,7 @@ export function ResumeEditor() {
               <div className="studio-form">
                 <button className="studio-back" onClick={() => setSection(null)}>← All sections</button>
                 <h2>{labelOf(section, draft)}</h2>
+                {section === 'header' && <NameSizeControl theme={theme} onChange={setTheme} />}
                 {form}
               </div>
             )}
@@ -503,7 +514,11 @@ export function ResumeEditor() {
 
             {tab === 'layout' && (
               <div className="studio-layout">
-                <StylePanel theme={theme} onChange={setTheme} />
+                <p className="studio-design-note">
+                  Every CV uses the one design for now: Roboto, black, the name in capitals and headings over a rule.
+                  Choose which sections show, and in what order.
+                </p>
+                <NameSizeControl theme={theme} onChange={setTheme} />
                 <div className="studio-visibility">
                   <p className="group">Sections</p>
                   {order.map((key, index) => (
@@ -553,9 +568,12 @@ export function ResumeEditor() {
             </button>
           </div>
           <div className="studio-canvas" ref={canvas}>
-            <div className="studio-zoom" style={{ zoom: scale }} onClick={openFromPreview}>
-              <ResumeDocument resumeId={id} resume={draft} theme={theme} onChange={change} />
-            </div>
+            <ScaledPage className="studio-zoom" scale={scale} onClick={openFromPreview}>
+              {/* Drawn as the PDF's sheets, with the same page breaks. */}
+              <PagedDocument watch={pagedWatch}>
+                <ResumeDocument resumeId={id} resume={draft} theme={theme} onChange={change} />
+              </PagedDocument>
+            </ScaledPage>
           </div>
         </main>
 

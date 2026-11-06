@@ -126,8 +126,14 @@ export class PrismaResumeRepository extends PrismaResumeTransaction implements R
     });
     return rows.map(({ tailoring, ...row }) => ({ ...row, hasTailoring: tailoring !== null }));
   }
-  create(input: CreateResumeRecord): Promise<ResumeRecord> {
-    return this.client.resume.create({ data: input });
+  create({ theme, ...input }: CreateResumeRecord): Promise<ResumeRecord> {
+    return this.client.resume.create({
+      data: { ...input, ...(theme ? { theme: theme as Prisma.InputJsonValue } : {}) },
+    });
+  }
+  /** Its versions, rows and PDF go with it (cascade); a job applied with it keeps the job, without the CV. */
+  async remove(id: string): Promise<void> {
+    await this.client.resume.delete({ where: { id } });
   }
   history(resumeId: string, name: VersionedTable, lineageId: string): Promise<VersionedRow[]> {
     return table(this.client, name).findMany({

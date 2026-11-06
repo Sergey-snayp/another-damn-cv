@@ -21,6 +21,7 @@ export const contactInputSchema = z.object({
   lastName: text,
   email: text,
   headline: nullableText,
+  openToRelocation: z.boolean().optional(),
   phone: nullableText,
   location: nullableText,
   linkedin: nullableText,

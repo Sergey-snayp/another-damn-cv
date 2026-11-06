@@ -10,6 +10,7 @@ const paths = {
   close: 'm6 6 12 12M6 18 18 6',
   history: 'M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7m2-5v6l4 2',
   arrow: 'M7 17 17 7M7 7h10v10',
+  trash: 'M3 6h18M8 6V3h8v3M6 6l1 15h10l1-15M10 11v6M14 11v6',
 } as const;
 
 export function DocumentIcon({

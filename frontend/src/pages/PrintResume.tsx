@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { RenderedResume } from '../resumeApi';
 import { ResumeDocument } from '../resume/ResumeDocument';
-import { DEFAULT_THEME, type ResumeTheme } from '../resume/theme';
+import { designOf, type ResumeTheme } from '../resume/theme';
 import '../resume/document.css';
 
 declare global {
@@ -27,7 +27,7 @@ export function PrintResume() {
       .then(async (response) => {
         if (!response.ok) throw new Error(`The print link did not work (${response.status}).`);
         const body = (await response.json()) as { resume: RenderedResume; theme: Partial<ResumeTheme> | null };
-        setView({ resume: body.resume, theme: { ...DEFAULT_THEME, ...(body.theme ?? {}) } });
+        setView({ resume: body.resume, theme: designOf(body.theme) });
       })
       .catch((error: unknown) => {
         window.__resumeError = error instanceof Error ? error.message : String(error);
@@ -36,9 +36,13 @@ export function PrintResume() {
 
   useEffect(() => {
     if (!view) return;
-    void document.fonts.ready.then(() => requestAnimationFrame(() => {
-      window.__resumeReady = true;
-    }));
+    // The design's font in regular, bold and italic, loaded before the PDF is printed.
+    const font = `${view.theme.fontSize}pt ${view.theme.fontFamily}`;
+    void Promise.all([font, `bold ${font}`, `italic ${font}`, `italic bold ${font}`].map((spec) => document.fonts.load(spec).catch(() => [])))
+      .then(() => document.fonts.ready)
+      .then(() => requestAnimationFrame(() => {
+        window.__resumeReady = true;
+      }));
   }, [view]);
 
   if (!view) return null;

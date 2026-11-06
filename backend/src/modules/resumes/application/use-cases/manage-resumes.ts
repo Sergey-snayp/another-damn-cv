@@ -66,6 +66,7 @@ export class GetResumeWorkspace {
         targetRole: input.job.title,
         jobId: input.job.id,
         sourceResumeId: source.id,
+        theme: source.theme,
       });
       await this.save.execute({
         userId: input.userId,

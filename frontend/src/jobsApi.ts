@@ -1,3 +1,4 @@
+import { notifyResumesChanged } from './extensionBridge';
 /**
  * Saved jobs: sent from the extension, found by the scanner, or pasted here.
  */
@@ -146,7 +147,7 @@ export const jobsApi = {
   tailor: (id: string, sourceResumeId?: string) =>
     request<{ resumeId: string }>(`/jobs/${id}/tailor`, {
       method: 'POST', body: JSON.stringify({ sourceResumeId }),
-    }),
+    }).then((result) => { notifyResumesChanged(result.resumeId); return result; }),
 };
 
 /** "Senior Engineer", or the page title while the reader is still working. */

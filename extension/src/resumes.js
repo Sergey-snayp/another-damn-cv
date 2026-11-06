@@ -8,10 +8,24 @@ import { APP_URL, NotSignedInError } from './jobs.js';
  * the CV and its design). The extension only downloads it: nothing opens in
  * the browser to make it.
  *
+ * The extension shows exactly the app's CVs: the list is the server's last
+ * answer, replaced on every fetch and dropped when a fetch fails or the
+ * account signs out, so a CV deleted in the app never stays here.
+ *
  * Storage (chrome.storage.local):
- *   appResumes        last fetched list, so the panel can draw before the API answers
+ *   appResumes        the server's last answer, so the panel can draw at once
  *   chosenResumeId    the CV Autofill uploads; the primary CV when unset
  */
+
+/** Drops this account's CV list, choice and texts: after a failed fetch or a sign-out. */
+export function forgetResumes() {
+  return chrome.storage.local.remove(['appResumes', 'chosenResumeId', 'cvTexts']);
+}
+
+/** The CV was deleted in the app since the list was fetched. */
+export class ResumeGoneError extends Error {
+  constructor() { super('That CV was deleted in the app. Choose another.'); this.name = 'ResumeGoneError'; }
+}
 
 /** Cached list and choice, without a network call. */
 export async function cachedResumes() {
@@ -38,6 +52,8 @@ export async function fetchResumes() {
   if (!response.ok) throw new Error(`Server returned ${response.status}.`);
   const items = await response.json();
   await chrome.storage.local.set({ appResumes: items });
+  // A choice of a CV that is gone is forgotten, so it can never come back.
+  if (chosenResumeId && !items.some(item => item.id === chosenResumeId)) await chrome.storage.local.remove('chosenResumeId');
   return withChoice(items, chosenResumeId);
 }
 
@@ -72,6 +88,7 @@ export async function pdfFor(resume) {
     throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`);
   }
   if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
+  if (response.status === 404) throw new ResumeGoneError();
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(typeof body.message === 'string' ? body.message : `Server returned ${response.status}.`);

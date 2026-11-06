@@ -24,6 +24,8 @@
     appResumes: [{ id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }],
     autofillDefaults: [{ id: 'd1', kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }],
   };
+  const popups = [], runtimeListeners = [];
+  let resumeListFetches = 0, serverDown = false, serverResumes = null;
   const sentToPage = [], opened = [], captured = [], recorded = [], madePdfs = [], downloadedPdfs = [];
   // ?applied: the page's job was saved and applied to before the panel opened.
   const APPLIED_MODE = location.search.includes('applied');
@@ -43,7 +45,7 @@
   }
   const CV_TEXTS = { cv1: 'Node.js TypeScript', cv2: 'Node.js TypeScript PostgreSQL Docker Kafka', cv3: 'React' };
   window.chrome = {
-    runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async (message) => { if (message?.type === 'make-cv-pdf') madePdfs.push(message.url); return message?.type === 'panel-tab' ? { tabId: 1 } : null; } },
+    runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: { addListener: (fn) => runtimeListeners.push(fn), removeListener: noop }, sendMessage: async (message) => { if (message?.type === 'make-cv-pdf') madePdfs.push(message.url); return message?.type === 'panel-tab' ? { tabId: 1 } : null; } },
     storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => { Object.assign(store, values); }, remove: async (keys) => { for (const key of [].concat(keys)) delete store[key]; } }, onChanged: event },
     tabs: {
       get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: async (options) => { opened.push(options.url); },
@@ -58,6 +60,11 @@
       },
     },
     permissions: { request: async () => true },
+    windows: {
+      getCurrent: async () => ({ id: 1, left: 0, top: 0, width: 1440, height: 900 }),
+      create: async (options) => { popups.push(options); return { id: 7 }; },
+      update: async () => ({}), onRemoved: event,
+    },
     scripting: { executeScript: async ({ func }) => (func ? [{ result: CVS_MODE ? { url: 'https://jobs.example.com/apply', pageTitle: 'Backend Developer', text: JOB_TEXT, jsonLd: [{ '@type': 'JobPosting', title: 'Backend Developer', description: JOB_TEXT }] } : { url: 'https://jobs.example.com/apply', pageTitle: 'Engineer', text: 'Engineer at Acme' } }] : []) },
     webNavigation: { getAllFrames: async () => [{ frameId: 0, url: 'https://jobs.example.com/apply' }] },
     identity: { getRedirectURL: () => 'https://test.chromiumapp.org/' },
@@ -83,7 +90,7 @@
     if (path === '/api/extension/profile/career') return reply(view('Ciklum', 'Dnipro Institute of Infrastructure and Transport'));
     if (path === '/api/extension/profile/career/resume/cv1') return reply(view('Paymorrow', 'CV School'));
     if (path === '/api/extension/defaults') return reply(store.autofillDefaults);
-    if (path === '/api/extension/resumes') return reply(store.appResumes);
+    if (path === '/api/extension/resumes') { resumeListFetches++; if (serverDown) return new Response('{}', { status: 503 }); return reply(serverResumes ?? store.appResumes); }
     // The server keeps each CV's PDF; the extension downloads it.
     const cvPdf = path.match(/^\/api\/extension\/resumes\/([^/]+)\/pdf$/);
     if (cvPdf) { downloadedPdfs.push(cvPdf[1]); return new Response(new TextEncoder().encode(`%PDF-1.4 ${cvPdf[1]}`), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="Sergey_Proniuk_Resume.pdf"' } }); }
@@ -170,6 +177,49 @@
       await wait(50);
       expect(opened.at(-1) === 'http://localhost:5173/api/resumes/cv3/pdf', `Preview resume opens the PDF from the server (opened ${opened.at(-1)})`);
       document.querySelector('.tab[data-panel="autofill"]').click();
+      await wait(300);
+      const quick = document.querySelector('[data-tailor="quick"]'), full = document.querySelector('[data-tailor="full"]');
+      expect(/Quick Tailor/.test(quick?.textContent ?? '') && /Full Tailoring/.test(full?.textContent ?? ''), 'the Resume card has Quick Tailor and Full Tailoring');
+      quick.click(); await wait(400);
+      const popup = popups.at(-1);
+      expect(popup?.url === 'http://localhost:5173/popup/jobs/j1/quick-tailor?from=cv3' && popup.type === 'popup',
+        `Quick Tailor saves the job and pops up Quick tailoring for the chosen CV over the job page (got ${JSON.stringify(popup)})`);
+      expect(popup && popup.left + popup.width <= 1440 && popup.top + popup.height <= 900, 'the popup fits on the same screen as the job page');
+      document.querySelector('[data-tailor="full"]').click(); await wait(400);
+      expect(opened.at(-1) === 'http://localhost:5173/documents/cv3?job=j1', `Full Tailoring opens the full editor with this job (opened ${opened.at(-1)})`);
+      // The web app says a CV changed, then picks a CV for this job (src/bridge.js): the panel fetches again.
+      const fetchesBefore = resumeListFetches;
+      const fromApp = { tab: { url: 'http://localhost:5173/documents/cv1' } }, fromSite = { tab: { url: 'https://evil.example/' } };
+      runtimeListeners.forEach((listener) => listener({ type: 'app-resumes-changed' }, fromSite));
+      await wait(500);
+      expect(resumeListFetches === fetchesBefore, 'a message from another site is ignored');
+      store.chosenResumeId = 'cv1'; // The bridge stores the app's choice.
+      runtimeListeners.forEach((listener) => listener({ type: 'app-resumes-changed', resumeId: 'cv1' }, fromApp));
+      runtimeListeners.forEach((listener) => listener({ type: 'app-use-resume', resumeId: 'cv1' }, fromApp));
+      await wait(900);
+      expect(resumeListFetches === fetchesBefore + 1, `a burst of app changes fetches the CV list once (fetched ${resumeListFetches - fetchesBefore} times)`);
+      expect(/Master CV/.test(document.getElementById('autofill-cv-select').textContent) && /Autofill now uses Master CV/.test(document.getElementById('panel-autofill').textContent),
+        `the app's choice becomes Autofill's CV (picker: "${document.getElementById('autofill-cv-select').textContent.trim()}")`);
+      store.chosenResumeId = 'cv3';
+      runtimeListeners.forEach((listener) => listener({ type: 'app-use-resume', resumeId: 'cv3' }, fromApp));
+      await wait(900);
+      // A CV deleted in the app leaves the extension at once; a server that cannot answer shows no old list.
+      serverResumes = store.appResumes.filter((cv) => cv.id !== 'cv2');
+      runtimeListeners.forEach((listener) => listener({ type: 'app-resumes-changed', resumeId: 'cv2' }, fromApp));
+      await wait(900);
+      expect(!store.appResumes.some((cv) => cv.id === 'cv2'), `a CV deleted in the app is gone from the extension (stored: ${store.appResumes.map((cv) => cv.id)})`);
+      serverDown = true;
+      runtimeListeners.forEach((listener) => listener({ type: 'app-resumes-changed' }, fromApp));
+      await wait(900);
+      expect(!('appResumes' in store) && !('chosenResumeId' in store) && /Server returned 503/.test(document.getElementById('panel-resume').textContent),
+        `when the app cannot answer, no old list is shown (stored: ${JSON.stringify(store.appResumes)})`);
+      serverDown = false; serverResumes = null;
+      store.appResumes = [{ id: 'cv3', name: 'Frontend CV', isPrimary: false, updatedAt: '2026-11-01' }, { id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }, { id: 'cv2', name: 'Backend CV', isPrimary: false, updatedAt: '2026-11-01' }];
+      const appList = store.appResumes;
+      serverResumes = appList; store.chosenResumeId = 'cv3';
+      runtimeListeners.forEach((listener) => listener({ type: 'app-use-resume', resumeId: 'cv3' }, fromApp));
+      await wait(900);
+      serverResumes = null;
       const autofillSelect = document.getElementById('autofill-cv-select');
       expect(/Frontend CV/.test(autofillSelect.textContent), 'Autofill shows the same selected CV as Resume');
       autofillSelect.click(); await wait(50);

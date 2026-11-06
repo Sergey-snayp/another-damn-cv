@@ -1,11 +1,14 @@
 /** Look of the document. Stored with the resume so it survives a reload. */
 export interface ResumeTheme {
-  template: 'classic' | 'compact';
+  /** One design for now; more can be added here later. */
+  template: 'professional';
   accent: string;
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
   sectionGap: number;
+  /** The name's size at the top of the CV, in points. */
+  nameSize?: number;
   /** The editor's order of the CV's sections (the header always comes first). */
   sectionOrder?: string[];
   /** Sections left out of the CV and its PDF. */
@@ -36,24 +39,34 @@ export function sectionOrder(theme: ResumeTheme, customIds: string[] = []): Sect
   return order;
 }
 
+/** The one design every CV has: the candidate's own layout, "professional". */
 export const DEFAULT_THEME: ResumeTheme = {
-  template: 'classic',
-  accent: '#1a3a5c',
-  fontFamily: '"Charter", "Georgia", serif',
-  fontSize: 10.5,
-  lineHeight: 1.42,
-  sectionGap: 14,
+  template: 'professional',
+  accent: '#000000',
+  fontFamily: 'Roboto, Arial, sans-serif',
+  fontSize: 10,
+  lineHeight: 1.3,
+  sectionGap: 12,
+  nameSize: 30,
+  sectionOrder: ['summary', 'experience', 'projects', 'skills', 'education', 'certifications'],
 };
 
-export const FONTS = [
-  { label: 'Charter', value: '"Charter", "Georgia", serif' },
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Helvetica', value: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
-  { label: 'Inter', value: 'Inter, -apple-system, sans-serif' },
-  { label: 'Times', value: '"Times New Roman", Times, serif' },
-];
+export const NAME_SIZES = { min: 16, max: 48, step: 1 } as const;
 
-export const ACCENTS = ['#1a3a5c', '#0f172a', '#134e4a', '#7c2d12', '#4c1d95', '#831843'];
+/**
+ * Every CV has the one design: a saved design keeps only its section order and
+ * hidden sections and the name's size; its look (an older template, font or
+ * size) is replaced.
+ */
+export function designOf(saved?: Partial<ResumeTheme> | null): ResumeTheme {
+  return {
+    ...DEFAULT_THEME,
+    ...(saved?.sectionOrder ? { sectionOrder: saved.sectionOrder } : {}),
+    ...(saved?.hiddenSections ? { hiddenSections: saved.hiddenSections } : {}),
+    ...(typeof saved?.nameSize === 'number' && saved.nameSize >= NAME_SIZES.min && saved.nameSize <= NAME_SIZES.max
+      ? { nameSize: saved.nameSize } : {}),
+  };
+}
 
 /**
  * The theme drives CSS custom properties rather than inline styles on every
@@ -66,5 +79,6 @@ export function themeVars(theme: ResumeTheme): React.CSSProperties {
     '--r-size': `${theme.fontSize}pt`,
     '--r-line': String(theme.lineHeight),
     '--r-gap': `${theme.sectionGap}px`,
+    '--r-name': `${theme.nameSize ?? DEFAULT_THEME.nameSize}pt`,
   } as React.CSSProperties;
 }

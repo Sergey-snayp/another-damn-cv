@@ -28,6 +28,15 @@ const chatSchema = z
   })
   .strict();
 
+const tailorLineSchema = z
+  .object({
+    text: z.string('There is nothing to tailor yet.').trim().min(1, 'There is nothing to tailor yet.').max(5_000),
+    kind: z.enum(['bullet', 'summary', 'headline']),
+    context: z.string().max(1_000).optional(),
+    job: jobSchema,
+  })
+  .strict();
+
 const settingsSchema = z
   .object({
     tone: z.enum(['balanced', 'confident', 'concise']),
@@ -60,6 +69,17 @@ export class ResumeAssistantController {
     @Body(new ZodValidationPipe(chatSchema)) body: { messages: ChatMessage[]; job?: JobChoice },
   ) {
     return this.assistant.chat(userId, id, body);
+  }
+
+  @Post(':id/tailor-line')
+  @HttpCode(200)
+  tailorLine(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(tailorLineSchema))
+    body: { text: string; kind: 'bullet' | 'summary' | 'headline'; context?: string; job: JobChoice },
+  ) {
+    return this.assistant.tailorLine(userId, id, body);
   }
 
   @Get(':id/ai-settings')

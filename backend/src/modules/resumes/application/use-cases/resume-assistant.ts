@@ -12,6 +12,11 @@ import {
   type RawSuggestion,
 } from '../../domain/resume-assistant';
 import type { RenderedResume } from '../../domain/resume';
+import type { LineRewriter, RewriteResult } from './rewrite-resume-line';
+
+const TAILOR_LINE = `Tailor this line for the job below. Use the job's words for things the line
+already shows, and put first what the job cares about. Do not add anything the
+line does not say: no new technology, number or responsibility.`;
 
 /** The job to score or chat about: one from the tracker, or a title and description typed in. */
 export type JobChoice = { jobId: string } | { title?: string; description: string };
@@ -44,7 +49,26 @@ export class ResumeAssistant {
     private readonly jobs: TailoringJobReader,
     private readonly store: AiSettingsStore,
     private readonly model: ResumeChatModel,
+    private readonly rewriter: LineRewriter,
   ) {}
+
+  /** Quick tailoring: one line of the CV reworded for the job, for the person to accept or not. */
+  async tailorLine(
+    userId: string,
+    id: string,
+    input: { text: string; kind: 'bullet' | 'summary' | 'headline'; context?: string; job: JobChoice },
+  ): Promise<RewriteResult> {
+    await this.resumes.assertOwned(userId, id);
+    const job = await this.job(userId, input.job);
+    const context = [
+      input.context,
+      `The job: ${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 8_000)}`,
+      await this.promptSettings(id),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    return this.rewriter.rewrite({ text: input.text, kind: input.kind, instruction: TAILOR_LINE, context });
+  }
 
   async score(userId: string, id: string, choice: JobChoice): Promise<ResumeScore & { job: Omit<ChosenJob, 'description'> }> {
     const resume = await this.resumes.current(userId, id);

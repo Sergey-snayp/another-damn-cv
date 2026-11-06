@@ -1,3 +1,5 @@
+import { notifyResumesChanged } from './extensionBridge';
+
 /**
  * The versioned resume API.
  *
@@ -29,6 +31,8 @@ export interface Contact {
   email: string;
   /** One line under the name, such as "Senior Backend Engineer". */
   headline?: string | null;
+  /** Shows "Open for relocation" after the location. */
+  openToRelocation?: boolean;
   phone?: string | null;
   location?: string | null;
   linkedin?: string | null;
@@ -211,9 +215,16 @@ export const resumeApi = {
     request<ResumeSummary>('/resumes', {
       method: 'POST',
       body: JSON.stringify({ name, targetRole }),
-    }),
+    }).then((created) => { notifyResumesChanged(created.id); return created; }),
 
   read: (id: string) => request<RenderedResume>(`/resumes/${id}`),
+
+  /** Deletes the CV with its versions and PDF. */
+  remove: (id: string) =>
+    fetch(`/api/resumes/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' }).then(async (response) => {
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? `${response.status} ${response.statusText}`);
+      notifyResumesChanged(id);
+    }),
 
   /**
    * Achievements arrive nested under their role but must be sent FLAT with an
@@ -238,13 +249,14 @@ export const resumeApi = {
         certifications: resume.certifications ?? [],
         customSections: resume.customSections ?? [],
       }),
-    }),
+    }).then((saved) => { notifyResumesChanged(id); return saved; }),
 
   snapshots: (id: string) => request<Snapshot[]>(`/resumes/${id}/snapshots`),
   diff: (id: string, number: number) => request<SnapshotDiff>(`/resumes/${id}/diff/${number}`),
   at: (id: string, number: number) => request<RenderedResume>(`/resumes/${id}/at/${number}`),
   revert: (id: string, number: number) =>
-    request<RenderedResume>(`/resumes/${id}/revert/${number}`, { method: 'POST' }),
+    request<RenderedResume>(`/resumes/${id}/revert/${number}`, { method: 'POST' })
+      .then((reverted) => { notifyResumesChanged(id); return reverted; }),
 
   tailoring: (id: string) => request<{ tailoring: Tailoring | null }>(`/resumes/${id}/tailoring`),
   discardTailoring: (id: string) =>

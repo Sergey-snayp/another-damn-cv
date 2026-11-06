@@ -2,7 +2,7 @@ import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.j
 import { captureTab, jobUrl, lookupJob, postingDatesFor, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
 import { observeTextPreviews, previewCvName } from './text-display.js';
-import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl } from './resumes.js';
+import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, forgetResumes, pdfFor, pdfUrl, ResumeGoneError } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { matchAnswers } from './answers.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
@@ -503,10 +503,15 @@ async function runFill() {
     let file = null, cvProblem = '';
     if (resumes.chosen && groupOn('resume') && scan?.fields.some(field => field.key === 'resume')) {
       try {
-        try { resumes = await fetchResumes(); } catch { /* use the cached list */ }
+        // The app's list at the moment of the click: never an old copy, so a deleted CV is never uploaded.
+        resumes = await fetchResumes(); rerenderResumes();
+        if (!resumes.chosen) throw new Error('You have no CVs in the app.');
         status('fill-status', 'Getting your CV…');
         file = await pdfFor(resumes.chosen);
-      } catch (error) { cvProblem = `CV not attached: ${error.message}`; }
+      } catch (error) {
+        cvProblem = `CV not attached: ${error.message}`;
+        if (error instanceof ResumeGoneError) void loadResumes();
+      }
       status('fill-status', 'Filling…');
     }
     // Fields in groups switched off in Settings are sent empty, so they stay as they are.
@@ -745,7 +750,7 @@ function renderCvOptions() {
   $('cv-options').innerHTML = options.length ? options.map((item, index) => {
     const chosen = item.id === resumes.chosen?.id;
     const score = match?.scores?.[item.id];
-    return `<li role="option" id="cv-option-${index}" aria-selected="${chosen}" class="cv-option${index === cvMenu.active ? ' is-active' : ''}"><button type="button" data-pick="${esc(item.id)}" tabindex="-1"><span class="cv-check" aria-hidden="true">${chosen ? icon('check', 14) : ''}</span><span class="cv-option-name" title="${esc(item.name)}">${esc(item.name)}${item.isPrimary ? ' <small>(default)</small>' : ''}</span>${score >= 70 ? `<span class="cv-option-score" title="Matches ${score}% of this job's keywords">${score}%</span>` : ''}</button></li>`;
+    return `<li role="option" id="cv-option-${index}" aria-selected="${chosen}" class="cv-option${index === cvMenu.active ? ' is-active' : ''}"><button type="button" data-pick="${esc(item.id)}" tabindex="-1"><span class="cv-check" aria-hidden="true">${chosen ? icon('check', 14) : ''}</span><span class="cv-option-name" title="${esc(item.name)}">${esc(item.name)}${item.isPrimary ? ' <small>(default)</small>' : ''}${item.tailoredForJob ? ' <small title="Made for a job by tailoring; in the app under Generated resumes">(for a job)</small>' : ''}</span>${score >= 70 ? `<span class="cv-option-score" title="Matches ${score}% of this job's keywords">${score}%</span>` : ''}</button></li>`;
   }).join('') : '<li class="cv-empty">No CVs found</li>';
   const activeName = options[cvMenu.active]?.name ?? '';
   $('cv-active-name').textContent = activeName;
@@ -843,17 +848,49 @@ function renderResume() {
 }
 function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); if (cvMenu.open) placeCvMenu(); }
 /** Fetches the CV list from the app. The cached list stays on screen meanwhile. */
+let reloadQueued = false, resumesLoadedAt = 0;
 async function loadResumes() {
-  if (loadingResumes) return;
-  loadingResumes = true; rerenderResumes();
+  // A change announced while a load runs is fetched right after it.
+  if (loadingResumes) { reloadQueued = true; return; }
+  loadingResumes = true; resumesLoadedAt = Date.now(); rerenderResumes();
   try {
     const previousId = resumes.chosen?.id;
     resumes = await fetchResumes(); resumeProblem = '';
     if (previousId !== resumes.chosen?.id) cvStatus('');
   }
-  catch (error) { resumeProblem = error instanceof NotSignedInError ? 'signed-out' : error.message; }
-  finally { loadingResumes = false; rerenderResumes(); }
+  catch (error) {
+    resumeProblem = error instanceof NotSignedInError ? 'signed-out' : error.message;
+    // Without the server's answer there is no list: an old copy could hold deleted CVs.
+    resumes = { items: [], chosen: null };
+    await forgetResumes().catch(() => {});
+  }
+  finally {
+    loadingResumes = false; rerenderResumes();
+    if (reloadQueued) { reloadQueued = false; void loadResumes(); }
+  }
 }
+/** The list again, and the job match with it: a changed CV has a new text (cvTexts follows updatedAt). */
+async function reloadResumes(announceChoice) {
+  await loadResumes();
+  // Job details read from a CV ("Autofill uses" in the Profile tab) follow its changes too.
+  career = { ...career, resumes: {} };
+  void loadCareer();
+  await rescore();
+  if (announceChoice && resumes.chosen) cvStatus(`Autofill now uses ${resumes.chosen.name}.`, 'success');
+}
+// The web app changed a CV, or chose one for this job (src/bridge.js), as
+// Simplify's site tells its extension. A burst of saves is fetched once.
+let appChangeTimer = 0;
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (!['app-resumes-changed', 'app-use-resume'].includes(message?.type) || !sender.tab?.url?.startsWith(APP_URL)) return false;
+  clearTimeout(appChangeTimer);
+  appChangeTimer = setTimeout(() => void reloadResumes(message.type === 'app-use-resume'), 300);
+  return false;
+});
+// Back on the job's tab (or the panel shown again): fetch the list if it is not fresh, in case a message was missed.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - resumesLoadedAt > 15000) void reloadResumes(false);
+});
 document.addEventListener('click', event => {
   const target = event.target.closest('[data-pick],[data-open-cv],[data-refresh-cvs],[data-go-sign-in],[data-open-documents]');
   if (!target) return;
@@ -895,7 +932,11 @@ async function replaceUploadedCv() {
       const reply = await askFrame(frameId, { type: 'replace-cv', dataUrl: file.dataUrl, fileName: file.fileName }, tab);
       replaced += reply?.replaced ?? 0; kept += reply?.kept ?? 0;
     }
-  } catch (error) { cvStatus(`The form still has the old CV: ${error.message}`, 'error'); return; }
+  } catch (error) {
+    cvStatus(`The form still has the old CV: ${error.message}`, 'error');
+    if (error instanceof ResumeGoneError) void loadResumes();
+    return;
+  }
   if (replaced) {
     lastApplication.resumeId = chosen.id;
     await recordOnSavedJob(tab.url);
@@ -921,7 +962,10 @@ function matchCard() {
     </div><div id="resume-keywords" ${expanded ? '' : 'hidden'}><p class="hint">Keyword coverage only. Check the job requirements too.</p>
     ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p><span class="cv-inline" title="${esc(match.better.name)}">${esc(match.better.name)}</span> matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
     <div class="keywords"><p class="group">Keywords from the posting</p><ul>${keywords}</ul></div>
-    </div><button class="tailor-button" id="improve-match" ${improving ? 'disabled' : ''}>${icon('edit', 18)}Tailor Resume</button>
+    </div><div class="tailor-buttons">
+      <button class="tailor-button quick" data-tailor="quick" title="Your CV line by line, with AI beside each line for this job" ${improving ? 'disabled' : ''}>${icon('bolt', 17)}Quick Tailor</button>
+      <button class="tailor-button full" data-tailor="full" title="The full CV editor in the app, with this job's score, AI and chat" ${improving ? 'disabled' : ''}>${icon('edit', 17)}Full Tailoring</button>
+    </div>
     <div class="status" id="match-status" role="status"></div>
   </div>`;
 }
@@ -968,28 +1012,50 @@ async function rescore(run = ++matchRun) {
   match = next;
   if (changed && !filling) renderAutofill();
 }
-// Save the job, then open it in the app with the chosen CV ready to tailor.
-// Tailoring itself runs Claude, so it starts only from the app's button.
-function improveMatch() {
+// Save the job, then open the app, as Simplify's "Tailor Resume" opens its
+// web builder. Quick: this job's copy of the chosen CV, line by line with AI
+// beside each line. Full: the whole CV editor with this job chosen.
+// The AI runs only from the app's buttons.
+const tailorButtons = () => document.querySelectorAll('[data-tailor]');
+let quickWindowId = null;
+/** Quick tailoring pops up over the job page, in a window of its own; a second click reuses it. */
+async function openQuickTailor(url) {
+  if (quickWindowId !== null) {
+    try {
+      const [tab] = await chrome.tabs.query({ windowId: quickWindowId });
+      if (tab) { await chrome.tabs.update(tab.id, { url }); await chrome.windows.update(quickWindowId, { focused: true }); return; }
+    } catch { /* closed since: open a new one */ }
+  }
+  const host = await chrome.windows.getCurrent();
+  const width = Math.min(1180, Math.max(720, (host.width ?? 1280) - 80));
+  const height = Math.min(880, Math.max(560, (host.height ?? 900) - 60));
+  const left = (host.left ?? 0) + Math.max(0, Math.round(((host.width ?? width) - width) / 2));
+  const top = (host.top ?? 0) + Math.max(0, Math.round(((host.height ?? height) - height) / 2));
+  const created = await chrome.windows.create({ url, type: 'popup', width, height, left, top, focused: true });
+  quickWindowId = created?.id ?? null;
+}
+chrome.windows?.onRemoved?.addListener(id => { if (id === quickWindowId) quickWindowId = null; });
+function improveMatch(mode) {
   const tab = currentTab, chosen = resumes.chosen;
   if (improving || !tab?.id || !chosen || unsendableReason(tab)) return;
   const access = requestSiteAccess(tab); // Must start in the click's user gesture.
-  improving = true; $('improve-match').disabled = true; status('match-status', 'Saving this job…');
+  improving = true; tailorButtons().forEach(button => { button.disabled = true; }); status('match-status', 'Saving this job…');
   void (async () => {
     try {
       if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
       const logo = jobLogo();
       const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) });
       savedJob = { url: tab.url, job, checkedAt: Date.now() };
-      await chrome.tabs.create({ url: `${jobUrl(job.id)}?tailorFrom=${encodeURIComponent(chosen.id)}` });
+      if (mode === 'quick') await openQuickTailor(`${APP_URL}/popup/jobs/${encodeURIComponent(job.id)}/quick-tailor?from=${encodeURIComponent(chosen.id)}`);
+      else await chrome.tabs.create({ url: `${APP_URL}/documents/${encodeURIComponent(chosen.id)}?job=${encodeURIComponent(job.id)}` });
       status('match-status', '');
     } catch (error) {
       if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
       status('match-status', error.message, 'error');
-    } finally { improving = false; if ($('improve-match')) $('improve-match').disabled = false; }
+    } finally { improving = false; tailorButtons().forEach(button => { button.disabled = false; }); }
   })();
 }
-document.addEventListener('click', event => { if (event.target.closest('#improve-match')) improveMatch(); });
+document.addEventListener('click', event => { const button = event.target.closest('[data-tailor]'); if (button) improveMatch(button.dataset.tailor); });
 
 async function renderAccount() {
   $('redirect-uri').textContent = redirectUri();

@@ -32,6 +32,8 @@ export class CvDocumentTextExtractor implements DocumentTextExtractor {
 
 function clean(text: string): string {
   return text
+    // Ligature characters ("ﬁ", "ﬂ") back to their letters.
+    .normalize('NFKC')
     .replace(/\r\n?/g, '\n')
     .replace(/-\n(?=[a-z])/g, '')
     .replace(/[ \t]+/g, ' ')

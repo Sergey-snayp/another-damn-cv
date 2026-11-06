@@ -108,13 +108,18 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
       inject: [JOBS_API, RESUMES_API, TAILORING_GENERATOR],
       useFactory: (jobs: JobsApi, resumes: ResumesApi, generator: TailoringGenerator): TailoringApi => {
         const workspace = new ResumeTailoringWorkspace(resumes);
-        const tailor = new TailorResume(new PublicTailoringJobReader(jobs), workspace, generator);
+        const reader = new PublicTailoringJobReader(jobs);
+        const tailor = new TailorResume(reader, workspace, generator);
         const pending = new GetPendingTailoring(workspace);
         const discard = new DiscardTailoring(workspace);
         return {
           tailorForJob: (userId, jobId, sourceResumeId) => tailor.execute({ userId, jobId, sourceResumeId }),
           pending: (userId, id) => pending.execute({ userId, id }),
           discard: (userId, id) => discard.execute({ userId, id }),
+          copyForJob: async (userId, jobId, sourceResumeId) => {
+            const job = await reader.getForTailoring(userId, jobId);
+            return { resumeId: (await workspace.forJob(userId, job, sourceResumeId)).id };
+          },
         };
       },
     },
@@ -127,6 +132,7 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           new PublicTailoringJobReader(jobs),
           new PrismaAiSettingsStore(database),
           new ClaudeResumeChat(runner),
+          new ClaudeLineRewriter(runner),
         ),
     },
     {

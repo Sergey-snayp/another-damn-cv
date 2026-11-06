@@ -17,6 +17,8 @@ export interface CreateResumeRecord {
   targetRole?: string | null;
   jobId?: string;
   sourceResumeId?: string;
+  /** The design, so a job's copy looks like the CV it was made from. */
+  theme?: unknown;
 }
 export interface SectionChangeRows {
   table: VersionedTable;
@@ -39,6 +41,7 @@ export interface ResumeRepository extends ResumeTransaction {
   findOwned(userId: string, id: string): Promise<ResumeRecord | null>;
   list(profileId: string): Promise<ResumeSummary[]>;
   create(input: CreateResumeRecord): Promise<ResumeRecord>;
+  remove(id: string): Promise<void>;
   history(resumeId: string, table: VersionedTable, lineageId: string): Promise<VersionedRow[]>;
   snapshots(resumeId: string): Promise<Snapshot[]>;
   snapshot(resumeId: string, number: number): Promise<Snapshot | null>;

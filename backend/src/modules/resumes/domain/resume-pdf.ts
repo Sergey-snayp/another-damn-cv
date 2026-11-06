@@ -14,9 +14,16 @@ function fingerprint(text: string): string {
   return hash.toString(16).padStart(8, '0');
 }
 
-/** "12:3f9a01bc": the CV version and a fingerprint of its design. */
+/**
+ * The print page's layout. Raise it when the print style changes, so PDFs
+ * made with the old style are made again. 2: page margins on every page.
+ * 3: every CV in the one design.
+ */
+export const PRINT_LAYOUT = 3;
+
+/** "12:3f9a01bc:2": the CV version, a fingerprint of its design and the print layout. */
 export function pdfVersion(snapshot: number, theme: unknown): string {
-  return `${snapshot}:${fingerprint(JSON.stringify(theme ?? null))}`;
+  return `${snapshot}:${fingerprint(JSON.stringify(theme ?? null))}:${PRINT_LAYOUT}`;
 }
 
 /** "Sergey_Proniuk_Resume.pdf", as Simplify names uploaded resumes; the CV's name when it has no name on it. */

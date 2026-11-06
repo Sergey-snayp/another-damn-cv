@@ -84,6 +84,11 @@ export function HeaderForm({ resume, onChange }: { resume: RenderedResume; onCha
       <Field label="Email" value={contact.email} onChange={set('email')} placeholder="email@example.com" />
       <Field label="Phone" value={contact.phone ?? ''} onChange={set('phone')} />
       <Field label="Location" value={contact.location ?? ''} onChange={set('location')} placeholder="City, Country" wide />
+      <label className="sf-check wide">
+        <input type="checkbox" checked={Boolean(contact.openToRelocation)}
+          onChange={(e) => onChange((d) => { d.contact = { ...(d.contact ?? contact), openToRelocation: e.target.checked }; })} />
+        Open for relocation
+      </label>
       <Field label="LinkedIn" value={contact.linkedin ?? ''} onChange={set('linkedin')} placeholder="linkedin.com/in/…" wide />
       <Field label="GitHub" value={contact.github ?? ''} onChange={set('github')} placeholder="github.com/…" />
       <Field label="Website" value={contact.website ?? ''} onChange={set('website')} />
@@ -248,39 +253,162 @@ export function EducationForm({ resume, onChange }: { resume: RenderedResume; on
   );
 }
 
+type Skill = RenderedResume['skills'][number];
+const groupOf = (skill: Skill) => (skill.category ?? '').trim();
+
+/** The categories in the order they appear on the CV ('' is skills without a category). */
+function groupsOf(skills: Skill[]): string[] {
+  const groups: string[] = [];
+  for (const skill of skills) if (!groups.includes(groupOf(skill))) groups.push(groupOf(skill));
+  return groups;
+}
+
+/** "a, b; c" → ["a", "b", "c"], trimmed, without blanks. */
+const namesIn = (text: string) => text.split(/[,;\n]/).map((name) => name.trim()).filter(Boolean);
+
+/**
+ * Skills in named categories ("Languages: JavaScript, Node.js"), as Huntr does
+ * and as Simplify's users ask for: each category is a card with its name, its
+ * skills as chips and its own "add" box. Chips drag between categories; cards
+ * move up and down. On the CV each category is one line, "Category: a, b, c";
+ * skills without a category print on a line without a label.
+ */
 export function SkillsForm({ resume, onChange }: { resume: RenderedResume; onChange: Change }) {
-  const [typed, setTyped] = useState('');
-  const add = () => {
-    const names = typed.split(',').map((name) => name.trim()).filter(Boolean);
+  const [pending, setPending] = useState<string[]>([]);
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const [dragging, setDragging] = useState<string | null>(null);
+  /** Names being typed: a rename applies when the box is left, so a half-typed name never merges categories. */
+  const [naming, setNaming] = useState<Record<string, string>>({});
+  const existing = groupsOf(resume.skills);
+  const groups = [...existing, ...pending.filter((name) => !existing.includes(name))];
+
+  /** Puts skills in a category, after its last skill; a skill already elsewhere moves here. */
+  const add = (category: string, names: string[]) => {
     if (!names.length) return;
     onChange((d) => {
-      const have = new Set(d.skills.map((skill) => skill.name.toLowerCase()));
       for (const name of names) {
-        if (have.has(name.toLowerCase())) continue;
-        have.add(name.toLowerCase());
-        d.skills.push({ lineageId: newId(), name, category: '' });
+        const at = d.skills.findIndex((skill) => skill.name.trim().toLowerCase() === name.toLowerCase());
+        const skill: Skill = at >= 0 ? d.skills.splice(at, 1)[0]! : { lineageId: newId(), name, category: '' };
+        skill.category = category;
+        const last = d.skills.map(groupOf).lastIndexOf(category);
+        d.skills.splice(last >= 0 ? last + 1 : d.skills.length, 0, skill);
       }
     });
-    setTyped('');
+    setPending((list) => list.filter((name) => name !== category));
+    setTyped((all) => ({ ...all, [category]: '' }));
   };
+
+  const rename = (from: string, typedName: string) => {
+    const to = typedName.trim();
+    setNaming((all) => { const { [from]: _done, ...rest } = all; return rest; });
+    if (to === from) return;
+    if (to && existing.includes(to) && existing.includes(from)
+      && !confirm(`There is already a category "${to}". Put these skills in it?`)) return;
+    if (existing.includes(from)) onChange((d) => { for (const skill of d.skills) if (groupOf(skill) === from) skill.category = to; });
+    setPending((list) => list.map((name) => (name === from ? to : name)));
+    setTyped((all) => { const { [from]: text, ...rest } = all; return { ...rest, [to]: text ?? '' }; });
+  };
+
+  /** Moves a whole category up or down: its skills move as one block. */
+  const moveGroup = (category: string, step: -1 | 1) => onChange((d) => {
+    const order = groupsOf(d.skills);
+    const from = order.indexOf(category);
+    if (from < 0 || from + step < 0 || from + step >= order.length) return;
+    order.splice(from, 1);
+    order.splice(from + step, 0, category);
+    d.skills = order.flatMap((group) => d.skills.filter((skill) => groupOf(skill) === group));
+  });
+
+  const removeGroup = (category: string, count: number) => {
+    if (count && !confirm(`Delete the category "${category || 'Other skills'}" and its ${count} skill${count === 1 ? '' : 's'}?`)) return;
+    if (count) onChange((d) => { d.skills = d.skills.filter((skill) => groupOf(skill) !== category); });
+    setPending((list) => list.filter((name) => name !== category));
+  };
+
+  /** A dragged chip lands before `before` (a skill's lineage), or at the end of the category. */
+  const drop = (category: string, before?: string) => {
+    const moving = dragging;
+    setDragging(null);
+    if (!moving || moving === before) return;
+    onChange((d) => {
+      const at = d.skills.findIndex((skill) => skill.lineageId === moving);
+      if (at < 0) return;
+      const [skill] = d.skills.splice(at, 1);
+      skill!.category = category;
+      const target = before ? d.skills.findIndex((s) => s.lineageId === before) : -1;
+      const last = d.skills.map(groupOf).lastIndexOf(category);
+      d.skills.splice(target >= 0 ? target : last >= 0 ? last + 1 : d.skills.length, 0, skill!);
+    });
+    setPending((list) => list.filter((name) => name !== category));
+  };
+
   return (
     <>
-      <div className="sf-skill-add">
-        <input value={typed} placeholder="Add a skill, or several separated by commas"
-          onChange={(e) => setTyped(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-        <button type="button" className="ghost" disabled={!typed.trim()} onClick={add}>Add</button>
-      </div>
-      <div className="sf-chips">
-        {resume.skills.map((skill, i) => (
-          <span className="sf-chip" key={skill.lineageId ?? i}>
-            {skill.name || '—'}
-            <button type="button" title={`Remove ${skill.name}`}
-              onClick={() => onChange((d) => { d.skills.splice(i, 1); })}>×</button>
-          </span>
-        ))}
-        {resume.skills.length === 0 && <p className="sf-count">No skills yet.</p>}
-      </div>
+      {groups.map((category, index) => {
+        const skills = resume.skills.filter((skill) => groupOf(skill) === category);
+        const isPending = !existing.includes(category);
+        return (
+          <div key={`${index}:${category}`} className={`sk-group${dragging ? ' droppable' : ''}`}
+            onDragOver={(e) => { if (dragging) e.preventDefault(); }}
+            onDrop={(e) => { e.preventDefault(); drop(category); }}>
+            <div className="sk-head">
+              <input className="sk-name" value={naming[category] ?? category} autoFocus={isPending && !category}
+                placeholder={category || isPending ? 'Category, e.g. Languages' : 'Other skills (no label on the CV)'}
+                aria-label="Category name"
+                onChange={(e) => setNaming((all) => ({ ...all, [category]: e.target.value }))}
+                onBlur={() => { if (category in naming) rename(category, naming[category]!); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') { setNaming((all) => { const { [category]: _x, ...rest } = all; return rest; }); }
+                }} />
+              <span className="sf-tools">
+                <button type="button" title="Move category up" disabled={index === 0 || isPending} onClick={() => moveGroup(category, -1)}>↑</button>
+                <button type="button" title="Move category down" disabled={index >= existing.length - 1 || isPending} onClick={() => moveGroup(category, 1)}>↓</button>
+                <button type="button" className="danger" title="Delete category" onClick={() => removeGroup(category, skills.length)}>×</button>
+              </span>
+            </div>
+            <div className="sf-chips">
+              {skills.map((skill) => (
+                <span key={skill.lineageId} className={`sf-chip${dragging === skill.lineageId ? ' dragging' : ''}`}
+                  draggable
+                  onDragStart={(e) => { setDragging(skill.lineageId ?? null); e.dataTransfer.effectAllowed = 'move'; }}
+                  onDragEnd={() => setDragging(null)}
+                  onDragOver={(e) => { if (dragging) e.preventDefault(); }}
+                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); drop(category, skill.lineageId); }}
+                  title="Drag to another category or place">
+                  {skill.name || '—'}
+                  <button type="button" title={`Remove ${skill.name}`}
+                    onClick={() => onChange((d) => { d.skills = d.skills.filter((s) => s.lineageId !== skill.lineageId); })}>×</button>
+                </span>
+              ))}
+            </div>
+            <input className="sk-add" value={typed[category] ?? ''}
+              placeholder="Add a skill, or several with commas"
+              onChange={(e) => {
+                const text = e.target.value;
+                // A comma ends a skill, as in tag inputs; pasting "a, b, c" adds them all.
+                if (/[,;\n]/.test(text)) {
+                  const parts = text.split(/[,;\n]/);
+                  const rest = parts.pop() ?? '';
+                  add(category, namesIn(parts.join(',')));
+                  setTyped((all) => ({ ...all, [category]: rest.trimStart() }));
+                } else setTyped((all) => ({ ...all, [category]: text }));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); add(category, namesIn(typed[category] ?? '')); }
+                if (e.key === 'Backspace' && !(typed[category] ?? '') && skills.length) {
+                  const last = skills[skills.length - 1]!;
+                  onChange((d) => { d.skills = d.skills.filter((s) => s.lineageId !== last.lineageId); });
+                }
+              }}
+              onBlur={() => add(category, namesIn(typed[category] ?? ''))} />
+          </div>
+        );
+      })}
+      <button type="button" className="sf-add big" onClick={() => setPending((list) => (list.includes('') ? list : [...list, '']))}>
+        + Add category
+      </button>
+      {resume.skills.length === 0 && groups.length === 0 && <p className="sf-count">No skills yet. Add a category, such as Languages.</p>}
     </>
   );
 }

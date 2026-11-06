@@ -7,12 +7,14 @@ import { useEffect, useRef } from 'react';
  * the DOM, mangles paste, and loses the caret on re-render. An input that
  * inherits the surrounding typography gives the same feel with none of that.
  */
-export function Editable({ value, onChange, placeholder, className, multiline }: {
+export function Editable({ value, onChange, placeholder, className, multiline, autoFocus, onBlur }: {
   value: string;
   onChange(next: string): void;
   placeholder?: string;
   className?: string;
   multiline?: boolean;
+  autoFocus?: boolean;
+  onBlur?(): void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -32,6 +34,8 @@ export function Editable({ value, onChange, placeholder, className, multiline }:
         rows={1}
         value={value}
         placeholder={placeholder}
+        autoFocus={autoFocus}
+        onBlur={onBlur}
         onChange={(e) => onChange(e.target.value)}
       />
     );

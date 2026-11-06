@@ -36,6 +36,8 @@ export interface ResumesApi {
   assertOwned(userId: string, id: string): Promise<void>;
   list(userId: string): Promise<ResumeSummary[]>;
   create(userId: string, name: string, targetRole?: string): Promise<ResumeRecord>;
+  /** Deletes the CV with its versions and PDF. Jobs applied with it keep the job, without the CV. */
+  remove(userId: string, id: string): Promise<void>;
   current(userId: string, id: string): Promise<RenderedResume>;
   atSnapshot(userId: string, id: string, number: number): Promise<RenderedResume>;
   history(userId: string, id: string, table: VersionedTable, lineageId: string): Promise<VersionedRow[]>;
@@ -63,4 +65,6 @@ export interface TailoringApi {
   ): Promise<{ resumeId: string; tailoring: Tailoring }>;
   pending(userId: string, resumeId: string): Promise<{ tailoring: Tailoring | null }>;
   discard(userId: string, resumeId: string): Promise<void>;
+  /** This job's copy of a CV, made now if there is none yet. No AI runs. */
+  copyForJob(userId: string, jobId: string, sourceResumeId?: string): Promise<{ resumeId: string }>;
 }

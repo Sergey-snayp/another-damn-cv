@@ -196,3 +196,69 @@ test('AI Settings are kept per CV and reach the chat; the chat only suggests cha
   });
   assert.match(prompts.at(-1)!, /Use British spelling\./, 'the ✦ rewrite follows the AI Settings too');
 });
+
+test('Quick tailoring: one copy per job with the source design, and lines tailored to that job', async () => {
+  const { id } = await cv();
+  const design = { template: 'professional', accent: '#000000', fontFamily: 'Roboto, Arial, sans-serif', fontSize: 10, lineHeight: 1.3, sectionGap: 12, hiddenSections: ['education'], nameSize: 26 };
+  assert.equal((await call(`/resumes/${id}/theme`, { method: 'PUT', user: owner.user.id, body: design })).status, 200);
+  const job = (await (
+    await call('/jobs', { method: 'POST', user: owner.user.id, body: { title: 'Payments Engineer', company: 'Paymorrow', description: JOB } })
+  ).json()) as { id: string };
+
+  const first = await call(`/jobs/${job.id}/tailor-copy`, { method: 'POST', user: owner.user.id, body: { sourceResumeId: id } });
+  assert.equal(first.status, 200);
+  const { resumeId } = (await first.json()) as { resumeId: string };
+  assert.notEqual(resumeId, id, 'the CV itself is left as it is');
+  const again = (await (
+    await call(`/jobs/${job.id}/tailor-copy`, { method: 'POST', user: owner.user.id, body: { sourceResumeId: id } })
+  ).json()) as { resumeId: string };
+  assert.equal(again.resumeId, resumeId, 'the same job reuses its copy');
+  const copied = (await (await call(`/resumes/${resumeId}/theme`, { user: owner.user.id })).json()) as { theme: { hiddenSections: string[] } };
+  assert.deepEqual(copied.theme.hiddenSections, ['education'], 'the copy keeps the design and its hidden sections');
+  assert.equal((copied.theme as { nameSize?: number }).nameSize, 26, 'and the name size');
+  const tooBig = await call(`/resumes/${id}/theme`, { method: 'PUT', user: owner.user.id, body: { ...design, nameSize: 90 } });
+  assert.equal(tooBig.status, 400, 'a name size outside 16–48pt is refused');
+  assert.equal(
+    (await call(`/jobs/${job.id}/tailor-copy`, { method: 'POST', user: other.user.id, body: {} })).status,
+    404,
+  );
+
+  answer = JSON.stringify({ suggestion: 'Built payment APIs on Node.js and PostgreSQL.', cannotDo: [] });
+  const line = await call(`/resumes/${resumeId}/tailor-line`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { text: 'Responsible for Node.js APIs.', kind: 'bullet', context: 'Engineer at Acme', job: { jobId: job.id } },
+  });
+  assert.equal(line.status, 200);
+  assert.deepEqual(await line.json(), {
+    original: 'Responsible for Node.js APIs.',
+    suggestion: 'Built payment APIs on Node.js and PostgreSQL.',
+    cannotDo: [],
+  });
+  const prompt = prompts.at(-1)!;
+  assert.match(prompt, /Payments Engineer at Paymorrow/);
+  assert.match(prompt, /Docker and Kubernetes/);
+  assert.match(prompt, /Engineer at Acme/);
+  assert.match(prompt, /Do not add anything the\s+line does not say/);
+});
+
+test('a CV can be deleted by its owner: its versions and PDF go, a job applied with it stays', async () => {
+  const { id } = await cv();
+  const job = (await (
+    await call('/jobs', { method: 'POST', user: owner.user.id, body: { title: 'Applied job', description: JOB } })
+  ).json()) as { id: string };
+  await prisma.job.update({ where: { id: job.id }, data: { applicationResumeId: id, applicationSnapshot: 1 } });
+  await prisma.resumePdf.create({ data: { resumeId: id, version: '1:x:3', fileName: 'Sam_Lee_Resume.pdf', pdf: new Uint8Array([1]) } });
+
+  assert.equal((await call(`/resumes/${id}`, { method: 'DELETE', user: other.user.id })).status, 404, "someone else's CV is not deleted");
+  assert.equal((await call(`/resumes/${id}`, { method: 'DELETE', user: owner.user.id })).status, 204);
+
+  assert.equal((await call(`/resumes/${id}`, { user: owner.user.id })).status, 404);
+  assert.equal(await prisma.snapshot.count({ where: { resumeId: id } }), 0);
+  assert.equal(await prisma.experienceEntry.count({ where: { resumeId: id } }), 0);
+  assert.equal(await prisma.resumePdf.count({ where: { resumeId: id } }), 0);
+  const kept = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+  assert.equal(kept.applicationResumeId, null, 'the job stays, without the deleted CV');
+  const list = (await (await call('/resumes', { user: owner.user.id })).json()) as Array<{ id: string }>;
+  assert.ok(!list.some((item) => item.id === id));
+});

@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
   ParseIntPipe,
@@ -42,6 +44,9 @@ export class ResumesController {
     @Body(new ZodValidationPipe(createResumeSchema)) body: CreateResumeInput,
   ) {
     return this.resumes.create(userId, body.name, body.targetRole);
+  }
+  @Delete(':id') @HttpCode(204) remove(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.resumes.remove(userId, id);
   }
   @Get(':id') read(@CurrentUser() userId: string, @Param('id') id: string) {
     return this.resumes.current(userId, id);

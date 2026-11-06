@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_THEME, type ResumeTheme } from './theme';
+import { DEFAULT_THEME, designOf, type ResumeTheme } from './theme';
+import { notifyResumesChanged } from '../extensionBridge';
 
 /**
  * A CV's design, kept on the server with the CV: the server makes the CV's PDF
@@ -9,7 +10,7 @@ import { DEFAULT_THEME, type ResumeTheme } from './theme';
 async function loadTheme(id: string): Promise<ResumeTheme> {
   const response = await fetch(`/api/resumes/${encodeURIComponent(id)}/theme`, { credentials: 'include' });
   const server = response.ok ? ((await response.json()) as { theme: Partial<ResumeTheme> | null }).theme : null;
-  if (server) return { ...DEFAULT_THEME, ...server };
+  if (server) return designOf(server);
   let local: Partial<ResumeTheme> | null = null;
   try {
     const stored = localStorage.getItem(`resume-theme:${id}`);
@@ -18,7 +19,7 @@ async function loadTheme(id: string): Promise<ResumeTheme> {
     local = null;
   }
   if (!local) return DEFAULT_THEME;
-  const theme = { ...DEFAULT_THEME, ...local };
+  const theme = designOf(local);
   await saveTheme(id, theme).catch(() => undefined);
   return theme;
 }
@@ -31,6 +32,8 @@ function saveTheme(id: string, theme: ResumeTheme) {
     body: JSON.stringify(theme),
   }).then((response) => {
     if (!response.ok) throw new Error(`${response.status}`);
+    // The CV's PDF changes with its design.
+    notifyResumesChanged(id);
     try {
       localStorage.removeItem(`resume-theme:${id}`);
     } catch {

@@ -23,6 +23,8 @@ export interface Contact extends VersionedRow {
   lastName: string;
   email: string;
   headline?: string | null;
+  /** Shows "Open for relocation" after the location. */
+  openToRelocation?: boolean;
   phone: string | null;
   location: string | null;
   linkedin: string | null;
@@ -119,6 +121,7 @@ export interface ResumeChanges {
     lastName: string;
     email: string;
     headline?: string | null;
+    openToRelocation?: boolean;
     phone?: string | null;
     location?: string | null;
     linkedin?: string | null;
@@ -224,6 +227,7 @@ export interface ResumeRecord {
   tailoring: unknown;
   currentSnapshotId: string | null;
   current: unknown;
+  theme?: unknown;
   materialisedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;

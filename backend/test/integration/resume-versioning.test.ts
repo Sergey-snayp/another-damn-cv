@@ -198,7 +198,7 @@ test('headline, projects, certifications and custom sections are versioned, copi
   const base = content();
   const first = await resumes.save(userId, row.id, {
     ...base,
-    contact: { ...base.contact!, headline: 'Senior Backend Engineer' },
+    contact: { ...base.contact!, headline: 'Senior Backend Engineer', openToRelocation: true },
     projects: [
       {
         lineageId: randomUUID(),
@@ -214,6 +214,7 @@ test('headline, projects, certifications and custom sections are versioned, copi
     customSections: [{ lineageId: randomUUID(), title: 'Languages', text: 'English, Polish', bullets: [] }],
   });
   assert.equal(first.contact?.headline, 'Senior Backend Engineer');
+  assert.equal(first.contact?.openToRelocation, true);
   assert.deepEqual(first.projects?.[0].bullets, ['Wrote the retry engine.', 'Reached 2k stars.']);
   assert.equal(first.certifications?.[0].issuer, 'Amazon');
   assert.equal(first.customSections?.[0].title, 'Languages');
@@ -243,4 +244,5 @@ test('headline, projects, certifications and custom sections are versioned, copi
   assert.notEqual(copied.projects?.[0].lineageId, reverted.projects?.[0].lineageId);
   assert.equal(copied.customSections?.[0].text, 'English, Polish');
   assert.equal(copied.contact?.headline, 'Senior Backend Engineer');
+  assert.equal(copied.contact?.openToRelocation, true, 'a copy keeps "Open for relocation"');
 });

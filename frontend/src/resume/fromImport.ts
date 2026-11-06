@@ -7,17 +7,24 @@ export interface ImportProposal {
   notFound: string[];
   proposed: {
     firstName?: string; lastName?: string; fullName?: string;
+    headline?: string; openToRelocation?: boolean;
     email?: string; phone?: string; location?: string;
-    linkedin?: string; github?: string; website?: string;
+    linkedin?: string; github?: string; website?: string; portfolio?: string;
     summary?: string;
     skills?: string[];
+    /** The CV's own skills section, grouped as written: "Languages: JavaScript, Node.js". */
+    skillGroups?: { category: string; skills: string[] }[];
     experience?: {
-      company: string; title: string; from: string; to?: string;
+      company: string; title: string; client?: string; location?: string;
+      from: string; to?: string;
       current?: boolean; description?: string; bullets?: string[];
     }[];
     education?: {
       institution: string; degree: string; field?: string; from: string; to?: string;
     }[];
+    projects?: { name: string; role?: string; link?: string; from?: string; to?: string; bullets?: string[] }[];
+    certifications?: { name: string; issuer?: string; date?: string; link?: string }[];
+    otherSections?: { title: string; text?: string; bullets?: string[] }[];
   };
 }
 
@@ -40,12 +47,14 @@ export function draftFromImport(proposal: ImportProposal): RenderedResume {
     contact: {
       firstName: p.firstName || derivedFirst,
       lastName: p.lastName || derivedRest.join(' '),
+      headline: p.headline ?? '',
+      openToRelocation: Boolean(p.openToRelocation),
       email: p.email ?? '',
       phone: p.phone ?? '',
       location: p.location ?? '',
       linkedin: p.linkedin ?? '',
       github: p.github ?? '',
-      website: p.website ?? '',
+      website: p.website || p.portfolio || '',
     },
 
     experiences: (p.experience ?? []).map((role, index) => {
@@ -55,6 +64,8 @@ export function draftFromImport(proposal: ImportProposal): RenderedResume {
         lineageId,
         company: role.company,
         title: role.title,
+        client: role.client || null,
+        location: role.location || null,
         from: role.from,
         to: role.to ?? '',
         current: role.current ?? !role.to,
@@ -84,14 +95,44 @@ export function draftFromImport(proposal: ImportProposal): RenderedResume {
       position: index,
     })),
 
-    skills: (p.skills ?? []).map((name) => ({
-      lineageId: newId(),
-      name,
-      category: '',
-      verified: false,
-    })),
+    // The CV's own skills section, in its categories and order; without one,
+    // every skill the CV names, in one list.
+    skills: (p.skillGroups?.some((group) => group.skills?.length)
+      ? p.skillGroups.flatMap((group) => (group.skills ?? []).map((name) => ({ name, category: (group.category ?? '').trim() })))
+      : (p.skills ?? []).map((name) => ({ name, category: '' })))
+      .filter((skill, index, all) => skill.name.trim() && all.findIndex((s) => s.name.toLowerCase() === skill.name.toLowerCase()) === index)
+      .map((skill, position) => ({ lineageId: newId(), name: skill.name.trim(), category: skill.category, verified: false, position })),
 
     summaries: p.summary ? { default: p.summary } : {},
+
+    projects: (p.projects ?? []).filter((project) => project.name?.trim()).map((project, position) => ({
+      lineageId: newId(),
+      name: project.name,
+      role: project.role || null,
+      link: project.link || null,
+      from: project.from || null,
+      to: project.to || null,
+      current: !project.to && Boolean(project.from),
+      bullets: project.bullets ?? [],
+      position,
+    })),
+    certifications: (p.certifications ?? []).filter((item) => item.name?.trim()).map((item, position) => ({
+      lineageId: newId(),
+      name: item.name,
+      issuer: item.issuer || null,
+      date: item.date || null,
+      link: item.link || null,
+      position,
+    })),
+    customSections: (p.otherSections ?? [])
+      .filter((section) => section.title?.trim() && (section.text?.trim() || section.bullets?.some((b) => b.trim())))
+      .map((section, position) => ({
+        lineageId: newId(),
+        title: section.title,
+        text: section.text || null,
+        bullets: section.bullets ?? [],
+        position,
+      })),
   };
 }
 

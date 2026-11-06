@@ -86,7 +86,8 @@ export async function signIn() {
 }
 
 export async function signOut() {
-  await chrome.storage.local.remove('auth');
+  // The account's CVs go with it: another account must not see them.
+  await chrome.storage.local.remove(['auth', 'appResumes', 'chosenResumeId', 'cvTexts']);
 }
 
 export async function currentUser() {
