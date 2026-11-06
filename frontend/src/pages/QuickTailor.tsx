@@ -1,18 +1,18 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { jobName, jobsApi, type JobDetail } from '../jobsApi';
-import { resumeApi, type RenderedResume } from '../resumeApi';
+import { resumeApi, type QuickTailoringDraft, type RenderedResume } from '../resumeApi';
 import { DiffText } from '../resume/DiffText';
 import { ResumeDocument, type RewriteTarget } from '../resume/ResumeDocument';
 import { PagedDocument, ScaledPage } from '../resume/PagedDocument';
-import { useResumeTheme } from '../resume/useResumeTheme';
+import { designOf } from '../resume/theme';
+import { DraftHistory } from '../resume/draftHistory';
 import { assistantApi, type ResumeScore } from '../resume/studio/assistantApi';
 import { Gauge } from '../resume/studio/AssistantPanel';
 import { notifyResumesChanged, useResumeInExtension } from '../extensionBridge';
 import '../resume/document.css';
 import '../resume/studio/studio.css';
 
-const AUTOSAVE_MS = 1500;
 const PAGE_WIDTH = 794;
 const newId = () => crypto.randomUUID();
 
@@ -40,55 +40,70 @@ interface Tailoring {
 }
 
 /**
- * Quick tailoring: this job's copy of the CV, drawn exactly as its PDF prints
+ * Quick tailoring: an unsaved draft for the job, drawn exactly as its PDF prints
  * (A4 sheets, the same page breaks). Change any line in place, or press ✦
  * beside a line: the AI rewords it for the job and the suggestion opens right
  * under that line. It is kept only when you choose "Use this", and the AI may
- * reword, never add facts. Changes save on their own, as versions in History.
+ * reword, never add facts. Save stores the edited CV first, then makes its PDF.
  */
-export function QuickTailor({ popup = false }: { popup?: boolean }) {
+export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boolean; jobRoute?: boolean }) {
   const { id = '' } = useParams();
   const [params] = useSearchParams();
-  const jobId = params.get('job') ?? '';
-  const theme = useResumeTheme(id);
+  const jobId = jobRoute ? id : params.get('job') ?? '';
+  const sourceId = jobRoute ? params.get('from') ?? undefined : id;
+  const [workspace, setWorkspace] = useState<QuickTailoringDraft | null>(null);
+  const resumeId = workspace?.resumeId ?? null;
+  const contextId = resumeId ?? workspace?.sourceResumeId ?? '';
+  const theme = useMemo(() => designOf(workspace?.theme), [workspace?.theme]);
 
   const [loaded, setLoaded] = useState<RenderedResume | null>(null);
   const [draft, setDraft] = useState<RenderedResume | null>(null);
+  const history = useRef(new DraftHistory()).current;
+  const [savedStep, setSavedStep] = useState<number | null>(null);
+  const [pendingEdit, setPendingEdit] = useState(false);
   const [name, setName] = useState('');
   const [job, setJob] = useState<JobDetail | null>(null);
   const [score, setScore] = useState<ResumeScore | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [creatingPdf, setCreatingPdf] = useState(false);
+  const [pdfSnapshot, setPdfSnapshot] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [tailoring, setTailoring] = useState<Tailoring | null>(null);
   const [cardTop, setCardTop] = useState(0);
   const [canvasWidth, setCanvasWidth] = useState(0);
-  const draftRef = useRef<RenderedResume | null>(null);
-  draftRef.current = draft;
   const canvas = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([resumeApi.read(id), resumeApi.list(), jobId ? jobsApi.get(jobId) : Promise.resolve(null)]).then(
-      ([resume, list, detail]) => {
+    if (!jobId) return;
+    Promise.all([resumeApi.previewQuick(jobId, sourceId), jobsApi.get(jobId)]).then(
+      ([prepared, detail]) => {
         if (!active) return;
-        setLoaded(resume);
-        setDraft(structuredClone(resume));
-        setName(list.find((item) => item.id === id)?.name ?? 'Resume');
+        setWorkspace(prepared);
+        setLoaded(prepared.document);
+        const initial = history.reset(prepared.document);
+        setDraft(initial.document);
+        setSavedStep(initial.id);
+        setPendingEdit(false);
+        setTailoring(null);
+        setName(prepared.name);
+        setPdfSnapshot(null);
         setJob(detail);
       },
       (err: Error) => active && setError(err.message),
     );
     return () => { active = false; };
-  }, [id, jobId]);
+  }, [jobId, sourceId, history]);
 
   // The score for the job, again after each save.
   useEffect(() => {
-    if (!jobId || !loaded) return;
+    if (!jobId || !loaded || !contextId) return;
     let active = true;
-    assistantApi.score(id, { jobId }).then((next) => active && setScore(next), () => active && setScore(null));
+    assistantApi.score(contextId, { jobId }).then((next) => active && setScore(next), () => active && setScore(null));
     return () => { active = false; };
-  }, [id, jobId, loaded?.snapshot]);
+  }, [contextId, jobId, loaded?.snapshot]);
 
   // The page is as wide as the column allows, up to its real size.
   useLayoutEffect(() => {
@@ -101,50 +116,90 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
   const scale = canvasWidth ? Math.min(1, Math.max(0.5, (canvasWidth - 48) / PAGE_WIDTH)) : 1;
 
   const pagedWatch = useMemo(() => [draft, theme], [draft, theme]);
-  const dirty = Boolean(loaded && draft && JSON.stringify(loaded) !== JSON.stringify(draft));
+  const dirty = Boolean(draft && history.current?.id !== savedStep);
 
   function change(mutate: (d: RenderedResume) => void) {
-    setDraft((current) => {
-      if (!current) return current;
-      const next = structuredClone(current);
-      mutate(next);
-      for (const role of next.experiences) {
-        role.lineageId ??= newId();
-        for (const bullet of role.achievements) { bullet.lineageId ??= newId(); bullet.experienceLineageId = role.lineageId; }
-      }
-      for (const skill of next.skills) skill.lineageId ??= newId();
-      return next;
-    });
+    if (savingRef.current) return;
+    const next = history.change(mutate);
+    setPendingEdit(false);
+    if (!next) return;
+    setTailoring(null);
+    setDraft(next.document);
   }
 
+  const moveHistory = useCallback((direction: -1 | 1) => {
+    if (savingRef.current) return;
+    const next = history.move(direction);
+    if (!next) return;
+    setTailoring(null);
+    setPendingEdit(false);
+    setDraft(next.document);
+  }, [history]);
+
+  function resetChanges() {
+    if (savingRef.current) return;
+    const initial = history.restoreInitial();
+    setTailoring(null);
+    setPendingEdit(false);
+    setSaveError(null);
+    if (initial) setDraft(initial.document);
+  }
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey)) return;
+      // Text fields keep the browser's normal undo while a line is being typed.
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const key = event.key.toLowerCase();
+      if (key !== 'z' && !(key === 'y' && event.ctrlKey)) return;
+      event.preventDefault();
+      moveHistory(key === 'y' || event.shiftKey ? 1 : -1);
+    };
+    document.addEventListener('keydown', shortcut);
+    return () => document.removeEventListener('keydown', shortcut);
+  }, [moveHistory]);
+
   async function save() {
-    const sent = draftRef.current;
-    if (!sent) return;
+    const sent = history.current?.document;
+    if (!sent || !workspace || savingRef.current) return false;
+    savingRef.current = true;
     setSaving(true);
+    setSaveError(null);
+    setPdfSnapshot(null);
+    let cvSaved = false;
     try {
-      const saved = await resumeApi.save(id, sent, job ? `Quick tailoring for ${jobName(job)}` : 'Quick tailoring');
-      setLoaded(saved);
-      setDraft((current) => (current === sent ? structuredClone(saved) : current && { ...current, snapshot: saved.snapshot }));
-      setSaveError(null);
+      const saved = await resumeApi.saveQuick(jobId, sent, {
+        resumeId: workspace.resumeId, sourceResumeId: workspace.sourceResumeId, theme,
+      }, job ? `Quick tailoring for ${jobName(job)}` : 'Quick tailoring');
+      if (!saved.resumeId) throw new Error('The CV could not be created.');
+      setWorkspace(saved);
+      setName(saved.name);
+      setLoaded(saved.document);
+      const savedEdit = history.acceptSaved(sent, saved.document, !workspace.resumeId);
+      if (savedEdit) { setDraft(savedEdit.document); setSavedStep(savedEdit.id); }
+      cvSaved = true;
+      setCreatingPdf(true);
+      await resumeApi.createPdf(saved.resumeId);
+      setPdfSnapshot(saved.document.snapshot);
+      notifyResumesChanged(saved.resumeId);
+      useResumeInExtension(saved.resumeId);
+      return true;
     } catch (err) {
-      setSaveError((err as Error).message);
+      setSaveError(`${cvSaved ? 'CV saved, but the PDF could not be created: ' : 'CV could not be saved: '}${(err as Error).message}`);
+      return false;
     } finally {
+      savingRef.current = false;
+      setCreatingPdf(false);
       setSaving(false);
     }
   }
 
   useEffect(() => {
-    if (!dirty || saving || saveError) return;
-    const timer = setTimeout(() => void save(), AUTOSAVE_MS);
-    return () => clearTimeout(timer);
-  }, [draft, dirty, saving, saveError]);
-
-  useEffect(() => {
-    if (!dirty && !saving) return;
+    if (!dirty && !pendingEdit && !saving) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty, saving]);
+  }, [dirty, pendingEdit, saving]);
 
   // The suggestion card sits right under its line, wherever the page has moved it.
   useLayoutEffect(() => {
@@ -164,7 +219,7 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
     if (!target.text.trim() || !jobId) return;
     setTailoring({ target, anchor, busy: true });
     try {
-      const response = await fetch(`/api/resumes/${encodeURIComponent(id)}/tailor-line`, {
+      const response = await fetch(`/api/resumes/${encodeURIComponent(contextId)}/tailor-line`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -195,14 +250,18 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
   if (error) return <div className="studio-message"><h1>Quick tailoring</h1><p className="error">{error}</p></div>;
   if (!draft) return <div className="studio-message"><h1>Quick tailoring</h1><p className="muted">Loading…</p></div>;
 
-  const status = saving ? 'Saving…' : saveError ? 'Not saved' : dirty ? 'Unsaved changes' : 'All changes saved';
+  const pdfReady = !dirty && !pendingEdit && pdfSnapshot === draft.snapshot;
+  const status = saving ? creatingPdf ? 'Creating PDF…' : 'Saving CV…'
+    : saveError ? 'Save failed' : !resumeId ? 'Unsaved CV draft' : dirty || pendingEdit ? 'Unsaved changes' : pdfReady ? 'CV and PDF saved' : 'Click Save to create the PDF';
   const matched = score?.keywords?.matched ?? [];
   const missing = score?.keywords?.missing ?? [];
   const skills = new Set(draft.skills.map((skill) => skill.name.toLowerCase()));
   const unchanged = tailoring?.after !== undefined && tailoring.after.trim() === tailoring.target.text.trim();
 
   return (
-    <div className="studio qt">
+    <div className="studio qt"
+      onInputCapture={(event) => { if (event.target instanceof HTMLElement && event.target.isContentEditable) setPendingEdit(true); }}
+      onBlurCapture={() => setPendingEdit(false)}>
       <header className="studio-bar">
         {popup ? (
           <nav className="studio-crumb">
@@ -212,7 +271,7 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
           </nav>
         ) : (
           <nav className="studio-crumb">
-            <Link to="/documents">Documents</Link>
+            <Link to="/documents" onClick={(event) => { if (dirty && !confirm('Discard your unsaved changes?')) event.preventDefault(); }}>Documents</Link>
             <span className="sep">›</span>
             <b className="qt-name">{name}</b>
             <span className="sep">›</span>
@@ -221,35 +280,46 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
         )}
         <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined}>{status}</span>
         <span className="studio-actions">
-          {popup
-            ? <a className="ghost" href={`/documents/${id}?job=${encodeURIComponent(jobId)}`} target="_blank" rel="noreferrer">Open full editor</a>
-            : <Link className="ghost" to={`/documents/${id}?job=${encodeURIComponent(jobId)}`}>Open full editor</Link>}
-          <a className="studio-export" href={`/api/resumes/${id}/pdf?download=1`}
-            onClick={(e) => { if (dirty) { e.preventDefault(); const href = e.currentTarget.href; void save().then(() => { window.location.href = href; }); } }}>
-            Export PDF
-          </a>
+          <span className="qt-history" role="group" aria-label="Change history">
+            <button type="button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" aria-keyshortcuts="Control+Z Meta+Z"
+              disabled={saving || (!history.canUndo && !pendingEdit)} onClick={() => moveHistory(-1)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 4-5 5 5 5M4 9h9a7 7 0 0 1 7 7" /></svg>Undo
+            </button>
+            <button type="button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z or Ctrl Y)" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+              disabled={saving || pendingEdit || !history.canRedo} onClick={() => moveHistory(1)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5-5 5M20 9h-9a7 7 0 0 0-7 7" /></svg>Redo
+            </button>
+            <button type="button" aria-label="Reset changes" title="Reset all edits from this tailoring session"
+              disabled={saving || (!history.canReset && !pendingEdit)} onClick={resetChanges}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7" /></svg>Reset
+            </button>
+          </span>
+          {!resumeId
+            ? <button className="ghost" disabled title="Save this CV before opening the full editor.">Open full editor</button>
+            : popup
+              ? <a className="ghost" href={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`} target="_blank" rel="noreferrer">Open full editor</a>
+              : <Link className="ghost" to={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`}
+                  onClick={(event) => { if (dirty && !confirm('Discard your unsaved changes?')) event.preventDefault(); }}>Open full editor</Link>}
+          <button className="primary" disabled={saving} onClick={() => void save()}>
+            {saving ? creatingPdf ? 'Creating PDF…' : 'Saving…' : 'Save'}
+          </button>
+          {pdfReady && !saving
+            ? <a className="ghost" href={`/api/resumes/${resumeId}/pdf?download=1`}>Export PDF</a>
+            : <button className="ghost" disabled title="Click Save to create the PDF first.">Export PDF</button>}
           {popup && (
-            <button className="primary" title="Close this window" onClick={() => {
-              // Saved first, so nothing typed in the last moment is lost.
-              void (dirty ? save() : Promise.resolve()).then(() => window.close());
-            }}>Done</button>
+            <button className="ghost" disabled={saving} title="Close this window" onClick={() => window.close()}>Close</button>
           )}
         </span>
       </header>
       {saveError && (
-        <div className="studio-held bad"><span>{saveError}</span><button className="ghost" onClick={() => { setSaveError(null); void save(); }}>Try again</button></div>
+        <div className="studio-held bad"><span>{saveError}</span><button className="ghost" disabled={saving} onClick={() => void save()}>Try again</button></div>
       )}
 
       <div className="qt-body">
         <main className="qt-canvas" ref={canvas}>
-          <p className="qt-hint">
-            Your CV for <b>{job ? `${jobName(job)}${job.company ? ` at ${job.company}` : ''}` : 'this job'}</b>, exactly as its PDF prints.
-            Click any text to change it, or point at a bullet and press <span className="qt-key">✦</span> to tailor it for the job.
-            Your main CV stays as it is.
-          </p>
           <ScaledPage className="qt-zoom" scale={scale}>
             <PagedDocument watch={pagedWatch}>
-              <ResumeDocument resumeId={id} resume={draft} theme={theme} onChange={change} onTailor={(target, anchor) => void tailor(target, anchor)} />
+              <ResumeDocument resumeId={contextId} resume={draft} theme={theme} readOnly={saving} onChange={change} onTailor={(target, anchor) => void tailor(target, anchor)} />
             </PagedDocument>
           </ScaledPage>
 
@@ -270,9 +340,9 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
               {!tailoring.busy && (
                 <div className="ra-row">
                   {tailoring.after !== undefined && (
-                    <button className="primary" disabled={unchanged} onClick={use}>{unchanged ? 'Already fits' : 'Use this'}</button>
+                    <button className="primary" disabled={unchanged || saving} onClick={use}>{unchanged ? 'Already fits' : 'Use this'}</button>
                   )}
-                  <button className="ghost" onClick={() => void tailor(tailoring.target, tailoring.anchor)}>Try again</button>
+                  <button className="ghost" disabled={saving} onClick={() => void tailor(tailoring.target, tailoring.anchor)}>Try again</button>
                   <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>
                 </div>
               )}
@@ -296,7 +366,7 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
                     <p className="ra-muted">Add to Skills only the ones you have used:</p>
                     <div className="sf-chips">
                       {missing.filter((kw) => !skills.has(kw.toLowerCase())).map((kw) => (
-                        <button key={kw} className="qt-add-skill"
+                        <button key={kw} className="qt-add-skill" disabled={saving}
                           onClick={() => change((d) => { d.skills.push({ lineageId: newId(), name: kw, category: '' }); })}>
                           + {kw}
                         </button>
@@ -321,45 +391,9 @@ export function QuickTailor({ popup = false }: { popup?: boolean }) {
 }
 
 /**
- * Opened by the extension's "Quick tailoring": makes (or reuses) this job's
- * copy of the chosen CV, then opens it in Quick tailoring.
+ * Opened by the extension's Quick Tailor button. Preview is read-only on the
+ * backend: the document, its first version and its PDF wait for Save.
  */
 export function QuickTailorStart({ popup = false }: { popup?: boolean }) {
-  const { id = '' } = useParams();
-  const [params] = useSearchParams();
-  const navigate = useNavigate();
-  const [error, setError] = useState<string | null>(null);
-  const started = useRef(false);
-
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    const from = params.get('from') ?? undefined;
-    fetch(`/api/jobs/${encodeURIComponent(id)}/tailor-copy`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(from ? { sourceResumeId: from } : {}),
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? `${response.status}`);
-        return response.json() as Promise<{ resumeId: string }>;
-      })
-      .then(
-        ({ resumeId }) => {
-          // The job's copy is new, and it is the CV for this job: Autofill uploads it.
-          notifyResumesChanged(resumeId);
-          useResumeInExtension(resumeId);
-          navigate(`${popup ? '/popup' : ''}/documents/${resumeId}/quick?job=${encodeURIComponent(id)}`, { replace: true });
-        },
-        (err: Error) => setError(err.message),
-      );
-  }, [id]);
-
-  return (
-    <div className="studio-message">
-      <h1>Quick tailoring</h1>
-      {error ? <p className="error">{error}</p> : <p className="muted">Preparing your CV for this job…</p>}
-    </div>
-  );
+  return <QuickTailor popup={popup} jobRoute />;
 }

@@ -3,9 +3,11 @@ import {
   Catch,
   Controller,
   Get,
+  HttpCode,
   Inject,
   Param,
   Patch,
+  Post,
   Put,
   Query,
   Res,
@@ -20,7 +22,7 @@ import { z } from 'zod';
 import { AuthGuard, CurrentUser, SyncTokenGuard } from '../../../../auth/http';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { ResumePdfs } from '../../../application/use-cases/resume-pdfs';
-import { PdfUnavailableError } from '../../../domain/resume-pdf';
+import { PdfNotReadyError, PdfUnavailableError } from '../../../domain/resume-pdf';
 import { ResumeErrorFilter } from './resume-error.filter';
 import { ResumeOwnerGuard } from './resume-owner.guard';
 
@@ -44,10 +46,15 @@ export const resumeThemeSchema = z
 
 export const renameSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
 
-@Catch(PdfUnavailableError)
+@Catch(PdfUnavailableError, PdfNotReadyError)
 class PdfErrorFilter implements ExceptionFilter {
-  catch(error: PdfUnavailableError, host: ArgumentsHost) {
-    host.switchToHttp().getResponse<Response>().status(503).json({ statusCode: 503, message: error.message });
+  catch(error: PdfUnavailableError | PdfNotReadyError, host: ArgumentsHost) {
+    const status = error instanceof PdfNotReadyError ? 409 : 503;
+    host
+      .switchToHttp()
+      .getResponse<Response>()
+      .status(status)
+      .json({ statusCode: status, message: error.message });
   }
 }
 
@@ -56,8 +63,13 @@ function sendPdf(
   file: { fileName: string; pdf: Buffer },
   disposition: 'inline' | 'attachment',
 ) {
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `${disposition}; filename="${file.fileName}"`);
+  // Express encodes international names in filename* as well as a fallback.
+  res.attachment(file.fileName);
+  if (disposition === 'inline')
+    res.setHeader(
+      'Content-Disposition',
+      String(res.getHeader('Content-Disposition')).replace(/^attachment/, 'inline'),
+    );
   res.setHeader('Cache-Control', 'no-store');
   res.send(file.pdf);
 }
@@ -88,6 +100,12 @@ export class ResumePdfController {
     @Res() res: Response,
   ) {
     sendPdf(res, await this.pdfs.file(userId, id), download ? 'attachment' : 'inline');
+  }
+
+  /** The Save button calls this only after saving the CV's content. */
+  @Post(':id/pdf') @HttpCode(200) async generate(@CurrentUser() userId: string, @Param('id') id: string) {
+    const file = await this.pdfs.generate(userId, id);
+    return { fileName: file.fileName, version: file.version };
   }
 
   /** The editor's ✎ on the CV name. */

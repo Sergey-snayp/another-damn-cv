@@ -1,4 +1,5 @@
 import { notifyResumesChanged } from './extensionBridge';
+import type { ResumeTheme } from './resume/theme';
 
 /**
  * The versioned resume API.
@@ -206,10 +207,37 @@ export interface Snapshot {
   createdAt: string;
 }
 
+export interface QuickTailoringDraft {
+  resumeId: string | null;
+  sourceResumeId: string;
+  name: string;
+  document: RenderedResume;
+  theme: Partial<ResumeTheme> | null;
+}
+
+/** Reads nest achievements; saves send them flat, linked to their role. */
+function changesForSave(resume: RenderedResume) {
+  return {
+    contact: resume.contact ?? undefined,
+    experiences: resume.experiences.map(({ achievements, ...rest }) => rest),
+    achievements: resume.experiences.flatMap((experience) =>
+      experience.achievements.map((achievement) => ({
+        ...achievement,
+        experienceLineageId: experience.lineageId ?? achievement.experienceLineageId,
+      }))),
+    educations: resume.educations,
+    skills: resume.skills,
+    summaries: Object.entries(resume.summaries).map(([variant, text]) => ({ variant, text })),
+    projects: resume.projects ?? [],
+    certifications: resume.certifications ?? [],
+    customSections: resume.customSections ?? [],
+  };
+}
+
 // ── the calls ────────────────────────────────────────────────────────────────
 
 export const resumeApi = {
-  list: () => request<ResumeSummary[]>('/resumes'),
+  list: () => request<ResumeSummary[]>('/resumes', { cache: 'no-store' }),
 
   create: (name: string, targetRole?: string) =>
     request<ResumeSummary>('/resumes', {
@@ -218,6 +246,18 @@ export const resumeApi = {
     }).then((created) => { notifyResumesChanged(created.id); return created; }),
 
   read: (id: string) => request<RenderedResume>(`/resumes/${id}`),
+
+  previewQuick: (jobId: string, sourceResumeId?: string) =>
+    request<QuickTailoringDraft>(`/jobs/${encodeURIComponent(jobId)}/quick-tailor${sourceResumeId ? `?sourceResumeId=${encodeURIComponent(sourceResumeId)}` : ''}`, { cache: 'no-store' }),
+
+  saveQuick: (jobId: string, resume: RenderedResume, input: { resumeId: string | null; sourceResumeId: string; theme: ResumeTheme }, message?: string) =>
+    request<QuickTailoringDraft>(`/jobs/${encodeURIComponent(jobId)}/quick-tailor`, {
+      method: 'POST', body: JSON.stringify({ ...input, changes: changesForSave(resume), message }),
+    }).then((saved) => { if (saved.resumeId) notifyResumesChanged(saved.resumeId); return saved; }),
+
+  /** Explicit Save action: the CV must be saved before this is called. */
+  createPdf: (id: string) =>
+    request<{ fileName: string; version: string }>(`/resumes/${encodeURIComponent(id)}/pdf`, { method: 'POST' }),
 
   /** Deletes the CV with its versions and PDF. */
   remove: (id: string) =>
@@ -235,19 +275,7 @@ export const resumeApi = {
       method: 'POST',
       body: JSON.stringify({
         message,
-        contact: resume.contact ?? undefined,
-        experiences: resume.experiences.map(({ achievements, ...rest }) => rest),
-        achievements: resume.experiences.flatMap((experience) =>
-          experience.achievements.map((achievement) => ({
-            ...achievement,
-            experienceLineageId: experience.lineageId ?? achievement.experienceLineageId,
-          }))),
-        educations: resume.educations,
-        skills: resume.skills,
-        summaries: Object.entries(resume.summaries).map(([variant, text]) => ({ variant, text })),
-        projects: resume.projects ?? [],
-        certifications: resume.certifications ?? [],
-        customSections: resume.customSections ?? [],
+        ...changesForSave(resume),
       }),
     }).then((saved) => { notifyResumesChanged(id); return saved; }),
 

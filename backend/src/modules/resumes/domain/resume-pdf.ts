@@ -1,7 +1,7 @@
 /**
  * A CV's PDF is made on the server and kept, like Simplify keeps its
- * candidates' resume files: the extension only downloads it. It is made again
- * when the CV gets a new version or its design changes.
+ * candidates' resume files: the extension only downloads it. It is made only
+ * by an explicit Save action, after the CV has been saved.
  */
 
 /** FNV-1a over the design's JSON: enough to notice that the design changed. */
@@ -26,8 +26,17 @@ export function pdfVersion(snapshot: number, theme: unknown): string {
   return `${snapshot}:${fingerprint(JSON.stringify(theme ?? null))}:${PRINT_LAYOUT}`;
 }
 
-/** "Sergey_Proniuk_Resume.pdf", as Simplify names uploaded resumes; the CV's name when it has no name on it. */
-export function pdfFileName(contact: { firstName?: string | null; lastName?: string | null } | null): string {
+/** Application PDFs use the saved full_name_CV_company_role name. */
+export function pdfFileName(
+  contact: { firstName?: string | null; lastName?: string | null } | null,
+  applicationName?: string | null,
+): string {
+  const application = (applicationName ?? '')
+    .replace(/\.pdf$/i, '')
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '_')
+    .replace(/^_|_$/g, '');
+  if (application) return `${Array.from(application).slice(0, 120).join('').replace(/_$/g, '')}.pdf`;
   const name = [contact?.firstName, contact?.lastName]
     .map((part) => (part ?? '').trim())
     .filter(Boolean)
@@ -43,5 +52,12 @@ export class PdfUnavailableError extends Error {
   constructor(message = 'The CV PDF could not be made. Is the app running?') {
     super(message);
     this.name = 'PdfUnavailableError';
+  }
+}
+
+export class PdfNotReadyError extends Error {
+  constructor(message = 'Save this CV to create an up-to-date PDF.') {
+    super(message);
+    this.name = 'PdfNotReadyError';
   }
 }

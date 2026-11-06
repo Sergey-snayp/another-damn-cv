@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { resumeApi, type ResumeSummary } from '../resumeApi';
+import { onResumesChanged } from '../extensionBridge';
 import { importCv, draftFromImport } from '../resume/fromImport';
 import { CreateResumeDialog } from '../documents/CreateResumeDialog';
 import {
@@ -16,13 +17,15 @@ import { DocumentPreview } from '../documents/DocumentPreview';
 import '../documents/documents.css';
 
 interface Preferences {
+  version: 1;
   type: ResumeType;
   sortBy: SortBy;
   order: SortOrder;
   pins: Record<string, boolean>;
 }
 const defaults: Preferences = {
-  type: 'mine',
+  version: 1,
+  type: 'all',
   sortBy: 'updatedAt',
   order: 'desc',
   pins: {},
@@ -41,7 +44,10 @@ function readPreferences(key: string): Preferences {
     ) as Partial<Preferences> | null;
     if (!stored || typeof stored !== 'object') return defaults;
     return {
-      type: ['mine', 'generated', 'all'].includes(stored.type ?? '')
+      version: 1,
+      // Older preferences persisted the implicit "My resumes" filter. Start
+      // with the complete library once, then remember deliberate filters.
+      type: stored.version === 1 && ['mine', 'generated', 'all'].includes(stored.type ?? '')
         ? stored.type!
         : defaults.type,
       sortBy: ['updatedAt', 'createdAt', 'name'].includes(stored.sortBy ?? '')
@@ -120,6 +126,23 @@ export function Documents() {
       active = false;
     };
   }, [reload]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') setReload((value) => value + 1);
+    };
+    const unsubscribe = onResumesChanged(refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    // Also pick up changes made directly through the backend or extension.
+    const timer = window.setInterval(refresh, 15_000);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -250,7 +273,7 @@ export function Documents() {
     }
   }
 
-  const filtered = query.trim() !== '' || preferences.type !== 'mine';
+  const filtered = query.trim() !== '' || preferences.type !== 'all';
 
   return (
     <section className="documents-page" aria-label="Documents">

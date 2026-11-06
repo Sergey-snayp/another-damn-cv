@@ -12,13 +12,16 @@ import { APP_URL, NotSignedInError } from './jobs.js';
  * answer, replaced on every fetch and dropped when a fetch fails or the
  * account signs out, so a CV deleted in the app never stays here.
  *
- * Storage (chrome.storage.local):
- *   appResumes        the server's last answer, so the panel can draw at once
- *   chosenResumeId    the CV Autofill uploads; the primary CV when unset
+ * The list lives only in this panel's memory, after the server answered for
+ * the current sign-in. A persisted list from an older visit is never shown.
+ * Only chosenResumeId (the CV to upload) is remembered between visits.
  */
+let library = null;
+let pending = null;
 
 /** Drops this account's CV list, choice and texts: after a failed fetch or a sign-out. */
 export function forgetResumes() {
+  library = null;
   return chrome.storage.local.remove(['appResumes', 'chosenResumeId', 'cvTexts']);
 }
 
@@ -27,10 +30,10 @@ export class ResumeGoneError extends Error {
   constructor() { super('That CV was deleted in the app. Choose another.'); this.name = 'ResumeGoneError'; }
 }
 
-/** Cached list and choice, without a network call. */
+/** This panel's last server answer, only for the current sign-in. */
 export async function cachedResumes() {
-  const { appResumes, chosenResumeId } = await chrome.storage.local.get(['appResumes', 'chosenResumeId']);
-  return withChoice(Array.isArray(appResumes) ? appResumes : [], chosenResumeId);
+  const { auth, chosenResumeId } = await chrome.storage.local.get(['auth', 'chosenResumeId']);
+  return withChoice(auth?.syncToken && library?.token === auth.syncToken ? library.items : [], chosenResumeId);
 }
 
 function withChoice(items, chosenId) {
@@ -38,23 +41,48 @@ function withChoice(items, chosenId) {
   return { items, chosen };
 }
 
-/** Fetches the CV list from the app and stores it. */
+/** Fetches the backend library. Concurrent readers share one request. */
 export async function fetchResumes() {
-  const { auth, chosenResumeId } = await chrome.storage.local.get(['auth', 'chosenResumeId']);
-  if (!auth?.syncToken) throw new NotSignedInError();
-  let response;
+  const { auth } = await chrome.storage.local.get('auth');
+  if (!auth?.syncToken) { await forgetResumes(); throw new NotSignedInError(); }
+  if (pending?.token === auth.syncToken) return pending.promise;
+  const request = { token: auth.syncToken, promise: null };
+  request.promise = readLibrary(auth.syncToken).finally(() => { if (pending === request) pending = null; });
+  pending = request;
+  return request.promise;
+}
+
+async function readLibrary(token) {
   try {
-    response = await fetch(`${API_URL}/api/extension/resumes`, { headers: { Authorization: `Bearer ${auth.syncToken}` } });
-  } catch {
-    throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`);
+    const response = await fetch(`${API_URL}/api/extension/resumes`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+    });
+    const items = response.ok ? await response.json() : null;
+    // A slow response from an earlier account must never restore its CVs or
+    // sign out the account selected while the request was in flight.
+    const { auth, chosenResumeId } = await chrome.storage.local.get(['auth', 'chosenResumeId']);
+    if (auth?.syncToken !== token) throw new NotSignedInError();
+    if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
+    if (!response.ok) throw new Error(`Server returned ${response.status}.`);
+    if (!Array.isArray(items)) throw new Error('The app returned an invalid CV list. Try again.');
+    library = { token, items };
+    // Remove the old persisted library; it is never a source of documents.
+    await chrome.storage.local.remove('appResumes');
+    if (chosenResumeId && !items.some(item => item.id === chosenResumeId)) await chrome.storage.local.remove('chosenResumeId');
+    return withChoice(items, chosenResumeId);
+  } catch (error) {
+    // Leave a newer account's successful request alone.
+    const { auth } = await chrome.storage.local.get('auth');
+    if (auth?.syncToken === token) await forgetResumes();
+    else if (library?.token === token) library = null;
+    if (error instanceof TypeError) throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`);
+    throw error;
   }
-  if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
-  if (!response.ok) throw new Error(`Server returned ${response.status}.`);
-  const items = await response.json();
-  await chrome.storage.local.set({ appResumes: items });
-  // A choice of a CV that is gone is forgotten, so it can never come back.
-  if (chosenResumeId && !items.some(item => item.id === chosenResumeId)) await chrome.storage.local.remove('chosenResumeId');
-  return withChoice(items, chosenResumeId);
+}
+
+/** Recheck ownership after downloading a file, just as for the library. */
+async function currentSignIn(token) {
+  return (await chrome.storage.local.get('auth')).auth?.syncToken === token;
 }
 
 export function chooseResume(id) {
@@ -75,26 +103,32 @@ function toDataUrl(bytes) {
 
 /**
  * The CV's PDF from the server, with the server's file name
- * ("Sergey_Proniuk_Resume.pdf"). The server makes it when the CV or its design
- * changed; otherwise it sends the kept file at once.
+ * ("Sergey_Proniuk_CV_Box_Software_Engineer.pdf" for a job's CV).
+ * The server creates the PDF only on Save; downloading never creates one.
  */
 export async function pdfFor(resume) {
   const { auth } = await chrome.storage.local.get('auth');
   if (!auth?.syncToken) throw new NotSignedInError();
   let response;
   try {
-    response = await fetch(`${API_URL}/api/extension/resumes/${encodeURIComponent(resume.id)}/pdf`, { headers: { Authorization: `Bearer ${auth.syncToken}` } });
+    response = await fetch(`${API_URL}/api/extension/resumes/${encodeURIComponent(resume.id)}/pdf`, { headers: { Authorization: `Bearer ${auth.syncToken}` }, cache: 'no-store' });
   } catch {
     throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`);
   }
+  if (!await currentSignIn(auth.syncToken)) throw new NotSignedInError();
   if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
   if (response.status === 404) throw new ResumeGoneError();
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(typeof body.message === 'string' ? body.message : `Server returned ${response.status}.`);
   }
-  const fileName = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? fileNameFor(resume);
-  return { dataUrl: toDataUrl(await response.arrayBuffer()), fileName };
+  const disposition = response.headers.get('content-disposition') ?? '';
+  let fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fileNameFor(resume);
+  const encodedName = /filename\*=UTF-8''([^;\s]+)/i.exec(disposition)?.[1];
+  if (encodedName) { try { fileName = decodeURIComponent(encodedName); } catch { /* use the fallback */ } }
+  const bytes = await response.arrayBuffer();
+  if (!await currentSignIn(auth.syncToken)) throw new NotSignedInError();
+  return { dataUrl: toDataUrl(bytes), fileName };
 }
 
 export function fileNameFor(resume) {
@@ -113,12 +147,14 @@ export async function cvTexts(items) {
   let changed = Object.keys(cached).some(id => !items.some(item => item.id === id));
   await Promise.all(items.map(async item => {
     if (cached[item.id]?.updatedAt === item.updatedAt) { next[item.id] = cached[item.id]; return; }
-    const response = await fetch(`${API_URL}/api/extension/resumes/${encodeURIComponent(item.id)}/text`, { headers: { Authorization: `Bearer ${auth.syncToken}` } }).catch(() => null);
+    const response = await fetch(`${API_URL}/api/extension/resumes/${encodeURIComponent(item.id)}/text`, { headers: { Authorization: `Bearer ${auth.syncToken}` }, cache: 'no-store' }).catch(() => null);
+    if (!await currentSignIn(auth.syncToken)) throw new NotSignedInError();
     if (response?.status === 401) { await signOut(); throw new NotSignedInError(); }
     if (!response?.ok) return; // Left out of the match until it can be read.
     next[item.id] = { updatedAt: item.updatedAt, text: (await response.json()).text };
     changed = true;
   }));
+  if (!await currentSignIn(auth.syncToken)) throw new NotSignedInError();
   if (changed) await chrome.storage.local.set({ cvTexts: next });
   return Object.fromEntries(Object.entries(next).map(([id, entry]) => [id, entry.text]));
 }

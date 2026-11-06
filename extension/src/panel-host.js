@@ -45,6 +45,9 @@
     if (!iframe) {
       // Created once and kept while hidden, so tabs, drafts and scroll survive a close.
       iframe = document.createElement('iframe');
+      iframe.addEventListener('load', () => {
+        iframe.contentWindow?.postMessage({ type: 'adcv-panel-visible', visible: isOpen }, '*');
+      });
       iframe.src = chrome.runtime.getURL('src/sidepanel.html');
       iframe.title = 'CV Autofill';
       iframe.allow = 'clipboard-write';
@@ -53,6 +56,7 @@
     requestAnimationFrame(() => host.classList.add('open'));
     host.style.removeProperty('visibility');
     isOpen = true;
+    iframe.contentWindow?.postMessage({ type: 'adcv-panel-visible', visible: true }, '*');
     window.CVAutofillLauncher?.panelChanged(true);
     notify('panel-opened');
     return true;
@@ -61,6 +65,7 @@
   function close() {
     if (!isOpen) return;
     isOpen = false;
+    iframe?.contentWindow?.postMessage({ type: 'adcv-panel-visible', visible: false }, '*');
     host.classList.remove('open');
     // Hide after the slide so a closed panel never catches clicks or tab focus.
     closeTimer = setTimeout(() => host.style.setProperty('visibility', 'hidden', 'important'), 220);

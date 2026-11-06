@@ -43,6 +43,11 @@ function mappedRows<T extends VersionedRow>(rows: VersionedRow[]): T[] {
 }
 class PrismaResumeTransaction implements ResumeTransaction {
   constructor(protected readonly client: Prisma.TransactionClient) {}
+  create({ theme, ...input }: CreateResumeRecord): Promise<ResumeRecord> {
+    return this.client.resume.create({
+      data: { ...input, ...(theme ? { theme: theme as Prisma.InputJsonValue } : {}) },
+    });
+  }
   async find(id: string): Promise<ResumeRecord | null> {
     return this.client.resume.findUnique({ where: { id } });
   }
@@ -126,10 +131,8 @@ export class PrismaResumeRepository extends PrismaResumeTransaction implements R
     });
     return rows.map(({ tailoring, ...row }) => ({ ...row, hasTailoring: tailoring !== null }));
   }
-  create({ theme, ...input }: CreateResumeRecord): Promise<ResumeRecord> {
-    return this.client.resume.create({
-      data: { ...input, ...(theme ? { theme: theme as Prisma.InputJsonValue } : {}) },
-    });
+  async rename(id: string, name: string): Promise<void> {
+    await this.client.resume.update({ where: { id }, data: { name } });
   }
   /** Its versions, rows and PDF go with it (cascade); a job applied with it keeps the job, without the CV. */
   async remove(id: string): Promise<void> {

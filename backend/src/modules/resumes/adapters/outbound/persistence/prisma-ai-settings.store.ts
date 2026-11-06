@@ -7,7 +7,10 @@ export class PrismaAiSettingsStore implements AiSettingsStore {
   constructor(private readonly db: PrismaService) {}
 
   async aiSettings(resumeId: string): Promise<unknown> {
-    return (await this.db.resume.findUnique({ where: { id: resumeId }, select: { aiSettings: true } }))?.aiSettings ?? null;
+    return (
+      (await this.db.resume.findUnique({ where: { id: resumeId }, select: { aiSettings: true } }))
+        ?.aiSettings ?? null
+    );
   }
 
   async setAiSettings(resumeId: string, settings: AiSettings): Promise<void> {

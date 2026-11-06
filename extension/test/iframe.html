@@ -4,7 +4,7 @@
 <!--
   A careers page embeds the application form in an iframe, as companies do
   with Greenhouse. The page scripts run in the iframe too: it reports its form
-  to the top page, which shows the tab's one D! button. The iframe shows no
+  to the top page, which opens the tab's one panel. The iframe shows no
   button or panel of its own, and a tiny (ad-sized) iframe is ignored.
 
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
@@ -25,10 +25,12 @@ addEventListener('load', () => setTimeout(() => {
   const expect = (ok, what) => { if (!ok) problems.push(what); };
   const frame = document.getElementById('form').contentWindow, ad = document.getElementById('ad').contentWindow;
   expect(window.CVAutofillFields.detectFields().found.length === 0, 'the top page itself has no form');
-  expect(Boolean(document.getElementById('adcv-autofill-launcher')), 'the top page shows the D! button for the form in its iframe');
+  expect(window.CVAutofillPanel.isOpen(), 'the top page automatically opens the panel for the form in its iframe');
   expect(!frame.document.getElementById('adcv-autofill-launcher') && !frame.CVAutofillLauncher && !frame.CVAutofillPanel, 'the iframe shows no button or panel of its own');
   expect(frame.CVAutofillFields.detectFields().found.map((f) => f.key).join(',') === 'firstName,email,resume', 'the page scripts in the iframe find its form');
-  expect(document.querySelectorAll('#adcv-autofill-launcher').length === 1, 'one button for the tab');
+  expect(document.querySelectorAll('#adcv-autofill-panel').length === 1, 'one panel for the tab');
+  window.CVAutofillPanel.close();
+  expect(document.querySelectorAll('#adcv-autofill-launcher').length === 1, 'closing leaves one button for the tab');
   expect(ad.innerWidth < 250, 'the small iframe counts as an ad-sized frame and is ignored');
   const out = document.createElement('pre');
   out.id = 'result';

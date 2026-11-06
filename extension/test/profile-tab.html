@@ -13,7 +13,7 @@
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
       --allow-file-access-from-files --virtual-time-budget=30000 \
       --dump-dom "file://$PWD/test/profile-tab.html" | grep -o '<pre id="result">.*</pre>'
-  Run it again with ?applied for the "already applied" banner, and with
+  Run it again with ?saved or ?applied for saved job cards, and with
   ?form for the form's messages when the page shows no company or location,
   and ?cvs for the Resume tab's CV dropdown and switching after Autofill.
 -->
@@ -24,29 +24,42 @@
     appResumes: [{ id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }],
     autofillDefaults: [{ id: 'd1', kind: 'willingToRelocate', scope: 'Poland', value: 'Yes' }],
   };
-  const popups = [], runtimeListeners = [];
-  let resumeListFetches = 0, serverDown = false, serverResumes = null;
-  const sentToPage = [], opened = [], captured = [], recorded = [], madePdfs = [], downloadedPdfs = [];
+  const popups = [], runtimeListeners = [], storageListeners = [];
+  let resumeListFetches = 0, serverDown = false, serverResumes;
+  const sentToPage = [], opened = [], captured = [], recorded = [], madePdfs = [], downloadedPdfs = [], jobUpdates = [];
+  let jobDetailReads = 0, failJobLoad = false, failJobUpdate = false;
   // ?applied: the page's job was saved and applied to before the panel opened.
   const APPLIED_MODE = location.search.includes('applied');
+  const SAVED_MODE = location.search.includes('saved');
   // ?form: the page shows no company, so Add opens the short form first.
   const FORM_MODE = location.search.includes('form');
   // ?cvs: three CVs and a job posting; the Resume tab's CV dropdown, and switching after Autofill uploaded a CV.
   const CVS_MODE = location.search.includes('cvs');
+  const SYNC_MODE = location.search.includes('sync');
   const POSTED_MODE = location.search.includes('posted');
   // ?board: the page has no date, but the job board says when it was posted (Greenhouse's first_published).
   const BOARD_MODE = location.search.includes('board');
   const JOB_TEXT = 'Backend Developer\nWe are hiring a backend engineer. Responsibilities: build services in Node.js and TypeScript with PostgreSQL, Docker and Kafka. Requirements: 5 years of experience.';
-  let lookupReply = APPLIED_MODE ? { job: { id: 'j9', status: 'interview', appliedAt: '2026-11-02T10:00:00.000Z', companyLogo: null } } : { job: null }, failNextCapture = '';
+  let lookupReply = APPLIED_MODE ? { job: { id: 'j9', status: 'interview', appliedAt: '2026-11-02T10:00:00.000Z', companyLogo: null } }
+    : SAVED_MODE ? { job: { id: 'j9', status: 'saved', appliedAt: null, companyLogo: null } } : { job: null }, failNextCapture = '';
+  let savedDetails = {
+    id: 'j9', title: 'Reviewed Engineer', company: 'Saved Acme', location: 'Remote',
+    salaryMin: 90000, salaryMax: 110000, salaryCurrency: 'CAD', salaryPeriod: 'year',
+    employmentType: 'Permanent', description: 'Saved backend description.', notes: 'My saved note.',
+    status: APPLIED_MODE ? 'interview' : 'saved', appliedAt: APPLIED_MODE ? '2026-11-02T10:00:00.000Z' : null,
+    url: 'https://jobs.example.com/apply', companyLogo: null,
+  };
   const noop = () => {};
   const event = { addListener: noop, removeListener: noop };
   if (CVS_MODE) {
     store.appResumes = [{ id: 'cv3', name: 'Frontend CV', isPrimary: false, updatedAt: '2026-11-01' }, { id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }, { id: 'cv2', name: 'Backend CV', isPrimary: false, updatedAt: '2026-11-01' }];
   }
+  // Server state is independent of the extension's legacy persisted cache.
+  serverResumes = SYNC_MODE ? [] : structuredClone(store.appResumes);
   const CV_TEXTS = { cv1: 'Node.js TypeScript', cv2: 'Node.js TypeScript PostgreSQL Docker Kafka', cv3: 'React' };
   window.chrome = {
     runtime: { id: 'test', getURL: (p) => p, getManifest: () => ({ version: 'test' }), onMessage: { addListener: (fn) => runtimeListeners.push(fn), removeListener: noop }, sendMessage: async (message) => { if (message?.type === 'make-cv-pdf') madePdfs.push(message.url); return message?.type === 'panel-tab' ? { tabId: 1 } : null; } },
-    storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => { Object.assign(store, values); }, remove: async (keys) => { for (const key of [].concat(keys)) delete store[key]; } }, onChanged: event },
+    storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter((key) => key in store).map((key) => [key, store[key]])), set: async (values) => { Object.assign(store, values); }, remove: async (keys) => { for (const key of [].concat(keys)) delete store[key]; } }, onChanged: { addListener: fn => storageListeners.push(fn), removeListener: noop } },
     tabs: {
       get: async () => ({ id: 1, url: 'https://jobs.example.com/apply' }), onUpdated: event, create: async (options) => { opened.push(options.url); },
       sendMessage: async (_tab, message) => {
@@ -82,15 +95,29 @@
     const path = String(url).replace(/^https?:\/\/[^/]+/, '');
     if (path.startsWith('/api/jobs/posting-date')) return reply({ posting: BOARD_MODE ? { posted: '2026-10-30T11:49:29-04:00', updated: '2026-11-04T13:11:09-05:00', board: 'greenhouse' } : null });
     if (path.startsWith('/api/jobs/lookup')) return reply(lookupReply);
+    if (path.startsWith('/api/extension/jobs/')) {
+      if (options.method === 'PATCH') {
+        if (failJobUpdate) { failJobUpdate = false; return new Response('{"message":"Update failed."}', { status: 503 }); }
+        const body = JSON.parse(options.body); jobUpdates.push({ path, body });
+        savedDetails = { ...savedDetails, ...body }; lookupReply = { job: savedDetails };
+        return reply(savedDetails);
+      }
+      jobDetailReads++;
+      if (failJobLoad) { failJobLoad = false; return new Response('{"message":"Load failed."}', { status: 503 }); }
+      return reply(savedDetails);
+    }
     if (/^\/api\/jobs\/[^/]+\/application$/.test(path)) { recorded.push({ path, body: JSON.parse(options.body) }); return reply({}); }
     if (path === '/api/jobs/capture') {
       if (failNextCapture) { const message = failNextCapture; failNextCapture = ''; return new Response(JSON.stringify({ message }), { status: 500 }); }
-      const body = JSON.parse(options.body); captured.push(body); return reply({ job: { id: 'j1', companyLogo: body.companyLogo, status: 'saved', appliedAt: null }, created: true });
+      const body = JSON.parse(options.body); captured.push(body);
+      savedDetails = { ...body.details, id: 'j1', companyLogo: body.companyLogo, appliedAt: body.details?.status === 'applied' ? '2026-11-05T10:00:00.000Z' : null };
+      lookupReply = { job: savedDetails };
+      return reply({ job: savedDetails, created: true });
     }
     if (path === '/api/extension/profile/career') return reply(view('Ciklum', 'Dnipro Institute of Infrastructure and Transport'));
     if (path === '/api/extension/profile/career/resume/cv1') return reply(view('Paymorrow', 'CV School'));
     if (path === '/api/extension/defaults') return reply(store.autofillDefaults);
-    if (path === '/api/extension/resumes') { resumeListFetches++; if (serverDown) return new Response('{}', { status: 503 }); return reply(serverResumes ?? store.appResumes); }
+    if (path === '/api/extension/resumes') { resumeListFetches++; if (serverDown) return new Response('{}', { status: 503 }); return reply(serverResumes); }
     // The server keeps each CV's PDF; the extension downloads it.
     const cvPdf = path.match(/^\/api\/extension\/resumes\/([^/]+)\/pdf$/);
     if (cvPdf) { downloadedPdfs.push(cvPdf[1]); return new Response(new TextEncoder().encode(`%PDF-1.4 ${cvPdf[1]}`), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="Sergey_Proniuk_Resume.pdf"' } }); }
@@ -113,8 +140,31 @@
     const postedDate = document.querySelector('#job-card time');
     expect(BOARD_MODE ? postedDate?.textContent === 'Posted on 10/30/2026' && postedDate.dateTime === '2026-10-30' : POSTED_MODE ? postedDate?.textContent === 'Posted on 11/4/2026' && postedDate.dateTime === '2026-11-04' : !postedDate, 'the company row shows a real posting date, without inventing one or shifting UTC midnight');
     expect(!document.querySelector('#job-card .page-site'), 'the company row replaces the website address');
+    const stateCard = document.getElementById('job-card');
+    expect(stateCard?.tagName === 'BUTTON' && getComputedStyle(stateCard).cursor === 'pointer' && getComputedStyle(stateCard).borderTopStyle === 'solid' && stateCard.querySelector('.company-avatar') && stateCard.querySelector('.page-card-title'), 'one clickable frame surrounds the logo and job text');
+    expect(!document.querySelector('.job-state-card') && !document.querySelector('.job-banner'), 'there is no separate status card or saved banner');
+    expect(APPLIED_MODE || SAVED_MODE ? stateCard?.querySelector('.job-card-action svg circle') && stateCard.dataset.jobAction === 'edit' : stateCard?.querySelector('.job-card-action svg') && stateCard.dataset.jobAction === 'add', 'saved frames have a check icon and unsaved frames have a plus action');
     // ?layout keeps the initial state for visual checks of the real panel.
     if (new URLSearchParams(location.search).has('layout')) throw Object.assign(new Error('done'), { done: true });
+    if (SYNC_MODE) {
+      expect(/No CVs in Documents yet/.test(document.getElementById('panel-resume').textContent), 'an empty backend replaces the old persisted documents');
+      serverResumes = [{ id: 'cv1', name: 'New CV', isPrimary: true, updatedAt: '2026-11-05' }, { id: 'cv2', name: 'For Acme', tailoredForJob: true, updatedAt: '2026-11-05' }];
+      runtimeListeners.forEach(listener => listener({ type: 'app-resumes-changed' }, { tab: { url: 'http://localhost:5173/documents' } }));
+      await wait(700);
+      document.getElementById('cv-select').click();
+      expect(document.querySelectorAll('#cv-menu [data-pick]').length === 2, 'new original and tailored documents both appear from the backend');
+      document.getElementById('cv-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      serverResumes = [{ ...serverResumes[1], name: 'Renamed for Acme' }];
+      await wait(16000);
+      expect(/Renamed for Acme/.test(document.getElementById('cv-select')?.textContent ?? ''), 'periodic backend reconciliation discovers a rename and deletion without an app message');
+      // Miss the app's notification; reopening still discovers the deletion.
+      serverResumes = [];
+      window.postMessage({ type: 'adcv-panel-visible', visible: true }, '*');
+      await wait(700);
+      expect(!document.getElementById('cv-select') && /No CVs in Documents yet/.test(document.getElementById('panel-resume').textContent), 'reopening clears all deleted documents even without an app message');
+      expect(!document.querySelector('#resume-picker [data-open-cv]'), 'the deleted CV cannot still be previewed');
+      throw Object.assign(new Error('done'), { done: true });
+    }
     if (CVS_MODE) {
       const closed = [];
       addEventListener('message', (message) => { if (message.data?.type === 'adcv-panel-close') closed.push(true); });
@@ -204,22 +254,22 @@
       runtimeListeners.forEach((listener) => listener({ type: 'app-use-resume', resumeId: 'cv3' }, fromApp));
       await wait(900);
       // A CV deleted in the app leaves the extension at once; a server that cannot answer shows no old list.
-      serverResumes = store.appResumes.filter((cv) => cv.id !== 'cv2');
+      serverResumes = serverResumes.filter((cv) => cv.id !== 'cv2');
       runtimeListeners.forEach((listener) => listener({ type: 'app-resumes-changed', resumeId: 'cv2' }, fromApp));
       await wait(900);
-      expect(!store.appResumes.some((cv) => cv.id === 'cv2'), `a CV deleted in the app is gone from the extension (stored: ${store.appResumes.map((cv) => cv.id)})`);
+      document.getElementById('autofill-cv-select').click();
+      expect(!document.querySelector('#cv-menu [data-pick="cv2"]'), 'a CV deleted in the app is gone from the extension');
+      document.getElementById('cv-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       serverDown = true;
       runtimeListeners.forEach((listener) => listener({ type: 'app-resumes-changed' }, fromApp));
       await wait(900);
       expect(!('appResumes' in store) && !('chosenResumeId' in store) && /Server returned 503/.test(document.getElementById('panel-resume').textContent),
         `when the app cannot answer, no old list is shown (stored: ${JSON.stringify(store.appResumes)})`);
-      serverDown = false; serverResumes = null;
-      store.appResumes = [{ id: 'cv3', name: 'Frontend CV', isPrimary: false, updatedAt: '2026-11-01' }, { id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }, { id: 'cv2', name: 'Backend CV', isPrimary: false, updatedAt: '2026-11-01' }];
-      const appList = store.appResumes;
-      serverResumes = appList; store.chosenResumeId = 'cv3';
+      serverDown = false;
+      serverResumes = [{ id: 'cv3', name: 'Frontend CV', isPrimary: false, updatedAt: '2026-11-01' }, { id: 'cv1', name: 'Master CV', isPrimary: true, updatedAt: '2026-11-01' }, { id: 'cv2', name: 'Backend CV', isPrimary: false, updatedAt: '2026-11-01' }];
+      store.chosenResumeId = 'cv3';
       runtimeListeners.forEach((listener) => listener({ type: 'app-use-resume', resumeId: 'cv3' }, fromApp));
       await wait(900);
-      serverResumes = null;
       const autofillSelect = document.getElementById('autofill-cv-select');
       expect(/Frontend CV/.test(autofillSelect.textContent), 'Autofill shows the same selected CV as Resume');
       autofillSelect.click(); await wait(50);
@@ -235,7 +285,7 @@
       document.querySelector('.tab[data-panel="resume"]').click();
       expect(menu.hidden && document.getElementById('autofill-cv-select').getAttribute('aria-expanded') === 'false', 'changing tabs closes the old picker');
       const longName = "Sr. Delivery Consultant - Application Modernization/Consultant en livraison – Modernisation d'applications, AWS Professional Services — Amazon Web Services Canada, Inc. Backend.pdf";
-      store.appResumes.find(cv => cv.id === 'cv2').name = longName;
+      serverResumes.find(cv => cv.id === 'cv2').name = longName;
       document.getElementById('refresh-cvs').click(); await wait(500);
       document.querySelector('.tab[data-panel="autofill"]').click();
       const namePreview = document.querySelector('#autofill-cv-select .cv-select-name');
@@ -248,36 +298,71 @@
       fullSearch.value = 'Canada, Inc. Backend.pdf'; fullSearch.dispatchEvent(new Event('input', { bubbles: true }));
       expect(menu.querySelectorAll('[role="option"]').length === 1 && document.getElementById('cv-active-name').textContent === longName, 'search uses the complete name and shows its full text before selection');
       fullSearch.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      expect(store.appResumes.find(cv => cv.id === 'cv2').name === longName, 'display shortening never renames the stored CV');
+      expect(serverResumes.find(cv => cv.id === 'cv2').name === longName, 'display shortening never renames the server CV');
       throw Object.assign(new Error('done'), { done: true });
     }
     if (FORM_MODE) {
-      document.getElementById('job-save').click();
+      document.getElementById('job-card').click();
       await wait(200);
       let form = document.getElementById('job-form');
       expect(form && form.querySelector('[name="title"]').value === 'Engineer' && form.querySelector('[name="company"]').value === '', 'Add opens the form, with what the page shows');
+      expect(!document.getElementById('panel-job').hidden && document.getElementById('panel-autofill').hidden && !document.querySelector('#panel-autofill #job-form'), 'the form opens on its own page instead of below the job frame');
       form.requestSubmit();
       await wait(100);
-      expect(/Please enter a company\./.test(document.getElementById('panel-autofill').textContent) && !captured.length, 'a missing company stops the save, with Simplify\'s message');
+      expect(/Please enter a company\./.test(document.getElementById('panel-job').textContent) && !captured.length, 'a missing company stops the save');
       const type = (name, value) => { const input = document.querySelector(`#job-form [name="${name}"]`); input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); };
       type('company', 'Acme Corp');
       document.getElementById('job-form').requestSubmit();
       await wait(100);
-      expect(/Please enter a location\./.test(document.getElementById('panel-autofill').textContent) && !captured.length, 'then a missing location');
+      expect(/Please enter a location\./.test(document.getElementById('panel-job').textContent) && !captured.length, 'then a missing location');
       type('location', 'Remote');
       document.getElementById('job-form').requestSubmit();
       await wait(600);
       expect(captured.at(-1)?.details?.company === 'Acme Corp' && captured.at(-1)?.details?.location === 'Remote', `then it saves what was typed (sent ${JSON.stringify(captured.at(-1)?.details)})`);
-      expect(/Added to your jobs!/.test(document.getElementById('panel-autofill').textContent) && !document.getElementById('job-form'), 'and the form closes');
+      expect(document.querySelector('#job-card.is-saved') && !document.getElementById('job-form') && !document.getElementById('panel-autofill').hidden && document.getElementById('panel-job').hidden, 'saving returns to Autofill with a green frame around the job');
       throw Object.assign(new Error('done'), { done: true });
     }
-    if (APPLIED_MODE) {
-      const text = document.getElementById('panel-autofill').textContent;
-      expect(/You've already applied to this job/.test(text) && /Applied on Nov 2, 2026/.test(text), `an applied job says so, with the date (got "${text.slice(0, 240)}")`);
+    if (APPLIED_MODE || SAVED_MODE) {
+      const text = document.getElementById('job-card').getAttribute('aria-label');
+      expect(APPLIED_MODE ? /Applied to this job/.test(text) && /Applied on Nov 2, 2026/.test(text) : /Added to your jobs/.test(text), `the saved job card shows its current status and application date (got "${text.slice(0, 240)}")`);
       expect(!document.querySelector('.job-add'), 'and offers no Add button');
-      document.getElementById('job-view').click();
+      failJobLoad = true;
+      document.querySelector('#job-card .job-card-action svg').dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await wait(100);
-      expect(opened.at(-1) === 'http://localhost:5173/jobs/j9', `View in app opens it (opened ${opened.at(-1)})`);
+      expect(!document.getElementById('job-form') && /Load failed/.test(document.getElementById('panel-job').textContent), 'failed backend reads show a retry instead of a form with page defaults');
+      document.getElementById('job-form-reload').click(); await wait(100);
+      const value = name => document.querySelector(`#job-form [name="${name}"]`)?.value;
+      expect(!document.getElementById('panel-job').hidden && !opened.length && !captured.length, 'the saved check opens the same extension form without opening the web app or capturing again');
+      expect(value('title') === 'Reviewed Engineer' && value('company') === 'Saved Acme' && value('location') === 'Remote'
+        && value('salaryMin') === '90000' && value('salaryCurrency') === 'CAD' && value('employmentType') === 'Permanent'
+        && value('status') === (APPLIED_MODE ? 'interview' : 'saved'), 'the form uses saved backend values and keeps advanced application statuses');
+      document.getElementById('job-form-back').click();
+      savedDetails.notes = 'Changed in the web app.';
+      document.getElementById('job-card').click(); await wait(100);
+      document.querySelector('[data-job-toggle="notes"]').click();
+      expect(value('notes') === 'Changed in the web app.', 'reopening an unedited form fetches newer backend details');
+      const title = document.querySelector('#job-form [name="title"]');
+      title.value = 'Edited in extension'; title.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('job-form-back').click();
+      const reads = jobDetailReads;
+      document.getElementById('job-card').click(); await wait(100);
+      expect(value('title') === 'Edited in extension' && jobDetailReads === reads, 'Back retains an unsaved edited draft');
+      failJobUpdate = true;
+      document.getElementById('job-form').requestSubmit(); await wait(200);
+      expect(/Couldn't save changes/.test(document.getElementById('panel-job').textContent) && !jobUpdates.length, 'failed edits keep the draft with Retry');
+      document.getElementById('job-retry').click(); await wait(200);
+      expect(jobUpdates.at(-1)?.path === '/api/extension/jobs/j9' && jobUpdates.at(-1)?.body.title === 'Edited in extension'
+        && !('status' in jobUpdates.at(-1).body) && !('salaryMin' in jobUpdates.at(-1).body), 'Save updates the existing ID without changing untouched salary or status');
+      expect(document.querySelector('#job-card.is-saved')?.textContent.includes('Edited in extension') && !opened.length && !captured.length, 'the green card reflects the saved edit without creating a duplicate or leaving the extension');
+      document.getElementById('job-card').click(); await wait(100);
+      for (const name of ['salaryMin', 'salaryMax']) { const input = document.querySelector(`#job-form [name="${name}"]`); input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); }
+      const status = document.querySelector('#job-form [name="status"]'); status.value = 'offer'; status.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('job-form').requestSubmit(); await wait(200);
+      expect(jobUpdates.at(-1)?.body.salaryMin === null && jobUpdates.at(-1)?.body.salaryMax === null && jobUpdates.at(-1)?.body.status === 'offer', 'editing can explicitly clear salary and change the application status');
+      document.getElementById('job-card').click(); await wait(100);
+      const previousAuth = store.auth; store.auth = { ...store.auth, syncToken: 'another-account' };
+      storageListeners.forEach(listener => listener({ auth: { oldValue: previousAuth, newValue: store.auth } }, 'local'));
+      expect(!document.getElementById('job-form') && document.getElementById('panel-job').hidden, 'changing account clears the previous account\'s saved job form');
       throw Object.assign(new Error('done'), { done: true });
     }
     const overview = () => document.getElementById('profile-overview');
@@ -290,19 +375,17 @@
     expect(active() === 'profile', `the Profile is used when it has experience (active: ${active()})`);
     expect(overview().querySelectorAll('.profile-bullets li').length === 3 && /Show all 4/.test(text()), 'long bullet lists fold after three');
 
-    // The job card, as in Simplify: the logo, "Add this job to the app", then a banner.
+    // The frame around the logo and text opens the form, then reflects saved state.
     const card = () => document.getElementById('job-card');
-    const panel = () => document.getElementById('panel-autofill').textContent;
+    const panel = () => document.getElementById(document.getElementById('panel-job').hidden ? 'panel-autofill' : 'panel-job').textContent;
     expect(card()?.querySelector('img')?.getAttribute('src')?.startsWith('data:image/png'), `the job card shows the page's logo (got ${card()?.innerHTML.slice(0, 200)})`);
-    expect(/Add this job to the app/.test(panel()), 'an unsaved job offers "Add this job to the app"');
-    card().click();
-    await wait(300);
-    expect(!captured.length, 'clicking the card itself saves nothing');
+    expect(card().dataset.jobAction === 'add', 'the unsaved job frame offers adding');
     lookupReply = { job: null };
     failNextCapture = 'Server returned 500.';
-    document.getElementById('job-save').click();
+    document.querySelector('#job-card .job-card-action').click();
     await wait(300);
-    expect(!captured.length, '"Add this job to the app" opens the form and saves nothing yet');
+    expect(!captured.length, 'the plus opens the form and saves nothing yet');
+    expect(!document.getElementById('panel-job').hidden && document.getElementById('panel-autofill').hidden && document.querySelector('.tabs').hidden && !document.querySelector('#panel-autofill #job-form'), 'the job editor replaces Autofill with its own page and Back button');
     const form = document.getElementById('job-form');
     const value = (name) => form.querySelector(`[name="${name}"]`)?.value;
     expect(value('company') === 'Acme' && value('title') === 'Engineer' && value('location') === 'Warsaw, Poland' && value('salaryMin') === '15000' && value('salaryMax') === '20000'
@@ -314,6 +397,11 @@
     const notes = document.querySelector('#job-form [name="notes"]');
     notes.value = 'Ask about the team.';
     notes.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('job-form-back').click();
+    expect(!document.getElementById('panel-autofill').hidden && document.getElementById('panel-job').hidden && !document.querySelector('.tabs').hidden && !captured.length, 'Back restores Autofill without saving');
+    expect(document.activeElement === document.getElementById('job-card'), 'Back returns keyboard focus to the job frame');
+    document.querySelector('#job-card .job-card-action').click();
+    expect(!document.getElementById('panel-job').hidden && document.querySelector('#job-form [name="notes"]').value === 'Ask about the team.', 'reopening preserves the unsaved draft');
     const status = document.querySelector('#job-form [name="status"]');
     status.value = 'applied';
     status.dispatchEvent(new Event('change', { bubbles: true }));
@@ -325,10 +413,11 @@
     expect(JSON.stringify(captured.at(-1)?.details) === JSON.stringify({ title: 'Engineer', company: 'Acme', location: 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time', description: 'Build payment APIs.', notes: 'Ask about the team.', status: 'applied', url: 'https://jobs.example.com/apply' }),
       `the form's values are saved, notes and status too (sent ${JSON.stringify(captured.at(-1)?.details)})`);
     expect(captured.at(-1)?.companyLogo?.startsWith('data:image/png') && captured.at(-1)?.url === 'https://jobs.example.com/apply', `saving sends the page with its logo (sent ${JSON.stringify(captured.at(-1))?.slice(0, 160)})`);
-    expect(/Added to your jobs!/.test(panel()) && !document.querySelector('.job-add'), `then "Added to your jobs!" and the button goes (got "${panel().slice(0, 200)}")`);
-    document.getElementById('job-view').click();
+    expect(document.querySelector('#job-card.is-saved[data-job-action="edit"]') && !document.querySelector('.job-add'), 'saving changes the same job frame to green with an edit action');
+    document.getElementById('job-card').click();
     await wait(100);
-    expect(opened.at(-1) === 'http://localhost:5173/jobs/j1', `View in app opens the job (opened ${opened.at(-1)})`);
+    expect(!document.getElementById('panel-job').hidden && document.querySelector('#job-form [name="notes"]') === null && !opened.length, 'reopening a newly saved job stays in the extension form');
+    document.getElementById('job-form-back').click();
     expect(recorded.at(-1)?.path === '/api/jobs/j1/application' && JSON.stringify(recorded.at(-1)?.body.answers) === JSON.stringify([{ question: 'How did you hear about us?', answer: 'https://another-damn.cv' }]),
       `saving records the answers on the form, not the empty ones (recorded ${JSON.stringify(recorded.at(-1))})`);
 

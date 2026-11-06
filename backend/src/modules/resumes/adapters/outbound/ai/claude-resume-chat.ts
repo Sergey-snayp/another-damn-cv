@@ -30,13 +30,20 @@ function cvForPrompt(resume: RenderedResume): string {
   if (contact?.headline) lines.push(`Headline: ${contact.headline}`);
   if (resume.summaries.default) lines.push(`Summary: ${resume.summaries.default}`);
   for (const role of resume.experiences) {
-    lines.push(`\nRole: ${role.title} at ${role.company} (${role.from} – ${role.current ? 'present' : (role.to ?? '')})`);
+    lines.push(
+      `\nRole: ${role.title} at ${role.company} (${role.from} – ${role.current ? 'present' : (role.to ?? '')})`,
+    );
     for (const bullet of role.achievements) lines.push(`  [bullet ${bullet.lineageId}] ${bullet.bullet}`);
   }
   for (const project of resume.projects ?? [])
-    lines.push(`\nProject: ${project.name}${project.role ? ` (${project.role})` : ''}`, ...project.bullets.map((b) => `  - ${b}`));
-  for (const row of resume.educations) lines.push(`Education: ${row.degree} ${row.field ?? ''}, ${row.institution}`);
-  for (const item of resume.certifications ?? []) lines.push(`Certification: ${item.name}${item.issuer ? `, ${item.issuer}` : ''}`);
+    lines.push(
+      `\nProject: ${project.name}${project.role ? ` (${project.role})` : ''}`,
+      ...project.bullets.map((b) => `  - ${b}`),
+    );
+  for (const row of resume.educations)
+    lines.push(`Education: ${row.degree} ${row.field ?? ''}, ${row.institution}`);
+  for (const item of resume.certifications ?? [])
+    lines.push(`Certification: ${item.name}${item.issuer ? `, ${item.issuer}` : ''}`);
   lines.push(`Skills: ${resume.skills.map((skill) => skill.name).join(', ')}`);
   for (const section of resume.customSections ?? [])
     lines.push(`\n${section.title}: ${section.text ?? ''}`, ...section.bullets.map((b) => `  - ${b}`));
@@ -99,5 +106,8 @@ function readAnswer(raw: string) {
   const json = firstJsonObject(raw);
   if (!json) return { reply: raw.trim(), suggestions: [] };
   const answer = answerSchema.parse(json);
-  return { reply: answer.reply.trim() || 'I could not answer that. Try asking another way.', suggestions: answer.suggestions };
+  return {
+    reply: answer.reply.trim() || 'I could not answer that. Try asking another way.',
+    suggestions: answer.suggestions,
+  };
 }

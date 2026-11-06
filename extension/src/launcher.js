@@ -13,6 +13,7 @@
   const sheet = new CSSStyleSheet();
   shadow.adoptedStyleSheets = [sheet];
   let available = false, enabled = true, disabledHosts = [], dismissedUrl = null, position = null, panelOpen = false, keepAfterPanel = false;
+  let settingsLoaded = false, autoOpenedUrl = null;
   const clamp = y => Math.max(48, Math.min(y, Math.max(48, innerHeight - 100)));
   const css = `
     :host { all: initial; position: fixed !important; right: 0 !important; top: min(22vh,160px); z-index: 2147483646 !important; font: 14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color: var(--color-text); }
@@ -38,6 +39,12 @@
     // Collapsing the panel always leaves the button as the way back to it, even
     // where it was hidden. A new hide choice from the × menu applies again.
     const hiddenByChoice = !enabled || disabledHosts.includes(location.hostname) || dismissedUrl === location.href;
+    // Open once for this page when an application form appears, including
+    // forms found in iframes. Wait for saved hide/disable settings first.
+    // Closing the panel leaves it closed through later scans of the same form.
+    if (settingsLoaded && available && !hiddenByChoice && !panelOpen && autoOpenedUrl !== location.href) {
+      if (window.CVAutofillPanel?.open()) return;
+    }
     if (!panelOpen && (keepAfterPanel || (available && !hiddenByChoice))) {
       loadTheme();
       if (!host.isConnected) document.documentElement.append(host);
@@ -112,7 +119,7 @@
   const endDrag = () => { if (!drag) return; drag = null; launcher.classList.remove('dragging'); savePosition(); };
   grip.addEventListener('pointerup', endDrag); grip.addEventListener('pointercancel', endDrag);
   grip.addEventListener('keydown', event => { if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); move(host.getBoundingClientRect().top + (event.key === 'ArrowUp' ? -16 : 16)); savePosition(); });
-  chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'launcherPosition']).then(values => { enabled = values.launcherEnabled !== false; if (Array.isArray(values.launcherDisabledHosts)) disabledHosts = values.launcherDisabledHosts; if (typeof values.launcherPosition === 'number' && Number.isFinite(values.launcherPosition)) position = values.launcherPosition; renderVisibility(); }).catch(() => {});
+  chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'launcherPosition']).then(values => { enabled = values.launcherEnabled !== false; if (Array.isArray(values.launcherDisabledHosts)) disabledHosts = values.launcherDisabledHosts; if (typeof values.launcherPosition === 'number' && Number.isFinite(values.launcherPosition)) position = values.launcherPosition; settingsLoaded = true; renderVisibility(); }).catch(() => {});
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes.launcherEnabled) enabled = changes.launcherEnabled.newValue !== false;
@@ -124,6 +131,6 @@
     update(value) { available = value; renderVisibility(); },
     /** Puts the button back after a page rebuilt its document and dropped it. */
     reattach() { if (!host.isConnected) renderVisibility(); },
-    panelChanged(open) { panelOpen = open; if (open) keepAfterPanel = true; renderVisibility(); },
+    panelChanged(open) { panelOpen = open; autoOpenedUrl = location.href; if (open) keepAfterPanel = true; renderVisibility(); },
   };
 })();

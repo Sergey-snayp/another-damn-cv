@@ -95,6 +95,21 @@ export function pushProfile(profile: unknown, timeoutMs = 1500): Promise<boolean
 
 const RESUMES_CHANGED = 'CV_PLATFORM_RESUMES_CHANGED';
 const USE_RESUME = 'CV_PLATFORM_USE_RESUME';
+const resumeListeners = new Set<() => void>();
+const resumeChannel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('cv-platform-resumes');
+
+function announceResumesChanged(resumeId?: string): void {
+  window.postMessage({ type: RESUMES_CHANGED, ...(resumeId ? { resumeId } : {}) }, window.location.origin);
+  resumeListeners.forEach((listener) => listener());
+}
+
+resumeChannel?.addEventListener('message', () => announceResumesChanged());
+
+/** Keep an open Documents library in step with edits in other app tabs/popups. */
+export function onResumesChanged(listener: () => void): () => void {
+  resumeListeners.add(listener);
+  return () => { resumeListeners.delete(listener); };
+}
 
 /**
  * Tells the extension a CV changed (saved, renamed, redesigned, made, deleted),
@@ -103,7 +118,8 @@ const USE_RESUME = 'CV_PLATFORM_USE_RESUME';
  * Posting with no extension listening does nothing.
  */
 export function notifyResumesChanged(resumeId?: string): void {
-  window.postMessage({ type: RESUMES_CHANGED, ...(resumeId ? { resumeId } : {}) }, window.location.origin);
+  announceResumesChanged(resumeId);
+  resumeChannel?.postMessage({ type: RESUMES_CHANGED });
 }
 
 /** Has the extension's Autofill use this CV, as Simplify's builder does after tailoring for a job. */

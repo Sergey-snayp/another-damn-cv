@@ -5,7 +5,7 @@ import type {
   WorkspaceInput,
 } from '../ports/resume-repository';
 import { ResumeError } from '../errors';
-import { copyOf } from '../../domain/document';
+import { copyOf, isAutomaticTailoredResumeName, tailoredResumeName } from '../../domain/document';
 import { careerFrom } from '../../domain/career';
 import type { SaveResume } from './save-resume';
 import { assertOwned, currentDocument } from './read-resume';
@@ -59,10 +59,9 @@ export class GetResumeWorkspace {
           input.sourceResumeId ? 'No such resume.' : 'Make a resume first.',
         );
       const from = await currentDocument(this.repository, source.id);
-      const title = input.job.title ?? input.job.pageTitle ?? 'Job';
       copy = await this.repository.create({
         profileId: profile.id,
-        name: input.job.company ? `${title} — ${input.job.company}` : title,
+        name: tailoredResumeName(from, input.job, profile),
         targetRole: input.job.title,
         jobId: input.job.id,
         sourceResumeId: source.id,
@@ -75,7 +74,13 @@ export class GetResumeWorkspace {
         message: `Copied from "${source.name}"`,
       });
     }
-    return { id: copy.id, document: await currentDocument(this.repository, copy.id) };
+    const document = await currentDocument(this.repository, copy.id);
+    // Reopening an older automatically named copy adopts the convention too.
+    // A name the person chose in the editor is kept.
+    const name = tailoredResumeName(document, input.job, profile);
+    if (name !== copy.name && isAutomaticTailoredResumeName(copy.name, document, input.job, profile))
+      await this.repository.rename(copy.id, name);
+    return { id: copy.id, document };
   }
 }
 export class GetResumeProposal {

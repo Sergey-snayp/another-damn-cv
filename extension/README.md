@@ -18,23 +18,34 @@ After updating the extension files, click **Reload** on its card in
 
 ## The panel
 
-The panel opens inside the page, on its right edge, over the page content.
-Open it with the D! button on the page edge or the toolbar icon; collapse it with
+The panel opens automatically when a job application form is detected, including
+forms loaded later or embedded in an iframe. It opens inside the page, on its
+right edge, over the page content. Closing it keeps it closed on that page;
+it can open automatically again on another application page.
+Open it again with the D! button on the page edge or the toolbar icon; collapse it with
 its `>` button or Esc. The D! button's × offers **Hide until next visit**, **Disable
 on this domain** or **Disable on all pages**; Settings in the panel turns the
-last two back on. Collapsing the panel always brings the D! button back on
+last two back on. These choices also stop automatic opening. Collapsing the panel always brings the D! button back on
 that page, even where it was hidden. It reopens after you move to another page in the same tab.
 
 - The extension runs on every site, so the panel opens anywhere from the
   toolbar icon. Chrome lists this as "Read and change all your data on all
-  websites". It only reads form fields, and only sends data when you press a button.
+  websites". Opening reads the form and prepares the panel; saving a job and
+  filling its application are actions you choose.
 - Your own app (`localhost:5173`, `localhost:3001`) is excluded.
 - Chrome pages (`chrome://`, the Web Store) cannot show it.
 
-## When the D! button appears
+The job logo, title and company sit inside one clickable frame: green with a
+check when saved, or gray with a plus when unsaved. Both open the same details
+form on a separate panel page. Saved jobs load their current backend details;
+**Save changes** updates that job. **Save Job** adds an unsaved job. **Back**
+returns to Autofill and keeps an edited draft; **Cancel** discards it. The frame
+also supports Enter and Space. Opening it never redirects to the web app.
+
+## When the panel opens automatically
 
 `src/job-form.js` decides, on every site, whether the page looks like a job
-application form:
+application form and should open the panel (or show the D! button after you close it):
 
 - a CV/resume upload together with name or email fields, or a CV upload on a
   page with a job sign;
@@ -100,13 +111,55 @@ of CVs from the app's Documents to pick another. Your primary CV is chosen
 until you pick another. The Autofill tab's Resume card has the same switcher. Text fields still come
 from your profile, not from the CV.
 
-The app makes PDFs only through the browser's print, so the extension does the
-same: it opens the CV in a background tab of the app, where you are signed in
-and your CV style is stored, and saves it as a PDF with Chrome's debugger
-(`Page.printToPDF`). Chrome shows a "CV Autofill started debugging this
-browser" bar for those few seconds. The PDF is kept and remade only after the
-CV changes in the app. `src/resumes.js` and `makeCvPdf` in `src/background.js`
-hold this logic; the list comes from `GET /api/extension/resumes`.
+The list comes from `GET /api/extension/resumes`, the same backend collection
+as Documents, including job-tailored copies. Each panel fetches it before
+showing CVs, on reopening, after app changes, and every 15 seconds while open
+and visible. A list from an older visit is never displayed. Empty responses,
+deletions and failed requests clear the picker; requests from an earlier
+sign-in cannot restore that account's documents.
+
+Quick Tailor names its application copy `full_name_CV_company_job_role`, for
+example `Sam_Lee_CV_Paymorrow_Payments_Engineer`. It uses the name on the chosen
+CV (or your profile if the CV's name is missing) and the saved job details.
+Its exported PDF uses the same name with `.pdf`, including company and role.
+Generated names use single underscores for spaces and punctuation. The role
+omits parenthetical, team and location suffixes and
+is limited to six words and 40 characters; the entire name stays under 120
+characters. Previewing remains read-only; Save upgrades older automatic names.
+Reopening a copy keeps a name you chose yourself.
+
+Opening Quick Tailor only reads the source CV into an unsaved draft. It creates
+no CV document, snapshot or PDF, and does not add anything to Documents or the
+extension's CV list. Closing without saving discards that draft.
+
+**Undo** and **Redo** move through edits in the current tailoring session,
+including skills, education and accepted AI suggestions. They stay available
+after Save and never save or generate a PDF themselves. Ctrl/⌘ Z undoes a
+committed edit; Ctrl/⌘ Shift Z or Ctrl Y redoes it. While typing in a line, the
+browser's normal text undo applies. A new edit after Undo replaces the redo path.
+**Reset** restores the CV as it was when this tailoring session opened, including
+all sections. Reset can be undone and only changes the draft; press **Save** to
+replace already saved edits with the restored content.
+
+Education entries can leave **Degree** blank for courses and training. The CV
+and PDF show the provider and course without a degree placeholder or extra
+comma. Hover or focus an entry and use its small **+** to add a degree later;
+clear an existing degree to omit it again.
+
+Quick Tailor's **Save** button creates the CV with the edited content first,
+then creates its PDF and makes that CV the extension's choice. Saving again
+reuses that document. Export becomes available after Save succeeds.
+
+The app stores PDFs made by an explicit Save action. The extension only
+downloads them from `GET /api/extension/resumes/:id/pdf`; it never starts PDF
+generation. If a PDF is missing or no longer matches the saved content/design,
+save the CV in Quick Tailor (or use **Save & export PDF** in the full editor)
+before uploading it. Other fields can still fill when a PDF is not ready.
+
+`node --test extension/test/*.test.mjs` from the repository root checks keyword
+matching, display text and backend document synchronization. Open
+`extension/test/profile-tab.html?sync` in Chrome with file access enabled to
+check the real panel against empty, added, renamed and deleted backend CVs.
 
 PDFs added to the extension by hand before 0.13.0 are removed on update.
 
@@ -402,7 +455,7 @@ Add to `CATEGORIES` in `src/fields.js`, add its label and group in
 
 Keep this view compact and calm:
 
-- Show the current job as a small header, with Save or View in app nearby.
+- Show the current job in one frame; open its add/edit form inside the panel.
   Below its title, show **Company · Posted date**. Use the page's explicit
   posting date or the saved job's posting date; omit it when unavailable.
   Keep its original calendar day when a timestamp uses a different time zone.

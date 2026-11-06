@@ -7,6 +7,7 @@ import type { ResumesApi } from '../resumes/contracts';
 import { RESUMES_API } from '../resumes/resumes.tokens';
 import { GetJob } from './application/use-cases/get-job';
 import { JobsController } from './adapters/inbound/http/jobs.controller';
+import { ExtensionJobsController } from './adapters/inbound/http/extension-jobs.controller';
 import { ApplicationsController } from './adapters/inbound/http/applications.controller';
 import { PublicApplicationResumeReader } from './adapters/outbound/modules/application-resume.reader';
 import {
@@ -26,7 +27,7 @@ import { JOB_REPOSITORY, RESUME_LINK_READER } from './jobs.tokens';
 /** Registered at the composition root only when its routes replace the legacy routes. */
 @Module({
   imports: [JobDirectoryModule, AiModule, AuthModule, ResumesModule],
-  controllers: [JobsController, ApplicationsController],
+  controllers: [JobsController, ApplicationsController, ExtensionJobsController],
   providers: [
     ...jobsProviders,
     {

@@ -1,6 +1,8 @@
 const paths = {
   edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z"/><path d="m14 5 5 5"/>',
   check: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  back: '<path d="M19 12H5m6-6-6 6 6 6"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
   file: '<path d="M14 2H5v20h14V7Z"/><path d="M14 2v6h5M8 13h8M8 17h6"/>',
   settings: '<path d="m9 3 1-2h4l1 2 3 2 2-.2 2 4-1.5 2v3l1.5 2-2 4-2-.2-3 2-1 2h-4l-1-2-3-2-2 .2-2-4 1.5-2v-3L2 9l2-4 2 .2Z"/><circle cx="12" cy="12" r="3"/>',

@@ -120,7 +120,7 @@ export function ResumeEditor() {
 
   const [loaded, setLoaded] = useState<RenderedResume | null>(null);
   const [draft, setDraft] = useState<RenderedResume | null>(null);
-  const [theme, setTheme] = useEditableResumeTheme(id);
+  const [theme, setTheme, saveTheme] = useEditableResumeTheme(id);
   const [name, setName] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +128,7 @@ export function ResumeEditor() {
   // An imported CV waits for "Keep this CV" before anything is saved.
   const [held, setHeld] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -190,7 +191,7 @@ export function ResumeEditor() {
 
   async function save() {
     const sent = draftRef.current;
-    if (!sent) return;
+    if (!sent) return false;
     setSaving(true);
     try {
       const saved = await resumeApi.save(id, sent, message.current);
@@ -202,9 +203,11 @@ export function ResumeEditor() {
       setDraft((current) => (current === sent ? structuredClone(saved) : current && { ...current, snapshot: saved.snapshot }));
       setSavedAt(Date.now());
       setSaveError(null);
+      return true;
     } catch (err) {
       failed.current = sent;
       setSaveError((err as Error).message);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -212,10 +215,10 @@ export function ResumeEditor() {
 
   // Autosave a moment after the last change. A draft that just failed waits for the next change.
   useEffect(() => {
-    if (!dirty || held || saving || draft === failed.current) return;
+    if (!dirty || held || saving || exporting || draft === failed.current) return;
     const timer = setTimeout(() => void save(), AUTOSAVE_MS);
     return () => clearTimeout(timer);
-  }, [draft, dirty, held, saving]);
+  }, [draft, dirty, held, saving, exporting]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -274,12 +277,22 @@ export function ResumeEditor() {
   }
 
   async function exportPdf(e: MouseEvent<HTMLAnchorElement>) {
-    // Saved first, so the PDF has the latest changes. An import not kept yet is not in it.
-    if (!dirty || held) return;
     e.preventDefault();
+    if (exporting || saving || held) return;
     const href = e.currentTarget.href;
-    await save();
-    window.location.href = href;
+    setExporting(true);
+    try {
+      // Content and layout must be persisted before the explicit PDF action.
+      if (!await save()) return;
+      await saveTheme();
+      await resumeApi.createPdf(id);
+      notifyResumesChanged(id);
+      window.location.href = href;
+    } catch (err) {
+      setSaveError(`Could not create the PDF: ${(err as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function resetToProfile() {
@@ -325,6 +338,7 @@ export function ResumeEditor() {
 
   /** A click on the CV opens the form for the section clicked. */
   function openFromPreview(e: MouseEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest('[contenteditable="true"], input, textarea, select, button, a')) return;
     const key = (e.target as HTMLElement).closest<HTMLElement>('[data-section]')?.dataset.section as Section | undefined;
     if (key && (key in LABELS || customId(key))) {
       setTab('editor');
@@ -420,7 +434,7 @@ export function ResumeEditor() {
         <span className="studio-actions">
           <Link className="ghost" to={`/documents/${id}/history`}>History</Link>
           <a className="studio-export" href={`/api/resumes/${id}/pdf?download=1`} onClick={(e) => void exportPdf(e)}>
-            Export PDF
+            {exporting ? 'Creating PDF…' : 'Save & export PDF'}
           </a>
         </span>
       </header>

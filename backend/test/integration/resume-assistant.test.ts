@@ -77,10 +77,20 @@ async function cv() {
     method: 'POST',
     user: owner.user.id,
     body: {
-      contact: { firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com', phone: '+48 600', location: 'Warsaw' },
+      contact: {
+        firstName: 'Sam',
+        lastName: 'Lee',
+        email: 'sam@example.com',
+        phone: '+48 600',
+        location: 'Warsaw',
+      },
       experiences: [{ lineageId: role, company: 'Acme', title: 'Engineer', from: '2020', current: true }],
       achievements: [
-        { lineageId: bullet, experienceLineageId: role, bullet: 'Responsible for Node.js APIs on PostgreSQL with Docker.' },
+        {
+          lineageId: bullet,
+          experienceLineageId: role,
+          bullet: 'Responsible for Node.js APIs on PostgreSQL with Docker.',
+        },
       ],
       skills: [{ name: 'Node.js' }, { name: 'TypeScript' }],
       summaries: [{ variant: 'default', text: 'Backend engineer.' }],
@@ -108,13 +118,25 @@ test('Resume Score: keywords from a pasted job, CV checks with the section they 
   assert.ok(score.keywords.matched.includes('PostgreSQL'), 'a skill named in a bullet counts');
   assert.ok(score.score > 0 && score.score < 100);
   assert.equal(score.job.title, 'Senior Backend Engineer');
-  assert.ok(score.issues.some((issue) => issue.kind === 'keyword' && issue.section === 'skills' && /Kafka/.test(issue.message)));
+  assert.ok(
+    score.issues.some(
+      (issue) => issue.kind === 'keyword' && issue.section === 'skills' && /Kafka/.test(issue.message),
+    ),
+  );
   assert.ok(score.issues.some((issue) => issue.section === 'header' && /LinkedIn/.test(issue.message)));
-  assert.ok(score.issues.some((issue) => issue.section === 'experience' && /Responsible for/.test(issue.message)));
-  assert.ok(score.issues.some((issue) => issue.section === 'skills' && /at least 5 skills/.test(issue.message)));
+  assert.ok(
+    score.issues.some((issue) => issue.section === 'experience' && /Responsible for/.test(issue.message)),
+  );
+  assert.ok(
+    score.issues.some((issue) => issue.section === 'skills' && /at least 5 skills/.test(issue.message)),
+  );
 
   const tracked = (await (
-    await call('/jobs', { method: 'POST', user: owner.user.id, body: { title: 'Tracked job', description: JOB } })
+    await call('/jobs', {
+      method: 'POST',
+      user: owner.user.id,
+      body: { title: 'Tracked job', description: JOB },
+    })
   ).json()) as { id: string };
   const fromTracker = (await (
     await call(`/resumes/${id}/score`, { method: 'POST', user: owner.user.id, body: { jobId: tracked.id } })
@@ -123,12 +145,19 @@ test('Resume Score: keywords from a pasted job, CV checks with the section they 
   assert.equal(fromTracker.score, score.score);
 
   assert.equal(
-    (await call(`/resumes/${id}/score`, { method: 'POST', user: other.user.id, body: { description: JOB } })).status,
+    (await call(`/resumes/${id}/score`, { method: 'POST', user: other.user.id, body: { description: JOB } }))
+      .status,
     404,
     "another person's CV cannot be scored",
   );
   assert.equal(
-    (await call(`/resumes/${id}/score`, { method: 'POST', user: owner.user.id, body: { description: 'short' } })).status,
+    (
+      await call(`/resumes/${id}/score`, {
+        method: 'POST',
+        user: owner.user.id,
+        body: { description: 'short' },
+      })
+    ).status,
     400,
   );
 });
@@ -149,7 +178,12 @@ test('AI Settings are kept per CV and reach the chat; the chat only suggests cha
   answer = JSON.stringify({
     reply: 'Lead with what you built.',
     suggestions: [
-      { target: 'bullet', lineageId: bullet, after: 'Built Node.js APIs on PostgreSQL with Docker.', reason: 'Active verb.' },
+      {
+        target: 'bullet',
+        lineageId: bullet,
+        after: 'Built Node.js APIs on PostgreSQL with Docker.',
+        reason: 'Active verb.',
+      },
       { target: 'bullet', lineageId: randomUUID(), after: 'A bullet that is not on the CV.' },
       { target: 'add-skill', after: 'Docker', reason: 'Named in a bullet.' },
       { target: 'add-skill', after: 'Kafka', reason: 'The job asks for it.' },
@@ -184,7 +218,11 @@ test('AI Settings are kept per CV and reach the chat; the chat only suggests cha
 
   answer = 'Plain prose, no JSON.';
   const prose = (await (
-    await call(`/resumes/${id}/chat`, { method: 'POST', user: owner.user.id, body: { messages: [{ role: 'user', text: 'Hi' }] } })
+    await call(`/resumes/${id}/chat`, {
+      method: 'POST',
+      user: owner.user.id,
+      body: { messages: [{ role: 'user', text: 'Hi' }] },
+    })
   ).json()) as { reply: string; suggestions: unknown[] };
   assert.deepEqual(prose, { reply: 'Plain prose, no JSON.', suggestions: [] });
 
@@ -199,24 +237,85 @@ test('AI Settings are kept per CV and reach the chat; the chat only suggests cha
 
 test('Quick tailoring: one copy per job with the source design, and lines tailored to that job', async () => {
   const { id } = await cv();
-  const design = { template: 'professional', accent: '#000000', fontFamily: 'Roboto, Arial, sans-serif', fontSize: 10, lineHeight: 1.3, sectionGap: 12, hiddenSections: ['education'], nameSize: 26 };
-  assert.equal((await call(`/resumes/${id}/theme`, { method: 'PUT', user: owner.user.id, body: design })).status, 200);
+  const design = {
+    template: 'professional',
+    accent: '#000000',
+    fontFamily: 'Roboto, Arial, sans-serif',
+    fontSize: 10,
+    lineHeight: 1.3,
+    sectionGap: 12,
+    hiddenSections: ['education'],
+    nameSize: 26,
+  };
+  assert.equal(
+    (await call(`/resumes/${id}/theme`, { method: 'PUT', user: owner.user.id, body: design })).status,
+    200,
+  );
   const job = (await (
-    await call('/jobs', { method: 'POST', user: owner.user.id, body: { title: 'Payments Engineer', company: 'Paymorrow', description: JOB } })
+    await call('/jobs', {
+      method: 'POST',
+      user: owner.user.id,
+      body: { title: 'Payments Engineer', company: 'Paymorrow', description: JOB },
+    })
   ).json()) as { id: string };
 
-  const first = await call(`/jobs/${job.id}/tailor-copy`, { method: 'POST', user: owner.user.id, body: { sourceResumeId: id } });
+  const first = await call(`/jobs/${job.id}/tailor-copy`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { sourceResumeId: id },
+  });
   assert.equal(first.status, 200);
   const { resumeId } = (await first.json()) as { resumeId: string };
   assert.notEqual(resumeId, id, 'the CV itself is left as it is');
+  const nameOf = async (cvId: string) =>
+    (
+      (await (await call('/resumes', { user: owner.user.id })).json()) as Array<{ id: string; name: string }>
+    ).find((row) => row.id === cvId)?.name;
+  assert.equal(await nameOf(resumeId), 'Sam_Lee_CV_Paymorrow_Payments_Engineer');
+  assert.equal(await nameOf(id), 'Assistant CV', 'the source keeps its own name');
+  await prisma.resume.update({ where: { id: resumeId }, data: { name: 'Payments Engineer — Paymorrow' } });
   const again = (await (
-    await call(`/jobs/${job.id}/tailor-copy`, { method: 'POST', user: owner.user.id, body: { sourceResumeId: id } })
+    await call(`/jobs/${job.id}/tailor-copy`, {
+      method: 'POST',
+      user: owner.user.id,
+      body: { sourceResumeId: id },
+    })
   ).json()) as { resumeId: string };
   assert.equal(again.resumeId, resumeId, 'the same job reuses its copy');
-  const copied = (await (await call(`/resumes/${resumeId}/theme`, { user: owner.user.id })).json()) as { theme: { hiddenSections: string[] } };
-  assert.deepEqual(copied.theme.hiddenSections, ['education'], 'the copy keeps the design and its hidden sections');
+  assert.equal(
+    await nameOf(resumeId),
+    'Sam_Lee_CV_Paymorrow_Payments_Engineer',
+    'an existing automatically named copy adopts the convention',
+  );
+  await call(`/resumes/${resumeId}/name`, {
+    method: 'PATCH',
+    user: owner.user.id,
+    body: { name: 'My reviewed application CV' },
+  });
+  await call(`/jobs/${job.id}/tailor-copy`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { sourceResumeId: id },
+  });
+  assert.equal(
+    await nameOf(resumeId),
+    'My reviewed application CV',
+    'a custom name is preserved on reopening',
+  );
+  const copied = (await (await call(`/resumes/${resumeId}/theme`, { user: owner.user.id })).json()) as {
+    theme: { hiddenSections: string[] };
+  };
+  assert.deepEqual(
+    copied.theme.hiddenSections,
+    ['education'],
+    'the copy keeps the design and its hidden sections',
+  );
   assert.equal((copied.theme as { nameSize?: number }).nameSize, 26, 'and the name size');
-  const tooBig = await call(`/resumes/${id}/theme`, { method: 'PUT', user: owner.user.id, body: { ...design, nameSize: 90 } });
+  const tooBig = await call(`/resumes/${id}/theme`, {
+    method: 'PUT',
+    user: owner.user.id,
+    body: { ...design, nameSize: 90 },
+  });
   assert.equal(tooBig.status, 400, 'a name size outside 16–48pt is refused');
   assert.equal(
     (await call(`/jobs/${job.id}/tailor-copy`, { method: 'POST', user: other.user.id, body: {} })).status,
@@ -227,7 +326,12 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
   const line = await call(`/resumes/${resumeId}/tailor-line`, {
     method: 'POST',
     user: owner.user.id,
-    body: { text: 'Responsible for Node.js APIs.', kind: 'bullet', context: 'Engineer at Acme', job: { jobId: job.id } },
+    body: {
+      text: 'Responsible for Node.js APIs.',
+      kind: 'bullet',
+      context: 'Engineer at Acme',
+      job: { jobId: job.id },
+    },
   });
   assert.equal(line.status, 200);
   assert.deepEqual(await line.json(), {
@@ -245,12 +349,25 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
 test('a CV can be deleted by its owner: its versions and PDF go, a job applied with it stays', async () => {
   const { id } = await cv();
   const job = (await (
-    await call('/jobs', { method: 'POST', user: owner.user.id, body: { title: 'Applied job', description: JOB } })
+    await call('/jobs', {
+      method: 'POST',
+      user: owner.user.id,
+      body: { title: 'Applied job', description: JOB },
+    })
   ).json()) as { id: string };
-  await prisma.job.update({ where: { id: job.id }, data: { applicationResumeId: id, applicationSnapshot: 1 } });
-  await prisma.resumePdf.create({ data: { resumeId: id, version: '1:x:3', fileName: 'Sam_Lee_Resume.pdf', pdf: new Uint8Array([1]) } });
+  await prisma.job.update({
+    where: { id: job.id },
+    data: { applicationResumeId: id, applicationSnapshot: 1 },
+  });
+  await prisma.resumePdf.create({
+    data: { resumeId: id, version: '1:x:3', fileName: 'Sam_Lee_Resume.pdf', pdf: new Uint8Array([1]) },
+  });
 
-  assert.equal((await call(`/resumes/${id}`, { method: 'DELETE', user: other.user.id })).status, 404, "someone else's CV is not deleted");
+  assert.equal(
+    (await call(`/resumes/${id}`, { method: 'DELETE', user: other.user.id })).status,
+    404,
+    "someone else's CV is not deleted",
+  );
   assert.equal((await call(`/resumes/${id}`, { method: 'DELETE', user: owner.user.id })).status, 204);
 
   assert.equal((await call(`/resumes/${id}`, { user: owner.user.id })).status, 404);

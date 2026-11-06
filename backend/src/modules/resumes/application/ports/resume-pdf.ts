@@ -6,6 +6,8 @@ export interface StoredPdf {
 
 /** The CV's design and its kept PDF. */
 export interface ResumePdfStore {
+  /** A job application's saved CV name, shared by Documents and its PDF. */
+  applicationName(resumeId: string): Promise<string | null>;
   theme(resumeId: string): Promise<unknown>;
   setTheme(resumeId: string, theme: unknown): Promise<void>;
   rename(resumeId: string, name: string): Promise<void>;

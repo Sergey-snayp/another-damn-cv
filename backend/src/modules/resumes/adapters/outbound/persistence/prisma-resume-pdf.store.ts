@@ -5,6 +5,14 @@ import type { ResumePdfStore, StoredPdf } from '../../../application/ports/resum
 export class PrismaResumePdfStore implements ResumePdfStore {
   constructor(private readonly db: PrismaService) {}
 
+  async applicationName(resumeId: string): Promise<string | null> {
+    const resume = await this.db.resume.findUnique({
+      where: { id: resumeId },
+      select: { name: true, jobId: true },
+    });
+    return resume?.jobId ? resume.name : null;
+  }
+
   async theme(resumeId: string): Promise<unknown> {
     return (
       (await this.db.resume.findUnique({ where: { id: resumeId }, select: { theme: true } }))?.theme ?? null

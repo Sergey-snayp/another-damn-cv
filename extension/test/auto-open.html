@@ -1,0 +1,96 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — open automatically on application forms</title>
+<!-- Real detection, launcher and panel host. Also run with ?disabled or ?domain. -->
+<script>
+  const mode = new URLSearchParams(location.search);
+  const runtimeMessages = [], storageListeners = [];
+  let releaseSettings;
+  window.chrome = {
+    runtime: {
+      id: 'test',
+      getURL: path => path.endsWith('.css') ? 'data:text/css,'
+        : path.endsWith('sidepanel.html') ? 'data:text/html,<p>Panel fixture</p>' : 'data:image/png;base64,',
+      onMessage: { addListener() {} },
+      sendMessage: async message => { runtimeMessages.push(message); return {}; },
+    },
+    storage: {
+      local: {
+        get: async keys => [].concat(keys).includes('launcherEnabled')
+          ? new Promise(resolve => { releaseSettings = resolve; }) : {},
+        set: async () => {},
+      },
+      onChanged: { addListener: listener => storageListeners.push(listener) },
+    },
+  };
+</script>
+<body>
+<form id="newsletter"><label>Email <input type="email" name="email"></label><button>Subscribe</button></form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script src="../src/filler.js"></script>
+<script src="../src/marks.js"></script>
+<script src="../src/launcher.js"></script>
+<script src="../src/panel-host.js"></script>
+<script src="../src/job-form.js"></script>
+<script src="../src/content.js"></script>
+<script type="module">
+  const problems = [];
+  const expect = (ok, what) => { if (!ok) problems.push(what); };
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const panel = window.CVAutofillPanel;
+  try {
+    await wait(250);
+    expect(!panel.isOpen(), 'a newsletter form does not open the panel');
+    document.getElementById('newsletter').outerHTML = `<form id="application">
+      <label>First name <input name="first_name"></label>
+      <label>Email <input name="email" type="email"></label>
+      <label>Resume/CV <input name="resume" type="file"></label>
+      <button>Submit application</button>
+    </form>`;
+    await wait(400);
+    expect(!panel.isOpen(), 'wait for saved settings before opening a detected form');
+    releaseSettings({
+      launcherEnabled: !mode.has('disabled'),
+      launcherDisabledHosts: mode.has('domain') ? [location.hostname] : [],
+    });
+    await wait(400);
+
+    if (mode.has('disabled') || mode.has('domain')) {
+      expect(!panel.isOpen(), 'the saved global/domain disable setting stops automatic opening');
+      expect(!runtimeMessages.some(message => message.type === 'panel-opened'), 'a disabled panel never flashes open');
+      // Turning the feature back on makes the detected form available again.
+      storageListeners.forEach(listener => listener({ launcherEnabled: { newValue: true }, launcherDisabledHosts: { newValue: [] } }, 'local'));
+      await wait(250);
+    }
+    expect(panel.isOpen(), 'a detected application form opens the panel automatically');
+    expect(document.querySelectorAll('#adcv-autofill-panel').length === 1, 'one panel is created');
+    expect(runtimeMessages.filter(message => message.type === 'panel-opened').length === 1, 'the panel opens once');
+    expect([...document.querySelectorAll('#application input')].every(input => !input.value), 'opening leaves every application field untouched');
+    expect(!runtimeMessages.some(message => message.type === 'fill'), 'opening never asks to autofill');
+
+    panel.close();
+    document.getElementById('application').insertAdjacentHTML('beforeend', '<label>Phone <input type="tel" name="phone"></label>');
+    await wait(600);
+    expect(!panel.isOpen(), 'closing stays closed when the form is rescanned or changes steps');
+    expect(Boolean(document.getElementById('adcv-autofill-launcher')), 'the D! button remains available to reopen it');
+
+    const launcher = document.getElementById('adcv-autofill-launcher').shadowRoot;
+    launcher.querySelector('.dismiss').click();
+    launcher.querySelector('[data-hide="visit"]').click();
+    window.CVAutofillLauncher.update(true);
+    expect(!panel.isOpen() && !document.getElementById('adcv-autofill-launcher'), 'hide until next visit suppresses both the button and automatic reopening');
+
+    location.hash = 'another-application';
+    await wait(600);
+    expect(panel.isOpen(), 'a different application URL can open automatically again');
+    expect(runtimeMessages.filter(message => message.type === 'panel-opened').length === 2, 'one automatic opening per application page');
+  } catch (error) {
+    problems.push(error.stack ?? String(error));
+  }
+  const result = document.createElement('pre');
+  result.id = 'result';
+  result.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.append(result);
+</script>
+</body>

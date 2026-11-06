@@ -70,7 +70,11 @@ export class ResumeAssistant {
     return this.rewriter.rewrite({ text: input.text, kind: input.kind, instruction: TAILOR_LINE, context });
   }
 
-  async score(userId: string, id: string, choice: JobChoice): Promise<ResumeScore & { job: Omit<ChosenJob, 'description'> }> {
+  async score(
+    userId: string,
+    id: string,
+    choice: JobChoice,
+  ): Promise<ResumeScore & { job: Omit<ChosenJob, 'description'> }> {
     const resume = await this.resumes.current(userId, id);
     const job = await this.job(userId, choice);
     const { description: _text, ...about } = job;
@@ -113,9 +117,20 @@ export class ResumeAssistant {
   private async job(userId: string, choice: JobChoice): Promise<ChosenJob> {
     if ('jobId' in choice) {
       const job = await this.jobs.getForTailoring(userId, choice.jobId);
-      if (!job.description?.trim()) throw new ResumeError('invalid', 'This job has no description yet. Add one in the tracker.');
-      return { id: job.id, title: job.title ?? job.pageTitle ?? 'This job', company: job.company, description: job.description };
+      if (!job.description?.trim())
+        throw new ResumeError('invalid', 'This job has no description yet. Add one in the tracker.');
+      return {
+        id: job.id,
+        title: job.title ?? job.pageTitle ?? 'This job',
+        company: job.company,
+        description: job.description,
+      };
     }
-    return { id: null, title: choice.title?.trim() || 'This job', company: null, description: choice.description };
+    return {
+      id: null,
+      title: choice.title?.trim() || 'This job',
+      company: null,
+      description: choice.description,
+    };
   }
 }

@@ -210,7 +210,9 @@ test('headline, projects, certifications and custom sections are versioned, copi
         bullets: ['Wrote the retry engine.', 'Reached 2k stars.'],
       },
     ],
-    certifications: [{ lineageId: randomUUID(), name: 'AWS Solutions Architect', issuer: 'Amazon', date: '2024-03' }],
+    certifications: [
+      { lineageId: randomUUID(), name: 'AWS Solutions Architect', issuer: 'Amazon', date: '2024-03' },
+    ],
     customSections: [{ lineageId: randomUUID(), title: 'Languages', text: 'English, Polish', bullets: [] }],
   });
   assert.equal(first.contact?.headline, 'Senior Backend Engineer');

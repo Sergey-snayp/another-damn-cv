@@ -57,7 +57,7 @@ export function useResumeTheme(id: string | undefined): ResumeTheme {
 }
 
 /** The editor's design: changes are saved to the server a moment after the last one. */
-export function useEditableResumeTheme(id: string): [ResumeTheme, (theme: ResumeTheme) => void] {
+export function useEditableResumeTheme(id: string): [ResumeTheme, (theme: ResumeTheme) => void, () => Promise<void>] {
   const [theme, setTheme] = useState<ResumeTheme>(DEFAULT_THEME);
   const loaded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -85,5 +85,9 @@ export function useEditableResumeTheme(id: string): [ResumeTheme, (theme: Resume
     clearTimeout(timer.current);
     timer.current = setTimeout(() => void saveTheme(id, next).catch(() => undefined), 600);
   };
-  return [theme, change];
+  const flush = async () => {
+    clearTimeout(timer.current);
+    await saveTheme(id, theme);
+  };
+  return [theme, change, flush];
 }

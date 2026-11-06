@@ -128,6 +128,24 @@ export const jobEditSchema = z.object({
 });
 export type JobEditInput = z.infer<typeof jobEditSchema>;
 
+/** The saved job form in the extension updates the same owned job by ID. */
+export const extensionJobEditSchema = jobEditSchema
+  .extend({
+    salaryMin: z.number().int().min(0).max(100_000_000).nullable().optional(),
+    salaryMax: z.number().int().min(0).max(100_000_000).nullable().optional(),
+    salaryCurrency: z.string().trim().max(10).nullable().optional(),
+    salaryPeriod: z.enum(SALARY_PERIODS).nullable().optional(),
+    url: z
+      .string()
+      .trim()
+      .max(4_000)
+      .refine((value) => /^https?:\/\//i.test(value), 'The job link must be a web address.')
+      .nullable()
+      .optional(),
+  })
+  .strict();
+export type ExtensionJobEditInput = z.infer<typeof extensionJobEditSchema>;
+
 export const undoStatusSchema = z.object({
   eventId: z.string('Say which move to undo.').min(1, 'Say which move to undo.'),
 });

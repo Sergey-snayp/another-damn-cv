@@ -94,6 +94,31 @@ export async function lookupJob(url) {
   return (await response.json()).job ?? null;
 }
 
+/** Saved details come from the backend; editing updates the same job, without recapturing the page. */
+async function savedJobRequest(jobId, init = {}) {
+  const { auth } = await chrome.storage.local.get('auth');
+  if (!auth?.syncToken) throw new NotSignedInError();
+  let response;
+  try {
+    response = await fetch(`${API_URL}/api/extension/jobs/${encodeURIComponent(jobId)}`, {
+      ...init, cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.syncToken}` },
+    });
+  } catch { throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`); }
+  const current = await chrome.storage.local.get('auth');
+  if (current.auth?.syncToken !== auth.syncToken) throw new NotSignedInError();
+  if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw Object.assign(new Error(body.message ?? `Server returned ${response.status}.`), { status: response.status });
+  }
+  const job = await response.json();
+  if (!job || job.id !== jobId) throw new Error('The server returned unexpected job details. Try again.');
+  return job;
+}
+export const getSavedJob = jobId => savedJobRequest(jobId);
+export const updateSavedJob = (jobId, details) => savedJobRequest(jobId, { method: 'PATCH', body: JSON.stringify(details) });
+
 /** Records on a saved job the CV Autofill uploaded and the answers on the form. Never saves a job. */
 export async function recordApplication(jobId, { resumeId, answers }) {
   const { auth } = await chrome.storage.local.get('auth');

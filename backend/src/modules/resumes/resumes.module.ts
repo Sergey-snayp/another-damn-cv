@@ -113,6 +113,14 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
         const pending = new GetPendingTailoring(workspace);
         const discard = new DiscardTailoring(workspace);
         return {
+          previewQuickTailoring: async (userId, jobId, sourceResumeId) =>
+            resumes.previewQuickTailoring(
+              userId,
+              await reader.getForTailoring(userId, jobId),
+              sourceResumeId,
+            ),
+          saveQuickTailoring: async (userId, jobId, input) =>
+            resumes.saveQuickTailoring(userId, await reader.getForTailoring(userId, jobId), input),
           tailorForJob: (userId, jobId, sourceResumeId) => tailor.execute({ userId, jobId, sourceResumeId }),
           pending: (userId, id) => pending.execute({ userId, id }),
           discard: (userId, id) => discard.execute({ userId, id }),
@@ -126,7 +134,12 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
     {
       provide: ResumeAssistant,
       inject: [RESUMES_API, JOBS_API, PrismaService, ClaudeProcessRunner],
-      useFactory: (resumes: ResumesApi, jobs: JobsApi, database: PrismaService, runner: ClaudeProcessRunner) =>
+      useFactory: (
+        resumes: ResumesApi,
+        jobs: JobsApi,
+        database: PrismaService,
+        runner: ClaudeProcessRunner,
+      ) =>
         new ResumeAssistant(
           resumes,
           new PublicTailoringJobReader(jobs),

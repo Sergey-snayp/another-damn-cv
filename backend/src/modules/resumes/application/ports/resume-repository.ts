@@ -27,6 +27,7 @@ export interface SectionChangeRows {
 }
 /** A transaction exposes the same operations, without a database-specific client. */
 export interface ResumeTransaction {
+  create(input: CreateResumeRecord): Promise<ResumeRecord>;
   find(id: string): Promise<ResumeRecord | null>;
   sections(resumeId: string, atSnapshot?: number): Promise<SectionRows>;
   liveRows(resumeId: string, table: VersionedTable): Promise<VersionedRow[]>;
@@ -40,7 +41,7 @@ export interface ResumeRepository extends ResumeTransaction {
   transaction<T>(work: (tx: ResumeTransaction) => Promise<T>): Promise<T>;
   findOwned(userId: string, id: string): Promise<ResumeRecord | null>;
   list(profileId: string): Promise<ResumeSummary[]>;
-  create(input: CreateResumeRecord): Promise<ResumeRecord>;
+  rename(id: string, name: string): Promise<void>;
   remove(id: string): Promise<void>;
   history(resumeId: string, table: VersionedTable, lineageId: string): Promise<VersionedRow[]>;
   snapshots(resumeId: string): Promise<Snapshot[]>;
@@ -53,7 +54,7 @@ export interface ResumeRepository extends ResumeTransaction {
   latestIdsForJobs(userId: string, jobIds: readonly string[]): Promise<Record<string, string>>;
 }
 export interface ProfileDirectory {
-  ensureProfile(userId: string): Promise<{ id: string }>;
+  ensureProfile(userId: string): Promise<{ id: string; firstName?: string | null; lastName?: string | null }>;
 }
 export interface IdGenerator {
   next(): string;

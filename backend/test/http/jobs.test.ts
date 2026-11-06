@@ -37,8 +37,8 @@ test('jobs module starts with fake providers and preserves HTTP auth, schemas, r
     .overrideProvider(AUTH_API)
     .useValue({
       resolveSyncToken: (token: string) =>
-        token === 'test-token'
-          ? Promise.resolve('owner')
+        token === 'test-token' || token === 'other-token'
+          ? Promise.resolve(token === 'test-token' ? 'owner' : 'stranger')
           : Promise.reject(new UnauthorizedException('Invalid sync token.')),
     })
     .compile();
@@ -56,7 +56,7 @@ test('jobs module starts with fake providers and preserves HTTP auth, schemas, r
     path: string,
     options: { method?: string; body?: unknown; user?: string; token?: string } = {},
   ) =>
-    fetch(`${base}/api/jobs${path}`, {
+    fetch(`${base}/api${path.startsWith('/extension/') ? '' : '/jobs'}${path}`, {
       method: options.method ?? 'GET',
       headers: {
         ...(options.user && { 'x-test-user': options.user }),
@@ -194,6 +194,84 @@ test('jobs module starts with fake providers and preserves HTTP auth, schemas, r
       assert.equal(removed.status, 204);
       assert.equal(await removed.text(), '');
       assert.equal((await request(`/${createdJob.id}`, { user: 'owner' })).status, 404);
+    },
+  );
+
+  await context.test(
+    'extension job forms read and update an owned job with bearer auth and preserve its identity',
+    async () => {
+      const path = '/extension/jobs/job-1';
+      for (const method of ['GET', 'PATCH']) {
+        assert.equal((await request(path, { method })).status, 401);
+        assert.equal((await request(path, { method, user: 'owner' })).status, 401);
+        assert.equal((await request(path, { method, token: 'wrong' })).status, 401);
+        assert.equal(
+          (
+            await request(path, {
+              method,
+              token: 'other-token',
+              ...(method === 'PATCH' && { body: { notes: 'No access' } }),
+            })
+          ).status,
+          404,
+        );
+      }
+      const detail = await request(path, { token: 'test-token' });
+      assert.equal(detail.status, 200);
+      const before = (await detail.json()) as { id: string; status: string };
+      const count = jobs.rows.size;
+      const edited = await request(path, {
+        method: 'PATCH',
+        token: 'test-token',
+        body: {
+          title: 'Reviewed in the extension',
+          notes: 'My note',
+          status: 'interview',
+          salaryMin: 110000,
+          salaryMax: 90000,
+          salaryCurrency: 'cad',
+          salaryPeriod: 'year',
+        },
+      });
+      assert.equal(edited.status, 200);
+      const job = (await edited.json()) as {
+        id: string;
+        status: string;
+        salaryMin: number;
+        salaryMax: number;
+        salaryCurrency: string;
+        editedFields: string[];
+        history: unknown[];
+      };
+      assert.equal(job.id, before.id);
+      assert.equal(job.status, 'interview');
+      assert.equal(job.salaryMin, 90000);
+      assert.equal(job.salaryMax, 110000);
+      assert.equal(job.salaryCurrency, 'CAD');
+      assert.ok(job.editedFields.includes('salary'));
+      const notesOnly = await request(path, {
+        method: 'PATCH',
+        token: 'test-token',
+        body: { notes: 'Updated note' },
+      });
+      const same = (await notesOnly.json()) as typeof job;
+      assert.equal(same.status, 'interview');
+      assert.equal(same.history.length, job.history.length);
+      assert.equal(same.salaryMin, 90000);
+      const cleared = await request(path, {
+        method: 'PATCH',
+        token: 'test-token',
+        body: { salaryMin: null, salaryMax: null },
+      });
+      assert.equal(((await cleared.json()) as { salary: null }).salary, null);
+      for (const body of [
+        { salaryMin: -1 },
+        { status: 'unknown' },
+        { url: 'javascript:alert(1)' },
+        { userId: 'stranger' },
+      ])
+        assert.equal((await request(path, { method: 'PATCH', token: 'test-token', body })).status, 400);
+      assert.equal(jobs.rows.size, count);
     },
   );
 });

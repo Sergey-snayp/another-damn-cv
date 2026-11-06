@@ -36,6 +36,9 @@ export class RewriteResumeLine {
     await this.access.assertOwned(userId, resumeId);
     const settings = await this.settings?.promptSettings(resumeId);
     if (!settings) return this.rewriter.rewrite(input);
-    return this.rewriter.rewrite({ ...input, context: [input.context, settings].filter(Boolean).join('\n\n') });
+    return this.rewriter.rewrite({
+      ...input,
+      context: [input.context, settings].filter(Boolean).join('\n\n'),
+    });
   }
 }

@@ -65,7 +65,6 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const theme = {
   template: 'professional',
   accent: '#134e4a',
@@ -75,10 +74,12 @@ const theme = {
   sectionGap: 14,
 };
 
-test('the server keeps each CV as a PDF, and the extension downloads it', async () => {
+test('Save explicitly creates the PDF after the CV; reads, edits and layout saves never print', async () => {
+  const initialPrints = printed.length;
   const cv = (await (
     await call('/resumes', { method: 'POST', user: owner.user.id, body: { name: 'Server CV' } })
   ).json()) as { id: string };
+  assert.equal((await call(`/resumes/${cv.id}/pdf`, { method: 'POST', user: owner.user.id })).status, 409);
   await call(`/resumes/${cv.id}/save`, {
     method: 'POST',
     user: owner.user.id,
@@ -87,7 +88,9 @@ test('the server keeps each CV as a PDF, and the extension downloads it', async 
       summaries: [{ variant: 'default', text: 'Engineer.' }],
     },
   });
-  await wait(50);
+  assert.equal(printed.length, initialPrints, 'creating and saving the CV never generates a PDF');
+  assert.equal((await call(`/resumes/${cv.id}/pdf`, { user: owner.user.id })).status, 409);
+  assert.equal((await call(`/extension/resumes/${cv.id}/pdf`, { token: ownerToken })).status, 409);
 
   // The design moves to the server.
   assert.equal(
@@ -108,7 +111,11 @@ test('the server keeps each CV as a PDF, and the extension downloads it', async 
     theme,
   );
   assert.equal((await call(`/resumes/${cv.id}/theme`, { user: other.user.id })).status, 404);
-  await wait(50);
+  assert.equal(printed.length, initialPrints, 'layout changes never generate a PDF');
+  assert.equal((await call(`/resumes/${cv.id}/pdf`, { method: 'POST', user: other.user.id })).status, 404);
+  assert.equal((await call(`/resumes/${cv.id}/pdf`, { method: 'POST' })).status, 401);
+  assert.equal((await call(`/resumes/${cv.id}/pdf`, { method: 'POST', user: owner.user.id })).status, 200);
+  assert.equal(printed.length, initialPrints + 1);
 
   const before = printed.length;
   const file = await call(`/extension/resumes/${cv.id}/pdf`, { token: ownerToken });
@@ -120,7 +127,7 @@ test('the server keeps each CV as a PDF, and the extension downloads it', async 
   );
   assert.match(Buffer.from(await file.arrayBuffer()).toString(), /^%PDF-1\.4/);
   await call(`/extension/resumes/${cv.id}/pdf`, { token: ownerToken });
-  assert.equal(printed.length, before, 'the PDF made after the design change is reused, not made again');
+  assert.equal(printed.length, before, 'the extension only downloads the PDF made by Save');
   assert.equal((await call(`/extension/resumes/${cv.id}/pdf`, { token: otherToken })).status, 404);
 
   // The print link the server's Chrome opens works once signed, and only for this CV.
@@ -133,13 +140,20 @@ test('the server keeps each CV as a PDF, and the extension downloads it', async 
   assert.deepEqual(((await view.json()) as { theme: unknown }).theme, theme);
   assert.equal((await call(`/print/resumes/${cv.id}?token=bad`)).status, 401);
 
-  // A new version of the CV makes a new PDF in the background.
+  // Editing the saved CV leaves printing for the next explicit Save action.
   await call(`/resumes/${cv.id}/save`, {
     method: 'POST',
     user: owner.user.id,
     body: { summaries: [{ variant: 'default', text: 'Senior engineer.' }] },
   });
-  await wait(100);
+  assert.equal(printed.length, before);
+  assert.equal(
+    (await call(`/extension/resumes/${cv.id}/pdf`, { token: ownerToken })).status,
+    409,
+    'the extension cannot upload a stale PDF',
+  );
+  assert.equal(printed.length, before, 'requesting a stale PDF never creates one');
+  assert.equal((await call(`/resumes/${cv.id}/pdf`, { method: 'POST', user: owner.user.id })).status, 200);
   assert.equal(printed.length, before + 1);
   const app = await call(`/resumes/${cv.id}/pdf`, { user: owner.user.id });
   assert.match(app.headers.get('content-disposition') ?? '', /^inline/);
@@ -185,4 +199,52 @@ test('the editor renames a CV and keeps its section order with the design', asyn
       .theme,
     design,
   );
+});
+
+test('app downloads and extension uploads retain the application CV name, including international names', async () => {
+  for (const contact of [
+    { firstName: 'Sergey', lastName: 'Proniuk', email: 's@example.com' },
+    { firstName: 'José', lastName: 'Коваль', email: 'j@example.com' },
+  ]) {
+    const source = (await (
+      await call('/resumes', {
+        method: 'POST',
+        user: owner.user.id,
+        body: { name: 'Master CV' },
+      })
+    ).json()) as { id: string };
+    await call(`/resumes/${source.id}/save`, { method: 'POST', user: owner.user.id, body: { contact } });
+    const job = (await (
+      await call('/jobs', {
+        method: 'POST',
+        user: owner.user.id,
+        body: { title: 'Engineer (Remote)', company: 'Box', description: 'Build content creation services.' },
+      })
+    ).json()) as { id: string };
+    const copyResponse = await call(`/jobs/${job.id}/tailor-copy`, {
+      method: 'POST',
+      user: owner.user.id,
+      body: { sourceResumeId: source.id },
+    });
+    assert.equal(copyResponse.status, 200);
+    const { resumeId } = (await copyResponse.json()) as { resumeId: string };
+    const expected = `${contact.firstName}_${contact.lastName}_CV_Box_Engineer.pdf`;
+    const before = printed.length;
+    const generated = await call(`/resumes/${resumeId}/pdf`, { method: 'POST', user: owner.user.id });
+    assert.equal(generated.status, 200);
+    assert.equal(((await generated.json()) as { fileName: string }).fileName, expected);
+    // An existing PDF with the old metadata is reused, with the correct response name.
+    await prisma.resumePdf.update({ where: { resumeId }, data: { fileName: 'Old_Resume.pdf' } });
+    const appFile = await call(`/resumes/${resumeId}/pdf?download=1`, { user: owner.user.id });
+    const extensionFile = await call(`/extension/resumes/${resumeId}/pdf`, { token: ownerToken });
+    assert.equal(appFile.status, 200);
+    assert.equal(extensionFile.status, 200);
+    const header = appFile.headers.get('content-disposition') ?? '';
+    assert.match(header, /^attachment;/);
+    assert.equal(extensionFile.headers.get('content-disposition'), header);
+    const encoded = /filename\*=UTF-8''([^;\s]+)/i.exec(header)?.[1];
+    assert.equal(encoded ? decodeURIComponent(encoded) : /filename="([^"]+)"/.exec(header)?.[1], expected);
+    assert.deepEqual(await appFile.arrayBuffer(), await extensionFile.arrayBuffer());
+    assert.equal(printed.length, before + 1, 'downloads do not regenerate the PDF to change its file name');
+  }
 });

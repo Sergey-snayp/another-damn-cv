@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, UseFilters, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Put,
+  UseFilters,
+  UseGuards,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { AuthGuard, CurrentUser } from '../../../../auth/http';
 import { ResumeOwnerGuard } from './resume-owner.guard';
@@ -13,7 +24,11 @@ const jobSchema = z.union([
   z
     .object({
       title: z.string().trim().max(300).optional(),
-      description: z.string('Paste the job description.').trim().min(30, 'Paste the job description.').max(30_000),
+      description: z
+        .string('Paste the job description.')
+        .trim()
+        .min(30, 'Paste the job description.')
+        .max(30_000),
     })
     .strict(),
 ]);
@@ -21,7 +36,9 @@ const jobSchema = z.union([
 const chatSchema = z
   .object({
     messages: z
-      .array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().trim().min(1).max(4_000) }).strict())
+      .array(
+        z.object({ role: z.enum(['user', 'assistant']), text: z.string().trim().min(1).max(4_000) }).strict(),
+      )
       .min(1)
       .max(30),
     job: jobSchema.optional(),
@@ -30,7 +47,11 @@ const chatSchema = z
 
 const tailorLineSchema = z
   .object({
-    text: z.string('There is nothing to tailor yet.').trim().min(1, 'There is nothing to tailor yet.').max(5_000),
+    text: z
+      .string('There is nothing to tailor yet.')
+      .trim()
+      .min(1, 'There is nothing to tailor yet.')
+      .max(5_000),
     kind: z.enum(['bullet', 'summary', 'headline']),
     context: z.string().max(1_000).optional(),
     job: jobSchema,

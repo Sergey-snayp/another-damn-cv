@@ -623,7 +623,7 @@ const KNOWN_BOARD = Boolean(Sites.siteFor(location.hostname)) || location.protoc
 // This script also runs in iframes, where an embedded application form may
 // live (a Greenhouse form on a company's careers page). Tiny frames (ads,
 // trackers) are left alone. A frame with a form tells the top page, which
-// shows the one D! button for the tab.
+// opens the one panel for the tab.
 const IS_TOP = window === window.top;
 const TINY_FRAME = !IS_TOP && (innerWidth < 250 || innerHeight < 150);
 const framesWithForms = new Set();
@@ -635,7 +635,7 @@ function showLauncher(ownForm) {
   window.top.postMessage({ adcvFrameForm: ownForm }, '*');
 }
 if (IS_TOP) {
-  // Only shows or hides the button; a page faking this message gains nothing else.
+  // Announces a form only: opening the panel never fills or submits anything.
   addEventListener('message', (event) => {
     if (typeof event.data?.adcvFrameForm !== 'boolean' || event.source === window) return;
     if (event.data.adcvFrameForm) framesWithForms.add(event.source); else framesWithForms.delete(event.source);

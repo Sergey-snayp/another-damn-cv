@@ -236,7 +236,7 @@ export function EducationForm({ resume, onChange }: { resume: RenderedResume; on
             {open === i && (
               <div className="sf-item-body sf-grid">
                 <Field label="School" value={row.institution} onChange={set('institution')} wide />
-                <Field label="Degree" value={row.degree} onChange={set('degree')} placeholder="B.Sc." />
+                <Field label="Degree (optional)" value={row.degree} onChange={set('degree')} placeholder="Leave blank if not applicable" />
                 <Field label="Field of study" value={row.field ?? ''} onChange={set('field')} />
                 <Field label="Start" value={row.from} onChange={set('from')} placeholder="2012" />
                 <Field label="End" value={row.to ?? ''} onChange={set('to')} placeholder="2016" />

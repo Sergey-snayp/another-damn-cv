@@ -26,7 +26,10 @@ export function aiSettingsFrom(value: unknown): AiSettings {
 
 /** The settings as lines for a prompt, so every AI feature in the editor follows them. */
 export function settingsForPrompt(settings: AiSettings): string {
-  return [`Tone: ${TONES[settings.tone]}`, settings.instructions.trim() && `The candidate's standing instructions: ${settings.instructions.trim()}`]
+  return [
+    `Tone: ${TONES[settings.tone]}`,
+    settings.instructions.trim() && `The candidate's standing instructions: ${settings.instructions.trim()}`,
+  ]
     .filter(Boolean)
     .join('\n');
 }

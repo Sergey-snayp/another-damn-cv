@@ -347,6 +347,15 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 .tpl-professional .pro-edit:hover { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
 .tpl-professional .pro-edit:focus { background: color-mix(in srgb, var(--color-accent) 30%, transparent); box-shadow: 0 0 0 1px var(--color-accent-hover); }
 .tpl-professional .pro-edit:empty::before { content: attr(data-placeholder); color: #b9c2cc; font-style: italic; font-weight: 400; }
+.tpl-professional .pro-skill { position: relative; }
+.tpl-professional .pro-skill > .doc-remove { position: absolute; right: -8px; top: -12px; z-index: 2; background: var(--color-surface); border-radius: 4px; }
+.tpl-professional .pro-skill:hover > .doc-remove,
+.tpl-professional .pro-skill:focus-within > .doc-remove { opacity: 1; }
+.tpl-professional .pro-section { position: relative; }
+.tpl-professional .doc-add.pro-add { display: inline-block; }
+.tpl-professional .pro-section > .pro-add { position: absolute; top: 0; right: 0; margin: 0; opacity: 0; }
+.tpl-professional .pro-section:hover > .pro-add,
+.tpl-professional .pro-section:focus-within > .pro-add { opacity: 1; }
 .tpl-professional .editable { padding: 0; }
 
 .tpl-professional .doc-head { text-align: center; margin-bottom: 12px; }
@@ -366,6 +375,10 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 
 .tpl-professional .doc-role { padding-top: 6px; margin: 0 0 7px; }
 .tpl-professional .doc-role.doc-education { margin-bottom: 12px; }
+.tpl-professional .doc-education .doc-title { position: relative; }
+.tpl-professional .doc-add.pro-add-degree { display: inline-grid; place-items: center; position: absolute; left: -24px; top: 0; width: 18px; height: 18px; margin: 0; padding: 0; border-style: solid; background: var(--color-surface); color: var(--color-muted); opacity: 0; }
+.tpl-professional .doc-education:hover .pro-add-degree,
+.tpl-professional .doc-education:focus-within .pro-add-degree { opacity: 1; }
 .tpl-professional .doc-role:last-of-type { margin-bottom: 0; }
 .tpl-professional .doc-roleline,
 .tpl-professional .doc-subline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: nowrap; }
@@ -402,5 +415,40 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
   pointer-events: none;
 }
 .doc-bullets li:hover .doc-bulletmeta { pointer-events: auto; }
+.doc-bullets li:focus-within .doc-bulletmeta { opacity: 1; pointer-events: auto; }
+.doc-roleline:focus-within > .doc-remove { opacity: 1; }
 .tpl-professional .doc-roleline { position: relative; }
 .tpl-professional .doc-roleline > .doc-remove { position: absolute; right: -22px; top: 0; }
+
+/* Editing controls describe and highlight their own target without changing the printed layout. */
+.tpl-professional:not(.read-only) [data-edit-item] { border-radius: 3px; transition: background-color .12s, box-shadow .12s; }
+.tpl-professional:not(.read-only) [data-edit-item="bullet"]:is(:hover, :focus-within),
+.tpl-professional:not(.read-only) [data-edit-item="skill"]:is(:hover, :focus-within) { background: var(--color-accent-soft); }
+.tpl-professional .doc-remove { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 3px; border: 1px solid var(--color-error-border); border-radius: 5px; background: var(--color-surface); color: var(--color-error); }
+.tpl-professional .doc-bulletmeta > .doc-remove { opacity: 1; }
+.tpl-professional .pro-skill > .doc-remove { top: -24px; right: -6px; z-index: 4; }
+.tpl-professional .doc-add.pro-add { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-style: solid; background: var(--color-surface); color: var(--color-success); font-size: 11px; line-height: 1.4; font-weight: 500; }
+.tpl-professional .doc-add.pro-insert { position: relative; width: 24px; height: 24px; padding: 3px; }
+.tpl-professional .doc-add:is(:hover, :focus) { background: var(--color-success-soft); border-color: var(--color-success); }
+.tpl-professional .doc-remove:is(:hover, :focus) { background: var(--color-error-soft); border-color: var(--color-error); }
+.tpl-professional [data-control-label] { position: relative; }
+.tpl-professional [data-control-label]::after { display: none; position: absolute; right: 0; bottom: calc(100% + 5px); z-index: 6; padding: 4px 7px; border: 1px solid currentColor; border-radius: 5px; background: var(--color-surface); color: inherit; font: 500 11px/1.4 system-ui, sans-serif; white-space: nowrap; pointer-events: none; content: attr(data-control-label); box-shadow: 0 2px 8px var(--color-shadow); }
+.tpl-professional [data-control-label]:is(:hover, :focus)::after { display: block; }
+.tpl-professional .pro-skill > .doc-remove,
+.tpl-professional .doc-roleline > .doc-remove { position: absolute; }
+.tpl-professional .pro-editable-role { position: relative; }
+.tpl-professional .doc-add.pro-add-bullet { position: absolute; right: 0; bottom: -12px; z-index: 3; margin: 0; padding: 3px 8px; opacity: 0; }
+.tpl-professional .pro-editable-role:is(:hover, :focus-within) > .pro-add-bullet { opacity: 1; }
+.tpl-professional:not(.read-only) [data-added="true"],
+.tpl-professional:not(.read-only) [data-edit-item="skill-group"]:has(> .doc-bulletmeta > .doc-add:is(:hover, :focus)),
+.tpl-professional:not(.read-only) .pro-section:has(> .doc-add:is(:hover, :focus)),
+.tpl-professional:not(.read-only) [data-edit-item="education"]:has(.pro-add-degree:is(:hover, :focus)) { background: var(--color-success-soft); box-shadow: 0 0 0 2px var(--color-success-border); }
+.tpl-professional:not(.read-only) [data-edit-item="bullet"]:has(> .doc-bulletmeta > .pro-insert:is(:hover, :focus)),
+.tpl-professional:not(.read-only) .pro-editable-role:has(> .pro-add-bullet:is(:hover, :focus)) > .doc-bullets { background: var(--color-success-soft); box-shadow: 0 2px 0 var(--color-success); }
+.tpl-professional:not(.read-only) [data-edit-item="bullet"]:has(> .doc-bulletmeta > .doc-remove:is(:hover, :focus)),
+.tpl-professional:not(.read-only) [data-edit-item="skill"]:has(> .doc-remove:is(:hover, :focus)),
+.tpl-professional:not(.read-only) [data-edit-item]:has(> .doc-roleline > .doc-remove:is(:hover, :focus)) { background: var(--color-error-soft); box-shadow: 0 0 0 2px var(--color-error-border); }
+@media (prefers-reduced-motion: reduce) { .tpl-professional [data-edit-item] { transition: none; } }
+@media print {
+  .tpl-professional [data-edit-item], .tpl-professional [data-added], .tpl-professional .doc-bullets { background: none !important; box-shadow: none !important; }
+}

@@ -10,6 +10,7 @@ import {
   assertOwned,
 } from './use-cases/read-resume';
 import { RebuildResume, RevertResume, SaveResume } from './use-cases/save-resume';
+import { PreviewQuickTailoring, SaveQuickTailoring } from './use-cases/quick-tailoring';
 import {
   CreateResume,
   DiscardResumeProposal,
@@ -40,6 +41,8 @@ export function createResumesApi(
   const pending = new GetResumeProposal(repository),
     store = new StoreResumeProposal(repository),
     discard = new DiscardResumeProposal(repository);
+  const quickPreview = new PreviewQuickTailoring(repository, profiles);
+  const quickSave = new SaveQuickTailoring(repository, profiles, ids, save);
   return {
     assertOwned: (userId, id) => assertOwned(repository, userId, id),
     list: (userId) => list.execute({ userId }),
@@ -60,6 +63,8 @@ export function createResumesApi(
     latestIdsForJobs: (userId, jobIds) => repository.latestIdsForJobs(userId, jobIds),
     workspaceForJob: (userId, job: JobForCopy, sourceResumeId) =>
       workspace.execute({ userId, job, sourceResumeId }),
+    previewQuickTailoring: (userId, job, sourceResumeId) => quickPreview.execute(userId, job, sourceResumeId),
+    saveQuickTailoring: (userId, job, input) => quickSave.execute(userId, job, input),
     pending: (userId, id) => pending.execute({ userId, id }),
     storeProposal: (userId, id, proposal) => store.execute({ userId, id, proposal }),
     discardProposal: (userId, id) => discard.execute({ userId, id }),

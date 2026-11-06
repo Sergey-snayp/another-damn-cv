@@ -1,12 +1,12 @@
 import type { ResumesApi } from '../../contracts';
-import { pdfFileName, pdfVersion, PdfUnavailableError } from '../../domain/resume-pdf';
+import { pdfFileName, pdfVersion, PdfNotReadyError, PdfUnavailableError } from '../../domain/resume-pdf';
 import type { PdfRenderer, PrintTokens, ResumePdfStore, StoredPdf } from '../ports/resume-pdf';
 
 /**
  * Each CV's PDF, kept on the server (as Simplify keeps resume files). The
  * extension downloads it; nothing opens in the person's browser. A PDF is
- * made from the app's print page with the CV's design, after the CV is saved
- * or its design changes, and on request when the kept one is out of date.
+ * made from the app's print page only after the person clicks Save. Reading
+ * a PDF, autosaving content and changing the design never start printing.
  */
 export class ResumePdfs {
   private readonly making = new Map<string, Promise<StoredPdf>>();
@@ -24,41 +24,44 @@ export class ResumePdfs {
     return this.store.theme(id);
   }
 
-  /** Saves the design and makes the PDF again in the background. */
+  /** Saves the design; making its PDF is a separate, explicit action. */
   async setTheme(userId: string, id: string, theme: unknown): Promise<unknown> {
     await this.resumes.assertOwned(userId, id);
     await this.store.setTheme(id, theme);
-    this.refresh(userId, id);
     return theme;
   }
 
-  /** A new name for the CV (the editor's ✎). The PDF's file name comes from the person's name, so it stays. */
+  /** A new name for the CV (the editor's ✎). Application downloads use this name too. */
   async rename(userId: string, id: string, name: string): Promise<string> {
     await this.resumes.assertOwned(userId, id);
     await this.store.rename(id, name.trim());
     return name.trim();
   }
 
-  /** The current PDF, made now when the kept one is missing or out of date. */
+  /** Downloads only a PDF explicitly made for the current saved CV and design. */
   async file(userId: string, id: string): Promise<StoredPdf> {
     const cv = await this.resumes.current(userId, id);
     const version = pdfVersion(cv.snapshot, await this.store.theme(id));
     const kept = await this.store.find(id);
-    if (kept?.version === version) return kept;
+    if (kept?.version !== version) throw new PdfNotReadyError();
+    return { ...kept, fileName: pdfFileName(cv.contact, await this.store.applicationName(id)) };
+  }
+
+  /** Called by Save, after the CV exists and its content is persisted. */
+  async generate(userId: string, id: string): Promise<StoredPdf> {
+    const cv = await this.resumes.current(userId, id);
+    if (!cv.snapshot) throw new PdfNotReadyError('Create and save the CV before making its PDF.');
+    const fileName = pdfFileName(cv.contact, await this.store.applicationName(id));
+    const version = pdfVersion(cv.snapshot, await this.store.theme(id));
+    const kept = await this.store.find(id);
+    if (kept?.version === version) return { ...kept, fileName };
     const key = `${id}@${version}`;
     let pending = this.making.get(key);
     if (!pending) {
-      pending = this.make(userId, id, version, cv.contact).finally(() => this.making.delete(key));
+      pending = this.make(userId, id, version, fileName).finally(() => this.making.delete(key));
       this.making.set(key, pending);
     }
-    return pending;
-  }
-
-  /** Makes the PDF in the background after a change, so it is ready when the extension asks. */
-  refresh(userId: string, id: string): void {
-    void this.file(userId, id).catch(() => {
-      /* made on the next request instead */
-    });
+    return pending.then((file) => ({ ...file, fileName }));
   }
 
   /** What the print page draws, for a link the server made. */
@@ -68,12 +71,7 @@ export class ResumePdfs {
     return { resume: await this.resumes.current(userId, id), theme: await this.store.theme(id) };
   }
 
-  private async make(
-    userId: string,
-    id: string,
-    version: string,
-    contact: { firstName?: string | null; lastName?: string | null } | null,
-  ): Promise<StoredPdf> {
+  private async make(userId: string, id: string, version: string, fileName: string): Promise<StoredPdf> {
     let pdf: Buffer;
     try {
       pdf = await this.renderer.render(this.printUrl(id, this.tokens.sign(userId, id)));
@@ -82,7 +80,7 @@ export class ResumePdfs {
         `The CV PDF could not be made: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    const made = { version, fileName: pdfFileName(contact), pdf };
+    const made = { version, fileName, pdf };
     await this.store.save(id, made);
     return made;
   }

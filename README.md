@@ -42,7 +42,18 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   view. Search by role/company; filter by applied dates, job type, status and
   favorites. Drag cards or use their Move menu; recent moves and archives offer Undo.
 - **Documents** holds resumes, previews, editing, history and tailoring review.
-  Old `/resumes` bookmarks redirect here.
+  It opens with all resumes, including copies tailored for jobs; the type filter
+  can narrow the list. Open libraries refresh after edits in other app tabs and
+  check the backend every 15 seconds while visible. Old `/resumes` bookmarks redirect here.
+  Opening Quick Tailor reads an unsaved draft: it creates no document, version
+  or PDF. Closing without **Save** leaves Documents unchanged. Save creates
+  the CV with the edited content in one transaction, then
+  creates its PDF and selects it for the extension. In the full editor,
+  **Save & export PDF** saves the content and layout before making the PDF.
+  Autosaves, layout changes, previews and extension downloads never create PDFs.
+  Skills, category labels and education fields can be edited directly on the
+  CV preview. Enter applies an edit, Escape cancels it; hover over Skills or
+  Education to add entries, or use the × controls to remove them.
 - **Profile → Import from CV** accepts PDF/DOCX/TXT/Markdown files or a saved CV
   from Documents. The Resume section's **Change** list shows every CV with
   **Preview** and **Import to Profile**, which opens this review for that CV.
@@ -108,6 +119,9 @@ currently filtered collection, descriptions, dates and attached resume versions.
 From `backend/`, `npm run check` runs types, lint, formatting and unit/architecture
 tests. `npm run test:http` checks routes with fake dependencies. `npm run build`
 builds the API; run `npm run build` in `frontend/` to build the web app.
+With the Vite server running, `npm run test:browser` in `frontend/` checks Quick
+Tailor's Save and the full editor's Save & export flow in headless Chrome with
+synthetic API responses.
 
 `npm run test:integration` uses real Postgres and fake Google/AI providers. Set
 `TEST_DATABASE_URL` to a database ending in `_test`, or it uses `cv_test` on the

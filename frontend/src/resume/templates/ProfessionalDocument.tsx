@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { RenderedResume } from '../../resumeApi';
 import { RewritePopover } from '../RewritePopover';
 import { DiffText } from '../DiffText';
@@ -13,6 +13,18 @@ export function monthYear(value?: string | null): string {
   const match = text.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
   const month = match ? MONTHS[Number(match[2]) - 1] : undefined;
   return match && month ? `${month} ${match[1]}` : text;
+}
+
+/** Keep dates typed as "Sep 2020" usable by the editor and education autofill. */
+function dateForSave(value: string): string {
+  const text = value.trim();
+  const named = text.match(/^([a-z]+)\s+(\d{4})$/i);
+  const month = named ? MONTHS.findIndex((name) => name.toLowerCase() === named[1]!.slice(0, 3).toLowerCase()) : -1;
+  if (named && month >= 0) return `${named[2]}-${String(month + 1).padStart(2, '0')}`;
+  const numeric = text.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (numeric && Number(numeric[2]) >= 1 && Number(numeric[2]) <= 12)
+    return `${numeric[1]}-${numeric[2]!.padStart(2, '0')}`;
+  return text;
 }
 
 const range = (from?: string | null, to?: string | null, current?: boolean) =>
@@ -138,6 +150,57 @@ function RichText({ value, onChange, placeholder, readOnly, bold, label, line }:
   );
 }
 
+/** Courses can omit a degree entirely; an empty optional field stays out of the CV. */
+function EducationDegree({ value, hasField, readOnly, onChange }: {
+  value: string;
+  hasField: boolean;
+  readOnly?: boolean;
+  onChange(next: string): void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const editor = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (adding && !readOnly) editor.current?.querySelector<HTMLElement>('[contenteditable]')?.focus();
+  }, [adding, readOnly]);
+  if (!value.trim() && (!adding || readOnly)) return readOnly ? null : (
+    <button type="button" className="doc-add pro-add-degree" aria-label="Add degree" title="Add degree (optional)" onClick={() => setAdding(true)}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+    </button>
+  );
+  return <>
+    <span ref={editor} onBlurCapture={() => setAdding(false)}>
+      <RichText line value={value} placeholder="Degree" bold={null} readOnly={readOnly} onChange={next => onChange(next.trim())} />
+    </span>
+    {hasField ? ', ' : !readOnly ? ' ' : null}
+  </>;
+}
+
+function DocumentControl({ action, label, title = label, description = label, onClick, className = '', compact = action === 'remove', controlKey }: {
+  action: 'add' | 'remove'; label: string; title?: string; description?: string;
+  onClick(): void; className?: string; compact?: boolean; controlKey?: string;
+}) {
+  return <button type="button" className={`doc-${action}${action === 'add' ? ' pro-add' : ''} ${className}`}
+    title={title} aria-label={description} data-control-label={compact ? label : undefined} data-control-key={controlKey} onClick={onClick}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={action === 'add' ? 'M12 5v14M5 12h14' : 'M3 6h18M8 6V3h8v3M6 6l1 15h10l1-15M10 11v6M14 11v6'} />
+    </svg>
+    {!compact && label}
+  </button>;
+}
+
+function BulletControls({ text, context, onAdd, onRemove, onRewrite, rewriteLabel = 'Rewrite with AI' }: {
+  text: string; context: string; onAdd(): void; onRemove(): void;
+  onRewrite?(event: React.MouseEvent<HTMLButtonElement>): void;
+  rewriteLabel?: string;
+}) {
+  return <span className="doc-bulletmeta">
+    {onRewrite && <button type="button" className="ai" title={rewriteLabel} onClick={onRewrite}>✦</button>}
+    <DocumentControl action="add" compact label="Add bullet below" className="inline pro-insert"
+      description={`Add a bullet below this one in ${context}`} onClick={onAdd} />
+    <DocumentControl action="remove" label="Remove bullet" description={`Remove bullet: ${text || 'empty bullet'} — ${context}`} onClick={onRemove} />
+  </span>;
+}
+
 /**
  * The "professional" template: the layout of the candidate's own CV. Roboto,
  * black; the name in capitals; headings in capitals over a rule; per job the
@@ -155,6 +218,37 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     summaries: given.summaries ?? {},
   };
   const [rewritingOwn, setRewriting] = useState<RewriteTarget | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const [added, setAdded] = useState<string | null>(null);
+  const [focusTarget, setFocusTarget] = useState<{ key: string } | null>(null);
+  useLayoutEffect(() => {
+    if (!focusTarget || readOnly) return;
+    const key = CSS.escape(focusTarget.key);
+    const target = root.current?.querySelector<HTMLElement>(`[data-edit-key="${key}"], [data-control-key="${key}"]`);
+    const field = target?.querySelector<HTMLElement>('[contenteditable="true"]') ?? target;
+    field?.focus({ preventScroll: true });
+    field?.scrollIntoView({ block: 'nearest' });
+    setFocusTarget(null);
+  }, [focusTarget, readOnly]);
+  useEffect(() => {
+    if (!added) return;
+    const timer = setTimeout(() => setAdded(null), 1800);
+    return () => clearTimeout(timer);
+  }, [added]);
+  const addItem = (key: string, mutate: (draft: RenderedResume) => void) => {
+    setAdded(key); setFocusTarget({ key }); onChange(mutate);
+  };
+  const removeItem = (nextKey: string, mutate: (draft: RenderedResume) => void) => {
+    setAdded(null); setFocusTarget({ key: nextKey }); onChange(mutate);
+  };
+  const addExperienceBullet = (index: number, at: number) => {
+    const id = crypto.randomUUID();
+    addItem(id, draft => {
+      const role = draft.experiences[index]!;
+      role.lineageId ??= crypto.randomUUID();
+      role.achievements.splice(at, 0, { lineageId: id, experienceLineageId: role.lineageId, bullet: '' });
+    });
+  };
   const rewriting = onTailor ? null : rewritingOwn;
   const ask = (target: RewriteTarget, event: React.MouseEvent<HTMLElement>) => {
     if (!onTailor) { setRewriting(target); return; }
@@ -172,6 +266,25 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const projects = resume.projects ?? [];
   const certifications = resume.certifications ?? [];
   const customs = resume.customSections ?? [];
+
+  const textBullets = (bullets: string[], key: string, context: string,
+    update: (draft: RenderedResume, index: number, text: string) => void,
+    insert: (draft: RenderedResume, index: number) => void,
+    remove: (draft: RenderedResume, index: number) => void) => <>
+    {(bullets.some(text => text.trim()) || !readOnly) && <ul className="doc-bullets">
+      {bullets.map((text, index) => readOnly && !text.trim() ? null : (
+        <li key={index} data-edit-item="bullet" data-edit-key={`${key}:bullet:${index}`} data-added={added === `${key}:bullet:${index}` || undefined}>
+          <RichText value={text} bold={bold} readOnly={readOnly} placeholder="What you did, and what it changed."
+            onChange={value => onChange(draft => update(draft, index, value))} />
+          {!readOnly && <BulletControls text={text} context={context}
+            onAdd={() => addItem(`${key}:bullet:${index + 1}`, draft => insert(draft, index + 1))}
+            onRemove={() => removeItem(bullets.length > 1 ? `${key}:bullet:${Math.min(index, bullets.length - 2)}` : `add-bullet:${key}`, draft => remove(draft, index))} />}
+        </li>
+      ))}
+    </ul>}
+    {!readOnly && <DocumentControl action="add" label="Add bullet" className="pro-add-bullet" controlKey={`add-bullet:${key}`}
+      description={`Add a bullet to ${context}`} onClick={() => addItem(`${key}:bullet:${bullets.length}`, draft => insert(draft, bullets.length))} />}
+  </>;
 
   /** A contact line: the filled fields, joined by " | ", with "Open for relocation" after the location when ticked. */
   const contactLine = (keys: Array<'phone' | 'email' | 'location' | 'linkedin' | 'github' | 'website'>) => {
@@ -192,11 +305,11 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   };
 
   // Skills grouped by category, in the order the groups first appear.
-  const groups = new Map<string, string[]>();
-  for (const skill of resume.skills) {
-    if (!skill.name.trim()) continue;
+  const groups = new Map<string, number[]>();
+  for (const [index, skill] of resume.skills.entries()) {
+    if (readOnly && !skill.name.trim()) continue;
     const category = (skill.category ?? '').trim();
-    groups.set(category, [...(groups.get(category) ?? []), skill.name.trim()]);
+    groups.set(category, [...(groups.get(category) ?? []), index]);
   }
 
   const sections: Record<BuiltInSection, ReactNode> = {
@@ -222,16 +335,17 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     ) : null,
     experience: (
       <section className="doc-section" data-section="experience">
-        <h2>Professional Experience</h2>
+        <h2 tabIndex={-1} data-control-key="experience-heading">Professional Experience</h2>
         {resume.experiences.map((role, i) => (
-          <article className={`doc-role${markOf(role.lineageId)}`} key={role.lineageId ?? i}>
+          <article className={`doc-role pro-editable-role${markOf(role.lineageId)}`} key={role.lineageId ?? i} data-edit-item="role" data-edit-key={role.lineageId}>
             <div className="doc-roleline">
               <span className="doc-company">
                 <RichText line value={role.company} placeholder="Company" bold={null} readOnly={readOnly} onChange={(v) => onChange((d) => { d.experiences[i]!.company = v; })} />
               </span>
               <span className="doc-dates">{range(role.from, role.to, role.current)}</span>
               {!readOnly && (
-                <button className="doc-remove" title="Remove role" onClick={() => onChange((d) => { d.experiences.splice(i, 1); })}>×</button>
+                <DocumentControl action="remove" label="Remove experience" title="Remove role" description={`Remove experience: ${role.title} at ${role.company}`}
+                  onClick={() => removeItem(resume.experiences[i + 1]?.lineageId ?? resume.experiences[i - 1]?.lineageId ?? 'experience-heading', d => { d.experiences.splice(i, 1); })} />
               )}
             </div>
             <div className="doc-subline">
@@ -248,33 +362,27 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                     onChange={(v) => onChange((d) => { d.experiences[i]!.blurb = v; })} />
                 </li>
               )}
-              {(role.achievements ?? []).map((bullet, j) => (
-                <li key={bullet.lineageId ?? j} className={markOf(bullet.lineageId)}>
+              {(role.achievements ?? []).map((bullet, j) => readOnly && !bullet.bullet.trim() ? null : (
+                <li key={bullet.lineageId ?? j} className={markOf(bullet.lineageId)} data-edit-item="bullet" data-edit-key={bullet.lineageId} data-added={added === bullet.lineageId || undefined}>
                   {readOnly && changeFor.get(bullet.lineageId ?? '')?.kind === 'changed'
                     ? <DiffText before={String(changeFor.get(bullet.lineageId!)!.before?.bullet ?? '')} after={bullet.bullet} />
                     : <RichText value={bullet.bullet} bold={bold} readOnly={readOnly} placeholder="What you did, and what it changed."
                         onChange={(v) => onChange((d) => { d.experiences[i]!.achievements[j]!.bullet = v; })} />}
-                  {!readOnly && (
-                    <span className="doc-bulletmeta">
-                      <button className="ai" title={onTailor ? 'Tailor this bullet for the job' : 'Rewrite with AI'}
-                        onClick={(event) => ask({
+                  {!readOnly && <BulletControls text={bullet.bullet} context={`${role.title} at ${role.company}`}
+                    rewriteLabel={onTailor ? 'Tailor this bullet for the job' : 'Rewrite with AI'}
+                    onAdd={() => addExperienceBullet(i, j + 1)}
+                    onRemove={() => removeItem(role.achievements[j + 1]?.lineageId ?? role.achievements[j - 1]?.lineageId ?? `add-bullet:${role.lineageId ?? i}`, d => { d.experiences[i]!.achievements.splice(j, 1); })}
+                    onRewrite={(event) => ask({
                           text: bullet.bullet,
                           context: `${role.title} at ${role.company}`,
                           kind: 'bullet',
                           apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; },
-                        }, event)}>✦</button>
-                      {!onTailor && (
-                        <button className="doc-remove" title="Remove bullet"
-                          onClick={() => onChange((d) => { d.experiences[i]!.achievements.splice(j, 1); })}>×</button>
-                      )}
-                    </span>
-                  )}
+                        }, event)} />}
                 </li>
               ))}
             </ul>
-            <button className="doc-add" onClick={() => onChange((d) => {
-              d.experiences[i]!.achievements.push({ experienceLineageId: role.lineageId ?? crypto.randomUUID(), bullet: '' } as never);
-            })}>+ bullet</button>
+            {!readOnly && <DocumentControl action="add" label="Add bullet" className="pro-add-bullet" controlKey={`add-bullet:${role.lineageId ?? i}`}
+              description={`Add a bullet to ${role.title} at ${role.company}`} onClick={() => addExperienceBullet(i, role.achievements.length)} />}
           </article>
         ))}
       </section>
@@ -283,7 +391,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
       <section className="doc-section" data-section="projects">
         <h2>Projects</h2>
         {projects.map((project, i) => (
-          <article className={`doc-role${markOf(project.lineageId)}`} key={project.lineageId ?? i}>
+          <article className={`doc-role pro-editable-role${markOf(project.lineageId)}`} key={project.lineageId ?? i}>
             <div className="doc-roleline">
               <span className="doc-company"><b>{project.name || 'Project'}</b></span>
               <span className="doc-dates">{range(project.from, project.to, project.current)}</span>
@@ -293,45 +401,91 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                 <span className="doc-title">{[project.role, project.link].filter(Boolean).join(' | ')}</span>
               </div>
             )}
-            {project.bullets.some((b) => b.trim()) && (
-              <ul className="doc-bullets">
-                {project.bullets.filter((b) => b.trim()).map((b, j) => <li key={j}><span className="pro-text">{rich(b, bold)}</span></li>)}
-              </ul>
-            )}
+            {textBullets(project.bullets, `project:${project.lineageId ?? i}`, project.name || 'this project',
+              (d, j, value) => { d.projects![i]!.bullets[j] = value; },
+              (d, j) => { d.projects![i]!.bullets.splice(j, 0, ''); },
+              (d, j) => { d.projects![i]!.bullets.splice(j, 1); })}
           </article>
         ))}
       </section>
     ),
-    skills: groups.size > 0 && (
-      <section className="doc-section" data-section="skills">
+    skills: (groups.size > 0 || !readOnly) && (
+      <section className="doc-section pro-section" data-section="skills">
         <h2>Skills</h2>
         <ul className="doc-bullets">
-          {[...groups].map(([category, names]) => (
-            <li key={category || 'skills'}>
-              <span className="pro-text">{category && <b>{category}: </b>}{names.join(names.some((n) => n.includes(',')) ? ' | ' : ', ')}</span>
-            </li>
-          ))}
+          {[...groups].map(([category, indices]) => {
+            const separator = indices.some((index) => resume.skills[index]!.name.includes(',')) ? ' | ' : ', ';
+            return (
+              <li key={category} data-edit-item="skill-group">
+                <span className="pro-text">
+                  {category && <b>
+                    <RichText line value={category} placeholder="Skill category" bold={null} readOnly={readOnly}
+                      onChange={(value) => onChange((d) => { for (const index of indices) d.skills[index]!.category = value.trim(); })} />
+                    {': '}
+                  </b>}
+                  {indices.map((index, position) => {
+                    const skill = resume.skills[index]!;
+                    return (
+                      <Fragment key={skill.lineageId ?? index}>
+                        {position > 0 && separator}
+                        <span className="pro-skill" data-edit-item="skill" data-edit-key={skill.lineageId} data-added={added === skill.lineageId || undefined}>
+                          <RichText line value={skill.name.trim()} placeholder="Skill" bold={null} readOnly={readOnly}
+                            onChange={(value) => onChange((d) => { d.skills[index]!.name = value.trim(); })} />
+                          {!readOnly && <DocumentControl action="remove" label="Remove skill" title={`Remove ${skill.name || 'skill'}`} description={`Remove skill: ${skill.name || 'empty skill'}`}
+                            onClick={() => removeItem(resume.skills[index + 1]?.lineageId ?? resume.skills[index - 1]?.lineageId ?? 'add-skill', d => { d.skills.splice(index, 1); })} />}
+                        </span>
+                      </Fragment>
+                    );
+                  })}
+                </span>
+                {!readOnly && <span className="doc-bulletmeta">
+                  <DocumentControl action="add" label="Add skill" className="inline" description={`Add a skill to ${category || 'uncategorised skills'}`} onClick={() => {
+                    const id = crypto.randomUUID(); addItem(id, d => { d.skills.push({ lineageId: id, name: '', category }); });
+                  }} />
+                </span>}
+              </li>
+            );
+          })}
         </ul>
+        {!readOnly && <DocumentControl action="add" label="Add skill" controlKey="add-skill" onClick={() => {
+          const id = crypto.randomUUID(); addItem(id, d => { d.skills.push({ lineageId: id, name: '', category: '' }); });
+        }} />}
       </section>
     ),
-    education: resume.educations.length > 0 && (
-      <section className="doc-section" data-section="education">
+    education: (resume.educations.length > 0 || !readOnly) && (
+      <section className="doc-section pro-section" data-section="education">
         <h2>Education</h2>
         {resume.educations.map((row, i) => (
-          <article className={`doc-role doc-education${markOf(row.lineageId)}`} key={row.lineageId ?? i}>
+          <article className={`doc-role doc-education${markOf(row.lineageId)}`} key={row.lineageId ?? i} data-edit-item="education" data-edit-key={row.lineageId} data-added={added === row.lineageId || undefined}>
             <div className="doc-roleline">
               <span className="doc-company">
                 <RichText line value={row.institution} placeholder="Institution" bold={null} readOnly={readOnly} onChange={(v) => onChange((d) => { d.educations[i]!.institution = v; })} />
               </span>
-              <span className="doc-dates">{[row.from, row.to].map((v) => monthYear(v)).filter(Boolean).join(' - ')}</span>
+              <span className="doc-dates">
+                {(row.from || !readOnly) && <RichText line value={monthYear(row.from)} placeholder="Education start date" bold={null} readOnly={readOnly}
+                  onChange={(value) => onChange((d) => { d.educations[i]!.from = dateForSave(value); })} />}
+                {((row.from && row.to) || !readOnly) && ' - '}
+                {(row.to || !readOnly) && <RichText line value={monthYear(row.to)} placeholder="Education end date" bold={null} readOnly={readOnly}
+                  onChange={(value) => onChange((d) => { d.educations[i]!.to = dateForSave(value); })} />}
+              </span>
+              {!readOnly && <DocumentControl action="remove" label="Remove education" description={`Remove education: ${row.institution || 'empty education'}`}
+                onClick={() => removeItem(resume.educations[i + 1]?.lineageId ?? resume.educations[i - 1]?.lineageId ?? 'add-education', d => { d.educations.splice(i, 1); })} />}
             </div>
-            {[row.degree, row.field].some((v) => v?.trim()) && (
+            {([row.degree, row.field].some((v) => v?.trim()) || !readOnly) && (
               <div className="doc-subline">
-                <span className="doc-title">{[row.degree, row.field].map((v) => v?.trim()).filter(Boolean).join(', ')}</span>
+                <span className="doc-title">
+                  <EducationDegree value={row.degree ?? ''} hasField={Boolean(row.field?.trim())} readOnly={readOnly}
+                    onChange={(value) => onChange((d) => { d.educations[i]!.degree = value; })} />
+                  {(row.field?.trim() || !readOnly) && <RichText line value={row.field ?? ''} placeholder="Field of study" bold={null} readOnly={readOnly}
+                    onChange={(value) => onChange((d) => { d.educations[i]!.field = value; })} />}
+                </span>
               </div>
             )}
           </article>
         ))}
+        {!readOnly && <DocumentControl action="add" label="Add education" controlKey="add-education" onClick={() => {
+          const id = crypto.randomUUID(); addItem(id, d => { d.educations.push({ lineageId: id, institution: '', degree: '', field: '', from: '', to: '' }); });
+        }} />}
       </section>
     ),
     certifications: certifications.length > 0 && (
@@ -354,13 +508,15 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
 
   const custom = (lineageId: string) => {
     const item = customs.find((entry) => entry.lineageId === lineageId);
-    const bullets = item?.bullets.filter((b) => b.trim()) ?? [];
-    if (!item || (!item.text?.trim() && !bullets.length)) return null;
+    if (!item || (readOnly && !item.text?.trim() && !item.bullets.some(text => text.trim()))) return null;
     return (
-      <section className={`doc-section${markOf(item.lineageId)}`} data-section={`custom:${lineageId}`}>
+      <section className={`doc-section pro-editable-role${markOf(item.lineageId)}`} data-section={`custom:${lineageId}`}>
         <h2>{item.title || 'Section'}</h2>
         {item.text?.trim() && <p className="doc-paragraph pro-justify">{rich(item.text, bold)}</p>}
-        {bullets.length > 0 && <ul className="doc-bullets">{bullets.map((b, j) => <li key={j}><span className="pro-text">{rich(b, bold)}</span></li>)}</ul>}
+        {textBullets(item.bullets, `custom:${lineageId}`, item.title || 'this section',
+          (d, j, value) => { d.customSections!.find(row => row.lineageId === lineageId)!.bullets[j] = value; },
+          (d, j) => { d.customSections!.find(row => row.lineageId === lineageId)!.bullets.splice(j, 0, ''); },
+          (d, j) => { d.customSections!.find(row => row.lineageId === lineageId)!.bullets.splice(j, 1); })}
       </section>
     );
   };
@@ -368,7 +524,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const name = [contact.firstName, contact.lastName];
 
   return (
-    <div className={`page tpl-professional${readOnly ? ' read-only' : ''}`} style={themeVars(theme)}>
+    <div ref={root} className={`page tpl-professional${readOnly ? ' read-only' : ''}`} style={themeVars(theme)}>
       <header className="doc-head" data-section="header">
         <h1>
           <RichText line value={name[0] ?? ''} placeholder="First" bold={null} readOnly={readOnly} onChange={setContact('firstName')} />

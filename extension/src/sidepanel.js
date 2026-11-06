@@ -1,8 +1,8 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
-import { captureTab, jobUrl, lookupJob, postingDatesFor, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, unsendableReason, APP_URL } from './jobs.js';
+import { captureTab, getSavedJob, lookupJob, postingDatesFor, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, updateSavedJob, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
 import { observeTextPreviews, previewCvName } from './text-display.js';
-import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, forgetResumes, pdfFor, pdfUrl, ResumeGoneError } from './resumes.js';
+import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl, ResumeGoneError } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { matchAnswers } from './answers.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
@@ -135,6 +135,7 @@ addEventListener('unhandledrejection', event => { if (isStaleError(event.reason)
 // Clicks are the main way a cut-off panel calls Chrome; catch them before any handler runs.
 document.addEventListener('click', event => { if (!alive() && !event.target.closest('#close-panel')) { event.stopImmediatePropagation(); event.preventDefault(); showStale(); } }, true);
 let profile = {}, scan = null, currentTab = null, filling = false, refreshId = 0;
+let panelView = 'autofill';
 let copyValues = [];
 let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, pageDisconnected = false;
 let match = null, matchUrl = null, matchKeywords = null, matchRun = 0, improving = false;
@@ -228,17 +229,16 @@ document.addEventListener('toggle', event => {
 // ─── The job card ────────────────────────────────────────────────────────
 // The posting with its company's logo (src/logo.js finds it on the page; the
 // company site's icon from Google's favicon service when the page has none).
-// Below it, as in Simplify: "Add this job to the app", which shows "Adding…"
-// while it saves, then a banner: added, already saved, already applied (each
-// with View in app), or could not add (Try again). Nothing is saved unless
-// the person presses the button.
-let savedJob = { url: null, job: null, checkedAt: 0 }, jobBusy = false, jobAdded = false, jobProblem = '';
+// Its frame and trailing icon show whether it is saved. Clicking opens the
+// details form; only submitting that form creates or updates the job.
+let savedJob = { url: null, job: null, checkedAt: 0 }, jobBusy = false, jobProblem = '';
 // What the last Autofill used on a page: { url, resumeId, answers }. Recorded on the job when it is saved.
 let lastApplication = null;
 // "Save job" form, as in Simplify: filled from the page, checked by the person, then saved.
 // { title, company, location, salaryMin, salaryMax, salaryCurrency, salaryPeriod,
 //   employmentType, description, notes, status, url, open: { description, notes }, error }
-let jobForm = null, jobPayload = {}, jobFormLoading = false;
+let jobForm = null, jobPayload = {}, jobFormLoading = false, jobFormDirty = false, jobLoadProblem = '';
+const JOB_STATUSES = [['saved', 'Saved'], ['dismissed', 'Dismissed'], ['applied', 'Applied'], ['screening', 'Screening'], ['interview', 'Interview'], ['offer', 'Offer'], ['accepted', 'Accepted'], ['rejected', 'Rejected'], ['declined', 'Declined']];
 const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary'];
 const PAY_PERIODS = [['year', 'Yearly'], ['month', 'Monthly'], ['week', 'Weekly'], ['day', 'Daily'], ['hour', 'Hourly']];
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'PLN', 'UAH', 'CHF', 'SEK', 'NOK', 'DKK', 'CZK', 'AUD', 'NZD', 'INR', 'JPY', 'SGD', 'ILS'];
@@ -285,24 +285,14 @@ async function checkSaved(url) {
     });
   }
   if (!url || (savedJob.url === url && Date.now() - savedJob.checkedAt < 60_000)) return;
-  if (savedJob.url !== url) { savedJob = { url, job: null, checkedAt: 0 }; jobAdded = false; jobProblem = ''; jobForm = null; }
+  if (savedJob.url !== url) {
+    savedJob = { url, job: null, checkedAt: 0 }; jobProblem = ''; jobForm = null; jobFormDirty = false; jobLoadProblem = '';
+    if (panelView === 'job') selectTab('autofill');
+  }
   savedJob.checkedAt = Date.now();
   try { const job = await lookupJob(url); if (savedJob.url === url) savedJob.job = job; }
   catch { /* signed out or offline: the button offers saving, which explains */ }
   if (!filling) renderAutofill();
-}
-function jobBanner() {
-  const saved = savedJob.url === currentTab?.url ? savedJob.job : null;
-  const view = '<button class="link-button" id="job-view">View in app</button>';
-  if (jobBusy) return '';
-  if (jobAdded && saved) return `<div class="job-banner is-added" role="status"><span>${icon('check', 16)}Added to your jobs!</span>${view}</div>`;
-  if (saved && (APPLIED.has(saved.status) || saved.appliedAt)) {
-    const date = saved.appliedAt ? new Date(saved.appliedAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-    return `<div class="job-banner is-applied" role="status"><span><strong>You've already applied to this job</strong>${date ? `<small>Applied on ${esc(date)}</small>` : ''}</span>${view}</div>`;
-  }
-  if (saved) return `<div class="job-banner is-saved" role="status"><span>This job is already in your jobs</span>${view}</div>`;
-  if (jobProblem) return `<div class="job-banner is-error" role="alert"><span><strong>Couldn't add this job</strong><small>${esc(jobProblem)}</small></span><button class="link-button" id="job-retry">Try again</button></div>`;
-  return '';
 }
 function jobFormHtml() {
   const form = jobForm;
@@ -311,39 +301,56 @@ function jobFormHtml() {
   const currency = form.salaryCurrency || 'USD';
   const currencies = [...new Set([currency, ...CURRENCIES])].map(code => [code, code]);
   const toggle = (part, label, has) => `<button type="button" class="job-form-toggle" data-job-toggle="${part}" aria-expanded="${form.open[part]}">${label} <span>— ${form.open[part] ? 'Click to collapse' : has ? 'Click to edit' : 'Click to add'}</span></button>`;
-  return `<form class="card job-form" id="job-form" novalidate>
-    <div class="job-form-head"><strong>Save job</strong><p>Save this job in your app. The details come from the page: check them and change anything that is wrong.</p></div>
+  return `<form class="job-form" id="job-form" aria-labelledby="job-form-heading" novalidate>
+    <div class="job-form-head"><p>${form.id ? 'Review and update your saved job details.' : 'Review the details from this page before saving.'}</p></div>
+    <fieldset class="job-form-fields" ${jobBusy ? 'disabled' : ''}>
     ${field('company', 'Company', form.company, 'placeholder="Company" autocomplete="off"')}
     ${field('title', 'Position Title', form.title, 'placeholder="Title" autocomplete="off"')}
     ${field('location', 'Location', form.location, 'placeholder="Location" autocomplete="off"')}
     <div class="job-form-row">${field('salaryMin', `Min. Salary (${esc(currency)})`, form.salaryMin, 'type="number" min="0" inputmode="numeric" placeholder="Min. Salary"')}${field('salaryMax', `Max. Salary (${esc(currency)})`, form.salaryMax, 'type="number" min="0" inputmode="numeric" placeholder="Max. Salary"')}</div>
     <div class="job-form-row">${select('salaryCurrency', 'Currency', currencies, currency)}${select('salaryPeriod', 'Period', PAY_PERIODS, form.salaryPeriod || 'year')}</div>
-    ${select('employmentType', 'Job Type', JOB_TYPES.map(type => [type, type]), form.employmentType, 'Choose a type')}
-    <div class="job-form-part">${toggle('description', 'Job Description', form.description)}${!form.open.description && form.description ? '<small>Auto-detected description available.</small>' : ''}${form.open.description ? `<textarea name="description" rows="8" placeholder="ex. This role requires a strong understanding of React and Node.js.">${esc(form.description)}</textarea>` : ''}</div>
+    ${select('employmentType', 'Job Type', [...new Set([...JOB_TYPES, form.employmentType].filter(Boolean))].map(type => [type, type]), form.employmentType, 'Choose a type')}
+    <div class="job-form-part">${toggle('description', 'Job Description', form.description)}${!form.open.description && form.description ? `<small>${form.id ? 'Saved description available.' : 'Auto-detected description available.'}</small>` : ''}${form.open.description ? `<textarea name="description" rows="8" placeholder="ex. This role requires a strong understanding of React and Node.js.">${esc(form.description)}</textarea>` : ''}</div>
     <div class="job-form-part">${toggle('notes', 'Notes', form.notes)}${!form.open.notes && form.notes ? '<small>Notes added.</small>' : ''}${form.open.notes ? `<textarea name="notes" rows="4" placeholder="Notes">${esc(form.notes)}</textarea>` : ''}</div>
-    ${select('status', 'Application Status', [['saved', 'Saved'], ['applied', 'Applied']], form.status)}
+    ${select('status', 'Application Status', form.id ? JOB_STATUSES : [['saved', 'Saved'], ['applied', 'Applied']], form.status)}
     ${field('url', 'Job Posting URL', form.url, 'type="url" placeholder="URL"')}
     ${form.error ? `<p class="status error" role="alert">${esc(form.error)}</p>` : ''}
-    <div class="job-form-actions"><button type="button" class="ghost small" id="job-form-cancel">Cancel</button><button type="submit" class="primary small" id="job-form-save">Save Job</button></div>
+    ${jobProblem && !jobBusy ? `<div class="job-banner is-error" role="alert"><span><strong>${form.id ? "Couldn't save changes" : "Couldn't add this job"}</strong><small>${esc(jobProblem)}</small></span><button type="button" class="link-button" id="job-retry">Try again</button></div>` : ''}
+    <div class="job-form-actions"><button type="button" class="ghost small" id="job-form-cancel">Cancel</button><button type="submit" class="primary small" id="job-form-save">${jobBusy ? 'Saving…' : form.id ? 'Save changes' : 'Save Job'}</button></div>
+    </fieldset>
   </form>`;
+}
+function renderJobForm() {
+  if (!jobForm && !jobFormLoading && !jobLoadProblem) { $('panel-job').innerHTML = ''; return; }
+  const editing = jobForm?.id || (!jobForm && savedJob.url === currentTab?.url && savedJob.job);
+  $('panel-job').innerHTML = `<div class="job-page-head"><button type="button" class="job-back" id="job-form-back" ${jobBusy ? 'disabled' : ''}>${icon('back', 18)}Back</button><h2 id="job-form-heading">${editing ? 'Edit job' : 'Save job'}</h2></div>${jobForm ? jobFormHtml() : jobLoadProblem ? `<div class="job-banner is-error" role="alert"><span><strong>Couldn't load this job</strong><small>${esc(jobLoadProblem)}</small></span><button type="button" class="link-button" id="job-form-reload">Try again</button></div>` : '<p class="status" role="status">Loading job details…</p>'}`;
+}
+function leaveJobForm(discard = false) {
+  if (jobBusy) return;
+  if (discard) { jobForm = null; jobProblem = ''; jobFormDirty = false; jobLoadProblem = ''; renderJobForm(); }
+  selectTab('autofill');
+  $('job-card')?.focus();
 }
 function pageCard() {
   if (!scan) return '';
-  const title = scan.context?.title || 'Application form';
-  const company = scan.context?.company || scan.host;
+  const saved = savedJob.url === currentTab?.url && savedJob.job;
+  const title = saved?.title || scan.context?.title || 'Application form';
+  const company = saved?.company || scan.context?.company || scan.host;
   const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
   const logo = jobLogo();
-  const saved = savedJob.url === currentTab?.url && savedJob.job;
   // The job board's own date first (as Simplify), else the page's, else the saved job's.
   const posted = postingDate((boardDates.url === currentTab?.url && boardDates.posted) || scan.context?.postedAt || (saved ? saved.postedAt : null));
-  const form = jobForm && !saved && !jobBusy ? jobFormHtml() : '';
-  const button = jobBusy ? '<div class="job-adding" aria-live="polite">Adding to your jobs…</div>'
-    : jobFormLoading ? '<div class="job-adding" aria-live="polite">Reading the job…</div>'
-      : saved || jobProblem || jobForm ? '' : `<button class="job-add" id="job-save">${icon('briefcase', 17)}Add this job to the app</button>`;
-  return `<section class="job-context" aria-label="Current job"><div class="page-card" id="job-card">
+  const busy = jobBusy || jobFormLoading;
+  const applied = saved && (APPLIED.has(saved.status) || saved.appliedAt);
+  const date = saved?.appliedAt ? new Date(saved.appliedAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const status = busy ? (jobBusy ? 'Saving job…' : 'Loading job details…')
+    : saved ? `${applied ? 'Applied to this job.' : 'Added to your jobs.'}${applied && date ? ` Applied on ${date}.` : ''} Edit job details`
+      : 'Add this job';
+  return `<section class="job-context" aria-label="Current job"><button type="button" class="page-card ${saved ? 'is-saved' : 'job-add'}" id="job-card" data-job-action="${saved ? 'edit' : 'add'}" aria-label="${esc(`${title} at ${company}. ${status}`)}" title="${esc(status)}" ${busy ? 'disabled aria-busy="true"' : ''}>
     <span class="company-avatar" data-initials="${esc(initials)}">${logo ? `<img src="${esc(logo)}" alt="" referrerpolicy="no-referrer">` : esc(initials)}</span>
     <span class="page-card-body"><span class="page-card-title">${esc(title)}</span><span class="page-card-meta"><span class="page-card-company" title="${esc(company)}">${esc(company)}</span>${posted ? `<span class="posted-date"><span aria-hidden="true">·</span> <time datetime="${posted.day}">Posted on ${posted.label}</time></span>` : ''}</span></span>
-  </div><div class="job-context-actions">${jobBanner()}${button}</div></section>${form}`;
+    <span class="job-card-action">${icon(busy ? 'refresh' : saved ? 'check' : 'plus', 22)}</span>
+  </button></section>`;
 }
 function postingDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value)) return null;
@@ -352,79 +359,99 @@ function postingDate(value) {
   // Simplify's wording: "Posted on 10/30/2026" (the day the board gives, not shifted to another time zone).
   return { day, label: `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}` };
 }
-/** "Add this job to the app": opens the "Save job" form, filled from the page. Nothing is saved yet. */
-async function onAddJob() {
+/** One form for adding a page's job or editing its backend record. Opening only reads. */
+async function openJobForm() {
   if (jobFormLoading || jobBusy) return;
+  selectTab('job');
+  if (jobForm && (!jobForm.id || jobFormDirty)) { renderJobForm(); document.querySelector('#job-form input')?.focus(); return; }
   const tab = currentTab;
-  jobFormLoading = true; jobProblem = ''; renderAutofill();
-  const found = (await askPage({ type: 'job-details' }, tab).catch(() => null)) ?? {};
-  jobFormLoading = false;
-  if (tab !== currentTab) { renderAutofill(); return; }
-  jobForm = {
-    title: found.title && found.title !== 'Application form' ? found.title : jobTitleOnPage(),
-    company: found.company || scan?.context?.company || '',
-    location: found.location || '',
-    salaryMin: found.salaryMin ?? '', salaryMax: found.salaryMax ?? '',
-    salaryCurrency: found.salaryCurrency || currencyFor(found.country) || currencyFor(profile.country) || 'USD',
-    salaryPeriod: found.salaryPeriod || 'year',
-    employmentType: found.employmentType || '',
-    description: found.description || '',
-    notes: '',
-    status: 'saved',
-    url: found.url || tab?.url || '',
-    open: { description: false, notes: false },
-    error: '',
-  };
-  renderAutofill();
+  const editing = savedJob.url === tab?.url ? savedJob.job : null;
+  jobForm = null; jobFormLoading = true; jobProblem = ''; jobLoadProblem = ''; renderJobForm(); renderAutofill();
+  $('job-form-back').focus();
+  try {
+    const found = editing ? await getSavedJob(editing.id) : (await askPage({ type: 'job-details' }, tab).catch(() => null)) ?? {};
+    if (tab?.id !== currentTab?.id || tab?.url !== currentTab?.url) return;
+    if (editing) savedJob = { url: tab.url, job: found, checkedAt: Date.now() };
+    jobForm = {
+      id: editing ? found.id : null,
+      title: editing ? found.title ?? '' : found.title && found.title !== 'Application form' ? found.title : jobTitleOnPage(),
+      company: editing ? found.company ?? '' : found.company || scan?.context?.company || '',
+      location: found.location || '',
+      salaryMin: found.salaryMin ?? '', salaryMax: found.salaryMax ?? '',
+      salaryCurrency: found.salaryCurrency || currencyFor(found.country) || currencyFor(profile.country) || 'USD',
+      salaryPeriod: found.salaryPeriod || 'year',
+      employmentType: found.employmentType || '',
+      description: found.description || '',
+      notes: editing ? found.notes ?? '' : '',
+      status: editing ? found.status : 'saved',
+      url: editing ? found.url ?? '' : found.url || tab?.url || '',
+      salaryEdited: false, statusEdited: false, fieldsEdited: new Set(),
+      open: { description: false, notes: false },
+      error: '',
+    };
+    jobFormDirty = false;
+  } catch (error) {
+    if (tab?.id !== currentTab?.id || tab?.url !== currentTab?.url) return;
+    jobLoadProblem = error.message;
+    if (error.status === 404) savedJob = { url: tab.url, job: null, checkedAt: Date.now() };
+  } finally { jobFormLoading = false; renderJobForm(); renderAutofill(); }
+  if (!jobForm) return;
   const first = ['company', 'title', 'location'].find(name => !jobForm[name]) ?? 'company';
-  document.querySelector(`#job-form [name="${first}"]`)?.focus();
+  if (panelView === 'job') document.querySelector(`#job-form [name="${first}"]`)?.focus();
 }
 /** The form's values for the app, or a message about what is missing (Simplify's wording). */
 function jobFormDetails(form) {
   const text = value => String(value ?? '').trim();
   const number = value => (text(value) === '' || !Number.isFinite(Number(value)) ? null : Math.round(Number(value)));
-  if (!text(form.company)) return { error: 'Please enter a company.' };
-  if (!text(form.title)) return { error: 'Please enter a position title.' };
-  if (!text(form.location)) return { error: 'Please enter a location.' };
+  if (!form.id && !text(form.company)) return { error: 'Please enter a company.' };
+  if (!form.id && !text(form.title)) return { error: 'Please enter a position title.' };
+  if (!form.id && !text(form.location)) return { error: 'Please enter a location.' };
   if (text(form.url) && !/^https?:\/\//i.test(text(form.url))) return { error: 'Please enter the job link as a web address (https://…).' };
   const salaryMin = number(form.salaryMin), salaryMax = number(form.salaryMax);
-  return {
-    details: {
-      title: text(form.title), company: text(form.company), location: text(form.location),
+  const details = {
+    title: text(form.title), company: text(form.company), location: text(form.location),
+    ...(!form.id || form.salaryEdited ? {
       salaryMin, salaryMax,
       salaryCurrency: salaryMin !== null || salaryMax !== null ? text(form.salaryCurrency) || null : null,
       salaryPeriod: salaryMin !== null || salaryMax !== null ? form.salaryPeriod || 'year' : null,
-      employmentType: text(form.employmentType) || null,
-      description: text(form.description) || null,
-      notes: text(form.notes) || null,
-      status: form.status === 'applied' ? 'applied' : 'saved',
-      ...(text(form.url) && { url: text(form.url) }),
-    },
+    } : {}),
+    employmentType: text(form.employmentType) || null,
+    description: text(form.description) || null,
+    notes: text(form.notes) || null,
+    ...(!form.id || form.statusEdited ? { status: (form.id ? JOB_STATUSES.map(([value]) => value) : ['saved', 'applied']).includes(form.status) ? form.status : 'saved' } : {}),
+    ...(form.id ? { url: text(form.url) || null } : text(form.url) && { url: text(form.url) }),
   };
+  return { details: form.id
+    ? Object.fromEntries(Object.entries(details).filter(([key]) => form.fieldsEdited.has(key) || (key.startsWith('salary') && form.salaryEdited)))
+    : details };
 }
 /**
  * Saves the posting with its logo. Only from the form ("Save Job") or Try
  * again. `payload` is { details } from the form; the app keeps those values.
  */
 function saveJob(payload = {}) {
-  jobPayload = payload;
+  const editId = payload.jobId ?? jobForm?.id;
+  jobPayload = { ...payload, ...(editId && { jobId: editId }) };
   const tab = currentTab;
   if (jobBusy || !tab?.id) return;
-  const reason = unsendableReason(tab);
-  if (reason) { jobProblem = reason; renderAutofill(); return; }
-  const access = requestSiteAccess(tab); // Must start in the click's user gesture.
-  jobBusy = true; jobProblem = ''; renderAutofill();
+  const reason = editId ? null : unsendableReason(tab);
+  if (reason) { jobProblem = reason; renderJobForm(); return; }
+  const access = editId ? Promise.resolve(true) : requestSiteAccess(tab); // A new capture starts in the click's user gesture.
+  jobBusy = true; jobProblem = ''; renderJobForm(); renderAutofill();
   void (async () => {
     try {
       if (!await access) { jobProblem = 'Access to this site was not allowed.'; return; }
       const logo = jobLogo();
-      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...payload });
-      savedJob = { url: tab.url, job, checkedAt: Date.now() }; jobAdded = true; jobForm = null;
-      await recordOnSavedJob(tab.url, await answersOnPage(tab));
+      const job = editId ? await updateSavedJob(editId, payload.details)
+        : (await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...payload })).job;
+      if (tab?.id !== currentTab?.id || tab?.url !== currentTab?.url) return;
+      savedJob = { url: tab.url, job, checkedAt: Date.now() }; jobForm = null; jobFormDirty = false;
+      if (!editId) await recordOnSavedJob(tab.url, await answersOnPage(tab));
+      if (panelView === 'job') selectTab('autofill');
     } catch (error) {
       if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
       jobProblem = /Cannot access|cannot be scripted|Frame with ID/i.test(error.message) ? 'Chrome does not let extensions read this page.' : error.message;
-    } finally { jobBusy = false; renderAutofill(); }
+    } finally { jobBusy = false; renderJobForm(); renderAutofill(); if (panelView === 'autofill') $('job-card')?.focus(); }
   })();
 }
 // Saved from the right-click menu while the panel is open: show it as saved.
@@ -439,23 +466,29 @@ for (const type of ['input', 'change']) document.addEventListener(type, event =>
   const input = event.target.closest('#job-form [name]');
   if (!input || !jobForm) return;
   jobForm[input.name] = input.value;
-  if (input.name === 'salaryCurrency' && type === 'change') renderAutofill(); // The salary labels show the currency.
+  jobFormDirty = true;
+  jobForm.fieldsEdited.add(input.name);
+  if (input.name.startsWith('salary')) jobForm.salaryEdited = true;
+  if (input.name === 'status') jobForm.statusEdited = true;
+  if (input.name === 'salaryCurrency' && type === 'change') renderJobForm(); // The salary labels show the currency.
 });
 document.addEventListener('submit', event => {
-  if (!event.target.closest('#job-form') || !jobForm) return;
+  if (!event.target.closest('#job-form')) return;
   event.preventDefault();
+  if (!jobForm || jobBusy) return;
   const { details, error } = jobFormDetails(jobForm);
   jobForm.error = error ?? '';
-  if (error) { renderAutofill(); document.querySelector(`#job-form [name="${/company/.test(error) ? 'company' : /title/.test(error) ? 'title' : /location/.test(error) ? 'location' : 'url'}"]`)?.focus(); return; }
+  if (error) { renderJobForm(); document.querySelector(`#job-form [name="${/company/.test(error) ? 'company' : /title/.test(error) ? 'title' : /location/.test(error) ? 'location' : 'url'}"]`)?.focus(); return; }
   saveJob({ details });
 });
 document.addEventListener('click', event => {
   const toggle = event.target.closest('[data-job-toggle]');
-  if (toggle && jobForm) { jobForm.open[toggle.dataset.jobToggle] = !jobForm.open[toggle.dataset.jobToggle]; renderAutofill(); document.querySelector(`#job-form [name="${toggle.dataset.jobToggle}"]`)?.focus(); return; }
-  if (event.target.closest('#job-form-cancel')) { jobForm = null; renderAutofill(); return; }
-  if (event.target.closest('#job-retry')) { saveJob(jobPayload); return; }
-  if (event.target.closest('#job-save')) void onAddJob();
-  else if (event.target.closest('#job-view') && savedJob.job) void chrome.tabs.create({ url: jobUrl(savedJob.job.id) });
+  if (toggle && jobForm) { jobForm.open[toggle.dataset.jobToggle] = !jobForm.open[toggle.dataset.jobToggle]; renderJobForm(); document.querySelector(`#job-form [name="${toggle.dataset.jobToggle}"]`)?.focus(); return; }
+  if (event.target.closest('#job-form-back')) { leaveJobForm(); return; }
+  if (event.target.closest('#job-form-cancel')) { leaveJobForm(true); return; }
+  if (event.target.closest('#job-form-reload')) { void openJobForm(); return; }
+  if (event.target.closest('#job-retry')) { const form = $('job-form'); if (form) form.requestSubmit(); else saveJob(jobPayload); return; }
+  if (event.target.closest('[data-job-action]')) void openJobForm();
 });
 // A logo that fails to load gives way to the company's initials.
 document.addEventListener('error', event => {
@@ -501,7 +534,7 @@ async function runFill() {
     // Autofill uploads the CV chosen at the moment of the click, as a PDF of its
     // latest saved version. A missing PDF does not stop the other fields.
     let file = null, cvProblem = '';
-    if (resumes.chosen && groupOn('resume') && scan?.fields.some(field => field.key === 'resume')) {
+    if (groupOn('resume') && scan?.fields.some(field => field.key === 'resume')) {
       try {
         // The app's list at the moment of the click: never an old copy, so a deleted CV is never uploaded.
         resumes = await fetchResumes(); rerenderResumes();
@@ -509,6 +542,7 @@ async function runFill() {
         status('fill-status', 'Getting your CV…');
         file = await pdfFor(resumes.chosen);
       } catch (error) {
+        resumes = await cachedResumes(); rerenderResumes();
         cvProblem = `CV not attached: ${error.message}`;
         if (error instanceof ResumeGoneError) void loadResumes();
       }
@@ -631,10 +665,11 @@ function activeCareer() {
 function careerAutofill() { return activeCareer()?.fields ?? {}; }
 
 async function loadCareer() {
+  const resumeId = resumes.chosen?.id;
   careerLoading = true; careerProblem = ''; renderProfileOverview();
   try {
-    const [profileView, resumeView] = await Promise.all([fetchProfileCareer(), resumes.chosen ? fetchResumeCareer(resumes.chosen.id) : Promise.resolve(null)]);
-    career = { profile: profileView, resumes: { ...career.resumes, ...(resumeView && { [resumes.chosen.id]: resumeView }) } };
+    const [profileView, resumeView] = await Promise.all([fetchProfileCareer(), resumeId ? fetchResumeCareer(resumeId) : Promise.resolve(null)]);
+    career = { profile: profileView, resumes: { ...career.resumes, ...(resumeView && resumeId && resumes.chosen?.id === resumeId && { [resumeId]: resumeView }) } };
   } catch (error) { careerProblem = error instanceof NotSignedInError ? 'Sign in to see your Profile from the app.' : error.message; }
   finally { careerLoading = false; renderProfileOverview(); renderAutofill(); }
 }
@@ -847,7 +882,7 @@ function renderResume() {
   $('refresh-cvs').disabled = loadingResumes;
 }
 function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); if (cvMenu.open) placeCvMenu(); }
-/** Fetches the CV list from the app. The cached list stays on screen meanwhile. */
+/** Fetches the backend's current collection, including an empty collection. */
 let reloadQueued = false, resumesLoadedAt = 0;
 async function loadResumes() {
   // A change announced while a load runs is fetched right after it.
@@ -862,10 +897,10 @@ async function loadResumes() {
     resumeProblem = error instanceof NotSignedInError ? 'signed-out' : error.message;
     // Without the server's answer there is no list: an old copy could hold deleted CVs.
     resumes = { items: [], chosen: null };
-    await forgetResumes().catch(() => {});
   }
   finally {
     loadingResumes = false; rerenderResumes();
+    void updateMatch();
     if (reloadQueued) { reloadQueued = false; void loadResumes(); }
   }
 }
@@ -891,6 +926,17 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && Date.now() - resumesLoadedAt > 15000) void reloadResumes(false);
 });
+// The page keeps the iframe alive while the panel is collapsed. Reopening it
+// must read the backend again, even when no app-change message arrived.
+let panelVisible = true;
+window.addEventListener('message', event => {
+  if (event.source !== window.parent || event.data?.type !== 'adcv-panel-visible') return;
+  panelVisible = event.data.visible === true;
+  if (panelVisible) void reloadResumes(false);
+});
+setInterval(() => {
+  if (panelVisible && document.visibilityState === 'visible') void reloadResumes(false);
+}, 15000);
 document.addEventListener('click', event => {
   const target = event.target.closest('[data-pick],[data-open-cv],[data-refresh-cvs],[data-go-sign-in],[data-open-documents]');
   if (!target) return;
@@ -915,11 +961,13 @@ async function switchCv(id) {
   cvStatus('Switching CV…');
   rerenderResumes();
   try {
+    resumes = await fetchResumes();
+    if (!resumes.items.some(item => item.id === id)) throw new ResumeGoneError();
     await chooseResume(id);
     resumes = await cachedResumes(); rerenderResumes(); void rescore();
     cvStatus('CV changed. Autofill will upload the selected CV.', 'success');
     await replaceUploadedCv();
-  } catch { cvStatus('Could not switch CVs. Try again.', 'error'); }
+  } catch (error) { resumes = await cachedResumes(); cvStatus(error instanceof ResumeGoneError ? error.message : 'Could not switch CVs. Try again.', 'error'); }
   finally { switchingCv = false; rerenderResumes(); $(anchorId)?.focus(); }
 }
 async function replaceUploadedCv() {
@@ -1013,7 +1061,7 @@ async function rescore(run = ++matchRun) {
   if (changed && !filling) renderAutofill();
 }
 // Save the job, then open the app, as Simplify's "Tailor Resume" opens its
-// web builder. Quick: this job's copy of the chosen CV, line by line with AI
+// web builder. Quick: an unsaved draft of the chosen CV, line by line with AI
 // beside each line. Full: the whole CV editor with this job chosen.
 // The AI runs only from the app's buttons.
 const tailorButtons = () => document.querySelectorAll('[data-tailor]');
@@ -1072,6 +1120,8 @@ async function doSignOut() { await signOut(); await renderAccount(); status('aut
 async function renderSyncState() { const { sync } = await chrome.storage.local.get('sync'); $('sync-state').textContent = sync?.lastSyncedAt ? `Synced ${new Date(sync.lastSyncedAt).toLocaleString()}` : 'Never synced'; }
 function selectTab(name) {
   closeCvMenu();
+  panelView = name;
+  document.querySelector('.tabs').hidden = name === 'job';
   for (const tab of document.querySelectorAll('.tab')) { const selected = tab.dataset.panel === name; tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1; }
   for (const panel of document.querySelectorAll('.panel')) panel.hidden = panel.id !== `panel-${name}`;
   document.querySelector('main').scrollTop = 0;
@@ -1081,7 +1131,10 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const nextResumes = await cachedResumes(); const tab = await ownTab(); const nextScan = await scanFrames(tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const tab = await ownTab(); const nextScan = await scanFrames(tab);
+    // Scanning may outlast a backend refresh. Read the latest library after
+    // it finishes, so an earlier empty list cannot replace the fresh one.
+    const nextResumes = await cachedResumes();
     if (sequence !== refreshId) return;
     if (fillReport && fillReport.url !== tab?.url) fillReport = null;
     if (currentTab?.url !== tab?.url || resumes.chosen?.id !== nextResumes.chosen?.id) cvStatus('');
@@ -1171,7 +1224,17 @@ $('report').addEventListener('click', () => { $('report-text').value = ['CV Auto
 $('copy-report').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('report-text').value); status('report-status', 'Copied. You can paste this into your feedback.', 'success'); } catch { $('report-text').select(); status('report-status', 'Select and copy the report manually.', 'error'); } });
 $('close-panel').addEventListener('click', closePanel);
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !cvMenu.open) closePanel(); });
-chrome.storage.onChanged.addListener((_changes, area) => { if (area === 'local') void refresh(); });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes.auth && changes.auth.oldValue?.syncToken !== changes.auth.newValue?.syncToken) {
+    savedJob = { url: null, job: null, checkedAt: 0 };
+    jobForm = null; jobFormDirty = false; jobPayload = {}; jobProblem = ''; jobLoadProblem = ''; lastApplication = null;
+    renderJobForm();
+    if (panelView === 'job') selectTab('autofill');
+  }
+  void refresh();
+  if (changes.auth) void reloadResumes(false);
+});
 chrome.tabs.onUpdated.addListener((id, info) => { if (id === currentTab?.id && (info.status === 'complete' || info.url)) void refresh(); });
 void refresh();
 void loadResumes();
