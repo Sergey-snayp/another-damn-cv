@@ -221,6 +221,8 @@ function signalsFor(element) {
     splitWords(element.getAttribute('id')),
     element.getAttribute('placeholder'),
     element.getAttribute('autocomplete'),
+    // A hidden file input is named by the button that opens it ("Upload resume").
+    element.type === 'file' && element.offsetParent === null ? uploadButtonText(element) : null,
   ]
     .filter(Boolean)
     .join(' ')
@@ -299,12 +301,32 @@ function categorise(signals) {
   return { key: best?.key ?? null, sensitive: false };
 }
 
+/**
+ * A hidden file input behind its own visible button, as on LinkedIn's Easy
+ * Apply: the "Upload resume" button is a <label for> the input, or sits beside
+ * it, and the modal has no <form> around it.
+ */
+function uploadButtonText(input) {
+  const visible = (node) => node.getClientRects().length > 0;
+  const label = [...(input.labels ?? [])].find(visible);
+  if (label) return label.textContent;
+  // The input's own box must be on screen: a hidden section's input is not a field.
+  for (let node = input.parentElement, depth = 0; node && depth < 3; node = node.parentElement, depth++) {
+    if (!visible(node)) return '';
+    const button = [...node.querySelectorAll('button, [role="button"], label')]
+      .find((candidate) => visible(candidate) && /\b(upload|attach|choose|browse|select)\b/i.test(candidate.textContent));
+    if (button) return button.textContent;
+  }
+  return '';
+}
+const hasUploadButton = (input) => Boolean(uploadButtonText(input).trim());
+
 function isFillable(element) {
   if (element.disabled || element.readOnly) return false;
   if (element.type === 'hidden') return false;
   if (['password', 'submit', 'button', 'reset', 'image'].includes(element.type)) return false;
   if (element.closest('[hidden], [aria-hidden="true"]')) return false;
-  if (element.type === 'file') return element.offsetParent !== null || !!element.closest('form')?.getClientRects().length;
+  if (element.type === 'file') return element.offsetParent !== null || !!element.closest('form')?.getClientRects().length || hasUploadButton(element);
   return element.offsetParent !== null;
 }
 

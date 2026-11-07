@@ -10,7 +10,9 @@ const frame = '<script>parent.postMessage(\'panel-loaded\', \'*\')</script><butt
 const html = `<!doctype html><title>Apply</title>
 <style>body { margin: 0; height: 2000px; font: 14px system-ui } dialog { width: 520px; } dialog::backdrop { background: rgba(0,0,0,.6) }</style>
 <button id="easy-apply">Easy Apply</button>
-<dialog id="apply"><label for="first">First name</label><input id="first"><button id="next">Next</button></dialog>`;
+<dialog id="apply"><label for="first">First name</label><input id="first"><button id="next">Next</button></dialog>
+<div id="sheet" popover="manual" style="width:70vw;height:80vh;background:#fff"><label for="last">Last name</label><input id="last"></div>
+<div id="menu" popover="manual" style="width:120px;height:60px">Menu</div>`;
 
 const chromeStub = () => {
   const clicks = [];
@@ -99,6 +101,19 @@ const hostParent = page => page.evaluate(() => document.getElementById('adcv-aut
     assert.equal(await hostParent(page), 'HTML', 'the panel goes back to the page when the dialog closes');
     assert.equal(await page.evaluate(() => document.getElementById('adcv-fill-marks')?.parentElement?.tagName), 'HTML');
     assert.equal(await clickPanel(page), true, 'the panel is clickable after the dialog closes');
+
+    // A popover window (another way pages draw over everything) works the same; a small menu does not move anything.
+    await page.evaluate(() => document.getElementById('menu').showPopover());
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await hostParent(page), 'HTML', 'a small popover such as a menu is left alone');
+    await page.evaluate(() => { document.getElementById('menu').hidePopover(); document.getElementById('sheet').showPopover(); });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await hostParent(page), 'sheet', 'the panel moves into a page-sized popover');
+    assert.equal(await clickPanel(page), true, 'the panel can be clicked over the popover');
+    await page.evaluate(() => document.getElementById('sheet').hidePopover());
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await hostParent(page), 'HTML', 'and goes back when it closes');
+    assert.equal(await page.evaluate(() => window.__loads), 1, 'the panel never reloaded');
 
     // A closed panel is not dragged into a later dialog's way: it stays hidden.
     await page.evaluate(() => window.CVAutofillPanel.close());

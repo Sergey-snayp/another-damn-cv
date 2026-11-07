@@ -377,6 +377,30 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return () => cancelAnimationFrame(frame);
   }, [tailoring?.run]);
 
+  // While the mouse is over the card, the wheel scrolls only the card: at its end (or when it
+  // has nothing to scroll) the page behind it stays still.
+  const cardOpen = Boolean(tailoring);
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!cardOpen || !card) return;
+    const canScroll = (el: HTMLElement, down: boolean) => {
+      const { overflowY } = getComputedStyle(el);
+      if (el !== card && !/(auto|scroll)/.test(overflowY) && el.tagName !== 'TEXTAREA') return false;
+      return down ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0;
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (!event.deltaY || event.ctrlKey) return; // Pinch zoom stays the browser's.
+      const down = event.deltaY > 0;
+      for (let el = event.target as HTMLElement | null; el; el = el.parentElement) {
+        if (canScroll(el, down)) return; // Something inside the card still scrolls this way.
+        if (el === card) break;
+      }
+      event.preventDefault();
+    };
+    card.addEventListener('wheel', onWheel, { passive: false });
+    return () => card.removeEventListener('wheel', onWheel);
+  }, [cardOpen]);
+
   /** Sends the AI's suggestions for this card's lines into it as they arrive. */
   const updateItem = (run: number, key: string, patch: Partial<Suggestion>) =>
     setTailoring((current) => current && current.run === run

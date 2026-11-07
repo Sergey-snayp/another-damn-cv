@@ -431,6 +431,26 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         return bar.top >= box.top - 1 && bar.bottom <= box.bottom;
       }), 'Use this, Try again and Dismiss stay at the top of the card while it scrolls');
       await page.screenshot({ path: '/private/tmp/job-agent-qt-card.png' });
+      {
+        // At the card's end, the wheel over the card does not scroll the CV behind it.
+        const box = await page.$eval('.qt-card', card => { const r = card.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+        const pageBefore = await page.$eval('.qt-canvas', canvas => canvas.scrollTop);
+        await page.mouse.move(box.x, box.y);
+        await page.mouse.wheel({ deltaY: 600 });
+        await pause(250);
+        assert.equal(await page.$eval('.qt-canvas', canvas => canvas.scrollTop), pageBefore, 'scrolling past the card end leaves the page still');
+        await page.mouse.wheel({ deltaY: -600 });
+        await pause(250);
+        assert.equal(await page.$eval('.qt-canvas', canvas => canvas.scrollTop), pageBefore, 'and so does scrolling past its top');
+        const canvasRoom = await page.$eval('.qt-canvas', canvas => canvas.scrollHeight - canvas.clientHeight);
+        if (canvasRoom > 0) {
+          await page.mouse.move(box.x, 860);
+          await page.mouse.wheel({ deltaY: 200 });
+          await pause(250);
+          assert.notEqual(await page.$eval('.qt-canvas', canvas => canvas.scrollTop), pageBefore, 'away from the card the page scrolls as usual');
+          await page.$eval('.qt-canvas', (canvas, top) => { canvas.scrollTop = top; }, pageBefore);
+        }
+      }
       await page.click('.qt-card-top .qt-actions .primary');
       assert.equal(await summaryText(), 'Built services for Acme.', 'the summary goes in with its bold');
       await page.click(undo);
