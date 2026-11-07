@@ -686,3 +686,12 @@
 .qt-screen-line .qt-actions { margin-top: 6px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .qt-screen-line .qt-actions button { padding: 4px 10px; font-size: 12px; }
 .qt-screen-line .qt-note { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+/* Writing without moving the menu: the placeholder is as tall as the line it replaces, and the
+   new line holds its finished height while it types in. */
+.qt-shimmer.qt-shimmer-line { display: block; color: transparent; border-radius: 4px; background: linear-gradient(90deg, var(--color-border), color-mix(in srgb, var(--color-accent) 45%, var(--color-border)), var(--color-border)); background-size: 200% 100%; animation: qt-sweep 1.1s linear infinite; padding: 0; }
+.qt-typing { position: relative; display: block; }
+.qt-typing-room { visibility: hidden; }
+.qt-typing-live { position: absolute; inset: 0; }
+.qt-working-done .qt-elapsed { display: none; }
+@media (prefers-reduced-motion: reduce) { .qt-shimmer.qt-shimmer-line { animation: none; } }

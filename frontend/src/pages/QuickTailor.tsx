@@ -155,7 +155,13 @@ function TypedLine({ text }: { text: string }) {
     return () => window.clearInterval(timer);
   }, [plain, still]);
   if (shown >= plain.length) return <>{withBold(text)}</>;
-  return <>{plain.slice(0, shown)}<span className="qt-caret" aria-hidden="true" /></>;
+  // The finished line holds the space from the first letter, so nothing below moves as it types.
+  return (
+    <span className="qt-typing">
+      <span className="qt-typing-room" aria-hidden="true">{plain}</span>
+      <span className="qt-typing-live">{plain.slice(0, shown)}<span className="qt-caret" aria-hidden="true" /></span>
+    </span>
+  );
 }
 
 /** What the line is, for the screen's label. */
@@ -362,37 +368,45 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   }, [dirty, pendingEdit, saving]);
 
   // The card opens over what its ✦ was pressed on, and follows it as the page changes.
+  // It moves only when its line does: text typing into the card resizes it many times a
+  // second, and redrawing the whole page each time made the card (and the CV) jump.
+  const placed = useRef('');
   useLayoutEffect(() => {
     const el = canvas.current;
     if (!tailoring || !el) return;
+    let frame = 0;
     const place = () => {
       const line = tailoring.anchor.getBoundingClientRect();
       const view = el.getBoundingClientRect();
       // The card is the line (or the lines) turned into a screen: the first line's text sits
       // exactly where it is on the CV, in the CV's own type, and the menu continues below.
-      {
-        const card = cardRef.current;
-        const old = card?.querySelector<HTMLElement>('.qt-screen-before, .qt-screen-text, .qt-shimmer');
-        const lift = card && old ? old.getBoundingClientRect().top - card.getBoundingClientRect().top : 34;
-        const style = getComputedStyle(tailoring.anchor);
-        const pad = 15;
-        const width = Math.min(el.clientWidth - 16, Math.max(line.width + 2 * pad, 460));
-        const left = Math.min(Math.max(8, line.left - view.left + el.scrollLeft - pad), el.scrollWidth - width - 8);
-        const lineHeight = parseFloat(style.lineHeight);
-        setCardBox({ left, width, font: {
-          fontFamily: style.fontFamily,
-          fontSize: `${parseFloat(style.fontSize) * scale}px`,
-          ...(Number.isFinite(lineHeight) && { lineHeight: `${lineHeight * scale}px` }),
-        } });
-        setCardTop(Math.max(0, line.top - view.top + el.scrollTop - lift));
-        return;
-      }
+      const card = cardRef.current;
+      const old = card?.querySelector<HTMLElement>('.qt-screen-before, .qt-screen-text, .qt-shimmer');
+      const lift = card && old ? old.getBoundingClientRect().top - card.getBoundingClientRect().top : 34;
+      const style = getComputedStyle(tailoring.anchor);
+      const pad = 15;
+      // Measured against the visible width: the card's own size must not move it.
+      const width = Math.round(Math.min(el.clientWidth - 16, Math.max(line.width + 2 * pad, 460)));
+      const left = Math.round(Math.min(Math.max(8, line.left - view.left + el.scrollLeft - pad), el.scrollLeft + el.clientWidth - width - 8));
+      const top = Math.round(Math.max(0, line.top - view.top + el.scrollTop - lift));
+      const lineHeight = parseFloat(style.lineHeight);
+      const font = {
+        fontFamily: style.fontFamily,
+        fontSize: `${parseFloat(style.fontSize) * scale}px`,
+        ...(Number.isFinite(lineHeight) && { lineHeight: `${lineHeight * scale}px` }),
+      };
+      const key = JSON.stringify([top, left, width, font]);
+      if (key === placed.current) return;
+      placed.current = key;
+      setCardBox({ left, width, font });
+      setCardTop(top);
     };
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(place); };
     place();
-    const observer = new ResizeObserver(place);
+    const observer = new ResizeObserver(schedule);
     observer.observe(tailoring.anchor);
     if (cardRef.current) observer.observe(cardRef.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [tailoring, draft, scale]);
 
   // A newly opened card, once at its line: its box takes the cursor without moving the page
@@ -582,7 +596,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const many = (tailoring?.items.length ?? 0) > 1;
   /** Use / Skip / Try again / Dismiss for one suggestion, once it has come back. */
   const itemActions = (item: Suggestion) => {
-    if (item.decided || (item.busy && many)) return null;
+    if (item.decided) return null;
     const same = item.after !== undefined && item.after.trim() === item.before.trim();
     return (
       <div className="ra-row qt-actions">
@@ -700,7 +714,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
                         {before ? <div className={`qt-screen-before${composing ? ' is-current' : ''}`}>{before}</div>
                           : composing && <div className="qt-screen-text qt-screen-empty">A new summary, written from your CV.</div>}
-                        {composing ? null : item.busy ? <div className="qt-shimmer" aria-hidden="true"><span /><span /><span /></div>
+                        {composing ? null : item.busy ? <div className="qt-shimmer qt-shimmer-line" aria-hidden="true">{before || 'A new version is being written for this job.'}</div>
                           : item.error ? <p className="ra-error">{item.error}</p>
                             : item.after !== undefined ? <div className="qt-screen-text"><TypedLine key={item.after} text={item.after} /></div>
                               : null}
@@ -734,6 +748,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                       summary={tailoring.items.some((item) => item.busy && item.target.kind === 'summary')}
                       skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
                       progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
+                  )}
+                  {/* Several lines: the progress line stays when done, so the menu does not move up. */}
+                  {waiting === 0 && many && !composing && (
+                    <p className="qt-working-status qt-working-done" role="status"><span>{tailoring.items.length} lines ready. Use each one, or all at once.</span></p>
                   )}
                   {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
                   {solo && !solo.busy && solo.after !== undefined && (

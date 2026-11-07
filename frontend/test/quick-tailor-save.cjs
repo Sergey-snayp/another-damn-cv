@@ -273,7 +273,17 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await pause(150);
         return reply({ groups: body.groups.map(group => ({ category: group.category, skills: [...new Set([...group.skills, 'Kubernetes'])], added: ['Kubernetes'], dropped: [] })), cannotDo: [] });
       }
-      if (pathname.endsWith('/tailor-line')) { aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(150); return reply({ suggestion: 'Built services for Acme.', cannotDo: [] }); }
+      if (pathname.endsWith('/tailor-line')) {
+        const body = JSON.parse(request.postData() || '{}');
+        aiRequests.push(body);
+        // Bullets of a job arrive one by one and are long, as the real AI's are.
+        if (body.kind === 'bullet' && /Acme Labs/.test(body.context || '')) {
+          await pause(300 + 500 * aiRequests.length % 1200);
+          return reply({ suggestion: `${body.text} Rewritten for the job with reliable services, observability and clear ownership from design through production support for the team.`, cannotDo: [] });
+        }
+        await pause(150);
+        return reply({ suggestion: 'Built services for Acme.', cannotDo: [] });
+      }
       if (pathname.endsWith('/save')) {
         events.push('save');
         await pause(100);
@@ -478,6 +488,28 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.equal(await summaryText(), 'First edit.');
       await page.click(redo);
       assert.equal(await summaryText(), 'Built services for Acme.');
+      // A job's bullets: while the AI writes, the card stays where it opened.
+      {
+        await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
+        await page.waitForSelector('.qt-unit .qt-generate');
+        const opened = await page.$eval('.qt-unit', card => Math.round(card.getBoundingClientRect().top));
+        await page.click('.qt-unit .qt-generate');
+        setTimeout(() => void page.screenshot({ path: '/private/tmp/job-agent-qt-writing.png' }).catch(() => {}), 900);
+        const tops = [], lines = [], menus = [];
+        for (let i = 0; i < 90; i++) {
+          tops.push(await page.$eval('.qt-unit', card => Math.round(card.getBoundingClientRect().top)).catch(() => null));
+          menus.push(await page.$eval('.qt-unit .qt-menu', menu => Math.round(menu.getBoundingClientRect().top)).catch(() => null));
+          lines.push(await page.evaluate(() => Math.round(document.querySelector('[data-section="experience"] article').getBoundingClientRect().top)));
+          await pause(30);
+        }
+        const moves = menus.filter((top, index) => index && top !== null && menus[index - 1] !== null && top !== menus[index - 1]).length;
+        console.log('CARD TOPS', opened, JSON.stringify([...new Set(tops)]), 'LINE TOPS', JSON.stringify([...new Set(lines)]), 'MENU MOVES', moves, JSON.stringify(menus.filter((top, index) => top !== menus[index - 1])));
+        assert.deepEqual([...new Set(tops.filter(top => top !== null))], [opened], 'the card stays where it opened while the bullets are written');
+        const lineCount = await page.$$eval('.qt-unit .qt-screen-line', rows => rows.length);
+        assert.ok(moves <= lineCount, `the menu moves at most once per line as it arrives (${moves} moves, ${lineCount} lines), never while text types in`);
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close')?.click());
+      }
+
       // Every skills line at once: the same screen over the section, one row per line.
       const beforeSkills = aiRequests.length;
       await page.click('[title="Tailor every skills line for the job"]');
