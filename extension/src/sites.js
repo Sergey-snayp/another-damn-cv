@@ -91,8 +91,20 @@ const SITES = [
   { name: 'icims', matches: /\.icims\.com$/, byId: {} },
 ];
 
+/** The job sites site-fields.js knows by their markup, as site entries. */
+const MARKED_SITES = (window.CVAutofillSiteFields ?? []).map((entry) => ({
+  name: entry.name,
+  matches: { test: (hostname) => entry.hosts.some((host) => host.test(hostname)) },
+  fields: entry.fields,
+}));
+
 function siteFor(hostname) {
-  return SITES.find((site) => site.matches.test(hostname)) ?? null;
+  return SITES.find((site) => site.matches.test(hostname)) ?? MARKED_SITES.find((site) => site.matches.test(hostname)) ?? null;
+}
+
+/** Every rule for this host: the hand-written entry and the marked-fields one. */
+function rulesFor(hostname) {
+  return [...SITES, ...MARKED_SITES].filter((site) => site.matches.test(hostname));
 }
 
 /** The site rule for this page: by host, or by page structure for custom domains. */
@@ -108,13 +120,30 @@ function formOpener() {
 
 /** A category key when the current site names this element explicitly. */
 function siteKeyFor(element, hostname = location.hostname) {
-  const site = siteForPage(hostname);
-  if (!site) return null;
+  const sites = rulesFor(hostname);
+  const page = siteForPage(hostname);
+  if (page && !sites.includes(page)) sites.push(page);
+  if (!sites.length) return null;
 
   const id = element.getAttribute('id');
   const name = element.getAttribute('name');
-
-  return (id && site.byId?.[id]) || (name && site.byName?.[name]) || null;
+  for (const site of sites) {
+    const key = (id && site.byId?.[id]) || (name && site.byName?.[name]);
+    if (key) return key;
+  }
+  // An attribute the site puts on the input or on a box right around it
+  // (Workday: data-automation-id="legalNameSection_firstName").
+  for (const site of sites) {
+    for (const [attribute, value, key] of site.fields ?? []) {
+      for (let node = element, depth = 0; node && depth < 4; node = node.parentElement, depth++) {
+        if (node.getAttribute?.(attribute) !== value) continue;
+        // A box that holds other fields too is not this field's own.
+        if (node !== element && node.querySelectorAll('input:not([type="hidden"]), textarea, select').length > 1) break;
+        return key;
+      }
+    }
+  }
+  return null;
 }
 
 window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, SITES };

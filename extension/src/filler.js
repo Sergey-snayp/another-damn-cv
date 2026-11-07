@@ -401,16 +401,64 @@ async function fillField(field, value, resumeFileName) {
       return dropFile(field.element, value, resumeFileName ?? 'Resume.pdf');
     case 'pick':
       return pickFile(field.element, value, resumeFileName ?? 'Resume.pdf');
-    case 'combobox':
-      return fillCombobox(field.element, value);
+    case 'combobox': {
+      const result = await fillCombobox(field.element, value);
+      // A school, degree or subject a site's fixed list does not have: its "Other", as a person
+      // would choose. Typed text with nothing chosen does not count: react-select drops it on leaving.
+      const chosen = () => window.CVAutofillFields.chosenValue?.(field.element) ?? '';
+      if (OTHER_FALLBACK.has(field.key) && (!result.filled || (/^typed/.test(result.note ?? '') && !chosen()))) {
+        const other = await fillCombobox(field.element, 'Other');
+        if (other.filled && chosen()) return { filled: true, note: `"${value}" is not in its list, so Other was chosen` };
+        return { filled: false, note: `"${value}" is not in its list. Choose the closest one.` };
+      }
+      return result;
+    }
     case 'select':
       return { filled: fillSelect(field.element, value) };
     case 'checkbox':
     case 'radio':
       return { filled: fillChoice(field.element, value) };
     default:
+      if (LOCATION_KEYS.has(field.key) && suggestionsFor(field.element)) return fillSuggested(field.element, value);
       return { filled: field.element.type === 'number' ? fillNumber(field.element, value) : fillText(field.element, value) };
   }
+}
+
+/**
+ * A text box with its own list of suggestions and no ARIA roles: Lever's
+ * "Current location" shows places under the box and keeps the chosen one in a
+ * hidden field. Typing the whole address finds nothing there.
+ */
+function suggestionsFor(element) {
+  const box = element.parentElement;
+  return box?.querySelector('[class*="dropdown-results" i], [class*="suggestions" i], [class*="autocomplete-results" i]') ?? null;
+}
+
+/** Types the city, waits for the site's suggestions, and picks the one for this place. */
+async function fillSuggested(element, value) {
+  const list = suggestionsFor(element);
+  const parts = String(value).split(',').map((part) => part.trim()).filter(Boolean);
+  const city = parts[0] ?? '';
+  if (!city || !list) return { filled: false };
+  typeText(element, city);
+  // Sites search as keys go down (Lever searches 0.5 s after the last keydown); typed text sends none.
+  for (const type of ['keydown', 'keyup']) element.dispatchEvent(new KeyboardEvent(type, { bubbles: true, key: city.at(-1) }));
+  let options = [];
+  for (let waited = 0; waited < 5000 && !options.length; waited += 200) {
+    await wait(200);
+    options = [...list.children].filter((node) => visible(node) && node.textContent.trim());
+  }
+  if (!options.length) {
+    // Nothing suggested: leave the city typed, for the person to finish.
+    return { filled: false, note: `no place was suggested for "${city}"` };
+  }
+  const words = parts.slice(1).map((part) => normal(part));
+  const best = options.find((option) => normal(option.textContent).includes(normal(city)) && words.some((word) => normal(option.textContent).includes(word)))
+    ?? options.find((option) => normal(option.textContent).includes(normal(city))) ?? options[0];
+  for (const type of ['mousedown', 'mouseup', 'click']) best.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }));
+  await wait(150);
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+  return { filled: Boolean(element.value.trim()) };
 }
 
 // ─── Diversity questions (opt-in) ─────────────────────────────────────────
@@ -478,6 +526,7 @@ async function fillDiversity(field, choice) {
 }
 
 const LOCATION_KEYS = new Set(['location', 'city', 'addressLine']);
+const OTHER_FALLBACK = new Set(['school', 'degree', 'fieldOfStudy']);
 
 const ELIGIBILITY = new Set(['requiresSponsorship', 'workAuthorization']);
 
@@ -488,6 +537,11 @@ const ELIGIBILITY = new Set(['requiresSponsorship', 'workAuthorization']);
  */
 function eligibilityValue(field, profile) {
   const answers = profile.eligibility ?? {};
+  // "Authorized to work in the US or Canada?" for someone in Canada: their general answer.
+  const home = String(profile.country ?? '').trim().toLowerCase();
+  if (home && field.countries?.length > 1 && field.countries.some((country) => country.toLowerCase() === home)) {
+    return answers[`${field.key}:${profile.country}`] || answers[field.key] || profile[field.key];
+  }
   if (field.country) {
     const wanted = `${field.key}:${field.country}`.toLowerCase();
     const own = Object.entries(answers).find(([key]) => key.toLowerCase() === wanted)?.[1];

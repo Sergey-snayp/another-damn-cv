@@ -21,7 +21,7 @@ const CATEGORIES = [
   { key: 'firstName', group: 'Personal', match: ['first name', 'firstname', 'given name', 'forename', 'fname'] },
   { key: 'lastName', group: 'Personal', match: ['last name', 'lastname', 'family name', 'surname', 'lname'] },
   { key: 'middleName', group: 'Personal', match: ['middle name', 'middlename', 'middle initial'] },
-  { key: 'preferredName', group: 'Personal', match: ['preferred name', 'nickname', 'goes by'] },
+  { key: 'preferredName', group: 'Personal', match: ['preferred name', 'nickname', 'goes by', "name you'd prefer", 'name you would prefer', 'prefer us to call you', 'prefer to be called'] },
   { key: 'fullName', group: 'Personal', match: ['full name', 'your name', 'candidate name', 'legal name', 'name'] },
   { key: 'email', group: 'Personal', match: ['email', 'e-mail', 'email address'] },
   { key: 'phone', group: 'Personal', match: ['phone', 'mobile', 'telephone', 'cell', 'contact number'] },
@@ -123,6 +123,18 @@ const COUNTRY_NAMES = {
   India: ['india'], Singapore: ['singapore'], Japan: ['japan'], 'South Korea': ['south korea', 'korea'], China: ['china'], Australia: ['australia'],
   'New Zealand': ['new zealand'], Mexico: ['mexico'], Brazil: ['brazil'], Argentina: ['argentina'], 'European Union': ['european union', 'eu'],
 };
+/** Every country the text names, in the order it names them ("the US or Canada"). */
+function countriesIn(text) {
+  const found = [];
+  let rest = String(text ?? '');
+  for (let country = countryIn(rest); country && found.length < 5; country = countryIn(rest)) {
+    found.push(country);
+    const names = COUNTRY_NAMES[country] ?? [];
+    rest = names.reduce((left, name) => left.replace(new RegExp(`(^|[^a-z])${name.replace(/\./g, '\\.')}(?=[^a-z]|$)`, 'gi'), '$1 '), rest);
+  }
+  return found;
+}
+
 function countryIn(text) {
   const lower = ` ${String(text ?? '').toLowerCase().replace(/[^a-z.\s]/g, ' ')} `;
   let found = null, at = Infinity;
@@ -232,11 +244,11 @@ function labelledByText(element) {
 function groupQuestion(element) {
   if (element.type !== 'radio' && element.type !== 'checkbox') return null;
   const group = element.closest('fieldset, [role="radiogroup"], [role="group"]');
-  if (!group) return null;
+  if (!group) return optionsTitle(element);
   return group.querySelector('legend')?.textContent ?? labelledByText(group) ?? group.getAttribute('aria-label') ?? groupTitle(group);
 }
 
-const TITLES = 'label, legend, [class*="question-title" i], [class*="questionTitle" i]';
+const TITLES = 'label, legend, [class*="question-title" i], [class*="questionTitle" i], [class*="application-label" i], [class*="field-label" i], [class*="form-label" i]';
 const CONTROLS = 'input:not([type="hidden"]), textarea, select';
 
 /**
@@ -248,6 +260,24 @@ function groupTitle(group) {
   const title = [...group.querySelectorAll(TITLES)].find((node) => !node.querySelector(CONTROLS)
     && !(node.control && group.contains(node.control) && ['radio', 'checkbox'].includes(node.control.type)));
   return title?.textContent ?? null;
+}
+
+/**
+ * A choice question with no fieldset (Lever's questions): the title in the
+ * smallest box that holds every option of its name and nothing else.
+ */
+function optionsTitle(element) {
+  if (!element.name) return null;
+  const options = [...rootOf(element).querySelectorAll(`input[name="${CSS.escape(element.name)}"]`)];
+  if (options.length < 2) return null;
+  for (let node = element.parentElement, depth = 0; node && depth < 8 && node !== document.body; node = node.parentElement, depth++) {
+    if (!options.every((option) => node.contains(option))) continue;
+    const others = [...node.querySelectorAll(CONTROLS)].filter((control) => control.name !== element.name && control.getClientRects().length);
+    if (others.length) return null;
+    const title = groupTitle(node);
+    if (title?.trim()) return title;
+  }
+  return null;
 }
 
 /**
@@ -274,7 +304,7 @@ function signalsFor(element) {
     groupQuestion(element),
     labelFromAria,
     labelFromFor,
-    element.closest('label')?.textContent,
+    wrapText(element),
     element.getAttribute('aria-label'),
     splitWords(element.getAttribute('name')),
     splitWords(element.getAttribute('id')),
@@ -325,7 +355,20 @@ function diversityKey(text) {
  */
 const ADDRESS_PARTS = [['city', 'town'], ['state', 'province', 'region'], ['country'], ['zip', 'postal', 'postcode']];
 
-function categorise(signals) {
+/**
+ * Field kinds that are questions by nature: their single words ("sponsorship")
+ * still count in a long question. For every other kind a single word counts
+ * only in a short label: "company" in "Do you have experience at a tech
+ * company?" is not Current company, "state" in "a U.S. state bar" is not
+ * State. Simplify reads labels the same way (under 60 characters).
+ */
+const QUESTION_KEYS = new Set(['requiresSponsorship', 'workAuthorization', 'willingToRelocate', 'workArrangement', 'heardAbout', 'resume', 'coverLetter', 'salaryExpectation', 'noticePeriod', 'startDate', 'workedHereBefore']);
+const LONG_LABEL = 60;
+
+/** A question that asks for yes or no: "Are you subject to agreements with your current employer?" */
+const YES_NO = /^\s*(are|do|does|did|have|has|had|will|would|is|was|were|can|could|should|may)\b/i;
+
+function categorise(signals, { long = false, yesNo = false } = {}) {
   if (NEVER_FILL.some((term) => mentions(signals, term))) {
     return { key: null, sensitive: true };
   }
@@ -346,12 +389,18 @@ function categorise(signals) {
     return { key: 'location', sensitive: false, compound: true };
   }
 
+  // "Name pronunciation: how do you pronounce your name?" asks how, not the name.
+  if (/\bpronounc/.test(signals)) return { key: null, sensitive: false };
+
   let best = null;
   // "the United States" is a country, never the State field ("…based in the United States?").
   const words = signals.replace(/\bunited states\b/g, 'usa');
 
   for (const category of CATEGORIES) {
     for (const phrase of category.match) {
+      // A yes/no question is never a profile field: it asks for yes or no, not the employer's name.
+      if (yesNo && !QUESTION_KEYS.has(category.key)) continue;
+      if (long && !phrase.includes(' ') && !QUESTION_KEYS.has(category.key)) continue;
       if (!mentions(words, phrase)) continue;
       if (!best || phrase.length > best.length) {
         best = { key: category.key, length: phrase.length };
@@ -472,7 +521,8 @@ function detectFields() {
 
     // A site rule is evidence; the heuristic is a guess. Prefer evidence.
     const fromSite = window.CVAutofillSites?.siteKeyFor(element) ?? null;
-    const { key: guessed, sensitive, compound, office } = categorise(signals);
+    const label = labelOf(element);
+    const { key: guessed, sensitive, compound, office } = categorise(signals, { long: label.length > LONG_LABEL, yesNo: YES_NO.test(label) });
     const key = fromSite ?? guessed;
 
     if (sensitive) {
@@ -495,6 +545,9 @@ function detectFields() {
         source: fromSite ? 'site' : 'heuristic',
         ...(compound && !fromSite && { compound: true }),
         ...(country && { country }),
+        // "Authorized to work in the US or Canada?": every country it names, so a person
+        // from any of them gets their own answer.
+        ...((key === 'requiresSponsorship' || key === 'workAuthorization') && { countries: countriesIn(rawLabel(element) || signals) }),
         ...(office && !fromSite && { office: true }),
       });
     }
@@ -512,22 +565,34 @@ function detectFields() {
 // ─── Required fields left empty ─────────────────────────────────────────────
 
 /** Readable label for a control, without "*" or "Required". */
+/**
+ * The text of the label around a field, without what else the label holds:
+ * Lever's label wraps the title, the input and the location dropdown's
+ * "No location found" messages. Its title element is used when it has one.
+ */
+function wrapText(element) {
+  const label = element.closest('label');
+  if (!label) return null;
+  const title = [...label.querySelectorAll('[class*="label" i], [class*="title" i], [class*="question" i]')].find((node) => !node.querySelector(CONTROLS) && node.textContent.trim());
+  return (title ?? label).textContent;
+}
+
 function labelOf(element) {
   // || not ??: an element without an id gives '' here, and that must fall through.
   const text = groupQuestion(element)
     || labelledByText(element)
     || labelFor(element)?.textContent
-    || element.closest('label')?.textContent
+    || wrapText(element)
     || element.getAttribute('aria-label')
     || boxLabel(element)
     || element.getAttribute('placeholder')
     || element.getAttribute('name')
     || 'Unnamed field';
-  return text.replace(/\*/g, ' ').replace(/\bRequired\b/gi, ' ').replace(/\s+/g, ' ').replace(/[\s:]+$/, '').trim().slice(0, 90);
+  return text.replace(/[*✱]/g, ' ').replace(/\bRequired\b/gi, ' ').replace(/\s+/g, ' ').replace(/[\s:]+$/, '').trim().slice(0, 90);
 }
 
 function rawLabel(element) {
-  return [groupQuestion(element), labelledByText(element), labelFor(element)?.textContent, element.closest('label')?.textContent, boxLabel(element)].filter(Boolean).join(' ');
+  return [groupQuestion(element), labelledByText(element), labelFor(element)?.textContent, wrapText(element), boxLabel(element)].filter(Boolean).join(' ');
 }
 
 function isRequired(element) {
@@ -611,7 +676,10 @@ function findMissingRequired(found = detectFields().found) {
       if (isHelperInput(element)) continue;
       const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length;
       if (!visible || !isRequired(element) || !isEmpty(element)) continue;
-      if (element.type === 'radio') { if (seenRadios.has(element.name)) continue; seenRadios.add(element.name); }
+      if ((element.type === 'radio' || element.type === 'checkbox') && element.name) {
+        if (seenRadios.has(element.name)) continue;
+        seenRadios.add(element.name);
+      }
       missing.push({ id: tag(element), label: labelOf(element) });
     }
     for (const zone of scope.querySelectorAll(DROPZONE)) {
@@ -676,6 +744,16 @@ function detectQuestions(found = detectFields().found) {
         seenRadios.add(element.name);
         if (!groupQuestion(element)) continue; // Options without their question.
         options = groupRadios(element).map((radio) => labelOf(radio.labels?.[0] ?? radio));
+      }
+      // Several checkboxes under one question (Lever's "Language skills, check all that apply"): one question.
+      if (kind === 'checkbox' && element.name) {
+        const group = [...rootOf(element).querySelectorAll(`input[type="checkbox"][name="${CSS.escape(element.name)}"]`)];
+        if (group.length > 1) {
+          if (seenRadios.has(element.name)) continue;
+          seenRadios.add(element.name);
+          if (!groupQuestion(element)) continue;
+          options = group.map((box) => labelOf(box.labels?.[0] ?? box));
+        }
       }
       if (kind === 'select') options = [...element.options].filter((option) => option.value !== '').map((option) => option.textContent.trim()).slice(0, 200);
       const question = labelOf(element);
@@ -759,6 +837,7 @@ window.CVAutofillFields = {
   labelOf,
   zoneDone,
   groupOf,
+  countriesIn,
   rootOf,
   searchRoots,
   deepAll,
