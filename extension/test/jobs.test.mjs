@@ -59,3 +59,52 @@ test('injected capture errors are returned explicitly and a later read can succe
   globalThis.__cvCapture = async () => capture;
   assert.deepEqual(await api.captureTab(1), capture);
 });
+
+test('a submitted application moves its saved job to Applied, never back from a later stage', async context => {
+  const { api } = await fixture(context);
+  let status = 'saved';
+  const requests = [];
+  context.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    requests.push({ url: String(url), method: options.method ?? 'GET', body: options.body });
+    if (String(url).includes('/api/jobs/lookup')) return new Response(JSON.stringify({ job: status ? { id: 'job-1', status } : null }));
+    return new Response(JSON.stringify({ id: 'job-1', status: 'applied' }));
+  });
+  const answers = [{ question: 'Website', answer: 'https://serhii.dev' }];
+  assert.equal(await api.markApplied('https://www.linkedin.com/jobs/view/111', answers), true);
+  assert.ok(requests[0].url.endsWith(`/api/jobs/lookup?url=${encodeURIComponent('https://www.linkedin.com/jobs/view/111')}`));
+  assert.ok(requests[1].url.endsWith('/api/jobs/job-1/application'), 'the form\'s answers are kept on the job');
+  assert.deepEqual(JSON.parse(requests[1].body), { answers });
+  assert.deepEqual([requests[2].method, JSON.parse(requests[2].body)], ['PATCH', { status: 'applied' }]);
+
+  for (const later of ['applied', 'interview', 'rejected']) {
+    status = later;
+    requests.length = 0;
+    assert.equal(await api.markApplied('https://www.linkedin.com/jobs/view/111'), false, `${later} stays ${later}`);
+    assert.ok(!requests.some(request => request.method === 'PATCH'), 'never moved back');
+  }
+  status = null;
+  assert.equal(await api.markApplied('https://example.com/careers/1'), false, 'a page that is not a saved job changes nothing');
+  assert.equal(await api.markApplied('chrome://extensions'), false);
+});
+
+test('a drafted answer is asked for with the saved job description, else with what the page shows', async context => {
+  const { api } = await fixture(context);
+  const requests = [];
+  let saved = true;
+  context.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    requests.push({ url: String(url), method: options.method ?? 'GET', body: options.body });
+    if (String(url).includes('/api/jobs/lookup')) return new Response(JSON.stringify({ job: saved ? { id: 'job-1', status: 'saved' } : null }));
+    if (String(url).endsWith('/api/extension/jobs/job-1')) return new Response(JSON.stringify({ id: 'job-1', title: 'Senior Backend Engineer', company: 'Quo', description: 'Build the phone system.' }));
+    return new Response(JSON.stringify({ answer: 'Because of the product.', needsInput: ['start date'] }));
+  });
+  const page = { title: 'Apply', company: 'Quo', text: 'The form text' };
+  assert.deepEqual(await api.jobForDraft('https://jobs.ashbyhq.com/quo/1/application', page), { title: 'Senior Backend Engineer', company: 'Quo', text: 'Build the phone system.' });
+  saved = false;
+  assert.deepEqual(await api.jobForDraft('https://jobs.ashbyhq.com/quo/1/application', page), page, 'not saved: the page');
+
+  const draft = await api.draftAnswer({ question: 'Why Quo?', kind: 'textarea', job: page, resumeId: 'cv-1' });
+  assert.deepEqual(draft, { answer: 'Because of the product.', needsInput: ['start date'] });
+  const last = requests.at(-1);
+  assert.ok(last.url.endsWith('/api/extension/answers/draft') && last.method === 'POST');
+  assert.deepEqual(JSON.parse(last.body), { question: 'Why Quo?', kind: 'textarea', job: page, resumeId: 'cv-1' });
+});

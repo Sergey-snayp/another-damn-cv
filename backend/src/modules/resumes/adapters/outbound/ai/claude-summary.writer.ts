@@ -51,7 +51,10 @@ Fix every failed check while keeping all the other rules, and return the full JS
   }
 
   private async ask(prompt: string): Promise<SummaryDraft> {
-    const first = await this.llm.complete(prompt, SUMMARY_INSTRUCTIONS, { timeoutMs: 150_000 });
+    const first = await this.llm.complete(prompt, SUMMARY_INSTRUCTIONS, {
+      timeoutMs: 150_000,
+      effort: 'medium',
+    });
     const parsed = parse(first);
     if (parsed.ok) return parsed.draft;
     // One retry, telling the model what was wrong with the shape.
@@ -64,7 +67,7 @@ ${first.slice(0, 6_000)}
 
 That reply was not valid JSON in the required shape (${parsed.problem}). Return only the JSON object described under Output.`,
       SUMMARY_INSTRUCTIONS,
-      { timeoutMs: 150_000 },
+      { timeoutMs: 150_000, effort: 'medium' },
     );
     const retried = parse(second);
     if (retried.ok) return retried.draft;

@@ -127,6 +127,59 @@ async function savedJobRequest(jobId, init = {}) {
 export const getSavedJob = jobId => savedJobRequest(jobId);
 export const updateSavedJob = (jobId, details) => savedJobRequest(jobId, { method: 'PATCH', body: JSON.stringify(details) });
 
+/**
+ * Claude's answer to one form question, written from the chosen CV and the
+ * job. Runs only on the person's click. { answer, needsInput }: what only the
+ * person can say (a date, a preference) is listed instead of invented.
+ */
+export async function draftAnswer(request) {
+  const { auth } = await chrome.storage.local.get('auth');
+  if (!auth?.syncToken) throw new NotSignedInError();
+  let response;
+  try {
+    response = await fetch(`${API_URL}/api/extension/answers/draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.syncToken}` },
+      body: JSON.stringify(request),
+    });
+  } catch { throw new Error(`Can't reach the app at ${API_URL}. Is the backend running?`); }
+  if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message ?? `Server returned ${response.status}.`);
+  return { answer: String(body.answer ?? ''), needsInput: Array.isArray(body.needsInput) ? body.needsInput.map(String) : [] };
+}
+
+/** The job a question is answered for: the saved job, with its full description, or what the page shows. */
+export async function jobForDraft(url, fromPage) {
+  try {
+    const saved = /^https?:\/\//i.test(url) ? await lookupJob(url) : null;
+    if (saved?.id) {
+      const job = await getSavedJob(saved.id);
+      if (job.description?.trim()) return { title: job.title || fromPage.title, company: job.company || fromPage.company, text: job.description.slice(0, 40000) };
+    }
+  } catch { /* the page's own text below */ }
+  return fromPage;
+}
+
+/**
+ * A submitted application: its saved job moves from Saved (or Dismissed) to
+ * Applied, which also records when. A job further along is left as it is, and
+ * a page that is not a saved job changes nothing. The form's answers are
+ * recorded on the job either way. True when it moved.
+ */
+export async function markApplied(url, answers = []) {
+  if (!/^https?:\/\//i.test(url)) return false;
+  try {
+    const job = await lookupJob(url);
+    if (!job) return false;
+    // What the form said, kept on the job ("Your answers"), added to earlier steps' answers.
+    if (answers.length) await recordApplication(job.id, { answers }).catch(() => {});
+    if (!['saved', 'dismissed'].includes(job.status)) return false;
+    await updateSavedJob(job.id, { status: 'applied' });
+    return true;
+  } catch { return false; /* signed out or offline: the job stays as it is */ }
+}
+
 /** Records on a saved job the CV Autofill uploaded and the answers on the form. Never saves a job. */
 export async function recordApplication(jobId, { resumeId, answers }) {
   const { auth } = await chrome.storage.local.get('auth');

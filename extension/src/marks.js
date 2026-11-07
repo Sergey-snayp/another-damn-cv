@@ -20,6 +20,8 @@
     ok: { color: '#16a34a', glyph: '✓' },
     check: { color: '#d97706', glyph: '!' },
     missing: { color: '#dc2626', glyph: '×' },
+    // A field the form asks for that the Profile has no value for: click to add one.
+    empty: { color: '#9ca3af', glyph: '+' },
   };
   const SIZE = 18;
   const host = document.createElement('div');
@@ -57,6 +59,7 @@
     .pop .text { display: flex; gap: 6px; }
     .pop .text input, .pop .text textarea { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12px; }
     .pop .text textarea { min-height: 60px; resize: vertical; }
+    .pop .choices.once { margin-top: 8px; }
     .pop .note { margin-top: 8px; font-size: 11px; color: #6b7280; }
     .pop .status { margin-top: 8px; font-size: 12px; font-weight: 500; }
     .pop .status.ok { color: #15803d; } .pop .status.error { color: #b91c1c; }
@@ -121,17 +124,37 @@
   }
 
   /**
+   * Where a choice question's icon goes: beside all its options together, level
+   * with their middle, never on top of the option text. One option's box is its
+   * radio (or checkbox) and its label, wherever the label is.
+   */
+  function rectFor(element) {
+    if (element.type !== 'radio' && element.type !== 'checkbox') return boxFor(element).getBoundingClientRect();
+    const group = element.type === 'radio' ? Fields().radiosOf(element)
+      : element.name ? [...Fields().rootOf(element).querySelectorAll(`input[type="checkbox"][name="${CSS.escape(element.name)}"]`)] : [element];
+    const boxes = group.flatMap((option) => [option, option.closest('label'), ...(option.labels ?? [])])
+      .filter(Boolean).map((node) => node.getBoundingClientRect()).filter((box) => box.width || box.height);
+    if (!boxes.length) return boxFor(element).getBoundingClientRect();
+    const left = Math.min(...boxes.map((box) => box.left)), top = Math.min(...boxes.map((box) => box.top));
+    const right = Math.max(...boxes.map((box) => box.right)), bottom = Math.max(...boxes.map((box) => box.bottom));
+    return { left, top, right, bottom, width: right - left, height: bottom - top };
+  }
+
+  /**
    * Whether an icon at (left, top) would sit on another field: side-by-side
    * fields (Country next to Phone) leave only a narrow gap. Checked on screen;
    * off screen counts as free.
    */
   function clashes(element, left, top) {
+    const own = element.type === 'radio' || element.type === 'checkbox' ? element.closest('fieldset, [role="radiogroup"], [role="group"]') : null;
     const points = [[left + SIZE / 2, top + SIZE / 2], [left + 1, top + SIZE / 2], [left + SIZE + 3, top + SIZE / 2]];
     host.style.setProperty('pointer-events', 'none', 'important');
     try {
       return points.some(([x, y]) => {
         const hit = document.elementFromPoint(x, y);
         if (!hit || hit === document.documentElement || hit === document.body || hit.contains(element)) return false;
+        // A choice question's own other options are not another field.
+        if (own && own.contains(hit)) return false;
         return Boolean(hit.closest('input, select, textarea, button, a, [role="combobox"]')) || fieldsIn(hit) > 0;
       });
     } finally { host.style.removeProperty('pointer-events'); }
@@ -143,7 +166,7 @@
    * another field; inside the right edge only when neither side is free.
    */
   function place(element, node) {
-    const rect = boxFor(element).getBoundingClientRect();
+    const rect = rectFor(element);
     node.hidden = !rect.width && !rect.height;
     if (node.hidden) return;
     const width = document.documentElement.clientWidth;
@@ -210,7 +233,7 @@
       reattach();
       for (const [element, mark] of marks) {
         if (element === popover.element && element.isConnected) continue; // Kept while its popover is open.
-        if (!element.isConnected || (mark.status === 'missing' && !isEmpty(element))) remove(element);
+        if (!element.isConnected || ((mark.status === 'missing' || mark.status === 'empty') && !isEmpty(element))) remove(element);
       }
       reposition();
     }, 500);
@@ -339,9 +362,9 @@
     if (popover.element) { draw(); placePop(); }
   }
 
-  async function act(run) {
+  async function act(run, working = 'Saving…') {
     if (popover.busy) return;
-    popover.busy = true; popover.message = 'Saving…'; popover.kind = '';
+    popover.busy = true; popover.message = working; popover.kind = '';
     draw();
     let result;
     try { result = await run(); } catch (error) { result = { ok: false, message: error.message }; }
@@ -402,7 +425,17 @@
       if (!spec.text.multiline) input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.isTrusted) { event.preventDefault(); void save(); } });
       parts.push(make('div', { className: 'section' }, [
         make('p', { className: 'label', textContent: spec.current ? 'Change it' : `Set a default${spec.heading ? ` (${spec.heading})` : ''}` }),
-        make('div', { className: 'text' }, [input, make('button', { className: 'act primary', textContent: 'Save', disabled: busy, onclick: trusted(save) })]),
+        spec.once
+          // Saved for later forms, or put in this field only; a written answer can be drafted first.
+          ? make('div', {}, [
+            make('div', { className: 'text' }, [input]),
+            make('div', { className: 'choices once' }, [
+              make('button', { className: 'act primary', textContent: spec.currentLabel === 'Your saved answer' ? 'Save answer' : 'Save to Profile', disabled: busy, onclick: trusted(save) }),
+              make('button', { className: 'act', textContent: 'Just this time', disabled: busy, onclick: trusted(() => act(() => spec.once(input.value))) }),
+              spec.generate ? make('button', { className: 'act', textContent: '✦ Generate answer', disabled: busy, onclick: trusted(() => act(() => spec.generate(), 'Writing from your CV…')) }) : null,
+            ]),
+          ])
+          : make('div', { className: 'text' }, [input, make('button', { className: 'act primary', textContent: 'Save', disabled: busy, onclick: trusted(save) })]),
       ]));
     }
     if (spec.fromForm) {
@@ -444,7 +477,7 @@
     const ids = new Set(missing.map((item) => String(item.id)));
     for (const [element, mark] of marks) if (mark.status === 'missing' && !ids.has(element.dataset.adcvField)) remove(element);
     for (const item of missing) {
-      const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
+      const element = window.CVAutofillFields.byTag(item.id);
       const reason = item.reason || 'Required, still empty.';
       const mark = marks.get(element);
       if (element && (mark?.status !== 'missing' || mark.reason !== reason)) add(element, 'missing', reason);
@@ -552,7 +585,7 @@
     return {
       async before(field) {
         await follow(field.element);
-        return field.kind === 'drop' || field.kind === 'file' ? glow(field.element, 'pending', { pulse: true }) : null;
+        return ['drop', 'file', 'pick'].includes(field.kind) ? glow(field.element, 'pending', { pulse: true }) : null;
       },
       async after(field, mark, stopPending) {
         stopPending?.();

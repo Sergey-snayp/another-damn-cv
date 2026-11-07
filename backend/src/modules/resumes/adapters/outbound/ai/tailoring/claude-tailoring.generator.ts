@@ -18,7 +18,7 @@ export class ClaudeTailoringGenerator implements TailoringGenerator {
   }
   private async complete(prompt: string, timeoutMs: number) {
     try {
-      return await this.runner.complete(prompt, TAILOR_SYSTEM, { timeoutMs });
+      return await this.runner.complete(prompt, TAILOR_SYSTEM, { timeoutMs, effort: 'medium' });
     } catch (error) {
       throw new TailoringError(
         'unavailable',

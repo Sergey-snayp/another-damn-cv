@@ -37,7 +37,7 @@ ${input.evidence.slice(0, 10_000)}
 </cv>
 
 <skills_lines>
-${input.groups.map((group) => `${group.category || '(no label)'}: ${group.skills.join(', ')}`).join('\n')}
+${input.groups.map((group, index) => `l${index + 1} | ${group.category || '(no label)'}: ${group.skills.join(', ')}`).join('\n')}
 </skills_lines>
 ${input.elsewhere.length ? `\n<other_lines_not_to_repeat>\n${input.elsewhere.join(', ')}\n</other_lines_not_to_repeat>\n` : ''}
 <settings>
@@ -47,30 +47,52 @@ ${input.settings}
 Return ONLY JSON, no prose and no code fences:
 
 {
-  "groups": [ { "category": "the line's category, exactly as given", "add": ["skills to add, or none"] } ],
+  "groups": [ { "line": "the line's id, such as l1", "add": ["skills to add, or none"] } ],
   "cannotDo": ["skills the job asks for that the CV does not show, so they were not added"]
 }
 
 Return every line given, in the same order.`;
-    return readAnswer(await this.llm.complete(prompt, SYSTEM, { timeoutMs: 120_000 }));
+    return readAnswer(
+      await this.llm.complete(prompt, SYSTEM, { timeoutMs: 120_000, effort: 'low' }),
+      input.groups,
+    );
   }
 }
 
 const answerSchema = z.object({
-  groups: z.array(z.object({ category: z.string().catch(''), add: z.array(z.string()).catch([]) })).catch([]),
+  groups: z
+    .array(
+      z.object({
+        line: z.string().catch(''),
+        category: z.string().catch(''),
+        add: z.array(z.string()).catch([]),
+      }),
+    )
+    .catch([]),
   cannotDo: z.array(z.string()).catch([]),
 });
 
-function readAnswer(raw: string) {
+/**
+ * Each answer back to its line by the line's id ("l2"). Models sometimes echo the
+ * whole line ("Core: TypeScript, Node.js") where a category was asked for, so a
+ * category is matched only by its own name, before any ":".
+ */
+function readAnswer(raw: string, lines: Array<{ category: string }>) {
   const json = firstJsonObject(raw);
   if (!json) return { groups: [], cannotDo: [] };
-  // "(no label)" is how a line without a category was shown to the model.
   const answer = answerSchema.parse(json);
+  const lineOf = (group: { line: string; category: string }) => {
+    const byId = /^l?(\d+)$/i.exec(group.line.trim());
+    if (byId && lines[Number(byId[1]) - 1]) return lines[Number(byId[1]) - 1];
+    const name = group.category.split(':')[0].trim().toLowerCase();
+    // "(no label)" is how a line without a category was shown to the model.
+    return lines.find((line) => (line.category || '(no label)').toLowerCase() === name);
+  };
   return {
-    groups: answer.groups.map((group) => ({
-      ...group,
-      category: group.category === '(no label)' ? '' : group.category,
-    })),
+    groups: answer.groups.flatMap((group) => {
+      const line = lineOf(group);
+      return line ? [{ category: line.category, add: group.add }] : [];
+    }),
     cannotDo: answer.cannotDo,
   };
 }

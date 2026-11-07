@@ -140,13 +140,13 @@ function explain(element) {
 /** Required fields still empty, each with why. */
 function missingWithReasons() {
   return Fields.findMissingRequired(Fields.detectFields().found).map((item) => {
-    const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(item.id))}"]`);
+    const element = Fields.byTag(item.id);
     return { ...item, reason: element ? explain(element) : 'Required, still empty.' };
   });
 }
 
 
-const byTag = (id) => document.querySelector(`[data-adcv-field="${CSS.escape(String(id))}"]`);
+const byTag = (id) => Fields.byTag(id);
 const stopOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
 
 /**
@@ -217,6 +217,25 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
   return result;
 }
 
+/**
+ * Gray "+" icons: fields the form asks for that the Profile has no value for
+ * (LinkedIn's "Website"), so a click can add one, for later forms or just here.
+ * Required ones already have a red icon; groups switched off in Settings stay quiet.
+ */
+function fieldsToAdd(profile, missing) {
+  const required = new Set(missing.map((item) => String(item.id)));
+  return lastScan.found
+    .filter((field) => PROFILE_DEFAULTS.has(field.key) && !profile.offKeys?.[field.key] && !Filler.valueFor(field, profile))
+    .filter((field) => field.element.matches('input, textarea, select') && Fields.isEmpty(field.element) && !required.has(field.element.dataset.adcvField))
+    .map((field) => ({ element: field.element, status: 'empty', reason: 'Not in your Profile yet. Click to add it.' }))
+    // The company's own questions with no answer yet: write one, or have it drafted.
+    .concat(Fields.detectQuestions(lastScan.found)
+      .filter((question) => !question.value && !required.has(String(question.id)))
+      .map((question) => Fields.byTag(question.id))
+      .filter((element) => element?.matches('input, textarea, select'))
+      .map((element) => ({ element, status: 'empty', reason: 'Not answered yet. Click to write an answer or generate one.' })));
+}
+
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
   lastFill = { profile, failed: new Map(), answers: new Map(answers.map((item) => [String(item.id), item])) };
@@ -229,6 +248,8 @@ async function fill(profile, answers = []) {
   // A last check for anything the pass could not reach (fields that appeared meanwhile).
   const missing = missingWithReasons();
   await Marks?.showMissing(missing);
+  await Marks?.show(fieldsToAdd(profile, missing));
+  keepAnswers();
   return {
     ...result,
     skippedSensitive: lastScan.skipped.filter((item) => item.reason === 'sensitive').length,
@@ -281,6 +302,28 @@ async function finishChoice(element, done, saved, reason) {
   }
   if (done.filled) await Marks.show([{ element: target, status: 'check', reason: 'Filled from your choice, but not saved as a default.' }]);
   return { ok: false, message: saved.message };
+}
+
+/** Answers the AI drafted in a popover, kept until used: the popover redraws from scratch. */
+const drafts = new WeakMap();
+/** Simplify's size for a written answer: at least 400 × 80 on screen. */
+function canDraft(element) {
+  const box = element.getBoundingClientRect();
+  return element.matches('textarea, input[type="text"], input:not([type])') && box.width >= 400 && box.height >= 80;
+}
+/** Asks the background for Claude's draft, with what the page says about the job. */
+async function askDraft(element, question, kind) {
+  const linkedin = window.CVAutofillLinkedIn?.isPage() ? window.CVAutofillLinkedIn.read() : null;
+  const job = {
+    title: linkedin?.title || (document.querySelector('h1')?.innerText || document.title || '').trim(),
+    company: linkedin?.company || companyName(),
+    text: String(linkedin?.description || document.body?.innerText || '').slice(0, 20000),
+  };
+  const maxLength = element.maxLength > 0 ? element.maxLength : undefined;
+  try {
+    return (await chrome.runtime.sendMessage({ type: 'answer-draft', question, kind, ...(maxLength && { maxLength }), job, jobUrl: linkedin?.url ?? (IS_TOP ? location.href : null) }))
+      ?? { ok: false, message: 'The extension did not answer. Try again.' };
+  } catch { return { ok: false, message: 'Reload this page: the extension was updated.' }; }
 }
 
 /** What the icon's popover offers for this element, or null when it has no default (consent, CV, name…). */
@@ -376,8 +419,17 @@ async function editorFor(element) {
       text: formChoices ? null : { value: current || inForm() },
       fromForm,
       canReset: false,
-      note: 'Saved to your Profile in the app. Change or clear it there too.',
+      note: current ? 'Saved to your Profile in the app. Change or clear it there too.' : 'Save to Profile fills it on later forms too. Just this time fills only this one.',
       choose: async (value) => (String(value).trim() ? save(String(value).trim(), await fillChosen(element, value)) : { ok: false, message: 'Type a value first.' }),
+      // Typed values only: fills this field and saves nothing.
+      once: formChoices ? null : async (value) => {
+        const text = String(value).trim();
+        if (!text) return { ok: false, message: 'Type a value first.' };
+        const done = await fillChosen(element, text);
+        if (!done.filled) return { ok: false, message: done.note || 'This field could not be filled. Type it in the form.' };
+        await Marks.show([{ element: done.element ?? element, status: 'ok', reason: 'Filled for this form only. Not saved to your Profile.' }]);
+        return { ok: true, message: 'Filled for this form only.' };
+      },
       saveFromForm: async () => { const value = inForm(); return value ? save(value, { filled: true }) : { ok: false, message: 'Fill it in the form first.' }; },
     };
   }
@@ -393,7 +445,26 @@ async function editorFor(element) {
     currentLabel: 'Your saved answer',
     current: current.length > 80 ? `${current.slice(0, 80)}…` : current,
     choices: formChoices,
-    text: formChoices ? null : { value: current || inForm(), multiline },
+    text: formChoices ? null : { value: drafts.get(element) ?? (current || inForm()), multiline },
+    // Typed answers only: fills this field and saves nothing.
+    once: formChoices ? null : async (value) => {
+      const answer = String(value).trim();
+      if (!answer) return { ok: false, message: 'Type an answer first.' };
+      const done = await fillChosen(element, answer);
+      if (!done.filled) return { ok: false, message: done.note || 'This field could not be filled. Type it in the form.' };
+      drafts.delete(element);
+      await Marks.show([{ element: done.element ?? element, status: 'check', reason: 'Your answer for this form only. Not saved for later forms.' }]);
+      return { ok: true, message: 'Filled for this form only.' };
+    },
+    // As Simplify does: a box big enough for a written answer (at least 400 × 80) can have one drafted.
+    generate: formChoices || !canDraft(element) ? null : async () => {
+      const reply = await askDraft(element, question.question, kind);
+      if (!reply.ok) return reply;
+      const asks = reply.needsInput?.length ? reply.needsInput.join('; ') : '';
+      if (!reply.answer) return { ok: false, message: asks ? `Only you can answer this: ${asks}` : 'Your CV does not answer this. Write it yourself.' };
+      drafts.set(element, reply.answer);
+      return { ok: true, message: asks ? `Written from your CV. Check: ${asks}` : 'Written from your CV and the job. Read it, then save it or use it just this time.' };
+    },
     fromForm,
     canReset: Boolean(used),
     note: 'Saved to your answers in the app, and used when another form asks this question.',
@@ -466,7 +537,7 @@ Marks?.setEditor(editorFor);
 
 /** Scrolls to a field from the panel's "still empty" list and outlines it briefly. */
 function focusField(id) {
-  const element = document.querySelector(`[data-adcv-field="${CSS.escape(String(id))}"]`);
+  const element = Fields.byTag(id);
   if (!element) return false;
   element.scrollIntoView({ block: 'center', behavior: 'smooth' });
   const target = element.matches('input, select, textarea') && element.getClientRects().length ? element : element.closest('label') ?? element;
@@ -497,7 +568,7 @@ function isBlank(field) {
   const element = field.element;
   if (field.kind === 'drop') return !Fields.zoneDone(element);
   if (field.kind === 'file') return !element.files?.length;
-  if (field.kind === 'radio') return !document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
+  if (field.kind === 'radio') return !Fields.radiosOf(element).some((radio) => radio.checked);
   if (field.kind === 'checkbox') return !element.checked;
   return Fields.isEmpty(element);
 }
@@ -576,6 +647,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               replaced++;
               await Marks?.show([{ element: field.element, status: 'ok', reason: `Your CV attached: ${message.fileName}` }]);
             }
+          } else if (field.kind === 'pick') {
+            if ((await Filler.pickFile(field.element, message.dataUrl, message.fileName)).filled) {
+              replaced++;
+              await Marks?.show([{ element: field.element, status: 'ok', reason: `Your CV attached: ${message.fileName}` }]);
+            }
           } else if (field.kind === 'drop') {
             if (Fields.zoneDone(field.element)) {
               kept++;
@@ -650,6 +726,8 @@ let lastLinkedInContext;
 function updateLauncher() {
   if (TINY_FRAME) return;
   scheduleStep();
+  // Before anything returns: LinkedIn's Easy Apply changes steps inside a shadow root.
+  watchShadowRoots();
   if (window.CVAutofillLinkedIn?.isPage()) {
     const job = window.CVAutofillLinkedIn.read();
     const context = JSON.stringify([job?.url, job?.title, job?.company, job?.location, job?.description]);
@@ -657,9 +735,9 @@ function updateLauncher() {
       lastLinkedInContext = context;
       try { void chrome.runtime.sendMessage({ type: 'job-context-changed' }).catch(() => {}); } catch { /* extension reloaded */ }
     }
-    if (job) { lastOwnForm = true; showLauncher(true); return; }
+    if (job) { lastOwnForm = true; showLauncher(true); formChanged(); return; }
   }
-  if (!document.querySelector('input, textarea, select')) { lastOwnForm = false; showLauncher(false); return; }
+  if (!Fields.deepOne('input, textarea, select')) { lastOwnForm = false; showLauncher(false); return; }
   scan();
   // Teamtailor and other boards on company domains are known by page structure.
   const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });
@@ -707,6 +785,90 @@ if (!TINY_FRAME) pageWatcher.observe(document, {
   attributeFilter: window.CVAutofillLinkedIn?.isPage() ? ['hidden', 'disabled', 'type', 'class', 'style', 'data-job-id', 'href', 'aria-expanded']
     : KNOWN_BOARD ? ['hidden', 'disabled', 'readonly', 'type', 'class', 'style'] : ['hidden', 'disabled', 'type'],
 });
+
+/**
+ * The person's own click on the form's Submit button ("Submit application" on
+ * LinkedIn): the saved job moves to Applied in the app. Only a real click,
+ * never Autofill's; only with no required field left empty, so a form that
+ * will not send does not count; and the background moves only a job still
+ * Saved, so a later stage is never undone.
+ */
+/**
+ * What this application said, kept step by step: a multi-step form (LinkedIn's
+ * Easy Apply) shows one step at a time, so each step is read before it goes.
+ * Sent to the saved job when the person submits; the app shows it on the job
+ * as "Your answers". Diversity answers are left out.
+ */
+const applicationAnswers = new Map();
+const clip = (text, max) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+function keepAnswers() {
+  try {
+    const { found } = Fields.detectFields();
+    const add = (question, answer) => {
+      const q = clip(question, 500).replace(/\s*\*\s*$/, ''), a = clip(answer, 5000);
+      if (q && a) applicationAnswers.set(q.toLowerCase(), { question: q, answer: a });
+    };
+    for (const field of found) {
+      if (field.diversity) continue;
+      const element = field.element;
+      if (field.kind === 'pick') { if (element.dataset.adcvPicked && element.dataset.adcvPicked !== '1') add(field.key === 'coverLetter' ? 'Cover letter' : 'Resume', element.dataset.adcvPicked); continue; }
+      if (field.kind === 'file') { if (element.files?.[0]) add(field.key === 'coverLetter' ? 'Cover letter' : 'Resume', element.files[0].name); continue; }
+      if (field.kind === 'drop') continue;
+      add(Fields.labelOf(element), Fields.currentAnswer(element, Filler.controlKind(element)));
+    }
+    for (const item of Fields.detectQuestions(found)) add(item.question, item.value);
+  } catch { /* a page mid-change: the next read catches up */ }
+}
+const keptAnswers = () => [...applicationAnswers.values()].slice(0, 200);
+
+// Any of the person's clicks on a button (Next, Review): read the step before it changes.
+addEventListener('click', (event) => {
+  if (!event.isTrusted || TINY_FRAME) return;
+  if (event.composedPath().some((node) => node instanceof Element && node.matches('button, [role="button"], input[type="submit"]'))) keepAnswers();
+}, true);
+
+const SUBMIT_TEXT = /^(?:submit|(?:submit|send|complete|finish)(?: (?:your|my|the))? application)$/i;
+let submittedAt = 0;
+addEventListener('click', (event) => {
+  if (!event.isTrusted || TINY_FRAME || Date.now() - submittedAt < 10_000) return;
+  const button = event.composedPath().find((node) => node instanceof Element && node.matches('button, input[type="submit"], [role="button"]'));
+  const text = String(button?.matches('input') ? button.value : button?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (!button || !SUBMIT_TEXT.test(text)) return;
+  const linkedin = window.CVAutofillLinkedIn?.isPage() ? window.CVAutofillLinkedIn.read() : null;
+  if (!linkedin && !lastOwnForm && !Fields.detectFields().found.length) return;
+  if (Fields.findMissingRequired().length) return;
+  submittedAt = Date.now();
+  keepAnswers();
+  // An embedded form's own address is not the job's: the background uses the tab's then.
+  try { void chrome.runtime.sendMessage({ type: 'application-submitted', jobUrl: linkedin?.url ?? (IS_TOP ? location.href : null), answers: keptAnswers() }).catch(() => {}); } catch { /* extension reloaded */ }
+}, true);
+
+/**
+ * Tells the panel when the form's fields change while the page stays the same
+ * (the next step of LinkedIn's Easy Apply), so its list and Autofill are current.
+ */
+let lastFormFields = '';
+function formChanged() {
+  if (!IS_TOP) return;
+  const fields = Fields.detectFields().found.map((field) => `${field.key}:${field.kind}`).sort().join(',');
+  if (fields === lastFormFields) return;
+  lastFormFields = fields;
+  try { void chrome.runtime.sendMessage({ type: 'form-changed' }).catch(() => {}); } catch { /* extension reloaded */ }
+}
+
+/**
+ * Forms inside open shadow roots (LinkedIn's Easy Apply) change where the
+ * document watcher cannot see. Each root found by a scan is watched as well.
+ */
+const watchedRoots = new WeakSet();
+function watchShadowRoots() {
+  if (TINY_FRAME) return;
+  for (const root of Fields.searchRoots()) {
+    if (root === document || watchedRoots.has(root)) continue;
+    watchedRoots.add(root);
+    pageWatcher.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'disabled', 'type', 'class', 'style', 'aria-checked', 'aria-selected'] });
+  }
+}
 addEventListener('resize', scheduleScan);
 addEventListener('popstate', scheduleScan);
 addEventListener('hashchange', scheduleScan);

@@ -61,7 +61,7 @@ Return ONLY JSON, no prose and no code fences:
 If the original already satisfies the request, return it unchanged and say so in
 cannotDo.`;
 
-    const answer = readAnswer(await this.llm.complete(prompt, SYSTEM));
+    const answer = readAnswer(await this.llm.complete(prompt, SYSTEM, { effort: 'medium' }));
     return {
       original: text,
       suggestion: withoutEmDashes(answer.suggestion.trim()) || text,

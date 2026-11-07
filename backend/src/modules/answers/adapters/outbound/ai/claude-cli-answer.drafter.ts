@@ -19,6 +19,7 @@ export class ClaudeCliAnswerDrafter implements AnswerDrafter {
       raw = await this.runner.complete(draftPrompt(context), DRAFT_SYSTEM, {
         model: config.interviewModel,
         timeoutMs: 120_000,
+        effort: 'medium',
         maxOutputChars: 40_000,
       });
     } catch (error) {

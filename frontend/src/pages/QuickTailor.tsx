@@ -140,6 +140,27 @@ const unmarked = (text: string) => text.replace(/\*\*/g, '');
 /** "**Kafka**" in bold, as it will print. */
 const withBold = (text: string) => text.split(/\*\*(.+?)\*\*/g).map((part, index) => (index % 2 ? <b key={index}>{part}</b> : part));
 
+/** The AI's line types itself into the screen, then shows with its bold. */
+function TypedLine({ text }: { text: string }) {
+  const plain = unmarked(text);
+  const still = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const [shown, setShown] = useState(still ? plain.length : 0);
+  useEffect(() => {
+    if (still) { setShown(plain.length); return; }
+    setShown(0);
+    const timer = window.setInterval(() => setShown((count) => {
+      if (count >= plain.length) { window.clearInterval(timer); return count; }
+      return Math.min(plain.length, count + 3);
+    }), 14);
+    return () => window.clearInterval(timer);
+  }, [plain, still]);
+  if (shown >= plain.length) return <>{withBold(text)}</>;
+  return <>{plain.slice(0, shown)}<span className="qt-caret" aria-hidden="true" /></>;
+}
+
+/** What the line is, for the screen's label. */
+const KIND_NAMES: Record<string, string> = { summary: 'Summary', bullet: 'Bullet', blurb: 'Job description', headline: 'Headline', skills: 'Skills' };
+
 /** The card under the part being tailored: one line, or every line of a job or section. */
 interface Tailoring {
   run: number;
@@ -202,12 +223,12 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const [saveError, setSaveError] = useState<string | null>(null);
   const [tailoring, setTailoring] = useState<Tailoring | null>(null);
   const [cardTop, setCardTop] = useState(0);
+  /** One line's card sits over that line: its left edge, width and the CV's type at this zoom. */
+  const [cardBox, setCardBox] = useState<{ left: number; width: number; font: React.CSSProperties } | null>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const canvas = useRef<HTMLDivElement>(null);
   const tailorRun = useRef(0);
   const cardRef = useRef<HTMLDivElement>(null);
-  /** Which side of its line this card opened on: chosen once, so the card does not jump as it grows. */
-  const cardSide = useRef<{ run: number; above: boolean } | null>(null);
   const draftRef = useRef<RenderedResume | null>(null);
 
   useEffect(() => {
@@ -340,23 +361,32 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty, pendingEdit, saving]);
 
-  // The card opens at the line whose ✦ was pressed: right under it, or right above it when
-  // there is no room below in view. The side is chosen when the card opens and then kept.
+  // The card opens over what its ✦ was pressed on, and follows it as the page changes.
   useLayoutEffect(() => {
     const el = canvas.current;
     if (!tailoring || !el) return;
     const place = () => {
       const line = tailoring.anchor.getBoundingClientRect();
       const view = el.getBoundingClientRect();
-      const height = cardRef.current?.offsetHeight ?? 0;
-      if (cardSide.current?.run !== tailoring.run) {
-        const roomBelow = view.bottom - line.bottom, roomAbove = line.top - view.top;
-        cardSide.current = { run: tailoring.run, above: roomBelow < height + 16 && roomAbove > roomBelow };
+      // The card is the line (or the lines) turned into a screen: the first line's text sits
+      // exactly where it is on the CV, in the CV's own type, and the menu continues below.
+      {
+        const card = cardRef.current;
+        const old = card?.querySelector<HTMLElement>('.qt-screen-before, .qt-screen-text, .qt-shimmer');
+        const lift = card && old ? old.getBoundingClientRect().top - card.getBoundingClientRect().top : 34;
+        const style = getComputedStyle(tailoring.anchor);
+        const pad = 15;
+        const width = Math.min(el.clientWidth - 16, Math.max(line.width + 2 * pad, 460));
+        const left = Math.min(Math.max(8, line.left - view.left + el.scrollLeft - pad), el.scrollWidth - width - 8);
+        const lineHeight = parseFloat(style.lineHeight);
+        setCardBox({ left, width, font: {
+          fontFamily: style.fontFamily,
+          fontSize: `${parseFloat(style.fontSize) * scale}px`,
+          ...(Number.isFinite(lineHeight) && { lineHeight: `${lineHeight * scale}px` }),
+        } });
+        setCardTop(Math.max(0, line.top - view.top + el.scrollTop - lift));
+        return;
       }
-      const top = cardSide.current.above
-        ? line.top - view.top + el.scrollTop - height - 6
-        : line.bottom - view.top + el.scrollTop + 6;
-      setCardTop(Math.max(0, top));
     };
     place();
     const observer = new ResizeObserver(place);
@@ -463,8 +493,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   }
 
   /**
-   * ✦ on a line, a job or a section opens the card, where the person can say what
-   * they want first. Nothing is asked of the AI until Generate.
+   * ✦ on a line, a job or a section opens it: one line turns into a small screen
+   * with the menu under it. Nothing is asked of the AI until Generate, so the
+   * person can say what should change first.
    */
   function tailor(targets: RewriteTarget | RewriteTarget[], anchor: HTMLElement) {
     if (!jobId) return;
@@ -476,9 +507,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     setTailoring({ run, anchor, items, stage: 'compose', request: '' });
   }
 
-  /** Generate (again): every line not yet used or skipped, two at a time, skills together. */
-  async function generate() {
-    const current = tailoring;
+  /** Generate (again): every line not yet used or skipped, four at a time, skills together. */
+  async function generate(current: Tailoring | null = tailoring) {
     if (!current || current.items.some((item) => item.busy)) return;
     const { run, request } = current;
     const open = current.items.filter((item) => !item.decided);
@@ -489,7 +519,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     if (skills.length) work.push(tailorSkills(run, skills, request));
     const queue = [...lines];
     const worker = async () => { for (let next = queue.shift(); next; next = queue.shift()) await tailorLine(run, next, request); };
-    work.push(worker(), worker());
+    // Four lines at a time: each is a few seconds, and they do not wait on one another.
+    work.push(worker(), worker(), worker(), worker());
     await Promise.all(work);
   }
 
@@ -551,15 +582,15 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const many = (tailoring?.items.length ?? 0) > 1;
   /** Use / Skip / Try again / Dismiss for one suggestion, once it has come back. */
   const itemActions = (item: Suggestion) => {
-    if (item.busy || item.decided) return null;
+    if (item.decided || (item.busy && many)) return null;
     const same = item.after !== undefined && item.after.trim() === item.before.trim();
     return (
       <div className="ra-row qt-actions">
-        {item.after !== undefined && (
-          <button className="primary" disabled={same || saving} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
+        {(item.after !== undefined || item.busy) && (
+          <button className="primary" disabled={same || saving || item.busy} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
         )}
         {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
-        <button className="ghost" disabled={saving} onClick={() => retry(item)}>Try again</button>
+        <button className="ghost" disabled={saving || item.busy} onClick={() => retry(item)}>Try again</button>
         {!many && <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>}
       </div>
     );
@@ -642,76 +673,97 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             </PagedDocument>
           </ScaledPage>
 
-          {tailoring && (
-            <div className="qt-card" ref={cardRef} style={{ top: cardTop }} role="dialog" aria-label="Suggestions for the job">
-              {/* The title and the buttons that decide stay pinned at the top while the card scrolls. */}
-              <div className={`qt-card-top${tailoring.stage === 'generated' ? ' has-actions' : ''}`}>
-                <div className="qt-card-head">
-                  <b>✦ {many ? `${tailoring.items.length} lines` : 'Tailored'} for {job ? jobName(job) : 'the job'}</b>
-                  <button className="qt-close" title="Close" onClick={() => setTailoring(null)}>×</button>
-                </div>
-                {tailoring.stage === 'generated' && (many ? (
-                  <div className="ra-row">
-                    <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>
-                      Use all{ready.length ? ` ${ready.length}` : ''}
-                    </button>
-                    <button className="ghost" onClick={() => setTailoring(null)}>Close</button>
+          {tailoring && (() => {
+            // ✦ turns what it was pressed on into a small screen over it: each line as it is,
+            // then the AI's version typed in under it. The menu continues right below, as one piece.
+            const composing = tailoring.stage === 'compose';
+            const solo = many ? null : tailoring.items[0]!;
+            const company = job?.company || (job ? jobName(job) : 'the job');
+            const forJob = job ? jobName(job) : 'the job';
+            const title = waiting > 0 ? `Writing for ${company}…`
+              : many ? `${tailoring.items.length} lines · ${composing ? 'for' : 'tailored for'} ${forJob}`
+                : `${KIND_NAMES[solo!.target.kind] ?? 'Line'} · ${composing ? 'for' : 'tailored for'} ${forJob}`;
+            return (
+              <div className="qt-card qt-unit" ref={cardRef} role="dialog" aria-label={many ? 'AI versions of these lines' : 'AI version of this line'}
+                style={{ top: cardTop, ...(cardBox && { left: cardBox.left, width: cardBox.width }) }}>
+                <div className="qt-screen" style={cardBox?.font}>
+                  <div className="qt-screen-label">
+                    <span className={`qt-dot${waiting > 0 ? ' busy' : ''}`} aria-hidden="true" />
+                    <span className="qt-screen-title">{title}</span>
+                    {waiting > 0 && <span className="qt-elapsed">{elapsed}s</span>}
+                    <button className="qt-close" title="Close" aria-label="Close" onClick={() => setTailoring(null)}>×</button>
                   </div>
-                ) : itemActions(tailoring.items[0]!))}
-              </div>
-              <div className="qt-compose">
-                {tailoring.stage === 'compose' && (
-                  many
-                    ? <p className="qt-scope">{tailoring.items.length} lines: {tailoring.items.slice(0, 4).map((item) => item.target.label ?? 'Line').join(', ')}{tailoring.items.length > 4 ? ', …' : ''}</p>
-                    : <p className="qt-scope">{tailoring.items[0]!.before ? `“${tailoring.items[0]!.before.slice(0, 160)}${tailoring.items[0]!.before.length > 160 ? '…' : ''}”` : 'A new summary, written from your CV.'}</p>
-                )}
-                <label className="qt-request">
-                  <span>What should change? <small>(optional)</small></span>
-                  <textarea rows={2} maxLength={500} value={tailoring.request}
-                    placeholder="e.g. shorter, lead with the payments work"
-                    onChange={(e) => { const request = e.target.value; setTailoring((t) => t && { ...t, request }); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void generate(); } }} />
-                </label>
-                <div className="chips">
-                  {REQUESTS.map((request) => (
-                    <button key={request} type="button" onClick={() => setTailoring((t) => t && { ...t, request: t.request.trim() ? `${t.request.trim()}; ${request.toLowerCase()}` : request })}>{request}</button>
-                  ))}
+                  {tailoring.items.map((item) => {
+                    const before = unmarked(item.before).trim();
+                    return (
+                      <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}`}>
+                        {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
+                        {before ? <div className={`qt-screen-before${composing ? ' is-current' : ''}`}>{before}</div>
+                          : composing && <div className="qt-screen-text qt-screen-empty">A new summary, written from your CV.</div>}
+                        {composing ? null : item.busy ? <div className="qt-shimmer" aria-hidden="true"><span /><span /><span /></div>
+                          : item.error ? <p className="ra-error">{item.error}</p>
+                            : item.after !== undefined ? <div className="qt-screen-text"><TypedLine key={item.after} text={item.after} /></div>
+                              : null}
+                        {many && !composing && itemActions(item)}
+                        {many && !item.busy && item.after !== undefined && (
+                          <>
+                            {item.added?.length ? <p className="qt-note">+ From your CV: {item.added.join(', ')}</p> : null}
+                            {item.dropped?.length ? <p className="qt-note">− Left out for this job: {item.dropped.join(', ')}</p> : null}
+                            {item.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <button className={`primary qt-generate${waiting > 0 ? ' is-working' : ''}`} disabled={waiting > 0 || saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">
-                  {waiting > 0 ? <><span className="qt-spinner" aria-hidden="true" /> Generating…</> : tailoring.stage === 'compose' ? '✦ Generate' : '✦ Generate again'}
-                </button>
-              </div>
-              {waiting > 0 && (
-                <WorkingStatus seconds={elapsed}
-                  summary={tailoring.items.some((item) => item.busy && item.target.kind === 'summary')}
-                  skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
-                  progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
-              )}
-              {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
-              {tailoring.stage === 'generated' && <div className="qt-items">
-                {tailoring.items.map((item) => {
-                  return (
-                    <div key={item.key} className={`qt-item${item.decided ? ` is-${item.decided}` : ''}`}>
-                      {many && <p className="qt-item-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
-                      {many && itemActions(item)}
-                      {item.busy && <div className="qt-skeleton" aria-hidden="true"><span /><span /><span /></div>}
-                      {item.error && <p className="ra-error">{item.error}</p>}
-                      {item.after !== undefined && (
-                        <>
-                          {/* A summary is written anew, so it is shown whole, with its bold, not as a diff. */}
-                          <p className="qt-diff">{item.report ? withBold(item.after) : item.before ? <DiffText before={unmarked(item.before)} after={unmarked(item.after)} /> : unmarked(item.after)}</p>
-                          {item.report && <SummaryReportView report={item.report} />}
-                          {item.added?.length ? <p className="qt-note">+ From your CV: {item.added.join(', ')}</p> : null}
-                          {item.dropped?.length ? <p className="qt-note">− Left out for this job: {item.dropped.join(', ')}</p> : null}
-                          {item.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
-                        </>
-                      )}
+                <div className="qt-menu">
+                  {composing ? (
+                    <div className="ra-row qt-actions">
+                      <button className="primary qt-generate" disabled={saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">✦ Generate</button>
+                      <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>
                     </div>
-                  );
-                })}
-              </div>}
-            </div>
-          )}
+                  ) : many ? (
+                    <div className="ra-row qt-actions">
+                      <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>Use all{ready.length ? ` ${ready.length}` : ''}</button>
+                      <button className="ghost" disabled={waiting > 0 || saving} onClick={() => void generate()}>✦ Generate again</button>
+                      <button className="ghost" onClick={() => setTailoring(null)}>Close</button>
+                    </div>
+                  ) : itemActions(solo!)}
+                  {waiting > 0 && (many || (solo!.target.kind !== 'bullet' && solo!.target.kind !== 'blurb' && solo!.target.kind !== 'headline')) && (
+                    <WorkingStatus seconds={elapsed}
+                      summary={tailoring.items.some((item) => item.busy && item.target.kind === 'summary')}
+                      skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
+                      progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
+                  )}
+                  {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
+                  {solo && !solo.busy && solo.after !== undefined && (
+                    <>
+                      {solo.report && <SummaryReportView report={solo.report} />}
+                      {solo.added?.length ? <p className="qt-note">+ From your CV: {solo.added.join(', ')}</p> : null}
+                      {solo.dropped?.length ? <p className="qt-note">− Left out for this job: {solo.dropped.join(', ')}</p> : null}
+                      {solo.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
+                    </>
+                  )}
+                  <label className="qt-request">
+                    <span>What should change? <small>{composing || many ? '(optional)' : '(optional, then Try again)'}</small></span>
+                    <textarea rows={2} maxLength={500} value={tailoring.request}
+                      placeholder="e.g. shorter, lead with the payments work"
+                      onChange={(e) => { const request = e.target.value; setTailoring((t) => t && { ...t, request }); }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || waiting > 0) return;
+                        e.preventDefault();
+                        if (composing || many) void generate(); else retry(solo!);
+                      }} />
+                  </label>
+                  <div className="chips">
+                    {REQUESTS.map((request) => (
+                      <button key={request} type="button" onClick={() => setTailoring((t) => t && { ...t, request: t.request.trim() ? `${t.request.trim()}; ${request.toLowerCase()}` : request })}>{request}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </main>
 
         <aside className="qt-job">

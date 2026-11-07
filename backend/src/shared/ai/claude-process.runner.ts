@@ -38,6 +38,7 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
    * prompt holds, and with tools on the model would go round after round
    * (one summary call grew to about 395,000 input tokens and 7 minutes).
    * `timeoutMs`: a whole-resume tailoring needs longer than reading one page.
+   * `effort`: how much the model thinks before it answers; left out, the model's own default.
    */
   complete(
     prompt: string,
@@ -46,7 +47,13 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
       timeoutMs = 180_000,
       model = config.llmModel,
       maxOutputChars = Infinity,
-    }: { timeoutMs?: number; model?: string; maxOutputChars?: number } = {},
+      effort,
+    }: {
+      timeoutMs?: number;
+      model?: string;
+      maxOutputChars?: number;
+      effort?: 'low' | 'medium' | 'high';
+    } = {},
   ): Promise<string> {
     if (this.stopping) return Promise.reject(this.cannotRun());
     const args = [
@@ -69,6 +76,7 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
       '--permission-mode',
       'dontAsk',
       '--no-chrome',
+      ...(effort ? ['--effort', effort] : []),
     ];
 
     const completion = new Promise<string>((resolve, reject) => {

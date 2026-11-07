@@ -175,8 +175,9 @@ function visible(element) {
 /** The suggestion list a combobox controls, or every open option list on the page. */
 function optionsFor(element) {
   const ids = [element.getAttribute('aria-controls'), element.getAttribute('aria-owns')].filter(Boolean).join(' ').split(/\s+/).filter(Boolean);
-  const lists = ids.map((id) => document.getElementById(id)).filter(Boolean);
-  const scope = lists.length ? lists : [document];
+  const root = window.CVAutofillFields.rootOf(element);
+  const lists = ids.map((id) => root.getElementById?.(id) ?? document.getElementById(id)).filter(Boolean);
+  const scope = lists.length ? lists : [...new Set([root, document])];
   // react-select options have ids like react-select-3-option-0 and no role.
   return scope.flatMap((list) => [...list.querySelectorAll('[role="option"], [id*="-option-"]')]).filter(visible);
 }
@@ -235,7 +236,7 @@ function choiceShown(element, chosen, typed) {
  */
 function highlighted(element) {
   const id = element.getAttribute('aria-activedescendant');
-  const node = (id && document.getElementById(id)) || optionsFor(element).find((item) => /(^|[\s_-])(is-)?focused\b/.test(item.className));
+  const node = (id && (window.CVAutofillFields.rootOf(element).getElementById?.(id) ?? document.getElementById(id))) || optionsFor(element).find((item) => /(^|[\s_-])(is-)?focused\b/.test(item.className));
   if (node) return optionText(node);
   return element.hasAttribute('aria-activedescendant') ? '' : null;
 }
@@ -362,6 +363,35 @@ async function dropFile(zone, fileUrl, fileName) {
   return { filled: true, note: 'upload started, check that it finished' };
 }
 
+/**
+ * An "Upload resume" button whose file input exists only once it is clicked
+ * (LinkedIn's Easy Apply). The page-world script (src/page-world.js) is given
+ * the file first; when the page's click opens its new file input, that input
+ * takes the file instead of showing the file picker. Then the button is clicked.
+ */
+async function pickFile(button, fileUrl, fileName) {
+  // Once per button: a second Autofill would add the same file again.
+  if (!fileUrl || button.dataset.adcvPicked) return { filled: false };
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const answer = (type, ms) => new Promise((resolve) => {
+    const done = (value) => { document.removeEventListener(type, listener); clearTimeout(timer); resolve(value); };
+    const listener = (event) => { try { if (JSON.parse(event.detail).token === token) done(true); } catch { /* not ours */ } };
+    const timer = setTimeout(() => done(false), ms);
+    document.addEventListener(type, listener);
+  });
+  const armed = answer('adcv:file-armed', 3000);
+  document.dispatchEvent(new CustomEvent('adcv:arm-file', { detail: JSON.stringify({ token, dataUrl: fileUrl, fileName }) }));
+  if (!(await armed)) return { filled: false, note: 'reload the page, then try again' };
+  const used = answer('adcv:file-used', 4000);
+  button.click();
+  if (await used) {
+    button.dataset.adcvPicked = fileName;
+    return { filled: true };
+  }
+  document.dispatchEvent(new CustomEvent('adcv:arm-file', { detail: JSON.stringify({ token, disarm: true }) }));
+  return { filled: false, note: 'the upload button did not open a file box' };
+}
+
 /** Dispatches on control type so callers do not have to care. */
 async function fillField(field, value, resumeFileName) {
   switch (field.kind) {
@@ -369,6 +399,8 @@ async function fillField(field, value, resumeFileName) {
       return { filled: await attachFile(field.element, value, resumeFileName ?? 'Resume.pdf') };
     case 'drop':
       return dropFile(field.element, value, resumeFileName ?? 'Resume.pdf');
+    case 'pick':
+      return pickFile(field.element, value, resumeFileName ?? 'Resume.pdf');
     case 'combobox':
       return fillCombobox(field.element, value);
     case 'select':
@@ -658,7 +690,7 @@ async function fillWork(field, decision, state = {}) {
 function valueFor(field, profile) {
   if (field.key === 'resume') return profile.resumeDataUrl;
   // The cover letter: its PDF for an upload box, its text for a text box.
-  if (field.key === 'coverLetter') return field.kind === 'file' || field.kind === 'drop' ? profile.coverLetterDataUrl : profile.coverLetterText;
+  if (field.key === 'coverLetter') return ['file', 'drop', 'pick'].includes(field.kind) ? profile.coverLetterDataUrl : profile.coverLetterText;
   if (field.key === 'workArrangement' || field.key === 'willingToRelocate') return workDecision(field, profile).value;
   if (ELIGIBILITY.has(field.key)) return eligibilityValue(field, profile);
   // Address pickers search by place: "Toronto, Canada" finds a suggestion where
@@ -686,7 +718,7 @@ function markFor(field, result, profile) {
       : { status: 'check', reason: `Your CV: ${result.note}` };
   }
   if (field.key === 'coverLetter') {
-    if (field.kind !== 'file' && field.kind !== 'drop') return { status: 'check', reason: 'Your cover letter. Read it before you submit.' };
+    if (!['file', 'drop', 'pick'].includes(field.kind)) return { status: 'check', reason: 'Your cover letter. Read it before you submit.' };
     return result.note === 'uploaded' || !result.note
       ? { status: 'ok', reason: `Your cover letter attached: ${profile.coverLetterFileName ?? 'Cover_Letter.pdf'}` }
       : { status: 'check', reason: `Your cover letter: ${result.note}` };
@@ -766,7 +798,7 @@ async function fillAll(found, profile, hooks = null) {
 async function fillAnswer(element, kind, value) {
   if (!value) return { filled: false };
   if (kind === 'radio') {
-    const radios = [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+    const radios = window.CVAutofillFields.radiosOf(element);
     if (radios.some((radio) => radio.checked)) return { filled: false };
     const option = radios.find((radio) => normal(window.CVAutofillFields.labelOf(radio.labels?.[0] ?? radio)) === normal(value));
     if (!option) return { filled: false };
@@ -798,7 +830,7 @@ async function fillAcknowledgement(item) {
     return { filled: element.checked };
   }
   if (kind === 'radio') {
-    const radios = [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+    const radios = window.CVAutofillFields.radiosOf(element);
     const option = radios.find((radio) => acknowledges(window.CVAutofillFields.labelOf(radio.labels?.[0] ?? radio)));
     if (!option) return { filled: false };
     option.click();
@@ -831,7 +863,7 @@ function controlKind(element) {
   return kind === 'text' && element.type === 'number' ? 'number' : kind;
 }
 
-const radiosOf = (element) => [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+const radiosOf = (element) => window.CVAutofillFields.radiosOf(element);
 const radioText = (radio) => window.CVAutofillFields.labelOf(radio.labels?.[0] ?? radio).trim();
 const PLACEHOLDER = /^(select|choose|please select|pick)\b|^[-—–]+/i;
 
@@ -884,4 +916,4 @@ function diversityChoiceFor(key, optionText) {
   return (DIVERSITY_VOCABULARY[key] ?? []).find((choice) => diversityOptionMatches(key, choice, optionText)) ?? null;
 }
 
-window.CVAutofillFiller = { workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile };
+window.CVAutofillFiller = { workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile, pickFile };

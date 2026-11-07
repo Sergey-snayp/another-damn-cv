@@ -3,6 +3,7 @@ import type { Achievement, RenderedResume } from '../../../../domain/tailoring/r
 import { byPosition, summaryVariantOf } from '../../../../domain/tailoring/ordering';
 import type { JobForTailoring } from '../../../../domain/tailoring/types';
 import type { PromptIds } from './prompt-ids';
+import { practiceHints } from '../../../../domain/job-practices';
 import {
   BULLET_COUNT_RULES,
   BULLET_RULES,
@@ -36,6 +37,10 @@ What you SHOULD do:
   words for what the work was (for example "modernization", "migration",
   "cloud-native", "client stakeholders") wherever the fact honestly matches,
   and lead with the part this job cares about most.
+- A bullet may come with <posting_words>: practices the posting names that this
+  bullet already shows, each with the bullet's own evidence ("observability
+  (CloudWatch, alarms)"). Name the work that way where it reads naturally, and
+  keep the bullet's tools and numbers next to it.
 - Return a bullet unchanged only when no honest rewording makes it more relevant.
 - Order each role's bullets most relevant first.
 - Suggest hiding a bullet (keep: false) when it is irrelevant to this job or is
@@ -104,7 +109,9 @@ export function tailorPrompt(
     for (const achievement of byPosition(role.achievements)) {
       const bulletId = `b${++bulletNo}`;
       ids.bullets.set(bulletId, { lineageId: achievement.lineageId, experienceLineageId: role.lineageId });
-      parts.push(`<bullet id="${bulletId}">${achievement.bullet}${factsOf(achievement)}</bullet>`);
+      parts.push(
+        `<bullet id="${bulletId}">${achievement.bullet}${factsOf(achievement)}${postingWords(job.description, achievement)}</bullet>`,
+      );
     }
     parts.push('</role>');
   });
@@ -117,6 +124,17 @@ export function tailorPrompt(
   parts.push(`<skills>\n${skills.join('\n')}\n</skills>`, '</resume>', ANSWER_FORMAT);
 
   return { prompt: parts.join('\n'), ids };
+}
+
+/** The posting's words for practices this bullet already shows, from its text and facts. */
+function postingWords(jobText: string, achievement: Achievement): string {
+  const own = [achievement.bullet, achievement.problem, achievement.action, achievement.result]
+    .filter(Boolean)
+    .join(' ');
+  const hints = practiceHints(jobText, own);
+  return hints.length
+    ? `\n<posting_words>${hints.map((hint) => `${hint.term} (${hint.evidence.join(', ')})`).join('; ')}</posting_words>`
+    : '';
 }
 
 /** The story behind a bullet, when the resume has it: more facts the rewrite may use. */

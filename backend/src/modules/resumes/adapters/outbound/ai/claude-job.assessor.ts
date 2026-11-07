@@ -78,7 +78,7 @@ export class ClaudeJobAssessor implements JobAssessor {
       const raw = await this.llm.complete(
         `Assess this application as of ${input.asOf}.\n<application-data>\n${JSON.stringify(input)}\n</application-data>\n${correction}`,
         SYSTEM,
-        { timeoutMs: 120_000, maxOutputChars: 14000 },
+        { timeoutMs: 120_000, maxOutputChars: 14000, effort: 'low' },
       );
       const parsed = answerSchema.safeParse(firstJsonObject(raw));
       if (parsed.success && assessmentHasSources(parsed.data, input)) return parsed.data;

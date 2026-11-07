@@ -89,13 +89,13 @@ ${input.candidate || 'Name: the candidate'}
         ? `\n\n<candidate_request>\n${input.request.trim()}\n</candidate_request>\nFollow the candidate's request only within the rules above.`
         : ''
     }`;
-    const first = parse(await this.llm.complete(prompt, SYSTEM, { timeoutMs: 150_000 }));
+    const first = parse(await this.llm.complete(prompt, SYSTEM, { timeoutMs: 150_000, effort: 'medium' }));
     if (first) return first;
     const second = parse(
       await this.llm.complete(
         `${prompt}\n\nYour previous reply was not the JSON object asked for. Return only {"letter": "...", "cannotClaim": [...]}.`,
         SYSTEM,
-        { timeoutMs: 150_000 },
+        { timeoutMs: 150_000, effort: 'medium' },
       ),
     );
     if (second) return second;

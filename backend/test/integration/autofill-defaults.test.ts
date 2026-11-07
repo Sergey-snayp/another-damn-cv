@@ -285,18 +285,27 @@ test('the extension records the CV and answers used on a saved job, for its owne
   assert.ok(detail.applicationSnapshot > 0);
   assert.deepEqual(detail.applicationAnswers, [{ question: 'how did you hear about us?', answer: 'Twice' }]);
 
-  // Answers only: the CV stays as it was.
+  // Answers only: the CV stays as it was, and they are added to the ones kept
+  // (the next step of a form); a question answered again keeps its new answer.
   await call(`/jobs/${job.id}/application`, {
     method: 'POST',
     token: ownerToken,
-    body: { answers: [{ question: 'Why Acme?', answer: 'Payments.' }] },
+    body: {
+      answers: [
+        { question: 'Why Acme?', answer: 'Payments.' },
+        { question: 'How did you hear about us?', answer: 'LinkedIn' },
+      ],
+    },
   });
   const again = (await (await call(`/jobs/${job.id}`, { user: owner.user.id })).json()) as {
     applicationResumeId: string;
     applicationAnswers: unknown[];
   };
   assert.equal(again.applicationResumeId, cv.id);
-  assert.deepEqual(again.applicationAnswers, [{ question: 'Why Acme?', answer: 'Payments.' }]);
+  assert.deepEqual(again.applicationAnswers, [
+    { question: 'How did you hear about us?', answer: 'LinkedIn' },
+    { question: 'Why Acme?', answer: 'Payments.' },
+  ]);
 
   assert.equal(
     (await call(`/jobs/${job.id}/application`, { method: 'POST', token: otherToken, body: { answers: [] } }))

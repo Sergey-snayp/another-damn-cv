@@ -20,6 +20,6 @@ export class ClaudeTechnologyDescriber implements TechnologyDescriber {
     const prompt = `<technology>${input.name}</technology>
 ${input.mentions.length ? `\n<cv_lines_that_name_it>\n${input.mentions.join('\n')}\n</cv_lines_that_name_it>\n` : ''}
 What is ${input.name}? Answer with the sentence only.`;
-    return this.llm.complete(prompt, SYSTEM, { timeoutMs: 60_000, maxOutputChars: 2_000 });
+    return this.llm.complete(prompt, SYSTEM, { timeoutMs: 60_000, maxOutputChars: 2_000, effort: 'low' });
   }
 }

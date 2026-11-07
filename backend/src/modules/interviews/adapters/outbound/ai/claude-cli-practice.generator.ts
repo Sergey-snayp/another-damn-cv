@@ -15,6 +15,7 @@ export class ClaudeCliPracticeGenerator implements PracticeGenerator {
       raw = await this.runner.complete(practicePrompt(kind, context), PRACTICE_SYSTEM, {
         model: this.identity.model,
         timeoutMs: 240_000,
+        effort: 'medium',
         maxOutputChars: 64_000,
       });
     } catch (error) {

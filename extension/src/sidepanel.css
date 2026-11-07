@@ -320,10 +320,8 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 
 /* Cover letter: written from the chosen CV for this page's job, attached by Autofill. */
 .cover-card > summary { font-size: 16px; font-weight: 650; }
-.cover-card[open] > summary { margin-bottom: 8px; }
+.cover-card[open] > summary { margin-bottom: 12px; }
 .cover-card .summary-count { display: inline-flex; align-items: center; gap: 4px; }
-.cover-card .cover-hint { margin: 0 0 12px; font-size: 13px; color: var(--color-muted); }
-.cover-card .cover-hint b { color: var(--color-text); font-weight: 600; }
 .cover-file { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 0 0 12px; border: 1px solid var(--color-border); border-radius: 12px; color: var(--color-muted); }
 .cover-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--color-text); }
 .cover-name.muted { color: var(--color-muted); }

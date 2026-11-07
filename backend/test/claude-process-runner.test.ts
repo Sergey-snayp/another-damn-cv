@@ -159,6 +159,22 @@ test('every call is prompt only: no tools or saved session, without disabling lo
   assert.equal(await response, 'answer');
 });
 
+test("effort is the model's own default unless a call asks for one", async (context) => {
+  const first = new FakeChild(),
+    second = new FakeChild(),
+    runner = fixture(context, [first, second]);
+  const plain = runner.complete('line', 'system');
+  const quick = runner.complete('line', 'system', { effort: 'low' });
+  assert.ok(!runner.launches[0].args.includes('--effort'));
+  const args = runner.launches[1].args;
+  assert.equal(args[args.indexOf('--effort') + 1], 'low');
+  for (const child of [first, second]) {
+    child.stdout.write('ok');
+    child.close(0);
+  }
+  assert.deepEqual(await Promise.all([plain, quick]), ['ok', 'ok']);
+});
+
 test('an oversized practice response kills only its own child and leaves another request running', async (context) => {
   const first = new FakeChild(),
     second = new FakeChild(),

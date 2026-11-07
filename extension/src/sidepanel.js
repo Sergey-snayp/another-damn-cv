@@ -473,6 +473,11 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     void refresh();
     return false;
   }
+  // The same page showing new fields (the next step of LinkedIn's Easy Apply).
+  if (message?.type === 'form-changed' && sender.tab?.id === currentTab?.id && sender.frameId === 0) {
+    if (!filling) void refresh();
+    return false;
+  }
   if (message?.type !== 'job-saved' || sender.tab || message.url !== jobAddress()) return false;
   savedJob.checkedAt = 0;
   void checkSaved(message.url);
@@ -547,7 +552,6 @@ function coverLetterCard() {
     ? `<button class="cover-generate is-working" disabled aria-busy="true"><span class="cover-spinner" aria-hidden="true"></span><span id="cover-working">${esc(letterWorkingText())}</span></button>`
     : `<button class="cover-generate" data-cover-generate ${resumes.chosen ? '' : 'disabled'}>${icon('edit', 18)}${own ? 'Generate again' : 'Generate Cover Letter'}</button>`;
   return `<details class="card cover-card" data-keep-open="cover" ${keptOpen.has('cover') || letter.busy || letter.editing ? 'open' : ''}><summary>${icon('edit', 20)}Cover Letter${count}</summary>
-    <p class="cover-hint">Boost your application with a tailored cover letter${resumes.chosen ? `, written from <b>${esc(previewCvName(resumes.chosen.name))}</b>` : ''}${resumes.chosen && /\.$/.test(resumes.chosen.name.trim()) ? '' : '.'}</p>
     <div class="cover-file">${icon('file', 18)}${file}<button class="cover-view" data-cover-view ${own ? '' : 'disabled'} title="${letter.editing ? 'Hide the letter' : 'Read and edit the letter'}" aria-label="${letter.editing ? 'Hide the letter' : 'Read and edit the letter'}" aria-pressed="${letter.editing}">${icon('eye', 18)}</button></div>
     ${editor}
     <input id="cover-request" class="cover-request" placeholder="What should it stress? (optional)" maxlength="500" value="${esc(letter.request)}" ${letter.busy ? 'disabled' : ''}>
@@ -675,6 +679,9 @@ async function runFill() {
   status('fill-status', 'Filling…');
   const target = currentTab;
   try {
+    // The fields on the page now, not at the last scan: a multi-step form may be on another step.
+    const fresh = target ? await scanFrames(target) : null;
+    if (fresh) scan = fresh;
     // Autofill uploads the CV chosen at the moment of the click, as a PDF of its
     // latest saved version. A missing PDF does not stop the other fields.
     let file = null, cvProblem = '';
@@ -698,7 +705,7 @@ async function runFill() {
     if (groupOn('coverLetter') && ownLetter && scan?.fields.some(field => field.key === 'coverLetter')) {
       try {
         status('fill-status', 'Getting your cover letter…');
-        const file = scan.fields.some(field => field.key === 'coverLetter' && (field.kind === 'file' || field.kind === 'drop'))
+        const file = scan.fields.some(field => field.key === 'coverLetter' && ['file', 'drop', 'pick'].includes(field.kind))
           ? await coverLetterPdf(letter.jobId, ownLetter.fileName) : null;
         coverLetter = { coverLetterText: ownLetter.text, coverLetterDataUrl: file?.dataUrl, coverLetterFileName: file?.fileName ?? ownLetter.fileName };
       } catch (error) { letterProblem = `Cover letter not attached: ${error.message}`; }

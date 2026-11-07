@@ -113,18 +113,21 @@ export class RecordApplication {
     private readonly resumes: ApplicationResumeReader,
   ) {}
   async execute(userId: string, id: string, input: { resumeId?: string; answers?: ApplicationAnswer[] }) {
-    if (!(await this.jobs.findOwned(userId, id))) throw new JobNotFoundError();
+    const job = await this.jobs.findOwned(userId, id);
+    if (!job) throw new JobNotFoundError();
     const changes: JobChanges = {};
     if (input.resumeId) {
       const snapshot = await this.resumes.savedSnapshot(userId, input.resumeId);
       if (!snapshot) throw new JobInputError('Choose one of your saved resumes.');
       Object.assign(changes, { applicationResumeId: input.resumeId, applicationSnapshot: snapshot });
     }
-    const answers = input.answers ? cleanAnswers(input.answers) : [];
+    // Added to the answers already kept, step by step for a multi-step form;
+    // a question answered again keeps its new answer.
+    const answers = input.answers?.length
+      ? cleanAnswers([...(job.applicationAnswers ?? []), ...input.answers])
+      : [];
     if (answers.length) changes.applicationAnswers = answers;
-    return Object.keys(changes).length
-      ? this.jobs.update(userId, id, changes)
-      : (await this.jobs.findOwned(userId, id))!;
+    return Object.keys(changes).length ? this.jobs.update(userId, id, changes) : job;
   }
 }
 

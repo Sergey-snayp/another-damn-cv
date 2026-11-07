@@ -31,7 +31,7 @@ const CATEGORIES = [
   { key: 'location', group: 'Location', match: ['location', 'current location', 'where are you based', 'where do you live'] },
   { key: 'city', group: 'Location', match: ['city', 'town'] },
   { key: 'state', group: 'Location', match: ['state', 'province', 'region', 'state/province'] },
-  { key: 'country', group: 'Location', match: ['country'] },
+  { key: 'country', group: 'Location', match: ['country', 'current residence', 'country of residence'] },
   { key: 'postalCode', group: 'Location', match: ['postal code', 'postcode', 'zip', 'zip code'] },
   { key: 'addressLine', group: 'Location', match: ['street address', 'address line', 'address'] },
 
@@ -60,7 +60,7 @@ const CATEGORIES = [
 
   // --- work authorization ---------------------------------------------------
   { key: 'workAuthorization', group: 'Work Authorization', match: ['work authorization', 'authorized to work', 'legally authorized', 'right to work'] },
-  { key: 'requiresSponsorship', group: 'Work Authorization', match: ['sponsorship', 'require sponsorship', 'visa sponsorship'] },
+  { key: 'requiresSponsorship', group: 'Work Authorization', match: ['sponsorship', 'require sponsorship', 'visa sponsorship', 'visa', 'h 1b', 'h1b'] },
 
   // --- compensation & availability -----------------------------------------
   { key: 'salaryExpectation', group: 'Compensation', match: ['salary expectation', 'expected salary', 'desired salary', 'compensation expectation'] },
@@ -189,11 +189,43 @@ const DECLINES = /\b(no|not|don.?t|do not|decline|disagree|reject|withdraw)\b/i;
 /** An option that acknowledges: "I acknowledge", "Yes, I agree". Never a refusal. */
 const acknowledges = (text) => (ACKNOWLEDGE.test(text) || /^\s*yes\b/i.test(text)) && !DECLINES.test(text);
 
+// ─── Shadow roots ───────────────────────────────────────────────────────────
+// Some forms live inside an open shadow root, where document.querySelector
+// cannot see: LinkedIn draws Easy Apply inside #interop-outlet's. Scans search
+// the document and every open shadow root; lookups for one field (its label,
+// its radio group) search the root that field is in.
+
+/** The document or shadow root the element is in. */
+function rootOf(element) {
+  const root = element?.getRootNode?.();
+  return root && (root.nodeType === Node.DOCUMENT_NODE || root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) ? root : document;
+}
+
+/** The document and every open shadow root inside it, nested ones too. */
+function searchRoots() {
+  const roots = [document];
+  for (let i = 0; i < roots.length; i++)
+    for (const element of roots[i].querySelectorAll('*')) if (element.shadowRoot) roots.push(element.shadowRoot);
+  return roots;
+}
+
+const deepAll = (selector, roots = searchRoots()) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+function deepOne(selector) {
+  for (const root of searchRoots()) { const found = root.querySelector(selector); if (found) return found; }
+  return null;
+}
+/** The element the extension tagged with data-adcv-field, wherever it is. */
+const taggedField = (id) => deepOne(`[data-adcv-field="${CSS.escape(String(id))}"]`);
+/** All radios of the element's group, in its own document or shadow root. */
+const groupRadios = (element) => [...rootOf(element).querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)];
+const labelFor = (element) => (element.id ? rootOf(element).querySelector(`label[for="${CSS.escape(element.id)}"]`) : null);
+
 /** Text of the element(s) named by aria-labelledby, which may list several ids. */
 function labelledByText(element) {
   const ids = element.getAttribute('aria-labelledby');
   if (!ids) return null;
-  return ids.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? '').join(' ').trim() || null;
+  const root = rootOf(element);
+  return ids.split(/\s+/).map((id) => (root.getElementById?.(id) ?? document.getElementById(id))?.textContent ?? '').join(' ').trim() || null;
 }
 
 /** The question a radio or checkbox answers: its fieldset legend or group label. */
@@ -201,15 +233,42 @@ function groupQuestion(element) {
   if (element.type !== 'radio' && element.type !== 'checkbox') return null;
   const group = element.closest('fieldset, [role="radiogroup"], [role="group"]');
   if (!group) return null;
-  return group.querySelector('legend')?.textContent ?? labelledByText(group) ?? group.getAttribute('aria-label');
+  return group.querySelector('legend')?.textContent ?? labelledByText(group) ?? group.getAttribute('aria-label') ?? groupTitle(group);
+}
+
+const TITLES = 'label, legend, [class*="question-title" i], [class*="questionTitle" i]';
+const CONTROLS = 'input:not([type="hidden"]), textarea, select';
+
+/**
+ * The question of a choice group that is a label, not a legend: Ashby's
+ * "Please confirm your current residence" is a label in the fieldset that
+ * names no option. Option labels (around or for a radio) are left out.
+ */
+function groupTitle(group) {
+  const title = [...group.querySelectorAll(TITLES)].find((node) => !node.querySelector(CONTROLS)
+    && !(node.control && group.contains(node.control) && ['radio', 'checkbox'].includes(node.control.type)));
+  return title?.textContent ?? null;
+}
+
+/**
+ * A field's label when it is not linked to it: the title in the smallest box
+ * that holds this field and no other (Ashby's "Location": a label for a field
+ * path, and an input with no id). Simplify reads such forms the same way.
+ */
+function boxLabel(element) {
+  for (let node = element.parentElement, depth = 0; node && depth < 4 && node !== document.body; node = node.parentElement, depth++) {
+    const controls = [...node.querySelectorAll(CONTROLS)].filter((control) => control.getClientRects().length || control === element);
+    if (controls.length > 1) return null;
+    const title = [...node.querySelectorAll(TITLES)].find((label) => !label.querySelector(CONTROLS) && (!label.control || label.control === element));
+    if (title?.textContent.trim()) return title.textContent;
+  }
+  return null;
 }
 
 function signalsFor(element) {
   const labelFromAria = labelledByText(element);
 
-  const labelFromFor = element.id
-    ? document.querySelector(`label[for="${CSS.escape(element.id)}"]`)?.textContent
-    : null;
+  const labelFromFor = labelFor(element)?.textContent ?? (element.labels?.length ? null : boxLabel(element));
 
   return [
     groupQuestion(element),
@@ -288,10 +347,12 @@ function categorise(signals) {
   }
 
   let best = null;
+  // "the United States" is a country, never the State field ("…based in the United States?").
+  const words = signals.replace(/\bunited states\b/g, 'usa');
 
   for (const category of CATEGORIES) {
     for (const phrase of category.match) {
-      if (!mentions(signals, phrase)) continue;
+      if (!mentions(words, phrase)) continue;
       if (!best || phrase.length > best.length) {
         best = { key: category.key, length: phrase.length };
       }
@@ -356,8 +417,33 @@ function labelNear(zone) {
   return null;
 }
 
+/**
+ * "Upload resume" buttons that open a file input created only when clicked,
+ * so the page has none to fill (LinkedIn's Easy Apply). Filled by having the
+ * page's next file input take the CV instead of opening the file picker.
+ */
+const UPLOAD_BUTTON = /^(?:upload|attach|add)(?: your| a| new)? (?:resume|cv|resume\/cv|cover letter)$/i;
+const UPLOAD_ELEMENTS = 'button, [role="button"], label';
+
+function isUploadButton(element) {
+  return element.matches?.(UPLOAD_ELEMENTS) && UPLOAD_BUTTON.test(element.textContent.replace(/\s+/g, ' ').trim());
+}
+
+function detectUploadButtons() {
+  const found = [];
+  for (const button of deepAll(UPLOAD_ELEMENTS)) {
+    if (!isUploadButton(button) || !button.getClientRects().length || button.closest('[hidden], [aria-hidden="true"]')) continue;
+    // A label for a real file input: that input is the field.
+    if (button.tagName === 'LABEL' && button.control?.type === 'file') continue;
+    const signals = button.textContent.replace(/\s+/g, ' ').trim().toLowerCase();
+    const { key } = categorise(signals);
+    if (key === 'resume' || key === 'coverLetter') found.push({ key, element: button, kind: 'pick', signals, source: 'heuristic' });
+  }
+  return found;
+}
+
 function detectDropzones() {
-  const zones = [...document.querySelectorAll(DROPZONE)]
+  const zones = deepAll(DROPZONE)
     .filter((zone) => !zone.parentElement?.closest(DROPZONE))
     .filter((zone) => zone.getClientRects().length && !zone.querySelector('input[type="file"]'));
   const found = [];
@@ -370,7 +456,7 @@ function detectDropzones() {
 }
 
 function detectFields() {
-  const elements = document.querySelectorAll('input, textarea, select');
+  const elements = deepAll('input, textarea, select');
   const found = [];
   const skipped = [];
 
@@ -414,7 +500,12 @@ function detectFields() {
     }
   }
 
-  found.push(...detectDropzones());
+  // A drop box (Ashby's "Autofill from resume") only when the form has no real file field for it.
+  for (const zone of detectDropzones())
+    if (!found.some((field) => field.key === zone.key && field.kind === 'file')) found.push(zone);
+  // An upload button with no file input behind it, unless that document is already found.
+  for (const button of detectUploadButtons())
+    if (!found.some((field) => field.key === button.key && (field.kind === 'file' || field.kind === 'drop'))) found.push(button);
   return { found, skipped };
 }
 
@@ -425,9 +516,10 @@ function labelOf(element) {
   // || not ??: an element without an id gives '' here, and that must fall through.
   const text = groupQuestion(element)
     || labelledByText(element)
-    || (element.id && document.querySelector(`label[for="${CSS.escape(element.id)}"]`)?.textContent)
+    || labelFor(element)?.textContent
     || element.closest('label')?.textContent
     || element.getAttribute('aria-label')
+    || boxLabel(element)
     || element.getAttribute('placeholder')
     || element.getAttribute('name')
     || 'Unnamed field';
@@ -435,7 +527,7 @@ function labelOf(element) {
 }
 
 function rawLabel(element) {
-  return [groupQuestion(element), labelledByText(element), element.id && document.querySelector(`label[for="${CSS.escape(element.id)}"]`)?.textContent, element.closest('label')?.textContent].filter(Boolean).join(' ');
+  return [groupQuestion(element), labelledByText(element), labelFor(element)?.textContent, element.closest('label')?.textContent, boxLabel(element)].filter(Boolean).join(' ');
 }
 
 function isRequired(element) {
@@ -487,8 +579,9 @@ function chosenValue(element) {
 function isEmpty(element) {
   if (isCombobox(element)) return !comboboxValue(element);
   if (element.type === 'checkbox') return !element.checked;
-  if (element.type === 'radio') return !document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
+  if (element.type === 'radio') return !groupRadios(element).some((radio) => radio.checked);
   if (element.type === 'file') return !element.files?.length;
+  if (isUploadButton(element)) return !element.dataset.adcvPicked;
   return !String(element.value ?? '').trim();
 }
 
@@ -508,8 +601,9 @@ function tag(element) {
  * application. Each gets a data-adcv-field id so the panel can scroll to it.
  */
 function findMissingRequired(found = detectFields().found) {
-  const scopes = [...new Set(found.map((field) => field.element.closest('form') ?? document.body))];
-  if (!scopes.length) scopes.push(document.body);
+  const scopes = [...new Set(found.map((field) => field.element.closest('form') ?? (rootOf(field.element) === document ? document.body : rootOf(field.element))))];
+  // No field recognized: the whole page, shadow roots included (LinkedIn's Easy Apply).
+  if (!scopes.length) scopes.push(...searchRoots().map((root) => (root === document ? document.body : root)));
   const missing = [], seenRadios = new Set();
   for (const scope of scopes) {
     for (const element of scope.querySelectorAll('input, select, textarea')) {
@@ -527,7 +621,8 @@ function findMissingRequired(found = detectFields().found) {
     }
   }
   // Page order, so the list reads like the form.
-  const order = (item) => document.querySelector(`[data-adcv-field="${item.id}"]`);
+  const tagged = new Map(deepAll('[data-adcv-field]').map((element) => [element.dataset.adcvField, element]));
+  const order = (item) => tagged.get(String(item.id));
   return missing.sort((a, b) => (order(a).compareDocumentPosition(order(b)) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
 }
 
@@ -538,7 +633,7 @@ const looksLikeName = (text) => !/\s/.test(text) && /[[\]_]/.test(text);
 
 function currentAnswer(element, kind) {
   if (kind === 'radio') {
-    const checked = document.querySelector(`input[type="radio"][name="${CSS.escape(element.name)}"]:checked`);
+    const checked = groupRadios(element).find((radio) => radio.checked);
     return checked ? labelOf(checked.labels?.[0] ?? checked).trim() : '';
   }
   if (kind === 'checkbox') return element.checked ? 'Yes' : '';
@@ -559,7 +654,8 @@ function detectQuestions(found = detectFields().found) {
   const known = new Set(profileFields.map((field) => field.element));
   const knownGroups = new Set(profileFields.filter((field) => field.kind === 'radio').map((field) => field.element.name));
   const scopes = [...new Set(found.map((field) => field.element.closest('form') ?? document.body))];
-  if (!scopes.length) scopes.push(document.body);
+  // No field recognized: the whole page, shadow roots included (LinkedIn's Easy Apply).
+  if (!scopes.length) scopes.push(...searchRoots().map((root) => (root === document ? document.body : root)));
   const questions = [], seenRadios = new Set();
   for (const scope of scopes) {
     for (const element of scope.querySelectorAll('input, select, textarea')) {
@@ -579,7 +675,7 @@ function detectQuestions(found = detectFields().found) {
         if (knownGroups.has(element.name) || seenRadios.has(element.name)) continue;
         seenRadios.add(element.name);
         if (!groupQuestion(element)) continue; // Options without their question.
-        options = [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)].map((radio) => labelOf(radio.labels?.[0] ?? radio));
+        options = groupRadios(element).map((radio) => labelOf(radio.labels?.[0] ?? radio));
       }
       if (kind === 'select') options = [...element.options].filter((option) => option.value !== '').map((option) => option.textContent.trim()).slice(0, 200);
       const question = labelOf(element);
@@ -600,7 +696,8 @@ function detectQuestions(found = detectFields().found) {
  */
 function detectAcknowledgements(found = detectFields().found) {
   const scopes = [...new Set(found.map((field) => field.element.closest('form') ?? document.body))];
-  if (!scopes.length) scopes.push(document.body);
+  // No field recognized: the whole page, shadow roots included (LinkedIn's Easy Apply).
+  if (!scopes.length) scopes.push(...searchRoots().map((root) => (root === document ? document.body : root)));
   const items = [], seen = new Set();
   for (const scope of scopes) {
     for (const element of scope.querySelectorAll('input[type="checkbox"], input[type="radio"], select, input[role="combobox"], input[aria-autocomplete]')) {
@@ -614,7 +711,7 @@ function detectAcknowledgements(found = detectFields().found) {
       const question = (groupQuestion(element) || labelOf(element) || '').trim();
       const own = kind === 'checkbox' ? (element.closest('label')?.textContent ?? labelOf(element)) : '';
       const options = kind === 'select' ? [...element.options].map((option) => option.textContent) : kind === 'radio'
-        ? [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)].map((radio) => labelOf(radio.labels?.[0] ?? radio)) : [];
+        ? groupRadios(element).map((radio) => labelOf(radio.labels?.[0] ?? radio)) : [];
       const text = `${question} ${own} ${options.join(' ')}`;
       if (!(CONSENT.test(text) || ACKNOWLEDGE.test(question) || ACKNOWLEDGE.test(own)) || NOT_ROUTINE.test(text)) continue;
       if (kind === 'checkbox' && !ACKNOWLEDGE.test(own || question)) continue;
@@ -662,6 +759,13 @@ window.CVAutofillFields = {
   labelOf,
   zoneDone,
   groupOf,
+  rootOf,
+  searchRoots,
+  deepAll,
+  deepOne,
+  byTag: taggedField,
+  radiosOf: groupRadios,
+  isUploadButton,
   CATEGORIES,
   NEVER_FILL,
   FIELD_KEYS: CATEGORIES.map((c) => c.key),

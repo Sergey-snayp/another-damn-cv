@@ -1,4 +1,5 @@
 import type { ResumesApi } from '../../contracts';
+import { practiceHintText, practiceHints } from '../../domain/job-practices';
 import type { TailoringJobReader } from '../ports/tailoring';
 import { ResumeError } from '../errors';
 import { scoreResume, type ResumeScore } from '../../domain/resume-score';
@@ -24,7 +25,9 @@ import { writeCheckedSummary, type CheckedSummary, type SummaryWriter } from './
 const TAILOR_LINE = `Tailor this line for the job below, so a recruiter for this job sees the match at once:
 - Lead with the part of the line this job cares about most.
 - Use the job's own words for what the line already shows (if the job says "event-driven"
-  and the line describes services fed by Kafka events, say event-driven).
+  and the line describes services fed by Kafka events, say event-driven; if it says
+  "observability" and the line has CloudWatch alarms and dashboards, say observability).
+  Name the practice; keep the line's own tools and numbers next to it.
 - Make it tighter and more concrete: an active verb first, no filler.
 - Keep every number, technology and fact the line has. Add none it does not have:
   no new technology, number, scale or responsibility.
@@ -171,10 +174,15 @@ export class ResumeAssistant {
     await this.resumes.assertOwned(userId, id);
     if (!input.text.trim()) throw new ResumeError('invalid', 'There is nothing to tailor yet.');
     const context = [input.context, jobText, await this.promptSettings(id)].filter(Boolean).join('\n\n');
+    // The posting's words for practices this line already shows ("observability" for CloudWatch alarms).
+    const hints = practiceHintText(practiceHints(job.description, input.text));
     return this.rewriter.rewrite({
       text: input.text,
       kind: input.kind,
-      instruction: withRequest(TAILOR_BY_KIND[input.kind], input.instruction),
+      instruction: withRequest(
+        hints ? `${TAILOR_BY_KIND[input.kind]}\n\n${hints}` : TAILOR_BY_KIND[input.kind],
+        input.instruction,
+      ),
       context,
     });
   }

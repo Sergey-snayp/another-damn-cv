@@ -344,6 +344,27 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
   assert.match(prompt, /Docker and Kubernetes/);
   assert.match(prompt, /Engineer at Acme/);
   assert.match(prompt, /Add none it does not have/);
+  assert.doesNotMatch(
+    prompt,
+    /The posting's words for work this line already shows/,
+    'this posting names no such practice',
+  );
+
+  // A posting that asks for observability: a line with CloudWatch alarms is told to say so.
+  const observed = await call(`/resumes/${resumeId}/tailor-line`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: {
+      text: 'Added CloudWatch alarms and dashboards to the payment services.',
+      kind: 'bullet',
+      job: { title: 'Platform Engineer', description: 'You will improve observability across our services.' },
+    },
+  });
+  assert.equal(observed.status, 200);
+  assert.match(
+    prompts.at(-1)!,
+    /The posting's words for work this line already shows[^\n]*\n- "observability": the line's CloudWatch, alarms, dashboards/,
+  );
 });
 
 test('a CV can be deleted by its owner: its versions and PDF go, a job applied with it stays', async () => {

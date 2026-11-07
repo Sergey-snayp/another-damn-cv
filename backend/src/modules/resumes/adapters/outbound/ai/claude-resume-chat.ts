@@ -91,7 +91,7 @@ Answer the last user message. Return ONLY JSON, no prose and no code fences:
 }
 
 "suggestions" may be empty.`;
-    return readAnswer(await this.llm.complete(prompt, SYSTEM, { timeoutMs: 120_000 }));
+    return readAnswer(await this.llm.complete(prompt, SYSTEM, { timeoutMs: 120_000, effort: 'medium' }));
   }
 }
 

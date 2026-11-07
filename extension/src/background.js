@@ -1,6 +1,6 @@
 import { matchAnswers, saveAnswers } from './answers.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
-import { captureTab, lookupJob, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
+import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
 
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
@@ -105,6 +105,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const fromContent = !sender.url?.startsWith('chrome-extension:');
   const fromPanel = sender.url?.startsWith(PANEL_URL);
 
+  // ✦ Generate answer in a field's popover: Claude writes it from the chosen CV and the job.
+  if (message?.type === 'answer-draft' && fromContent) {
+    void (async () => {
+      const { chosenResumeId } = await chrome.storage.local.get('chosenResumeId');
+      if (!chosenResumeId) return sendResponse({ ok: false, message: 'Choose a CV in the panel first: the answer is written from it.' });
+      const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+      const page = message.job ?? {};
+      const fromPage = Object.fromEntries(Object.entries({ title: text(page.title, 300), company: text(page.company, 200), text: text(page.text, 40000) }).filter(([, value]) => value));
+      const url = typeof message.jobUrl === 'string' && message.jobUrl ? message.jobUrl : sender.tab.url ?? '';
+      const draft = await draftAnswer({
+        question: text(message.question, 500),
+        kind: message.kind,
+        ...(Array.isArray(message.options) && message.options.length && { options: message.options.map((option) => text(option, 300)).slice(0, 200) }),
+        ...(Number.isInteger(message.maxLength) && message.maxLength > 0 && { maxLength: message.maxLength }),
+        job: await jobForDraft(url, fromPage),
+        resumeId: chosenResumeId,
+      });
+      sendResponse({ ok: true, ...draft });
+    })().catch((error) => sendResponse({ ok: false, message: error instanceof NotSignedInError ? 'Sign in from the panel first.' : error.message }));
+    return true;
+  }
+  // The person submitted the application form: the saved job moves to Applied.
+  if (message?.type === 'application-submitted' && fromContent) {
+    const url = typeof message.jobUrl === 'string' && message.jobUrl ? message.jobUrl : sender.tab.url ?? '';
+    const answers = (Array.isArray(message.answers) ? message.answers : [])
+      .filter((item) => typeof item?.question === 'string' && typeof item?.answer === 'string')
+      .map((item) => ({ question: item.question.slice(0, 500), answer: item.answer.slice(0, 5000) }))
+      .slice(0, 200);
+    void markApplied(url, answers).then((moved) => {
+      // An open panel shows the new status on its job card.
+      if (moved) chrome.runtime.sendMessage({ type: 'job-saved', url }).catch(() => {});
+    }, () => {});
+    sendResponse({ ok: true });
+    return false;
+  }
   if (message?.type === 'panel-tab' && fromPanel) {
     sendResponse({ tabId });
     return false;
