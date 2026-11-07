@@ -525,6 +525,21 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const waiting = tailoring?.items.filter((item) => item.busy).length ?? 0;
   const ready = tailoring?.items.filter(isReady) ?? [];
   const many = (tailoring?.items.length ?? 0) > 1;
+  /** Use / Skip / Try again / Dismiss for one suggestion, once it has come back. */
+  const itemActions = (item: Suggestion) => {
+    if (item.busy || item.decided) return null;
+    const same = item.after !== undefined && item.after.trim() === item.before.trim();
+    return (
+      <div className="ra-row qt-actions">
+        {item.after !== undefined && (
+          <button className="primary" disabled={same || saving} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
+        )}
+        {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
+        <button className="ghost" disabled={saving} onClick={() => retry(item)}>Try again</button>
+        {!many && <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>}
+      </div>
+    );
+  };
 
   return (
     <div className="studio qt"
@@ -605,9 +620,20 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
 
           {tailoring && (
             <div className="qt-card" ref={cardRef} style={{ top: cardTop }} role="dialog" aria-label="Suggestions for the job">
-              <div className="qt-card-head">
-                <b>✦ {many ? `${tailoring.items.length} lines` : 'Tailored'} for {job ? jobName(job) : 'the job'}</b>
-                <button className="qt-close" title="Close" onClick={() => setTailoring(null)}>×</button>
+              {/* The title and the buttons that decide stay pinned at the top while the card scrolls. */}
+              <div className={`qt-card-top${tailoring.stage === 'generated' ? ' has-actions' : ''}`}>
+                <div className="qt-card-head">
+                  <b>✦ {many ? `${tailoring.items.length} lines` : 'Tailored'} for {job ? jobName(job) : 'the job'}</b>
+                  <button className="qt-close" title="Close" onClick={() => setTailoring(null)}>×</button>
+                </div>
+                {tailoring.stage === 'generated' && (many ? (
+                  <div className="ra-row">
+                    <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>
+                      Use all{ready.length ? ` ${ready.length}` : ''}
+                    </button>
+                    <button className="ghost" onClick={() => setTailoring(null)}>Close</button>
+                  </div>
+                ) : itemActions(tailoring.items[0]!))}
               </div>
               <div className="qt-compose">
                 {tailoring.stage === 'compose' && (
@@ -640,10 +666,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
               {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
               {tailoring.stage === 'generated' && <div className="qt-items">
                 {tailoring.items.map((item) => {
-                  const same = item.after !== undefined && item.after.trim() === item.before.trim();
                   return (
                     <div key={item.key} className={`qt-item${item.decided ? ` is-${item.decided}` : ''}`}>
                       {many && <p className="qt-item-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
+                      {many && itemActions(item)}
                       {item.busy && <div className="qt-skeleton" aria-hidden="true"><span /><span /><span /></div>}
                       {item.error && <p className="ra-error">{item.error}</p>}
                       {item.after !== undefined && (
@@ -656,28 +682,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                           {item.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
                         </>
                       )}
-                      {!item.busy && !item.decided && (
-                        <div className="ra-row">
-                          {item.after !== undefined && (
-                            <button className="primary" disabled={same || saving} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
-                          )}
-                          {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
-                          <button className="ghost" disabled={saving} onClick={() => retry(item)}>Try again</button>
-                          {!many && <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>}
-              {many && tailoring.stage === 'generated' && (
-                <div className="ra-row qt-card-foot">
-                  <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>
-                    Use all{ready.length ? ` ${ready.length}` : ''}
-                  </button>
-                  <button className="ghost" onClick={() => setTailoring(null)}>Close</button>
-                </div>
-              )}
             </div>
           )}
         </main>

@@ -418,12 +418,20 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.equal(aiRequests.length, 0, 'the AI button opens the card; nothing is generated before Generate');
       await page.type('.qt-request textarea', 'Make it shorter');
       await page.click('.qt-card .qt-generate');
-      await page.waitForSelector('.qt-item .primary');
+      await page.waitForSelector('.qt-card-top .qt-actions .primary');
       assert.equal(aiRequests.at(-1).instruction, 'Make it shorter', 'the request typed in the card goes to the AI');
       const report = await page.$eval('.qt-item', element => element.innerText);
       for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'How it answers the posting'])
         assert.ok(report.includes(part), `the summary card shows: ${part}`);
-      await page.click('.qt-item .primary');
+      assert.deepEqual(await page.$$eval('.qt-card-top .qt-actions button', buttons => buttons.map(button => button.textContent)), ['Use this', 'Try again', 'Dismiss']);
+      await page.$eval('.qt-card', card => { card.scrollTop = card.scrollHeight; });
+      await pause(50);
+      assert.ok(await page.$eval('.qt-card', card => {
+        const bar = card.querySelector('.qt-card-top .qt-actions').getBoundingClientRect(), box = card.getBoundingClientRect();
+        return bar.top >= box.top - 1 && bar.bottom <= box.bottom;
+      }), 'Use this, Try again and Dismiss stay at the top of the card while it scrolls');
+      await page.screenshot({ path: '/private/tmp/job-agent-qt-card.png' });
+      await page.click('.qt-card-top .qt-actions .primary');
       assert.equal(await summaryText(), 'Built services for Acme.', 'the summary goes in with its bold');
       await page.click(undo);
       assert.equal(await summaryText(), 'First edit.');
