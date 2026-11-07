@@ -51,9 +51,24 @@ export interface AiSettings {
   instructions: string;
 }
 
+export interface JobAssessment {
+  verdict: 'apply' | 'stretch' | 'skip' | 'unclear';
+  /** 0 to 10, inside the verdict's band; null when unclear. */
+  score: number | null;
+  summary: string;
+  strengths: Array<{ point: string; jobQuote: string; profileQuote: string }>;
+  gaps: Array<{ point: string; jobQuote: string; importance: 'required' | 'preferred' }>;
+  questions: string[];
+  /** The posting's technologies; inProfile is checked by the server against the Profile text. */
+  technologies?: Array<{ name: string; inProfile: boolean }>;
+  basis: { source: 'profile'; profileRevision: number; jobId: string };
+}
+
 const path = (id: string) => `/resumes/${encodeURIComponent(id)}`;
 
 export const assistantApi = {
+  assessJob: (jobId: string) =>
+    request<JobAssessment>('/profile/job-assessment', { method: 'POST', body: JSON.stringify({ jobId }) }),
   score: (id: string, job: JobChoice) =>
     request<ResumeScore>(`${path(id)}/score`, { method: 'POST', body: JSON.stringify(job) }),
   chat: (id: string, messages: ChatMessage[], job?: JobChoice) =>

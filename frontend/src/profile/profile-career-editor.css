@@ -1,0 +1,65 @@
+.career-edit-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.career-edit-heading h3 {
+  overflow-wrap: anywhere;
+}
+.career-edit-heading button {
+  flex-shrink: 0;
+}
+.career-edit-bullet {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  margin: 0 -8px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.career-edit-bullet label {
+  flex: 1;
+  min-width: 0;
+}
+.career-edit-bullet textarea {
+  margin-bottom: 0;
+}
+.career-edit-entry:has(> .career-edit-heading .career-remove:hover),
+.career-edit-entry:has(> .career-edit-heading .career-remove:focus-visible),
+.career-edit-bullet:has(.career-remove:hover),
+.career-edit-bullet:has(.career-remove:focus-visible) {
+  border-color: var(--color-error-border);
+  background: var(--color-error-soft);
+}
+@media (max-width: 550px) {
+  .career-edit-heading,
+  .career-edit-bullet {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .profile-career-editor > form {
+    max-height: calc(100dvh - 20px);
+  }
+}
+.profile-career-editor {
+  overflow: hidden;
+}
+.profile-career-editor > form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 40px);
+}
+.profile-career-editor .profile-import-header,
+.profile-career-editor .profile-import-footer {
+  flex-shrink: 0;
+}
+.profile-career-editor .profile-import-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+.profile-career-editor .profile-import-footer {
+  position: static;
+}

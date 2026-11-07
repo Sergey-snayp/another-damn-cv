@@ -96,6 +96,14 @@ test('the runner preserves CLI arguments, isolated cwd, environment allowlist, s
     '--exclude-dynamic-system-prompt-sections',
     '--system-prompt',
     'Exact system prompt',
+    '--restricted',
+    '--tools',
+    '',
+    '--disable-slash-commands',
+    '--no-session-persistence',
+    '--permission-mode',
+    'dontAsk',
+    '--no-chrome',
   ]);
   assert.deepEqual(launched.options.stdio, ['pipe', 'pipe', 'pipe']);
   assert.deepEqual(readdirSync(launched.options.cwd), []);
@@ -135,13 +143,10 @@ test('spawn errors and synchronous launch failures keep the existing unavailable
   }
 });
 
-test('prompt-only practice restricts tools and persistence without disabling local sign-in', async (context) => {
+test('every call is prompt only: no tools or saved session, without disabling local sign-in', async (context) => {
   const child = new FakeChild(),
     runner = fixture(context, [child]);
-  const response = runner.complete('private candidate data', 'coach', {
-    promptOnly: true,
-    model: 'practice-model',
-  });
+  const response = runner.complete('private candidate data', 'coach', { model: 'practice-model' });
   const args = runner.launches[0].args;
   for (const flag of ['--restricted', '--disable-slash-commands', '--no-session-persistence', '--no-chrome'])
     assert.ok(args.includes(flag));

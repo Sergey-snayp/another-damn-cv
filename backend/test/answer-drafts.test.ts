@@ -118,7 +118,7 @@ test('the drafter sends the truth rules and source data, and rejects unusable re
     ),
   });
   assert.equal((await ok.draft(context)).answer, 'I build payment APIs. [add your reason]');
-  assert.equal((options as { promptOnly: boolean }).promptOnly, true);
+  assert.equal((options as { timeoutMs: number }).timeoutMs, 120_000);
   const bad = new ClaudeCliAnswerDrafter({ complete: () => Promise.resolve('{"text":"wrong shape"}') });
   await assert.rejects(
     bad.draft(context),

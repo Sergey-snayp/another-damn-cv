@@ -180,7 +180,9 @@ function assertInlineChanges(resume, source) {
 async function check(browser, failure, fullEditor = false, historyMode = false) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1180, height: 880 });
-  const events = [], errors = [], aiRequests = [];
+  const events = [], errors = [], aiRequests = [], assessmentRequests = [];
+  let assessmentUnavailable = historyMode;
+  let assessedOnOpen = 0;
   let fail = failure, cvSaved = false;
   let savedId = fullEditor ? 'copy-1' : null, createdDocuments = fullEditor ? 1 : 0;
   let resume = {
@@ -252,6 +254,16 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       if (pathname === '/api/jobs') return reply([]);
       if (pathname === '/api/jobs/job-1') return reply({ id: 'job-1', title: 'Engineer', company: 'Acme', description: 'Build Node.js services.' });
       if (pathname.endsWith('/score')) return reply({ score: historyMode ? 50 : null, keywords: historyMode ? { matched: ['Node.js'], missing: ['Docker'] } : null, issues: [], job: { id: 'job-1', title: 'Engineer', company: 'Acme' } });
+      if (pathname.endsWith('/job-assessment')) {
+        assessmentRequests.push({ path: pathname, body: JSON.parse(request.postData() || '{}') });
+        await pause(200);
+        if (assessmentUnavailable) return reply({ message: 'Test assessment unavailable' }, 503);
+        return reply({ verdict: 'apply', score: 8, technologies: [{ name: 'Node.js', inProfile: true }, { name: 'Docker', inProfile: false }],
+          summary: 'I would apply. Your payment API work in Node.js fits the central backend responsibilities; confirm how much Docker the role expects.',
+          strengths: [{ point: 'Your API delivery is relevant to this role.', jobQuote: 'Build Node.js services.', profileQuote: 'Led payment API delivery, including details omitted from this CV.' }],
+          gaps: [{ point: 'The Profile does not yet show container operations experience.', jobQuote: 'Build Node.js services.', importance: 'preferred' }],
+          questions: ['How much infrastructure ownership is expected?'], basis: { source: 'profile', profileRevision: 3, jobId: 'job-1' } });
+      }
       if (pathname.endsWith('/tailor-summary')) {
         aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(150);
         return reply({ original: '', summary: 'Built services for **Acme**.', wordCount: 4, mapping: [{ item: 'Node.js', type: 'required', evidence: 'NO EVIDENCE', employer: null }], gaps: ['Node.js'], decidingGap: 'Node.js', failedChecks: [{ id: 'word-count', name: 'Word count', ok: false, detail: '4 words; it must be 80 to 120.' }], attempts: 3 });
@@ -287,6 +299,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await print.waitForSelector('[data-section="education"]');
       assert.equal(await print.$('[contenteditable="true"]'), null, 'the printed CV is read-only');
       assert.equal(await print.$('.doc-add, .pro-skill .doc-remove, .doc-education .doc-remove'), null, 'editing controls stay out of the printed CV');
+      assert.equal(await print.$('.qt-assessment'), null, 'job recommendations stay out of the CV PDF');
       const text = await print.$eval('.page', element => element.textContent);
       for (const value of ['Languages: TypeScript, Rust', 'Cloud: AWS', 'New University', 'Master of Science, Software Engineering', 'Sep 2014 - Jun 2018'])
         assert.ok(text.includes(value), `the printed CV includes ${value}`);
@@ -306,7 +319,36 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.ok(events.includes('preview') && !events.includes('copy'), 'opening reads a draft instead of creating a copy');
       assert.equal(createdDocuments, 0, 'opening Quick Tailor creates no document');
       assert.equal(await page.evaluate(() => window.testMessages.some(message => message.type === 'CV_PLATFORM_RESUMES_CHANGED')), false, 'opening does not publish a new document to the extension');
+      await page.waitForSelector('.qt-assessment-start button');
+      await pause(400);
+      assert.equal(assessmentRequests.length, 0, 'opening Quick Tailor does not run "Should you apply?"');
+      await page.click('.qt-assessment-start button');
+      if (historyMode) {
+        await page.waitForSelector('.qt-assessment [role="alert"]');
+        assert.match(await page.$eval('.qt-assessment', element => element.textContent), /Test assessment unavailable/);
+        assessmentUnavailable = false;
+        await page.click('.qt-assessment button');
+      }
+      await page.waitForSelector('.qt-assessment-verdict');
+      assert.match(await page.$eval('.qt-assessment', element => element.textContent), /I’d apply/);
+      assert.match(await page.$eval('.qt-assessment', element => element.textContent), /payment API work/);
+      assert.equal(await page.$eval('.qt-assessment-score', element => element.getAttribute('aria-label')), '8 out of 10');
+      assert.equal(await page.$$eval('.qt-assessment-meter i.on', bars => bars.length), 8);
+      assert.deepEqual(await page.$$eval('.qt-assessment-summary .qt-tech', marks => marks.map(mark => `${mark.textContent}:${mark.className}`)),
+        ['Node.js:qt-tech has', 'Docker:qt-tech missing'], 'technologies are bold, green when the Profile shows them and red when not');
+      assert.ok(assessmentRequests.every(request => request.path === '/api/profile/job-assessment' && JSON.stringify(request.body) === JSON.stringify({ jobId: 'job-1' })), 'only the job is sent; the assessment reads the saved Profile independently of the CV');
+      assert.match(await page.$eval('.qt-assessment', element => element.textContent), /Based on your saved Profile/);
+      assert.equal(createdDocuments, 0, 'the assessment creates no CV');
     }
+    if (failure === 'close') {
+      await page.screenshot({ path: '/private/tmp/job-agent-quick-tailor-assessment.png', fullPage: true });
+      const beforeProfileSave = assessmentRequests.length;
+      await page.evaluate(() => window.dispatchEvent(new StorageEvent('storage', { key: 'cv-platform:profile-career-changed', newValue: 'updated-profile' })));
+      await page.waitForSelector('.qt-assessment-start button');
+      await pause(400);
+      assert.equal(assessmentRequests.length, beforeProfileSave, 'a Profile edit clears the old advice without running it again');
+    }
+    assessedOnOpen = assessmentRequests.length;
     assert.ok(!events.includes('save') && !events.includes('pdf'), 'opening Quick Tailor does not save or generate a PDF');
     assert.equal(await page.evaluate(() => window.testMessages.some(message => message.type === 'CV_PLATFORM_USE_RESUME')), false);
     if (historyMode) {
@@ -507,6 +549,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
     assert.deepEqual(errors, []);
     console.log(`PASS Quick Tailor Save (${failure ? `${failure} failure and retry` : 'success'})`);
   } finally {
+    if (!fullEditor && assessedOnOpen) assert.equal(assessmentRequests.length, assessedOnOpen, 'editing, history, Reset and Save do not change the Profile assessment');
     if (!page.isClosed()) await page.close();
   }
 }

@@ -122,6 +122,7 @@
    * domain when the page is on it, for the panel's site-icon fallback.
    */
   function find(companyName) {
+    if (window.CVAutofillLinkedIn?.isPage()) return { logo: window.CVAutofillLinkedIn.read()?.logo ?? null, domain: null };
     const company = key(companyName);
     const own = companySite(company);
     try {

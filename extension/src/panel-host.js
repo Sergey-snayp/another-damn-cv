@@ -30,6 +30,12 @@
 
   const alive = () => Boolean(chrome.runtime?.id);
 
+  /** On the page, or inside its open modal dialog (LinkedIn's Easy Apply) so it can still be clicked. */
+  function attachHost() {
+    if (window.CVAutofillTopLayer) window.CVAutofillTopLayer.attach(host);
+    else if (!host.isConnected) document.documentElement.append(host);
+  }
+
   function notify(type) {
     if (!alive()) return;
     try { void chrome.runtime.sendMessage({ type }).catch(() => {}); } catch { /* extension reloaded */ }
@@ -41,7 +47,7 @@
     // usable: it shows its own "reload this page" notice.
     if (!iframe && !alive()) return false;
     clearTimeout(closeTimer);
-    if (!host.isConnected) document.documentElement.append(host);
+    attachHost();
     if (!iframe) {
       // Created once and kept while hidden, so tabs, drafts and scroll survive a close.
       iframe = document.createElement('iframe');
@@ -91,7 +97,7 @@
 
   /** An open panel goes back on the page if the page rebuilt its document. */
   function reattach() {
-    if (isOpen && !host.isConnected) document.documentElement.append(host);
+    if (isOpen && !host.isConnected) attachHost();
   }
 
   window.CVAutofillPanel = { open, close, reattach, toggle: () => (isOpen ? close() : open()), isOpen: () => isOpen };

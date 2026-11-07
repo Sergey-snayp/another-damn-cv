@@ -41,7 +41,10 @@ export interface CareerSections {
   educations: CareerEducation[];
   skills: string[];
 }
-export type CareerSource = { kind: 'file'; name: string } | { kind: 'resume'; id: string; snapshot: number };
+export type CareerSource =
+  | { kind: 'file'; name: string }
+  | { kind: 'resume'; id: string; snapshot: number }
+  | { kind: 'profile' };
 export interface CareerSection<T> {
   value: T;
   source: CareerSource;
@@ -90,7 +93,7 @@ export function mergeCareer(state: CareerState, input: CareerImport, importedAt:
 export const conflict = () =>
   new CareerImportError(
     'conflict',
-    'Your profile changed while you were reviewing this CV. Close and reopen the import to review the latest values.',
+    'Your profile changed in another session. Close and reopen the editor to review the latest values before saving.',
   );
 export function selectedContactChanged(
   existing: Partial<Record<StoredContactKey, string | null>>,

@@ -202,3 +202,69 @@ test('cover letters stay with their owner, and need a job description and valid 
   const broken = await call(path, { method: 'POST', token: ownerToken, body: { resumeId } });
   assert.equal(broken.status, 503, 'no letter after one retry: try again');
 });
+
+test('the app lists letters with their job and author, opens, edits, prints and deletes them', async () => {
+  const { resumeId, jobId } = await cvAndJob();
+  answer = JSON.stringify({
+    letter: 'Dear Hiring Manager,\n\nAt Acme I built 16 payment integrations.\n\nSincerely,\nSam Lee',
+    cannotClaim: [],
+  });
+  const written = await call(`/cover-letters/${jobId}`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { resumeId },
+  });
+  assert.equal(written.status, 200);
+
+  const list = (await (await call('/cover-letters', { user: owner.user.id })).json()) as Array<{
+    jobId: string;
+    fileName: string;
+    job: { title: string; company: string };
+    author: { firstName: string; email: string } | null;
+  }>;
+  const mine = list.find((item) => item.jobId === jobId)!;
+  assert.deepEqual(mine.job, { title: 'Senior Backend Engineer', company: 'Pay & Co' });
+  assert.equal(mine.author?.firstName, 'Sam');
+  assert.equal(mine.author?.email, 'sam@example.com');
+  assert.deepEqual(
+    await (await call('/cover-letters', { user: other.user.id })).json(),
+    [],
+    'only your own letters',
+  );
+
+  const detail = (await (await call(`/cover-letters/${jobId}`, { user: owner.user.id })).json()) as {
+    letter: { text: string };
+    job: { company: string };
+  };
+  assert.match(detail.letter.text, /16 payment integrations/);
+  assert.equal(detail.job.company, 'Pay & Co');
+  assert.equal((await call(`/cover-letters/${jobId}`, { user: other.user.id })).status, 404);
+
+  const edited = await call(`/cover-letters/${jobId}`, {
+    method: 'PUT',
+    user: owner.user.id,
+    body: { text: 'Edited.' },
+  });
+  assert.equal(((await edited.json()) as { text: string }).text, 'Edited.');
+  const pdf = await call(`/cover-letters/${jobId}/pdf`, { user: owner.user.id });
+  assert.match(pdf.headers.get('content-disposition') ?? '', /^inline/);
+
+  assert.equal(
+    (await call(`/cover-letters/${jobId}`, { method: 'DELETE', user: other.user.id })).status,
+    404,
+  );
+  assert.equal(
+    (await call(`/cover-letters/${jobId}`, { method: 'DELETE', user: owner.user.id })).status,
+    204,
+  );
+  assert.deepEqual(
+    ((await (await call(`/cover-letters/${jobId}`, { user: owner.user.id })).json()) as { letter: unknown })
+      .letter,
+    null,
+  );
+  assert.equal(
+    (await call(`/cover-letters/${jobId}`, { method: 'DELETE', user: owner.user.id })).status,
+    404,
+  );
+  assert.equal((await call('/cover-letters')).status, 401, 'signed out');
+});

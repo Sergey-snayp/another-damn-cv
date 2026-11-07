@@ -615,3 +615,216 @@ test('a technology on the CV is described once by the AI, then read from the sav
   answer = '   ';
   assert.equal((await call(`/resumes/${id}/technology?name=Kafka`, { user: owner.user.id })).status, 400);
 });
+
+test('job advice uses full saved Profile evidence independently of CVs and creates no documents or PDFs', async () => {
+  const { id } = await cv();
+  const tracked = await call('/jobs', {
+    method: 'POST',
+    user: owner.user.id,
+    body: { title: 'Backend Engineer', company: 'Acme', description: JOB },
+  });
+  assert.equal(tracked.status, 201);
+  const job = (await tracked.json()) as { id: string };
+  const state = (await (await call('/profile/career', { user: owner.user.id })).json()) as {
+    revision: number;
+  };
+  const profileRole = {
+    company: 'Full Profile Employer',
+    title: 'Lead Engineer',
+    client: 'Payments Client',
+    location: 'Remote',
+    from: '2018',
+    to: '',
+    current: true,
+    description: 'This detailed role description is saved only in Profile.',
+    bullets: [
+      'Implemented Node.js and TypeScript services for payment reconciliation.',
+      'Mentored engineers across the platform team.',
+    ],
+  };
+  const saved = await call('/profile/career', {
+    method: 'PUT',
+    user: owner.user.id,
+    body: {
+      expectedRevision: state.revision,
+      sections: {
+        experiences: [profileRole],
+        skills: ['Node.js', 'TypeScript'],
+        educations: [
+          { institution: 'Backend Training', degree: '', field: 'Distributed systems', from: '', to: '' },
+        ],
+      },
+    },
+  });
+  assert.equal(saved.status, 200);
+  const profile = (await saved.json()) as {
+    revision: number;
+    data: { experiences: { source: { kind: string } } };
+  };
+  assert.equal(profile.data.experiences.source.kind, 'profile');
+  const before = {
+    documents: await prisma.resume.count({ where: { profileId: owner.profile.id } }),
+    versions: await prisma.snapshot.count({ where: { resumeId: id } }),
+    pdfs: await prisma.resumePdf.count({ where: { resumeId: id } }),
+    cv: await (await call('/resumes/' + id, { user: owner.user.id })).json(),
+  };
+  answer = JSON.stringify({
+    verdict: 'apply',
+    score: 8,
+    technologies: ['TypeScript', 'Kubernetes', 'Invented Tech'],
+    summary:
+      'I would apply. Your full Profile shows relevant backend delivery and team mentoring; clarify the infrastructure scope.',
+    strengths: [
+      {
+        point: 'Your payment services match this backend role.',
+        jobQuote: 'Node.js and TypeScript',
+        profileQuote: profileRole.bullets[0],
+      },
+    ],
+    gaps: [
+      {
+        point: 'Kubernetes operations are not shown in your Profile.',
+        jobQuote: 'Docker and Kubernetes',
+        importance: 'required',
+      },
+    ],
+    questions: ['How much Kubernetes ownership is expected?'],
+  });
+  const modelCalls = prompts.length;
+  const assess = (user = owner.user.id, body: unknown = { jobId: job.id }) =>
+    call('/profile/job-assessment', { method: 'POST', user, body });
+  const response = await assess();
+  assert.equal(response.status, 200);
+  const assessment = (await response.json()) as {
+    verdict: string;
+    score: number;
+    technologies: unknown;
+    basis: unknown;
+  };
+  assert.equal(assessment.verdict, 'apply');
+  assert.equal(assessment.score, 8);
+  assert.deepEqual(assessment.technologies, [
+    { name: 'TypeScript', inProfile: true },
+    { name: 'Kubernetes', inProfile: false },
+  ]);
+  assert.deepEqual(assessment.basis, { source: 'profile', profileRevision: profile.revision, jobId: job.id });
+  assert.equal(prompts.length, modelCalls + 1);
+  assert.match(prompts.at(-1)!, /full Profile|full.*Profile|Profile/);
+  for (const detail of [
+    profileRole.description,
+    profileRole.bullets[1],
+    profileRole.client,
+    'Distributed systems',
+  ])
+    assert.ok(prompts.at(-1)!.includes(detail));
+  assert.ok(
+    !prompts.at(-1)!.includes('Responsible for Node.js APIs on PostgreSQL with Docker.'),
+    'the selected CV content is never read into the recommendation',
+  );
+  assert.equal((await assess()).status, 200);
+  assert.equal(prompts.length, modelCalls + 1, 'unchanged Profile reuses the assessment');
+  assert.equal(
+    (await call('/profile/job-assessment', { method: 'POST', body: { jobId: job.id } })).status,
+    401,
+  );
+  assert.equal(
+    (await assess(other.user.id)).status,
+    404,
+    'a different account cannot assess this private job',
+  );
+  assert.equal((await assess(owner.user.id, {})).status, 400);
+  assert.equal(
+    (await assess(owner.user.id, { jobId: job.id, resumeId: id })).status,
+    400,
+    'no selected CV is accepted as an assessment source',
+  );
+  assert.equal(prompts.length, modelCalls + 1);
+  const changed = await call('/profile/career', {
+    method: 'PUT',
+    user: owner.user.id,
+    body: {
+      expectedRevision: profile.revision,
+      sections: {
+        experiences: [{ ...profileRole, bullets: [...profileRole.bullets, 'Improved platform monitoring.'] }],
+      },
+    },
+  });
+  assert.equal(changed.status, 200);
+  assert.equal((await assess()).status, 200);
+  assert.equal(prompts.length, modelCalls + 2, 'saving Profile changes invalidates the old assessment');
+  assert.ok(prompts.at(-1)!.includes('Improved platform monitoring.'));
+  assert.equal(await prisma.resume.count({ where: { profileId: owner.profile.id } }), before.documents);
+  assert.equal(await prisma.snapshot.count({ where: { resumeId: id } }), before.versions);
+  assert.equal(await prisma.resumePdf.count({ where: { resumeId: id } }), before.pdfs);
+  assert.deepEqual(await (await call('/resumes/' + id, { user: owner.user.id })).json(), before.cv);
+});
+
+test('an empty Profile asks for details even with a populated CV, and editing needs no CV', async () => {
+  const created = (await (
+    await call('/resumes', { method: 'POST', user: other.user.id, body: { name: 'CV with evidence' } })
+  ).json()) as { id: string };
+  assert.equal(
+    (
+      await call('/resumes/' + created.id + '/save', {
+        method: 'POST',
+        user: other.user.id,
+        body: {
+          summaries: [
+            { variant: 'default', text: 'Experienced backend engineer with PostgreSQL and Node.js.' },
+          ],
+        },
+      })
+    ).status,
+    201,
+  );
+  const job = (await (
+    await call('/jobs', {
+      method: 'POST',
+      user: other.user.id,
+      body: { title: 'Backend Engineer', description: JOB },
+    })
+  ).json()) as { id: string };
+  const before = prompts.length;
+  const response = await call('/profile/job-assessment', {
+    method: 'POST',
+    user: other.user.id,
+    body: { jobId: job.id },
+  });
+  assert.equal(response.status, 200);
+  const advice = (await response.json()) as { verdict: string; summary: string };
+  assert.equal(advice.verdict, 'unclear');
+  assert.match(advice.summary, /Profile has no career details/);
+  assert.equal(prompts.length, before, 'CV evidence is never a fallback');
+  const fresh = await createUser('Profile Without CVs');
+  const write = (body: unknown, user: string | undefined = fresh.user.id) =>
+    call('/profile/career', { method: 'PUT', user, body });
+  const details = {
+    expectedRevision: 0,
+    sections: {
+      summary: 'Profile-only engineer.',
+      experiences: [
+        {
+          title: 'Engineer',
+          company: 'Profile Co',
+          client: '',
+          location: '',
+          from: '2020',
+          to: '',
+          current: true,
+          description: 'All responsibilities.',
+          bullets: ['Shipped reliable Node.js services.'],
+        },
+      ],
+    },
+  };
+  assert.equal((await write(details)).status, 200);
+  assert.equal((await write(details)).status, 409, 'a stale editor cannot overwrite newer profile changes');
+  assert.equal((await write({ expectedRevision: 1, sections: {} })).status, 400);
+  assert.equal((await call('/profile/career', { method: 'PUT', body: details })).status, 401);
+  assert.equal(
+    (await write({ expectedRevision: 1, sections: { experiences: [] } })).status,
+    200,
+    'explicit empty lists clear a section',
+  );
+  assert.equal(await prisma.resume.count({ where: { profileId: fresh.profile.id } }), 0);
+});

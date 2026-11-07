@@ -27,6 +27,7 @@
   const shadow = host.attachShadow({ mode: 'closed' });
   shadow.innerHTML = `<style>
     :host { all: initial; position: absolute !important; left: 0 !important; top: 0 !important; width: 0 !important; height: 0 !important; z-index: 2147483645 !important; }
+    :host(.adcv-in-dialog) { position: fixed !important; left: var(--adcv-left, 0px) !important; top: var(--adcv-top, 0px) !important; }
     .mark { position: absolute; display: grid; place-items: center; width: ${SIZE}px; height: ${SIZE}px; border-radius: 50%; border: 2px solid #fff;
       color: #fff; font: 700 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer; box-sizing: content-box; }
     .mark.open { outline: 2px solid #2563eb; outline-offset: 1px; }
@@ -172,15 +173,34 @@
     if (!marks.size) stop();
   }
 
+  /**
+   * On the page, or inside the page's open modal dialog (LinkedIn's Easy Apply),
+   * which Chrome draws above everything else. Icons are placed in page
+   * coordinates, so inside the dialog the layer is fixed and offset by the scroll.
+   */
+  function attachHost() {
+    const layer = window.CVAutofillTopLayer;
+    if (!layer) { if (!host.isConnected) document.documentElement.append(host); return; }
+    layer.attach(host, dialog => {
+      host.classList.toggle('adcv-in-dialog', Boolean(dialog));
+      host.style.setProperty('--adcv-left', `${-scrollX}px`);
+      host.style.setProperty('--adcv-top', `${-scrollY}px`);
+      if (marks.size) reposition();
+    });
+  }
+  function detachHost() {
+    if (window.CVAutofillTopLayer) window.CVAutofillTopLayer.detach(host); else host.remove();
+  }
+
   function stop() {
     clearInterval(ticker); ticker = 0;
     removeEventListener('scroll', reposition, true);
     removeEventListener('resize', reposition);
-    if (!shadow.querySelector('.glow')) host.remove();
+    if (!shadow.querySelector('.glow')) detachHost();
   }
 
   function start() {
-    if (!host.isConnected) document.documentElement.append(host);
+    if (!host.isConnected) attachHost();
     if (ticker) return;
     addEventListener('scroll', reposition, { capture: true, passive: true });
     addEventListener('resize', reposition);
@@ -502,12 +522,12 @@
   function glow(element, status, { pulse = false } = {}) {
     const rect = boxFor(element).getBoundingClientRect();
     if (!rect.width && !rect.height) return () => {};
-    if (!host.isConnected) document.documentElement.append(host);
+    if (!host.isConnected) attachHost();
     const node = document.createElement('div');
     node.className = `glow ${status}${pulse ? ' pulse' : ''}${motion.mode === 'reduced' ? ' still' : ''}`;
     Object.assign(node.style, { left: `${rect.left + scrollX - 4}px`, top: `${rect.top + scrollY - 4}px`, width: `${rect.width + 8}px`, height: `${rect.height + 8}px` });
     shadow.append(node);
-    const removeGlow = () => { node.remove(); if (!marks.size && !shadow.querySelector('.glow')) host.remove(); };
+    const removeGlow = () => { node.remove(); if (!marks.size && !shadow.querySelector('.glow')) detachHost(); };
     if (!pulse) setTimeout(removeGlow, motion.mode === 'reduced' ? 500 : 900);
     return removeGlow;
   }
@@ -572,7 +592,7 @@
 
   /** Icons go back on the page if the page rebuilt its document. */
   function reattach() {
-    if (marks.size && !host.isConnected) { document.documentElement.append(host); reposition(); }
+    if (marks.size && !host.isConnected) { attachHost(); reposition(); }
   }
 
   /** What a person's own scroll does during a fill: stop following. Also used by tests, which cannot send trusted events. */

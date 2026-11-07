@@ -32,7 +32,7 @@ async function armedSteps(tabId, url) {
   return armed;
 }
 
-const PAGE_SCRIPTS = ['src/sites.js', 'src/fields.js', 'src/filler.js', 'src/marks.js', 'src/logo.js', 'src/job-details.js', 'src/launcher.js', 'src/panel-host.js', 'src/job-form.js', 'src/content.js'];
+const PAGE_SCRIPTS = ['src/top-layer.js', 'src/sites.js', 'src/fields.js', 'src/filler.js', 'src/marks.js', 'src/linkedin.js', 'src/logo.js', 'src/job-details.js', 'src/launcher.js', 'src/panel-host.js', 'src/job-form.js', 'src/content.js'];
 const PANEL_URL = chrome.runtime.getURL('src/sidepanel.html');
 
 /** Pages where Chrome loads PAGE_SCRIPTS itself, from the manifest's match patterns. */
@@ -245,7 +245,7 @@ async function pageDetails(tabId) {
       func: () => {
         const context = typeof scan === 'function' ? scan().context : null;
         const found = context && window.CVAutofillLogo ? window.CVAutofillLogo.find(context.company) : {};
-        return { title: context?.title ?? '', company: context?.company ?? '', logo: found.logo ?? null, domain: found.domain ?? null };
+        return { title: context?.title ?? '', company: context?.company ?? '', jobUrl: context?.jobUrl ?? null, logo: found.logo ?? null, domain: found.domain ?? null };
       },
     });
     return result?.result ?? {};
@@ -256,14 +256,16 @@ async function saveJobFromMenu(tab) {
   const tabId = tab.id;
   if (unsendableReason(tab)) { flashBadge(tabId, false); return; }
   try {
-    if (await lookupJob(tab.url)) { flashBadge(tabId, true); return; }
     const details = await pageDetails(tabId);
+    if (await lookupJob(details.jobUrl || tab.url)) { flashBadge(tabId, true); return; }
     const logo = details.logo || (details.domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(details.domain)}&sz=128` : null);
     const hints = Object.fromEntries(Object.entries({ title: details.title, company: details.company }).filter(([, value]) => value));
-    await sendCapture({ ...await captureTab(tabId), ...(logo && { companyLogo: logo }), ...(Object.keys(hints).length && { hints }) });
+    const capture = await captureTab(tabId);
+    const currentHints = { ...hints, ...capture.hints };
+    await sendCapture({ ...capture, ...(logo && { companyLogo: logo }), ...(Object.keys(currentHints).length && { hints: currentHints }) });
     flashBadge(tabId, true);
     // An open panel on this page shows the job as saved.
-    void chrome.runtime.sendMessage({ type: 'job-saved', url: tab.url }).catch(() => {});
+    void chrome.runtime.sendMessage({ type: 'job-saved', url: capture.url }).catch(() => {});
   } catch (error) {
     flashBadge(tabId, false);
     if (error instanceof NotSignedInError) {

@@ -13,7 +13,6 @@ export class ClaudeCliPracticeGenerator implements PracticeGenerator {
     let raw: string;
     try {
       raw = await this.runner.complete(practicePrompt(kind, context), PRACTICE_SYSTEM, {
-        promptOnly: true,
         model: this.identity.model,
         timeoutMs: 240_000,
         maxOutputChars: 64_000,

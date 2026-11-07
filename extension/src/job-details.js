@@ -37,6 +37,7 @@
 
   /** The page's JobPosting structured data, if any. */
   function posting() {
+    if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.posting ?? null;
     for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
       let data;
       try { data = JSON.parse(script.textContent); } catch { continue; }
@@ -49,7 +50,10 @@
 
   /** Only a date explicitly labelled as the job's posting date, never an update/expiry date. */
   function postedAt() {
-    const nodes = document.querySelectorAll('[itemprop~="datePosted" i], meta[name="datePosted" i], meta[property="job:posted_time" i]');
+    const linkedin = window.CVAutofillLinkedIn?.isPage();
+    const selected = linkedin ? window.CVAutofillLinkedIn.read() : null;
+    if (linkedin && !selected) return null;
+    const nodes = selected?.source === 'public' ? [] : (selected?.root ?? document).querySelectorAll('[itemprop~="datePosted" i], meta[name="datePosted" i], meta[property="job:posted_time" i]');
     const values = [posting()?.datePosted, ...Array.from(nodes, node => node.getAttribute('content') || node.getAttribute('datetime') || node.textContent)];
     for (const value of values) {
       if (typeof value !== 'string') continue;
@@ -146,13 +150,15 @@
 
   /** The details found, each '' or null when the page does not say. */
   function read() {
+    const linkedin = window.CVAutofillLinkedIn?.isPage();
+    const selected = linkedin ? window.CVAutofillLinkedIn.read() : null;
     const job = posting();
-    const bodyText = clean(document.body?.innerText ?? '').slice(0, 80000);
-    const description = job?.description ? htmlText(job.description).slice(0, 20000) : descriptionOnPage();
+    const bodyText = clean(linkedin ? selected?.text ?? '' : document.body?.innerText ?? '').slice(0, 80000);
+    const description = linkedin ? selected?.description ?? '' : job?.description ? htmlText(job.description).slice(0, 20000) : descriptionOnPage();
     const salary = salaryFrom(job) ?? salaryInText(bodyText) ?? { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null };
     const types = [].concat(job?.employmentType ?? []).join(' ');
     return {
-      location: locationFrom(job) || locationOnPage(),
+      location: linkedin ? selected?.location || locationFrom(job) : locationFrom(job) || locationOnPage(),
       ...salary,
       employmentType: typeOf(types) || typeOf(bodyText.slice(0, 3000)),
       description,

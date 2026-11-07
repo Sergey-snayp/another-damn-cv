@@ -35,6 +35,8 @@
     .status { position:absolute; top:100%; right:8px; width:230px; padding:10px 12px; border:1px solid var(--color-border); border-radius:10px; background:var(--color-surface); box-shadow:0 4px 16px var(--color-shadow); color:var(--color-text); } [hidden] { display:none !important; }
     @media(prefers-reduced-motion:reduce) { .launcher,.grip,.dismiss { transition:none; } }
   `;
+  const removeHost = () => (window.CVAutofillTopLayer ? window.CVAutofillTopLayer.detach(host) : host.remove());
+
   function renderVisibility() {
     // Collapsing the panel always leaves the button as the way back to it, even
     // where it was hidden. A new hide choice from the × menu applies again.
@@ -47,9 +49,9 @@
     }
     if (!panelOpen && (keepAfterPanel || (available && !hiddenByChoice))) {
       loadTheme();
-      if (!host.isConnected) document.documentElement.append(host);
+      if (window.CVAutofillTopLayer) window.CVAutofillTopLayer.attach(host); else if (!host.isConnected) document.documentElement.append(host);
       if (position !== null) host.style.setProperty('top', `${clamp(position * innerHeight)}px`, 'important');
-    } else { closeMenu(); host.remove(); }
+    } else { closeMenu(); removeHost(); }
   }
   // Loaded the first time the button shows: this script runs on every site,
   // and most pages never show it.
@@ -60,7 +62,7 @@
     fetch(chrome.runtime.getURL('assets/theme/launcher-colors.css')).then(response => {
       if (!response.ok) throw new Error('Theme unavailable');
       return response.text();
-    }).then(theme => { sheet.replaceSync(theme + css); host.hidden = false; }).catch(() => host.remove());
+    }).then(theme => { sheet.replaceSync(theme + css); host.hidden = false; }).catch(() => removeHost());
   }
   host.hidden = true;
   shadow.innerHTML = `<div class="launcher" role="group" aria-label="CV Autofill launcher">

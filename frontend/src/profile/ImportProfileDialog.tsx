@@ -111,7 +111,8 @@ export function ImportProfileDialog({
   // Opened for one CV: read it once the latest profile has loaded, so the
   // review compares against current values.
   useEffect(() => {
-    if (!initialResumeId || autoRead.current || baseLoading || baseError) return;
+    if (!initialResumeId || autoRead.current || baseLoading || baseError)
+      return;
     autoRead.current = true;
     void read();
   });
@@ -369,7 +370,9 @@ export function ImportProfileDialog({
               <p>
                 {draft.source.kind === "file"
                   ? draft.source.name
-                  : `${resumes.find((cv) => cv.id === (draft.source.kind === "resume" ? draft.source.id : ""))?.name || "Saved CV"} · version ${draft.source.snapshot}`}
+                  : draft.source.kind === "resume"
+                    ? `${resumes.find((cv) => cv.id === (draft.source.kind === "resume" ? draft.source.id : ""))?.name || "Saved CV"} · version ${draft.source.snapshot}`
+                    : "Profile"}
               </p>
               <p>
                 Filled contact fields and previously imported sections start

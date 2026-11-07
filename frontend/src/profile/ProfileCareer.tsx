@@ -11,6 +11,7 @@ import {
 import type { usePrimaryResume } from "./usePrimaryResume";
 import type { CareerData, CareerSection } from "./careerApi";
 import type { Experience } from "../resumeApi";
+import type { CareerSectionKey } from "./ProfileCareerEditor";
 
 type Career = ReturnType<typeof usePrimaryResume>;
 
@@ -19,20 +20,20 @@ export function ProfileCareer({
   profile,
   onEditPersonal,
   imported,
-  onImport,
   onImportCv,
   importDisabled,
+  onEditCareer,
 }: {
   career: Career;
   profile: ContactFields;
   onEditPersonal(): void;
   imported: CareerData;
-  onImport(): void;
   /** Opens the import review for one saved CV. */
   onImportCv(resumeId: string): void;
   importDisabled: boolean;
+  onEditCareer(section: CareerSectionKey): void;
 }) {
-  const { primary, resumes, document, loading, error, retry } = career;
+  const { primary, resumes, loading, error, retry } = career;
   const [showAll, setShowAll] = useState(false);
   const editHref = primary ? `/documents/${primary.id}` : "/documents";
   const experiences: Experience[] = imported.experiences
@@ -44,17 +45,17 @@ export function ProfileCareer({
           experienceLineageId: "",
         })),
       }))
-    : (document?.experiences ?? []);
-  const educations = imported.educations?.value ?? document?.educations ?? [];
+    : [];
+  const educations = imported.educations?.value ?? [];
   const skills = imported.skills
     ? imported.skills.value.map((name) => ({ name }))
-    : (document?.skills ?? []);
-  const summary = imported.summary?.value ?? document?.summaries.default ?? "";
-  const importEdit = (label: string) => (
+    : [];
+  const summary = imported.summary?.value ?? "";
+  const careerEdit = (section: CareerSectionKey, label: string) => (
     <button
       className="profile-edit-button"
       aria-label={label}
-      onClick={onImport}
+      onClick={() => onEditCareer(section)}
       disabled={importDisabled}
     >
       <Icon name="edit" />
@@ -117,7 +118,9 @@ export function ProfileCareer({
               aria-controls="profile-cv-list"
               onClick={() => setShowAll((open) => !open)}
             >
-              {showAll ? "Hide CVs" : `Change · ${resumes.length} CV${resumes.length === 1 ? "" : "s"}`}
+              {showAll
+                ? "Hide CVs"
+                : `Change · ${resumes.length} CV${resumes.length === 1 ? "" : "s"}`}
             </button>
             {showAll && (
               <ul className="profile-cv-list" id="profile-cv-list">
@@ -126,8 +129,12 @@ export function ProfileCareer({
                     <div>
                       <h3 title={cv.name}>
                         {cv.name}
-                        {cv.isPrimary && <span className="profile-tag">Default</span>}
-                        {cv.jobId && <span className="profile-tag">Tailored</span>}
+                        {cv.isPrimary && (
+                          <span className="profile-tag">Default</span>
+                        )}
+                        {cv.jobId && (
+                          <span className="profile-tag">Tailored</span>
+                        )}
                       </h3>
                       <p>
                         {cv.currentSnapshotId
@@ -135,7 +142,10 @@ export function ProfileCareer({
                           : "No saved version yet"}
                       </p>
                     </div>
-                    <Link className="profile-button is-secondary" to={`/documents/${cv.id}`}>
+                    <Link
+                      className="profile-button is-secondary"
+                      to={`/documents/${cv.id}`}
+                    >
                       Preview
                     </Link>
                     <button
@@ -161,23 +171,19 @@ export function ProfileCareer({
         )}
       </section>
 
-      {summary && (
-        <section className="profile-panel">
-          <div className="profile-panel-heading">
-            <h2>Professional summary</h2>
-            {imported.summary ? (
-              importEdit("Update profile summary from CV")
-            ) : (
-              <EditLink to={editHref} label="Edit summary in CV" />
-            )}
-          </div>
-          <SourceNote
-            section={imported.summary}
-            fallback="From your primary CV."
-          />
-          <p className="profile-preserve-lines">{summary}</p>
-        </section>
-      )}
+      <section className="profile-panel">
+        <div className="profile-panel-heading">
+          <h2>Professional summary</h2>
+          {careerEdit("summary", "Edit profile summary")}
+        </div>
+        <SourceNote
+          section={imported.summary}
+          fallback="Add your professional summary to Profile."
+        />
+        <p className="profile-preserve-lines">
+          {summary || "Describe your background and the work you want to do."}
+        </p>
+      </section>
 
       <section className="profile-panel profile-document-options">
         <div>
@@ -215,19 +221,11 @@ export function ProfileCareer({
       <section className="profile-panel" aria-labelledby="profile-work-heading">
         <div className="profile-panel-heading">
           <h2 id="profile-work-heading">Work Experience</h2>
-          {imported.experiences ? (
-            importEdit("Update profile work experience from CV")
-          ) : (
-            <EditLink
-              to={editHref}
-              label="Add work experience in your CV"
-              icon="plus"
-            />
-          )}
+          {careerEdit("experiences", "Edit profile work experience")}
         </div>
         <SourceNote
           section={imported.experiences}
-          fallback="From your primary CV. Open the CV to update this experience."
+          fallback="Add your full experience, responsibilities and achievements, or import them from a CV."
         />
         {experiences.length ? (
           experiences.map((role, index) => (
@@ -244,15 +242,9 @@ export function ProfileCareer({
                     <h3>{role.title}</h3>
                     <p className="profile-company">{role.company}</p>
                   </div>
-                  {imported.experiences ? (
-                    importEdit(
-                      `Update ${role.title} at ${role.company} from CV`,
-                    )
-                  ) : (
-                    <EditLink
-                      to={editHref}
-                      label={`Edit ${role.title} at ${role.company} in CV`}
-                    />
+                  {careerEdit(
+                    "experiences",
+                    `Edit ${role.title} at ${role.company} in Profile`,
                   )}
                 </div>
                 <div className="profile-tags">
@@ -276,11 +268,7 @@ export function ProfileCareer({
           ))
         ) : (
           <p className="profile-muted">
-            {loading
-              ? "Loading experience…"
-              : error
-                ? "Experience is unavailable until the CV loads."
-                : "No work experience added to your primary CV yet."}
+            No work experience saved in Profile yet.
           </p>
         )}
       </section>
@@ -288,19 +276,11 @@ export function ProfileCareer({
       <section className="profile-panel">
         <div className="profile-panel-heading">
           <h2>Education</h2>
-          {imported.educations ? (
-            importEdit("Update profile education from CV")
-          ) : (
-            <EditLink
-              to={editHref}
-              label="Add education in your CV"
-              icon="plus"
-            />
-          )}
+          {careerEdit("educations", "Edit profile education")}
         </div>
         <SourceNote
           section={imported.educations}
-          fallback="From your primary CV."
+          fallback="Add education, courses or training to Profile. A degree is optional."
         />
         {educations.length ? (
           educations.map((row, index) => (
@@ -311,13 +291,9 @@ export function ProfileCareer({
               <div className="profile-career-text">
                 <div className="profile-career-heading">
                   <h3>{row.institution}</h3>
-                  {imported.educations ? (
-                    importEdit(`Update ${row.institution} from CV`)
-                  ) : (
-                    <EditLink
-                      to={editHref}
-                      label={`Edit ${row.institution} in CV`}
-                    />
+                  {careerEdit(
+                    "educations",
+                    `Edit ${row.institution} in Profile`,
                   )}
                 </div>
                 <div className="profile-tags">
@@ -333,11 +309,7 @@ export function ProfileCareer({
             </article>
           ))
         ) : (
-          <p className="profile-muted">
-            {loading
-              ? "Loading education…"
-              : "No education added to your primary CV yet."}
-          </p>
+          <p className="profile-muted">No education saved in Profile yet.</p>
         )}
       </section>
 
@@ -399,15 +371,11 @@ export function ProfileCareer({
       <section className="profile-panel">
         <div className="profile-panel-heading">
           <h2>Skills</h2>
-          {imported.skills ? (
-            importEdit("Update profile skills from CV")
-          ) : (
-            <EditLink to={editHref} label="Edit skills in your CV" />
-          )}
+          {careerEdit("skills", "Edit profile skills")}
         </div>
         <SourceNote
           section={imported.skills}
-          fallback="Skills from your primary CV."
+          fallback="Add the skills you want to include in your Profile."
         />
         <div className="profile-skills">
           {skills.length ? (
@@ -418,11 +386,7 @@ export function ProfileCareer({
               </span>
             ))
           ) : (
-            <p className="profile-muted">
-              {loading
-                ? "Loading skills…"
-                : "No skills added to your primary CV yet."}
-            </p>
+            <p className="profile-muted">No skills saved in Profile yet.</p>
           )}
         </div>
       </section>
@@ -453,7 +417,9 @@ function SourceNote({
   return (
     <p className="profile-source-note">
       {section
-        ? `Saved in Profile · imported from ${section.source.kind === "file" ? section.source.name : `CV version ${section.source.snapshot}`} on ${new Date(section.importedAt).toLocaleDateString()}. Later CV edits do not change this section.`
+        ? section.source.kind === "profile"
+          ? `Saved in Profile · updated on ${new Date(section.importedAt).toLocaleDateString()}.`
+          : `Saved in Profile · imported from ${section.source.kind === "file" ? section.source.name : `CV version ${section.source.snapshot}`} on ${new Date(section.importedAt).toLocaleDateString()}. Later CV edits do not change this section.`
         : fallback}
     </p>
   );

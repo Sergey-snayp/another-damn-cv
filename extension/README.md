@@ -451,6 +451,41 @@ Add to `CATEGORIES` in `src/fields.js`, add its label and group in
 
 ## Development
 
+### LinkedIn job descriptions
+
+Open a LinkedIn job page or select a posting in Jobs search. The extension
+opens for the selected posting, reads its company, title, location and full
+description, and compares its keywords with your selected CV. **Quick Tailor**
+and **Full Tailoring** use that posting through the existing backend flow.
+Opening Quick Tailor keeps the CV as a draft; **Save** creates the CV and PDF.
+
+The selected job description is read automatically. Its keyword match and
+missing skills appear in the existing **Resume** card. Reading and analysis
+create no job, CV or PDF.
+
+When the signed-in page does not expose its description, the extension reads
+that same job ID from LinkedIn's public posting. These requests omit login
+cookies, share an in-flight read and are cached briefly. Loading failures are
+retried automatically while the panel is visible.
+
+The shared reader is `src/linkedin.js`. It supports signed-in detail panes
+and public job pages, including `/jobs/search-results/` layouts whose
+description is identified by its **About the job** heading. It expands only
+the selected description and excludes
+search results and recommended jobs. The panel follows selection changes
+even when LinkedIn keeps the same search URL. A missing description or
+sign-in screen is never captured as a job.
+
+After editing, reload the extension in `chrome://extensions` and refresh
+LinkedIn. Run the synthetic browser checks with Node 22 and Chrome installed:
+
+```sh
+node extension/test/linkedin.cjs
+```
+
+Run this command from the repository root after installing backend dependencies.
+Set `CHROME_PATH` when Chrome is installed somewhere other than its macOS path.
+
 ### Autofill layout
 
 Keep this view compact and calm:

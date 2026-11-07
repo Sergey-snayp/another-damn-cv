@@ -26,6 +26,7 @@ let lastScan = { found: [], skipped: [] };
  */
 const BOARD_HOST = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
 function companyName() {
+  if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.company ?? '';
   const named = document.querySelector('.company-name, [data-testid="company-name"]')?.textContent?.trim()
     || document.querySelector('meta[property="og:site_name"]')?.content?.trim();
   if (named) return named.slice(0, 100);
@@ -54,6 +55,8 @@ function scan() {
   const unique = [...new Map(lastScan.found.map((f) => [`${f.key}|${f.country ?? ''}`, f])).values()];
 
   const site = Sites.siteForPage();
+  const linkedin = window.CVAutofillLinkedIn?.isPage();
+  const selected = linkedin ? window.CVAutofillLinkedIn.read() : null;
   const ruleCount = Object.keys(site?.byId ?? {}).length + Object.keys(site?.byName ?? {}).length;
 
   return {
@@ -62,8 +65,9 @@ function scan() {
     site: site?.name ?? null,
     ruleCount,
     context: {
-      title: (document.querySelector('h1')?.innerText || document.title || 'Application form').trim().slice(0, 180),
-      company: companyName(),
+      title: linkedin ? selected?.title || (selected ? 'LinkedIn job' : 'Open a LinkedIn job') : (document.querySelector('h1')?.innerText || document.title || 'Application form').trim().slice(0, 180),
+      company: linkedin ? selected?.company ?? '' : companyName(),
+      ...(selected && { jobUrl: selected.url, isJobPosting: true }),
     },
     fields: unique.map((field) => ({
       key: field.key,
@@ -592,7 +596,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const context = scan().context;
     let details = {};
     try { details = window.CVAutofillJobDetails?.read() ?? {}; } catch { /* the form opens with what is known */ }
-    sendResponse({ title: context.title, company: context.company, url: location.href, ...details });
+    sendResponse({ title: context.title, company: context.company, url: context.jobUrl || location.href, ...details });
     return false;
   }
   if (message.type === 'check-required') {
@@ -615,9 +619,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-// The D! button appears only on pages that look like a job application form
-// (src/job-form.js). This script runs on every site, so it stays cheap: pages
-// without inputs are skipped, and ordinary sites rescan less often.
+// Show the launcher on application forms and selected LinkedIn postings.
+// Ordinary pages without inputs are skipped.
 const KNOWN_BOARD = Boolean(Sites.siteFor(location.hostname)) || location.protocol === 'file:';
 
 // This script also runs in iframes, where an embedded application form may
@@ -643,9 +646,19 @@ if (IS_TOP) {
   });
 }
 let lastOwnForm = false;
+let lastLinkedInContext;
 function updateLauncher() {
   if (TINY_FRAME) return;
   scheduleStep();
+  if (window.CVAutofillLinkedIn?.isPage()) {
+    const job = window.CVAutofillLinkedIn.read();
+    const context = JSON.stringify([job?.url, job?.title, job?.company, job?.location, job?.description]);
+    if (IS_TOP && context !== lastLinkedInContext) {
+      lastLinkedInContext = context;
+      try { void chrome.runtime.sendMessage({ type: 'job-context-changed' }).catch(() => {}); } catch { /* extension reloaded */ }
+    }
+    if (job) { lastOwnForm = true; showLauncher(true); return; }
+  }
   if (!document.querySelector('input, textarea, select')) { lastOwnForm = false; showLauncher(false); return; }
   scan();
   // Teamtailor and other boards on company domains are known by page structure.
@@ -666,7 +679,13 @@ function reattachOwnElements() {
   window.CVAutofillMarks?.reattach?.();
 }
 let scanTimer;
-const scheduleScan = () => { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, KNOWN_BOARD ? 140 : 600); };
+const scheduleScan = () => {
+  if (window.CVAutofillLinkedIn?.isPage()) {
+    // Busy search pages keep mutating; coalesce changes without postponing a
+    // new selection indefinitely. React also updates text nodes in place.
+    if (!scanTimer) scanTimer = setTimeout(() => { scanTimer = null; updateLauncher(); }, 300);
+  } else { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, KNOWN_BOARD ? 140 : 600); }
+};
 const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel', 'adcv-fill-marks']);
 const pageWatcher = new MutationObserver(records => {
   reattachOwnElements();
@@ -683,12 +702,15 @@ if (!TINY_FRAME) pageWatcher.observe(document, {
   childList: true,
   subtree: true,
   attributes: true,
+  characterData: Boolean(window.CVAutofillLinkedIn?.isPage()),
   // class/style change constantly on busy sites; job boards need them to spot step changes.
-  attributeFilter: KNOWN_BOARD ? ['hidden', 'disabled', 'readonly', 'type', 'class', 'style'] : ['hidden', 'disabled', 'type'],
+  attributeFilter: window.CVAutofillLinkedIn?.isPage() ? ['hidden', 'disabled', 'type', 'class', 'style', 'data-job-id', 'href', 'aria-expanded']
+    : KNOWN_BOARD ? ['hidden', 'disabled', 'readonly', 'type', 'class', 'style'] : ['hidden', 'disabled', 'type'],
 });
 addEventListener('resize', scheduleScan);
 addEventListener('popstate', scheduleScan);
 addEventListener('hashchange', scheduleScan);
+addEventListener('adcv-job-ready', scheduleScan);
 updateLauncher();
 
 // A new page of an armed multi-step form fills once its fields are on screen.

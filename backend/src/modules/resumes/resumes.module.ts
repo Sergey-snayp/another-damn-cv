@@ -9,7 +9,9 @@ import { JOBS_API } from '../jobs/jobs.tokens';
 import type { JobsApi } from '../jobs/contracts';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { ProfileDirectoryModule } from '../profiles/profile-directory.module';
-import { PROFILE_DIRECTORY } from '../profiles/profiles.tokens';
+import { PROFILE_DIRECTORY, PROFILE_CAREER_API } from '../profiles/profiles.tokens';
+import type { ProfileCareerApi } from '../profiles/contracts';
+import { PublicAssessmentProfileReader } from './adapters/outbound/modules/assessment-profile.reader';
 import type { ProfileDirectory } from './application/ports/resume-repository';
 import type { ResumeRepository } from './application/ports/resume-repository';
 import { createResumesApi } from './application/resumes-api';
@@ -19,6 +21,9 @@ import { TailoringController } from './adapters/inbound/http/tailoring.controlle
 import { RewriteController } from './adapters/inbound/http/rewrite.controller';
 import { ResumeAssistantController } from './adapters/inbound/http/resume-assistant.controller';
 import { ResumeAssistant } from './application/use-cases/resume-assistant';
+import { AssessJobFit } from './application/use-cases/assess-job-fit';
+import { ClaudeJobAssessor } from './adapters/outbound/ai/claude-job.assessor';
+import { JobAssessmentController } from './adapters/inbound/http/job-assessment.controller';
 import { ClaudeResumeChat } from './adapters/outbound/ai/claude-resume-chat';
 import { ClaudeSkillTailor } from './adapters/outbound/ai/claude-skill.tailor';
 import { ClaudeSummaryWriter } from './adapters/outbound/ai/claude-summary.writer';
@@ -29,7 +34,10 @@ import { DescribeTechnology } from './application/use-cases/describe-technology'
 import { CoverLetters } from './application/use-cases/cover-letters';
 import { PrismaCoverLetterStore } from './adapters/outbound/persistence/prisma-cover-letter.store';
 import { ClaudeCoverLetterWriter } from './adapters/outbound/ai/claude-cover-letter.writer';
-import { ExtensionCoverLettersController } from './adapters/inbound/http/extension-cover-letters.controller';
+import {
+  CoverLettersController,
+  ExtensionCoverLettersController,
+} from './adapters/inbound/http/cover-letters.controller';
 import { CvImportController } from './adapters/inbound/http/cv-import.controller';
 import { ExtensionResumesController } from './adapters/inbound/http/extension-resumes.controller';
 import {
@@ -69,9 +77,11 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
     TailoringController,
     RewriteController,
     ResumeAssistantController,
+    JobAssessmentController,
     CvImportController,
     ExtensionResumesController,
     ExtensionCoverLettersController,
+    CoverLettersController,
     ExtensionResumePdfController,
     ResumePdfController,
     PrintResumeController,
@@ -161,6 +171,16 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           new ClaudeLineRewriter(runner),
           new ClaudeSkillTailor(runner),
           new ClaudeSummaryWriter(runner),
+        ),
+    },
+    {
+      provide: AssessJobFit,
+      inject: [PROFILE_CAREER_API, JOBS_API, ClaudeProcessRunner],
+      useFactory: (profiles: ProfileCareerApi, jobs: JobsApi, runner: ClaudeProcessRunner) =>
+        new AssessJobFit(
+          new PublicAssessmentProfileReader(profiles),
+          new PublicTailoringJobReader(jobs),
+          new ClaudeJobAssessor(runner),
         ),
     },
     {

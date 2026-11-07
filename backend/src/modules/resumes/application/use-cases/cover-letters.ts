@@ -18,9 +18,16 @@ export interface StoredCoverLetter {
   updatedAt: Date;
 }
 
+/** A letter in the app's list, with its job. */
+export interface ListedCoverLetter extends StoredCoverLetter {
+  job: { title: string | null; company: string | null };
+}
+
 /** One letter per person and job. */
 export interface CoverLetterStore {
   find(userId: string, jobId: string): Promise<StoredCoverLetter | null>;
+  list(userId: string): Promise<ListedCoverLetter[]>;
+  remove(userId: string, jobId: string): Promise<boolean>;
   save(
     userId: string,
     jobId: string,
@@ -129,6 +136,45 @@ export class CoverLetters {
           : []),
       ],
     };
+  }
+
+  /** Every letter, newest first, with its job and who it is from (for the page preview). */
+  async list(userId: string): Promise<Array<ListedCoverLetter & { author: LetterAuthor | null }>> {
+    const letters = await this.store.list(userId);
+    const authors = new Map<string, Promise<LetterAuthor | null>>();
+    const authorFor = (resumeId: string | null) => {
+      if (!resumeId) return Promise.resolve(null);
+      if (!authors.has(resumeId))
+        authors.set(
+          resumeId,
+          this.resumes
+            .current(userId, resumeId)
+            .then((resume) => authorOf(resume.contact))
+            .catch(() => null),
+        );
+      return authors.get(resumeId)!;
+    };
+    return Promise.all(
+      letters.map(async (letter) => ({ ...letter, author: await authorFor(letter.resumeId) })),
+    );
+  }
+
+  /** One letter with its job and author, for the app's editor. */
+  async detail(userId: string, jobId: string) {
+    const job = await this.jobs.getForTailoring(userId, jobId);
+    const letter = await this.store.find(userId, jobId);
+    const author = letter?.resumeId
+      ? await this.resumes
+          .current(userId, letter.resumeId)
+          .then((resume) => authorOf(resume.contact))
+          .catch(() => null)
+      : null;
+    return { letter, author, job: { id: job.id, title: job.title ?? job.pageTitle, company: job.company } };
+  }
+
+  async remove(userId: string, jobId: string): Promise<void> {
+    if (!(await this.store.remove(userId, jobId)))
+      throw new ResumeError('not-found', 'There is no cover letter for this job.');
   }
 
   /** The person's own edit. */

@@ -136,10 +136,13 @@ addEventListener('unhandledrejection', event => { if (isStaleError(event.reason)
 // Clicks are the main way a cut-off panel calls Chrome; catch them before any handler runs.
 document.addEventListener('click', event => { if (!alive() && !event.target.closest('#close-panel')) { event.stopImmediatePropagation(); event.preventDefault(); showStale(); } }, true);
 let profile = {}, scan = null, currentTab = null, filling = false, refreshId = 0;
+// Search pages can select another posting without changing the tab's address.
+const jobAddress = (tab = currentTab) => tab?.jobUrl || tab?.url;
 let panelView = 'autofill';
 let copyValues = [];
 let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, pageDisconnected = false;
-let match = null, matchUrl = null, matchKeywords = null, matchRun = 0, improving = false;
+let match = null, matchUrl = null, matchKeywords = null, matchCapture = null, matchRun = 0, improving = false;
+let matchReading = false, matchProblem = '', matchRetryTimer = null, matchRetryAttempt = 0;
 // The last Autofill result for this page: summary, notes and required fields still empty.
 let fillReport = null;
 function status(id, text, kind = '') { const node = $(id); if (node) { node.textContent = text; node.className = `status ${kind}`; } }
@@ -276,7 +279,7 @@ const APPLIED = new Set(['applied', 'screening', 'interview', 'offer', 'accepted
 function jobLogo() {
   const context = scan?.context ?? {};
   if (context.logo) return context.logo;
-  if (savedJob.url === currentTab?.url && savedJob.job?.companyLogo) return savedJob.job.companyLogo;
+  if (savedJob.url === jobAddress() && savedJob.job?.companyLogo) return savedJob.job.companyLogo;
   return context.logoDomain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(context.logoDomain)}&sz=128` : null;
 }
 /** Whether this page's job is saved: on a new page, and again at most once a minute. */
@@ -297,7 +300,8 @@ async function checkSaved(url) {
     if (panelView === 'job') selectTab('autofill');
   }
   savedJob.checkedAt = Date.now();
-  try { const job = await lookupJob(url); if (savedJob.url === url) savedJob.job = job; }
+  const pending = savedJob;
+  try { const job = await lookupJob(url); if (savedJob === pending) savedJob.job = job; }
   catch { /* signed out or offline: the button offers saving, which explains */ }
   void loadLetter();
   if (!filling) renderAutofill();
@@ -330,7 +334,7 @@ function jobFormHtml() {
 }
 function renderJobForm() {
   if (!jobForm && !jobFormLoading && !jobLoadProblem) { $('panel-job').innerHTML = ''; return; }
-  const editing = jobForm?.id || (!jobForm && savedJob.url === currentTab?.url && savedJob.job);
+  const editing = jobForm?.id || (!jobForm && savedJob.url === jobAddress() && savedJob.job);
   $('panel-job').innerHTML = `<div class="job-page-head"><button type="button" class="job-back" id="job-form-back" ${jobBusy ? 'disabled' : ''}>${icon('back', 18)}Back</button><h2 id="job-form-heading">${editing ? 'Edit job' : 'Save job'}</h2></div>${jobForm ? jobFormHtml() : jobLoadProblem ? `<div class="job-banner is-error" role="alert"><span><strong>Couldn't load this job</strong><small>${esc(jobLoadProblem)}</small></span><button type="button" class="link-button" id="job-form-reload">Try again</button></div>` : '<p class="status" role="status">Loading job details…</p>'}`;
 }
 function leaveJobForm(discard = false) {
@@ -341,13 +345,13 @@ function leaveJobForm(discard = false) {
 }
 function pageCard() {
   if (!scan) return '';
-  const saved = savedJob.url === currentTab?.url && savedJob.job;
+  const saved = savedJob.url === jobAddress() && savedJob.job;
   const title = saved?.title || scan.context?.title || 'Application form';
   const company = saved?.company || scan.context?.company || scan.host;
   const initials = company.split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
   const logo = jobLogo();
   // The job board's own date first (as Simplify), else the page's, else the saved job's.
-  const posted = postingDate((boardDates.url === currentTab?.url && boardDates.posted) || scan.context?.postedAt || (saved ? saved.postedAt : null));
+  const posted = postingDate((boardDates.url === jobAddress() && boardDates.posted) || scan.context?.postedAt || (saved ? saved.postedAt : null));
   const busy = jobBusy || jobFormLoading;
   const applied = saved && (APPLIED.has(saved.status) || saved.appliedAt);
   const date = saved?.appliedAt ? new Date(saved.appliedAt).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -373,13 +377,13 @@ async function openJobForm() {
   selectTab('job');
   if (jobForm && (!jobForm.id || jobFormDirty)) { renderJobForm(); document.querySelector('#job-form input')?.focus(); return; }
   const tab = currentTab;
-  const editing = savedJob.url === tab?.url ? savedJob.job : null;
+  const editing = savedJob.url === jobAddress(tab) ? savedJob.job : null;
   jobForm = null; jobFormLoading = true; jobProblem = ''; jobLoadProblem = ''; renderJobForm(); renderAutofill();
   $('job-form-back').focus();
   try {
     const found = editing ? await getSavedJob(editing.id) : (await askPage({ type: 'job-details' }, tab).catch(() => null)) ?? {};
-    if (tab?.id !== currentTab?.id || tab?.url !== currentTab?.url) return;
-    if (editing) savedJob = { url: tab.url, job: found, checkedAt: Date.now() };
+    if (tab?.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) return;
+    if (editing) savedJob = { url: jobAddress(tab), job: found, checkedAt: Date.now() };
     jobForm = {
       id: editing ? found.id : null,
       title: editing ? found.title ?? '' : found.title && found.title !== 'Application form' ? found.title : jobTitleOnPage(),
@@ -392,16 +396,16 @@ async function openJobForm() {
       description: found.description || '',
       notes: editing ? found.notes ?? '' : '',
       status: editing ? found.status : 'saved',
-      url: editing ? found.url ?? '' : found.url || tab?.url || '',
+      url: editing ? found.url ?? '' : found.url || jobAddress(tab) || '',
       salaryEdited: false, statusEdited: false, fieldsEdited: new Set(),
       open: { description: false, notes: false },
       error: '',
     };
     jobFormDirty = false;
   } catch (error) {
-    if (tab?.id !== currentTab?.id || tab?.url !== currentTab?.url) return;
+    if (tab?.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) return;
     jobLoadProblem = error.message;
-    if (error.status === 404) savedJob = { url: tab.url, job: null, checkedAt: Date.now() };
+    if (error.status === 404) savedJob = { url: jobAddress(tab), job: null, checkedAt: Date.now() };
   } finally { jobFormLoading = false; renderJobForm(); renderAutofill(); }
   if (!jobForm) return;
   const first = ['company', 'title', 'location'].find(name => !jobForm[name]) ?? 'company';
@@ -452,9 +456,9 @@ function saveJob(payload = {}) {
       const logo = jobLogo();
       const job = editId ? await updateSavedJob(editId, payload.details)
         : (await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...payload })).job;
-      if (tab?.id !== currentTab?.id || tab?.url !== currentTab?.url) return;
-      savedJob = { url: tab.url, job, checkedAt: Date.now() }; jobForm = null; jobFormDirty = false;
-      if (!editId) await recordOnSavedJob(tab.url, await answersOnPage(tab));
+      if (tab?.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) return;
+      savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() }; jobForm = null; jobFormDirty = false;
+      if (!editId) await recordOnSavedJob(jobAddress(tab), await answersOnPage(tab));
       if (panelView === 'job') selectTab('autofill');
     } catch (error) {
       if (error instanceof NotSignedInError) { selectTab('profile'); document.querySelector('.account-card').open = true; }
@@ -464,7 +468,12 @@ function saveJob(payload = {}) {
 }
 // Saved from the right-click menu while the panel is open: show it as saved.
 chrome.runtime.onMessage.addListener((message, sender) => {
-  if (message?.type !== 'job-saved' || sender.tab || message.url !== currentTab?.url) return false;
+  if (message?.type === 'job-context-changed' && sender.tab?.id === currentTab?.id && sender.frameId === 0) {
+    matchUrl = null; matchKeywords = null; matchCapture = null; match = null; ++matchRun;
+    void refresh();
+    return false;
+  }
+  if (message?.type !== 'job-saved' || sender.tab || message.url !== jobAddress()) return false;
   savedJob.checkedAt = 0;
   void checkSaved(message.url);
   return false;
@@ -505,12 +514,12 @@ document.addEventListener('error', event => {
 }, true);
 /** The letter of this page's saved job, once loaded. */
 function letterForPage() {
-  const job = savedJob.url === currentTab?.url ? savedJob.job : null;
+  const job = savedJob.url === jobAddress() ? savedJob.job : null;
   return job && letter.jobId === job.id ? letter.data : null;
 }
 /** Reads the saved job's letter from the server, when the page's job changes. */
 async function loadLetter() {
-  const job = savedJob.url === currentTab?.url ? savedJob.job : null;
+  const job = savedJob.url === jobAddress() ? savedJob.job : null;
   if (!job || letter.busy || letter.jobId === job.id) return;
   letter = { ...letter, jobId: job.id, data: null, loading: true, problem: '', notes: [], editing: false };
   try { const found = await coverLetterFor(job.id); if (letter.jobId === job.id) letter.data = found; }
@@ -520,14 +529,14 @@ async function loadLetter() {
 const letterSeconds = () => Math.max(0, Math.floor((Date.now() - letter.startedAt) / 1000));
 function letterWorkingText() {
   const seconds = letterSeconds();
-  const step = seconds < 4 && !(savedJob.url === currentTab?.url && savedJob.job) ? 'Saving this job…'
+  const step = seconds < 4 && !(savedJob.url === jobAddress() && savedJob.job) ? 'Saving this job…'
     : seconds < 25 ? 'Reading the job and your CV…' : 'Writing your cover letter…';
   return `${step} ${seconds}s`;
 }
 function coverLetterCard() {
   const own = letterForPage();
   const asked = scan?.fields?.filter(field => field.key === 'coverLetter').length ?? 0;
-  const attached = own && letter.attachedUrl === currentTab?.url ? asked : 0;
+  const attached = own && letter.attachedUrl === jobAddress() ? asked : 0;
   const count = asked ? `<span class="summary-count">${icon('check', 14)}Filled (${attached}/${asked})</span>` : '';
   const file = letter.loading ? '<span class="cover-name muted">Loading…</span>'
     : own ? `<span class="cover-name" title="${esc(own.fileName)}">${esc(own.fileName)}</span>` : '<span class="cover-name muted">No cover letter yet</span>';
@@ -562,14 +571,14 @@ async function generateLetter(access) {
   clearInterval(letterTicker);
   letterTicker = setInterval(() => { const text = $('cover-working'); if (text) text.textContent = letterWorkingText(); }, 1000);
   try {
-    let job = savedJob.url === tab?.url ? savedJob.job : null;
+    let job = savedJob.url === jobAddress(tab) ? savedJob.job : null;
     if (!job) {
       const reason = unsendableReason(tab);
       if (reason) throw new Error(reason);
       if (!await access) throw new Error('Access to this site was not allowed.');
       const logo = jobLogo();
       job = (await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) })).job;
-      if (tab?.url === currentTab?.url) savedJob = { url: tab.url, job, checkedAt: Date.now() };
+      if (jobAddress(tab) === jobAddress()) savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() };
     }
     letter.jobId = job.id;
     // A job just saved may still be being read: its description arrives within seconds.
@@ -608,7 +617,7 @@ document.addEventListener('click', event => {
   if (!target) return;
   if ('coverGenerate' in target.dataset) {
     const tab = currentTab;
-    const saved = savedJob.url === tab?.url && savedJob.job;
+    const saved = savedJob.url === jobAddress(tab) && savedJob.job;
     // Asked here, inside the click, as Chrome requires for a site permission.
     void generateLetter(saved ? Promise.resolve(true) : requestSiteAccess(tab));
     return;
@@ -630,6 +639,10 @@ function renderAutofill() {
   if (!scan && pageDisconnected) {
     host.innerHTML = `<div class="notice">${icon('refresh')}<div><strong>Reload this page to reconnect</strong><p>The extension was updated while this page was open, so it can no longer read the form. Reloading keeps nothing you typed on the page.</p><button class="primary" id="reload-page">${icon('refresh')}Reload page</button></div></div>`;
     $('reload-page').addEventListener('click', () => { if (currentTab?.id) void chrome.tabs.reload(currentTab.id); });
+    return;
+  }
+  if (scan?.context?.isJobPosting && !scan.fields?.length) {
+    host.innerHTML = `${pageCard()}${autofillCvCard()}${coverLetterCard()}`;
     return;
   }
   if (!scan || !scan.fields?.length) {
@@ -714,24 +727,24 @@ async function runFill() {
         : { ...reply, missing };
     }
     // Settings → "Keep filling the next steps": later steps of this form, on this site, for 30 minutes.
-    if (result && continueSteps && target?.url) {
+    if (result && continueSteps && jobAddress(target)) {
       void chrome.runtime.sendMessage({ type: 'arm-steps', host: new URL(target.url).host, company: scan?.context?.company ?? '', profile: payload, useAnswers: fillGroups.answers !== false }).catch(() => {});
     }
     if (cvProblem && result) result.failures.push(cvProblem);
     if (letterProblem && result) result.failures.push(letterProblem);
-    if (result && coverLetter.coverLetterText) letter.attachedUrl = target?.url ?? null;
+    if (result && coverLetter.coverLetterText) letter.attachedUrl = jobAddress(target) ?? null;
     if (!result) throw new Error(pageDisconnected ? 'The extension was updated. Reload this page, then try again.' : 'Lost contact with the page. Reload it and try again.');
     fillReport = {
-      url: target?.url,
+      url: jobAddress(target),
       text: result.failures.length ? `Filled ${result.filled}. Could not fill: ${result.failures.join('; ')}` : `Filled ${result.filled} field${result.filled === 1 ? '' : 's'}. Review the form before submitting.`,
       kind: result.failures.length ? 'error' : 'success',
       notes: [...(result.notes ?? []), ...(result.fromAnswers ? [`${result.fromAnswers} filled from saved answers`] : []), ...answerNotes],
       missing: result.missing ?? [],
     };
     // The CV this Autofill uploaded and the answers now on the form, for the saved job.
-    lastApplication = { url: target?.url, resumeId: file ? resumes.chosen?.id : undefined, answers: await answersOnPage(target) };
-    if (await recordOnSavedJob(target?.url)) fillReport.notes.push('Your CV and answers were added to this job in the app');
-  } catch (error) { fillReport = { url: target?.url, text: error.message, kind: 'error', notes: [], missing: [] }; }
+    lastApplication = { url: jobAddress(target), resumeId: file ? resumes.chosen?.id : undefined, answers: await answersOnPage(target) };
+    if (await recordOnSavedJob(jobAddress(target))) fillReport.notes.push('Your CV and answers were added to this job in the app');
+  } catch (error) { fillReport = { url: jobAddress(target), text: error.message, kind: 'error', notes: [], missing: [] }; }
   finally { filling = false; rerenderResumes(); }
   // Settings → "Draft unknown questions with AI": off unless the person switched it on.
 }
@@ -1117,7 +1130,7 @@ async function switchCv(id) {
 }
 async function replaceUploadedCv() {
   const tab = currentTab, chosen = resumes.chosen;
-  if (!chosen || !lastApplication || lastApplication.url !== tab?.url || !lastApplication.resumeId || lastApplication.resumeId === chosen.id) return;
+  if (!chosen || !lastApplication || lastApplication.url !== jobAddress(tab) || !lastApplication.resumeId || lastApplication.resumeId === chosen.id) return;
   let replaced = 0, kept = 0;
   try {
     const file = await pdfFor(chosen);
@@ -1132,7 +1145,7 @@ async function replaceUploadedCv() {
   }
   if (replaced) {
     lastApplication.resumeId = chosen.id;
-    await recordOnSavedJob(tab.url);
+    await recordOnSavedJob(jobAddress(tab));
     cvStatus('CV updated on this form. It replaced the previous upload.', 'success');
   }
   if (kept) cvStatus(`This form keeps the old CV. Remove it in the form, then upload ${chosen.name} yourself.`, 'error');
@@ -1141,8 +1154,21 @@ async function replaceUploadedCv() {
 // ─── Keyword match card ───────────────────────────────────────────────────
 // On a job description page, scores how many of the posting's keywords each CV
 // mentions (src/match.js). Keywords only: it does not judge experience depth.
+function isLinkedInJobPage() {
+  try { const url = new URL(currentTab?.url); return /(^|\.)linkedin\.com$/i.test(url.hostname) && /^\/jobs(?:\/|$)/.test(url.pathname); }
+  catch { return false; }
+}
+function tailoringActions() {
+  return `<div class="tailor-buttons">
+    <button class="tailor-button quick" data-tailor="quick" title="Your CV line by line, with AI beside each line for this job" ${improving ? 'disabled' : ''}>${icon('bolt', 17)}Quick Tailor</button>
+    <button class="tailor-button full" data-tailor="full" title="The full CV editor in the app, with this job's score, AI and chat" ${improving ? 'disabled' : ''}>${icon('edit', 17)}Full Tailoring</button>
+  </div><div class="status" id="match-status" role="status"></div>`;
+}
 function matchCard() {
-  if (!match) return '<p class="resume-match-empty">Open a job description to see your CV’s keyword match.</p>';
+  if (!match && isLinkedInJobPage() && (matchReading || matchProblem)) return `<p class="resume-match-empty" role="status">${matchReading ? 'Reading this job description…' : 'Waiting for LinkedIn to finish loading the job description…'}</p>`;
+  if (!match) return scan?.context?.isJobPosting
+    ? `<p class="resume-match-empty">${matchKeywords ? 'No keyword score is available for this description.' : 'Job description detected.'}</p>${tailoringActions()}`
+    : '<p class="resume-match-empty">Open a job description to see your CV’s keyword match.</p>';
   const { score, matched, missing } = match.chosen;
   const label = matchLabel(score), total = matched.length + missing.length;
   const circumference = 2 * Math.PI * 30;
@@ -1155,11 +1181,7 @@ function matchCard() {
     </div><div id="resume-keywords" ${expanded ? '' : 'hidden'}><p class="hint">Keyword coverage only. Check the job requirements too.</p>
     ${match.better ? `<div class="better-cv"><strong>Better CV available</strong><p><span class="cv-inline" title="${esc(match.better.name)}">${esc(match.better.name)}</span> matches ${match.better.score} (${match.better.matched} of ${total} keywords).</p><button class="ghost" data-pick="${esc(match.better.id)}">Switch to this CV</button></div>` : ''}
     <div class="keywords"><p class="group">Keywords from the posting</p><ul>${keywords}</ul></div>
-    </div><div class="tailor-buttons">
-      <button class="tailor-button quick" data-tailor="quick" title="Your CV line by line, with AI beside each line for this job" ${improving ? 'disabled' : ''}>${icon('bolt', 17)}Quick Tailor</button>
-      <button class="tailor-button full" data-tailor="full" title="The full CV editor in the app, with this job's score, AI and chat" ${improving ? 'disabled' : ''}>${icon('edit', 17)}Full Tailoring</button>
-    </div>
-    <div class="status" id="match-status" role="status"></div>
+    </div>${tailoringActions()}
   </div>`;
 }
 document.addEventListener('click', event => {
@@ -1172,20 +1194,43 @@ document.addEventListener('click', event => {
   if (open) keptOpen.add('keywords'); else keptOpen.delete('keywords');
 });
 /** Reads the page once per address; rescoring after a CV switch reuses the keywords. */
-async function updateMatch() {
-  const tab = currentTab, run = ++matchRun;
-  if (!tab?.id || unsendableReason(tab)) { matchUrl = null; matchKeywords = null; }
-  else if (tab.url !== matchUrl) {
-    matchUrl = tab.url; matchKeywords = null;
-    try {
-      const capture = await captureTab(tab.id), job = jobFromCapture(capture), keywords = findKeywords(job.text);
-      if (looksLikeJobPosting(capture, job, keywords)) matchKeywords = keywords;
-    } catch { /* not readable: no card */ }
+async function updateMatch({ force = false } = {}) {
+  const tab = currentTab, url = jobAddress(tab);
+  if (!tab?.id || unsendableReason(tab)) { matchUrl = null; matchKeywords = null; matchCapture = null; }
+  else {
+    if (force || url !== matchUrl) {
+      matchUrl = url; matchKeywords = null;
+      matchReading = true; matchProblem = ''; clearTimeout(matchRetryTimer);
+      matchCapture = { promise: (async () => {
+        try {
+          const capture = await captureTab(tab.id), job = jobFromCapture(capture), keywords = findKeywords(job.text);
+          return { keywords: looksLikeJobPosting(capture, job, keywords) ? keywords : null, error: '' };
+        } catch (error) { return { keywords: null, error: error.message || 'The job description is not ready.' }; }
+      })() };
+      if (!filling) renderAutofill();
+    }
+    // CV-list refreshes reuse an in-flight capture. A new selection replaces
+    // it, so a late result cannot overwrite that posting's keyword match.
+    const reading = matchCapture;
+    if (reading) {
+      const result = await reading.promise;
+      if (reading !== matchCapture || url !== jobAddress()) return;
+      matchKeywords = result.keywords;
+      matchReading = false; matchProblem = result.error;
+      if (!result.error) matchRetryAttempt = 0;
+    }
   }
-  await rescore(run);
+  await rescore();
+  if (url === jobAddress() && matchProblem && isLinkedInJobPage()) {
+    clearTimeout(matchRetryTimer);
+    matchRetryTimer = setTimeout(() => {
+      if (url === jobAddress() && panelVisible && document.visibilityState === 'visible') void updateMatch({ force: true });
+    }, Math.min(15000, 500 * 2 ** Math.min(matchRetryAttempt++, 5)));
+  }
+  if (url === jobAddress() && !filling) renderAutofill();
 }
 async function rescore(run = ++matchRun) {
-  let next = null;
+  let next = null, analysisError = '';
   if (matchKeywords && resumes.chosen) {
     try {
       const texts = await cvTexts(resumes.items);
@@ -1198,17 +1243,18 @@ async function rescore(run = ++matchRun) {
         // Every CV's score, for the Resume tab's CV list.
         next = { chosen, better, scores: Object.fromEntries(scored.map(item => [item.id, item.score])) };
       }
-    } catch { /* signed out or app unreachable: no card */ }
+    } catch (error) { analysisError = `Could not analyze your CV: ${error.message}`; }
   }
   if (run !== matchRun) return;
   const changed = JSON.stringify(next) !== JSON.stringify(match);
+  if (matchKeywords) matchProblem = analysisError;
   match = next;
   if (changed && !filling) renderAutofill();
 }
 // Save the job, then open the app, as Simplify's "Tailor Resume" opens its
 // web builder. Quick: an unsaved draft of the chosen CV, line by line with AI
 // beside each line. Full: the whole CV editor with this job chosen.
-// The AI runs only from the app's buttons.
+// Opening Quick Tailor loads a read-only job assessment; CV rewrites use its editor controls.
 const tailorButtons = () => document.querySelectorAll('[data-tailor]');
 let quickWindowId = null;
 /** Quick tailoring pops up over the job page, in a window of its own; a second click reuses it. */
@@ -1238,7 +1284,7 @@ function improveMatch(mode) {
       if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
       const logo = jobLogo();
       const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) });
-      savedJob = { url: tab.url, job, checkedAt: Date.now() };
+      savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() };
       if (mode === 'quick') await openQuickTailor(`${APP_URL}/popup/jobs/${encodeURIComponent(job.id)}/quick-tailor?from=${encodeURIComponent(chosen.id)}`);
       else await chrome.tabs.create({ url: `${APP_URL}/documents/${encodeURIComponent(chosen.id)}?job=${encodeURIComponent(job.id)}` });
       status('match-status', '');
@@ -1276,14 +1322,19 @@ async function refresh() {
   const sequence = ++refreshId;
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
-    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const tab = await ownTab(); const nextScan = await scanFrames(tab);
+    const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const pageTab = await ownTab(); const nextScan = await scanFrames(pageTab);
+    const tab = pageTab ? { ...pageTab, jobUrl: nextScan?.context?.jobUrl || pageTab.url } : null;
     // Scanning may outlast a backend refresh. Read the latest library after
     // it finishes, so an earlier empty list cannot replace the fresh one.
     const nextResumes = await cachedResumes();
     if (sequence !== refreshId) return;
-    if (fillReport && fillReport.url !== tab?.url) fillReport = null;
-    if (currentTab?.url !== tab?.url || resumes.chosen?.id !== nextResumes.chosen?.id) cvStatus('');
-    void checkSaved(tab?.url);
+    if (jobAddress() !== jobAddress(tab)) {
+      match = null; matchKeywords = null; matchCapture = null; matchUrl = null; ++matchRun;
+      matchReading = false; matchProblem = ''; matchRetryAttempt = 0; clearTimeout(matchRetryTimer);
+    }
+    if (fillReport && fillReport.url !== jobAddress(tab)) fillReport = null;
+    if (jobAddress() !== jobAddress(tab) || resumes.chosen?.id !== nextResumes.chosen?.id) cvStatus('');
+    void checkSaved(jobAddress(tab));
     fillGroups = stored.autofillGroups ?? {};
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
     diversityAnswers = stored.diversityAnswers ?? {};

@@ -40,21 +40,29 @@ export function requestSiteAccess(tab) {
 export async function captureTab(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ['src/capture-sites.js', 'src/capture.js'],
+    files: ['src/linkedin.js', 'src/capture-sites.js', 'src/capture.js'],
   });
   const [result] = await chrome.scripting.executeScript({
     target: { tabId },
-    func: () => globalThis.__cvCapture(),
+    func: async () => {
+      // Chrome can turn a rejected injected promise into an empty result.
+      // Return the error explicitly so loading failures can be retried.
+      try { return { ok: true, capture: await globalThis.__cvCapture() }; }
+      catch (error) { return { ok: false, error: error?.message || 'The job description is not ready.' }; }
+    },
   });
-  if (!result?.result) throw new Error('Could not read this page.');
-  return result.result;
+  const reading = result?.result;
+  if (reading?.ok === false) throw new Error(reading.error);
+  const capture = reading?.ok === true ? reading.capture : reading;
+  if (!capture?.url) throw new Error(result?.error?.message || 'The job description is not ready.');
+  return capture;
 }
 
 export async function sendCapture(capture) {
   const { auth } = await chrome.storage.local.get('auth');
   if (!auth?.syncToken) throw new NotSignedInError();
 
-  const { matched: _matched, ...payload } = capture;
+  const { matched: _matched, description: _description, ...payload } = capture;
 
   let response;
   try {

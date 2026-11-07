@@ -3,6 +3,7 @@ import { IMPORT_CONTACT_KEYS } from '../domain/career-profile';
 const text = z.string().trim().max(2000);
 const date = z.string().trim().max(80);
 export const sourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('profile') }).strict(),
   z.object({ kind: z.literal('file'), name: z.string().trim().min(1).max(250) }).strict(),
   z
     .object({
@@ -66,6 +67,16 @@ export const careerImportSchema = z
   })
   .strict()
   .refine((input) => JSON.stringify(input).length <= 250000, 'Choose fewer entries for one import.');
+export const careerUpdateSchema = z
+  .object({
+    expectedRevision: z.number().int().nonnegative(),
+    sections: sectionsSchema.refine(
+      (sections) => Object.keys(sections).length > 0,
+      'Choose a section to save.',
+    ),
+  })
+  .strict()
+  .refine((input) => JSON.stringify(input).length <= 250000, 'Save fewer entries at once.');
 export const careerDataSchema = z
   .object({
     summary: z.object({ value: z.string(), source: sourceSchema, importedAt: z.string() }).optional(),

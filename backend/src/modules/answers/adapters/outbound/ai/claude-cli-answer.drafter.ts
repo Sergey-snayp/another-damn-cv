@@ -17,7 +17,6 @@ export class ClaudeCliAnswerDrafter implements AnswerDrafter {
     let raw: string;
     try {
       raw = await this.runner.complete(draftPrompt(context), DRAFT_SYSTEM, {
-        promptOnly: true,
         model: config.interviewModel,
         timeoutMs: 120_000,
         maxOutputChars: 40_000,

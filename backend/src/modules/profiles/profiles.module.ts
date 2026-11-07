@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../shared/database/database.module';
-import { PrismaService } from '../../shared/database/prisma.service';
 import { AuthModule } from '../auth/auth.module';
 import { AUTH_API } from '../auth/auth.tokens';
 import type { AuthApi } from '../auth/contracts';
@@ -12,8 +11,8 @@ import { ProfileCareerController } from './adapters/inbound/http/profile-career.
 import { PrismaCareerProfileRepository } from './adapters/outbound/prisma-career-profile.repository';
 import { ResumeImportSourceReader } from './adapters/outbound/resume-import-source.reader';
 import { ImportProfileCareer } from './application/use-cases/import-profile-career';
+import { SaveProfileCareer } from './application/use-cases/save-profile-career';
 import { GetCareerFields } from './application/use-cases/get-career-fields';
-import { GetProfileCareer } from './application/use-cases/get-profile-career';
 import { ResumeCareerReader } from './adapters/outbound/resume-career.reader';
 import { ResumeSectionsAdapter } from './adapters/outbound/resume-sections.reader';
 import { GetExtensionCareer } from './application/use-cases/get-extension-career';
@@ -31,15 +30,10 @@ import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITO
   controllers: [ProfilesController, ExtensionProfileController, ProfileCareerController],
   providers: [
     {
-      provide: GetProfileCareer,
+      provide: SaveProfileCareer,
       inject: [PROFILE_DIRECTORY, PrismaCareerProfileRepository],
       useFactory: (directory: ProfileDirectory, repository: PrismaCareerProfileRepository) =>
-        new GetProfileCareer(directory, repository),
-    },
-    {
-      provide: PrismaCareerProfileRepository,
-      inject: [PrismaService],
-      useFactory: (db: PrismaService) => new PrismaCareerProfileRepository(db),
+        new SaveProfileCareer(directory, repository),
     },
     {
       provide: ImportProfileCareer,

@@ -9,6 +9,7 @@ import { designOf } from '../resume/theme';
 import { DraftHistory } from '../resume/draftHistory';
 import { assistantApi, type ResumeScore } from '../resume/studio/assistantApi';
 import { Gauge } from '../resume/studio/AssistantPanel';
+import { JobAssessment } from '../resume/studio/JobAssessment';
 import { useSkillCard } from '../resume/SkillInfo';
 import { notifyResumesChanged, useResumeInExtension } from '../extensionBridge';
 import '../resume/document.css';
@@ -682,6 +683,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         </main>
 
         <aside className="qt-job">
+          <JobAssessment jobId={jobId} />
           <section className="ra-card">
             <h3>Resume Score</h3>
             {score?.score !== null && score?.score !== undefined ? (

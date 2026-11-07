@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
@@ -13,7 +14,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { CurrentUser, SyncTokenGuard } from '../../../../auth/http';
+import { AuthGuard, CurrentUser, SyncTokenGuard } from '../../../../auth/http';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { CoverLetters } from '../../../application/use-cases/cover-letters';
 import { ResumeErrorFilter } from './resume-error.filter';
@@ -66,5 +67,55 @@ export class ExtensionCoverLettersController {
 
   @Get('pdf') async pdf(@CurrentUser() userId: string, @Param('jobId') jobId: string, @Res() res: Response) {
     sendPdf(res, await this.letters.pdfOf(userId, jobId), 'attachment');
+  }
+}
+
+/** The app's Documents → Cover Letters: every letter, its editor, and its PDF. */
+@Controller('cover-letters')
+@UseGuards(AuthGuard)
+@UseFilters(ResumeErrorFilter, TailoringErrorFilter)
+export class CoverLettersController {
+  constructor(@Inject(CoverLetters) private readonly letters: CoverLetters) {}
+
+  @Get() list(@CurrentUser() userId: string) {
+    return this.letters.list(userId);
+  }
+
+  @Get(':jobId') detail(@CurrentUser() userId: string, @Param('jobId') jobId: string) {
+    return this.letters.detail(userId, jobId);
+  }
+
+  @Post(':jobId')
+  @HttpCode(200)
+  generate(
+    @CurrentUser() userId: string,
+    @Param('jobId') jobId: string,
+    @Body(new ZodValidationPipe(generateSchema)) body: { resumeId: string; instruction?: string },
+  ) {
+    return this.letters.generate(userId, jobId, body);
+  }
+
+  @Put(':jobId')
+  update(
+    @CurrentUser() userId: string,
+    @Param('jobId') jobId: string,
+    @Body(new ZodValidationPipe(updateSchema)) body: { text: string },
+  ) {
+    return this.letters.update(userId, jobId, body.text);
+  }
+
+  @Delete(':jobId')
+  @HttpCode(204)
+  async remove(@CurrentUser() userId: string, @Param('jobId') jobId: string) {
+    await this.letters.remove(userId, jobId);
+  }
+
+  /** Opens in the browser's PDF viewer. */
+  @Get(':jobId/pdf') async pdf(
+    @CurrentUser() userId: string,
+    @Param('jobId') jobId: string,
+    @Res() res: Response,
+  ) {
+    sendPdf(res, await this.letters.pdfOf(userId, jobId), 'inline');
   }
 }

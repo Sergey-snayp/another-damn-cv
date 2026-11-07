@@ -194,7 +194,6 @@ test('CLI adapter applies restricted mode, distinct prompts, and validates the f
   const generator = new ClaudeCliPracticeGenerator({
     complete: async (prompt, system, options) => {
       calls++;
-      assert.equal(options?.promptOnly, true);
       assert.equal(options?.maxOutputChars, 64000);
       assert.equal(system, PRACTICE_SYSTEM);
       assert.ok(prompt.includes(JSON.stringify(context)));

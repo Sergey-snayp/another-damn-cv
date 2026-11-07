@@ -13,6 +13,7 @@ import {
 } from '../documents/DocumentFilters';
 import { DocumentIcon } from '../documents/DocumentIcon';
 import { DocumentPopover } from '../documents/DocumentPopover';
+import { DocumentKindSwitch } from '../documents/DocumentKindSwitch';
 import { DocumentPreview } from '../documents/DocumentPreview';
 import '../documents/documents.css';
 
@@ -67,7 +68,7 @@ function readPreferences(key: string): Preferences {
   }
 }
 
-function timeAgo(value: string): string {
+export function timeAgo(value: string): string {
   const elapsed = Math.max(0, Date.now() - new Date(value).getTime());
   const minutes = Math.floor(elapsed / 60_000);
   if (minutes < 1) return 'Just now';
@@ -299,7 +300,7 @@ export function Documents() {
             </button>
           )}
         </label>
-        <span className="documents-type">Resumes</span>
+        <DocumentKindSwitch />
         <DocumentPopover
           open={panel === 'add'}
           onToggle={() => setPanel(panel === 'add' ? null : 'add')}

@@ -51,6 +51,12 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   creates its PDF and selects it for the extension. In the full editor,
   **Save & export PDF** saves the content and layout before making the PDF.
   Autosaves, layout changes, previews and extension downloads never create PDFs.
+  In Quick Tailor, **Should you apply?** → **Check the fit** compares the job
+  description with your saved Profile: a 0 to 10 score, a recommendation,
+  relevant strengths, gaps, questions to clarify and supporting quotes. The
+  posting's technologies are bold, framed green when your Profile shows them and
+  red when not. It runs only when asked, stays independent of tailoring edits and
+  creates no document or PDF. Saving Profile changes clears an open assessment.
   Skills, category labels and education fields can be edited directly on the
   CV preview. Enter applies an edit, Escape cancels it; hover over Skills or
   Education to add entries, or use the × controls to remove them.
@@ -62,7 +68,10 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   contact values and previously imported sections start unchecked. Chosen career
   sections replace that section in Profile; other sections stay unchanged.
   Imported sections keep their file name or CV version and stay independent of
-  later CV edits. Until a section is imported, Profile still shows the primary CV.
+  later CV edits. Profile shows only its saved career details. Edit its summary,
+  experience, role descriptions, individual bullets, education and skills directly;
+  these changes do not alter any CV. Courses can leave Degree blank. Job assessments
+  use this full Profile history even when a selected CV omits those details.
   File parsing uses Claude; choosing a saved CV makes no AI call. Neither action
   changes your documents or CV versions attached to applications.
 - **Profile → Saved answers** lists answers saved from application forms in

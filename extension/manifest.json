@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CV Autofill",
-  "version": "0.36.0",
+  "version": "0.37.0",
   "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -44,6 +44,7 @@
         "http://localhost:3001/*"
       ],
       "js": [
+        "src/top-layer.js",
         "src/sites.js",
         "src/fields.js",
         "src/filler.js",
@@ -51,6 +52,7 @@
         "src/launcher.js",
         "src/panel-host.js",
         "src/job-form.js",
+        "src/linkedin.js",
         "src/logo.js",
         "src/job-details.js",
         "src/content.js"

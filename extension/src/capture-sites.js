@@ -8,7 +8,8 @@
  *
  * Selectors are tried in order, and one is used only if it holds real text, so
  * a stale selector falls through to the next rather than capturing nothing.
- * When a site changes its layout, this file is the only thing to update.
+ * LinkedIn also has a shared selected-posting reader in linkedin.js; the
+ * panel and capture use it so both see the same job, including on SPA pages.
  *
  * Everything else (company sites, ATS boards) uses GENERIC_ROOTS.
  */

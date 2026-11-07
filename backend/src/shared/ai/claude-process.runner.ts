@@ -32,16 +32,21 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
     'Task',
   ];
 
-  /** `timeoutMs`: a whole-resume tailoring needs longer than reading one page. */
+  /**
+   * One prompt in, text out. Every call is prompt only: no tools, no slash
+   * commands, no saved session. The app's AI work is all writing from what the
+   * prompt holds, and with tools on the model would go round after round
+   * (one summary call grew to about 395,000 input tokens and 7 minutes).
+   * `timeoutMs`: a whole-resume tailoring needs longer than reading one page.
+   */
   complete(
     prompt: string,
     system: string,
     {
       timeoutMs = 180_000,
-      promptOnly = false,
       model = config.llmModel,
       maxOutputChars = Infinity,
-    }: { timeoutMs?: number; promptOnly?: boolean; model?: string; maxOutputChars?: number } = {},
+    }: { timeoutMs?: number; model?: string; maxOutputChars?: number } = {},
   ): Promise<string> {
     if (this.stopping) return Promise.reject(this.cannotRun());
     const args = [
@@ -56,18 +61,15 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
       '--exclude-dynamic-system-prompt-sections',
       '--system-prompt',
       system,
+      '--restricted',
+      '--tools',
+      '',
+      '--disable-slash-commands',
+      '--no-session-persistence',
+      '--permission-mode',
+      'dontAsk',
+      '--no-chrome',
     ];
-    if (promptOnly)
-      args.push(
-        '--restricted',
-        '--tools',
-        '',
-        '--disable-slash-commands',
-        '--no-session-persistence',
-        '--permission-mode',
-        'dontAsk',
-        '--no-chrome',
-      );
 
     const completion = new Promise<string>((resolve, reject) => {
       let child: ChildProcessWithoutNullStreams;

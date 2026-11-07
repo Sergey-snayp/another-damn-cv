@@ -11,6 +11,8 @@ import { ResumeEditor } from './pages/ResumeEditor';
 import { ResumeHistory } from './pages/ResumeHistory';
 import { TailorReview } from './pages/TailorReview';
 import { QuickTailor, QuickTailorStart } from './pages/QuickTailor';
+import { CoverLetters } from './pages/CoverLetters';
+import { CoverLetterEditor } from './pages/CoverLetterEditor';
 import { InterviewPrep } from './pages/InterviewPrep';
 import { InterviewWorkspace } from './pages/InterviewWorkspace';
 import { InterviewReference } from './pages/InterviewReference';
@@ -56,6 +58,8 @@ function Gate() {
           <Route path="resumes" element={<Navigate to="/documents" replace />} />
           <Route path="resumes/:id/*" element={<LegacyResumeRedirect />} />
           <Route path="documents" element={<Documents />} />
+          <Route path="documents/cover-letters" element={<CoverLetters />} />
+          <Route path="documents/cover-letters/:jobId" element={<CoverLetterEditor />} />
           <Route path="interview-prep" element={<InterviewPrep />} />
           <Route path="interview-prep/:id" element={<InterviewWorkspace />} />
           <Route path="interview-prep/:id/job" element={<InterviewReference kind="job" />} />

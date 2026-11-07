@@ -47,3 +47,15 @@ test('missing or malformed saved jobs fail instead of becoming a new capture', a
   context.mock.method(globalThis, 'fetch', async () => new Response('{"id":"different-job"}'));
   await assert.rejects(api.getSavedJob('job-1'), /unexpected job details/);
 });
+
+test('injected capture errors are returned explicitly and a later read can succeed', async context => {
+  const { api } = await fixture(context);
+  const previous = globalThis.__cvCapture;
+  context.after(() => { if (previous === undefined) delete globalThis.__cvCapture; else globalThis.__cvCapture = previous; });
+  globalThis.chrome.scripting = { executeScript: async options => options.func ? [{ result: await options.func() }] : [] };
+  globalThis.__cvCapture = async () => { throw new Error('The selected description is still loading.'); };
+  await assert.rejects(api.captureTab(1), /selected description is still loading/);
+  const capture = { url: 'https://www.linkedin.com/jobs/view/111', text: 'Node.js TypeScript PostgreSQL' };
+  globalThis.__cvCapture = async () => capture;
+  assert.deepEqual(await api.captureTab(1), capture);
+});

@@ -8,6 +8,10 @@ import { ProfileCareer } from "../profile/ProfileCareer";
 import { usePrimaryResume } from "../profile/usePrimaryResume";
 import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerState } from "../profile/careerApi";
+import {
+  ProfileCareerEditor,
+  type CareerSectionKey,
+} from "../profile/ProfileCareerEditor";
 import "../profile/profile.css";
 
 type ProfileTab = "profile" | "personal" | "preferences";
@@ -32,7 +36,12 @@ export function Profile() {
   const [attempt, setAttempt] = useState(0);
   const [careerState, setCareerState] = useState<CareerState | null>(null);
   // false, or the import dialog's options: a saved CV to start from.
-  const [importing, setImporting] = useState<false | { resumeId?: string }>(false);
+  const [importing, setImporting] = useState<false | { resumeId?: string }>(
+    false,
+  );
+  const [editingCareer, setEditingCareer] = useState<CareerSectionKey | null>(
+    null,
+  );
 
   useEffect(() => {
     let current = true;
@@ -101,12 +110,16 @@ export function Profile() {
     .map((word) => word[0])
     .join("")
     .toUpperCase();
+  const roles = careerState?.data.experiences?.value ?? [];
+  const currentRole =
+    roles.find((role) => role.current) ??
+    [...roles].sort((a, b) => b.from.localeCompare(a.from))[0];
   const checks = [
     !!profile?.firstName?.trim() && !!profile?.lastName?.trim(),
     !!profile?.email?.trim(),
     !!profile?.phone?.trim(),
     !!(profile?.location?.trim() || profile?.city?.trim()),
-    !!career.primary?.currentSnapshotId,
+    roles.length > 0,
     !!(
       profile?.linkedin?.trim() ||
       profile?.github?.trim() ||
@@ -165,9 +178,9 @@ export function Profile() {
           </div>
           <h1>{name}</h1>
           <p className="profile-headline">
-            {[profile.currentTitle, profile.currentCompany]
+            {[currentRole?.title, currentRole?.company]
               .filter(Boolean)
-              .join(" @ ") || "Add your current role in your primary CV"}
+              .join(" @ ") || "Add your work experience to Profile"}
           </p>
           <div className="profile-job-search">
             <span>Job Search Status</span>
@@ -241,7 +254,7 @@ export function Profile() {
             <Icon name="sparkle" />
           </h3>
           <p>
-            Fill your contact details, add a primary CV, and link your work.
+            Fill your contact details, add your experience, and link your work.
           </p>
           <div>
             <progress
@@ -261,10 +274,11 @@ export function Profile() {
         <section className="profile-panel profile-import-banner">
           <div className="profile-panel-heading">
             <div>
-              <h2>Build your profile from your CV</h2>
+              <h2>Your full career profile</h2>
               <p>
-                Import contact details, work experience, education and skills.
-                Review everything before saving.
+                Add detailed experience, achievements, education and skills
+                below, or import a CV to get started. Job recommendations use
+                this Profile.
               </p>
             </div>
             <button
@@ -295,14 +309,12 @@ export function Profile() {
             career={career}
             profile={profile}
             imported={careerState?.data ?? {}}
-            onImport={() => {
-              if (!dirty && !saving) setImporting({});
-            }}
             onImportCv={(resumeId) => {
               if (!dirty && !saving) setImporting({ resumeId });
             }}
             importDisabled={dirty || saving || !careerState}
             onEditPersonal={() => setActive("personal")}
+            onEditCareer={setEditingCareer}
           />
         ) : (
           <>
@@ -449,6 +461,25 @@ export function Profile() {
                   "The import was saved, but personal details could not refresh. Reload the page to see them.",
                 ),
               );
+          }}
+        />
+      )}
+      {editingCareer && careerState && (
+        <ProfileCareerEditor
+          section={editingCareer}
+          career={careerState}
+          onClose={() => setEditingCareer(null)}
+          onSaved={(state) => {
+            setCareerState(state);
+            setEditingCareer(null);
+            setNotice("Profile career details saved.");
+            void api
+              .profile()
+              .then((next) => {
+                setProfile(next);
+                setDraft({ ...next });
+              })
+              .catch(() => {});
           }}
         />
       )}

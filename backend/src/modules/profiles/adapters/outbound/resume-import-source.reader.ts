@@ -4,7 +4,7 @@ import { CareerImportError, type CareerSource } from '../../domain/career-profil
 export class ResumeImportSourceReader implements CareerSourceReader {
   constructor(private readonly resumes: Pick<ResumesApi, 'atSnapshot'>) {}
   async assertOwned(userId: string, source: CareerSource) {
-    if (source.kind === 'file') return;
+    if (source.kind !== 'resume') return;
     try {
       await this.resumes.atSnapshot(userId, source.id, source.snapshot);
     } catch (error) {

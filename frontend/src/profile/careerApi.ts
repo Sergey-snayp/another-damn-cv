@@ -44,6 +44,7 @@ export interface CareerSections {
   skills: string[];
 }
 export type CareerSource =
+  | { kind: "profile" }
   | { kind: "file"; name: string }
   | { kind: "resume"; id: string; snapshot: number };
 export interface CareerSection<T> {
@@ -81,18 +82,36 @@ async function request<T>(suffix: string, init?: RequestInit): Promise<T> {
     throw new Error(
       typeof detail?.message === "string"
         ? detail.message
-        : `Could not import profile information (${response.status}).`,
+        : `Could not load or save profile information (${response.status}).`,
     );
   }
   return response.json() as Promise<T>;
 }
+export const PROFILE_CAREER_CHANGED = "cv-platform:profile-career-changed";
+function notifyCareerSaved(state: CareerState): CareerState {
+  window.dispatchEvent(new Event(PROFILE_CAREER_CHANGED));
+  try {
+    localStorage.setItem(
+      PROFILE_CAREER_CHANGED,
+      `${Date.now()}:${state.revision}`,
+    );
+  } catch {
+    /* Storage may be disabled. */
+  }
+  return state;
+}
 export const careerApi = {
   read: () => request<CareerState>(""),
+  save: (expectedRevision: number, sections: Partial<CareerSections>) =>
+    request<CareerState>("", {
+      method: "PUT",
+      body: JSON.stringify({ expectedRevision, sections }),
+    }).then(notifyCareerSaved),
   apply: (input: ProfileImportInput) =>
     request<CareerState>("/import", {
       method: "POST",
       body: JSON.stringify(input),
-    }),
+    }).then(notifyCareerSaved),
 };
 
 const text = (value: unknown, max = 12000): string => {

@@ -72,6 +72,32 @@
   }
 
   globalThis.__cvCapture = async () => {
+    const linkedin = window.CVAutofillLinkedIn;
+    if (linkedin?.isPage()) {
+      const job = await linkedin.expand();
+      // Keep only this posting: results, recommendations and account UI never
+      // become job requirements, even when they share its outer container.
+      const root = document.createElement('article');
+      for (const [tag, text] of [['h1', job.title], ['p', job.company], ['p', job.location]]) {
+        const node = document.createElement(tag); node.textContent = text; root.append(node);
+      }
+      const description = document.createElement('section');
+      for (const line of job.description.split('\n').filter(line => line.trim())) {
+        const paragraph = document.createElement('p'); paragraph.textContent = line; description.append(paragraph);
+      }
+      root.append(description);
+      return {
+        url: job.url,
+        pageTitle: [job.title, job.company].filter(Boolean).join(' at ').slice(0, 500) || 'LinkedIn job',
+        html: cleanHtml(root), text: job.text.slice(0, MAX_TEXT),
+        description: job.description.slice(0, MAX_TEXT),
+        // Drop JSON-LD for other search results; the DOM contains the fully
+        // expanded current description when its structured copy is shorter.
+        jsonLd: job.posting ? [{ ...job.posting, title: job.title, description: description.innerHTML }] : [],
+        hints: { title: job.title, company: job.company, ...(job.location && { location: job.location }) },
+        matched: 'LinkedIn',
+      };
+    }
     const sites = globalThis.__cvCaptureSites ?? [];
     const site = sites.find((s) => s.hosts.test(location.hostname)) ?? null;
 
