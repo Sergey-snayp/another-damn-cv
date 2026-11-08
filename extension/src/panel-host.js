@@ -273,6 +273,58 @@
     if (spaceStyle && !spaceStyle.isConnected) (document.head || document.documentElement).append(spaceStyle);
   }
 
+  // ─── Quick tailoring on the job page ─────────────────────────────────────────
+  // The app's Quick tailoring in a window over this page, the size the popup
+  // window had. Its frame is src/tailor.html, which signs the app in.
+  const TAILOR_PATH = /^\/popup\/jobs\/[\w-]{1,80}\/quick-tailor(\?[\w=&%.-]*)?$/;
+  const tailorHost = document.createElement('div');
+  tailorHost.id = 'adcv-tailor';
+  const tailorShadow = tailorHost.attachShadow({ mode: 'closed' });
+  tailorShadow.innerHTML = `<style>
+    :host { all: initial; position: fixed !important; inset: 0 !important; z-index: 2147483647 !important;
+      display: grid !important; place-items: center !important; background: rgba(20, 20, 14, .42) !important; }
+    .box { width: min(1180px, calc(100vw - 80px)); height: min(880px, calc(100vh - 60px));
+      min-width: min(720px, 100vw); min-height: min(560px, 100vh); border-radius: 14px; overflow: hidden; background: #fff;
+      box-shadow: 0 24px 64px rgba(0,0,0,.34), 0 0 0 1px rgba(0,0,0,.12); }
+    iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: light; }
+  </style><div class="box"></div>`;
+  // The page behind does not scroll under the window.
+  tailorHost.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
+  let tailorFrame = null;
+
+  /** Opens Quick tailoring for a saved job; a second opening replaces the first. */
+  function openTailor(path) {
+    if (!alive() || typeof path !== 'string' || !TAILOR_PATH.test(path)) return false;
+    tailorFrame?.remove();
+    tailorFrame = document.createElement('iframe');
+    tailorFrame.title = 'Quick tailoring';
+    tailorFrame.allow = 'clipboard-write';
+    tailorFrame.src = `${chrome.runtime.getURL('src/tailor.html')}?path=${encodeURIComponent(path)}`;
+    tailorShadow.querySelector('.box').append(tailorFrame);
+    // Over the panel, and inside LinkedIn's Easy Apply window when it is open.
+    if (window.CVAutofillTopLayer) { window.CVAutofillTopLayer.detach(tailorHost); window.CVAutofillTopLayer.attach(tailorHost); }
+    else document.documentElement.append(tailorHost);
+    tailorFrame.focus();
+    return true;
+  }
+
+  function closeTailor() {
+    tailorFrame?.remove();
+    tailorFrame = null;
+    if (window.CVAutofillTopLayer) window.CVAutofillTopLayer.detach(tailorHost); else tailorHost.remove();
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!alive() || sender.id !== chrome.runtime.id || message?.type !== 'tailor-open') return false;
+    sendResponse({ ok: openTailor(message.path) });
+    return false;
+  });
+  addEventListener('message', (event) => {
+    if (tailorFrame && event.source === tailorFrame.contentWindow && event.origin.startsWith('chrome-extension://') && event.data?.type === 'adcv-tailor-close') closeTailor();
+  });
+
+  window.CVAutofillTailor = { open: openTailor, close: closeTailor, isOpen: () => Boolean(tailorFrame) };
+
   window.CVAutofillPanel = { open, close, reattach, toggle: () => (isOpen ? close() : open()), isOpen: () => isOpen };
 
   // Reopen after a page load if this tab had the panel open.

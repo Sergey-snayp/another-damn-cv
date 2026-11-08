@@ -707,8 +707,8 @@ const IS_TOP = window === window.top;
 const TINY_FRAME = !IS_TOP && (innerWidth < 250 || innerHeight < 150);
 const framesWithForms = new Set();
 let frameVerdict = null;
-function showLauncher(ownForm) {
-  if (IS_TOP) { window.CVAutofillLauncher?.update(ownForm || framesWithForms.size > 0); return; }
+function showLauncher(ownForm, { form = true } = {}) {
+  if (IS_TOP) { window.CVAutofillLauncher?.update(ownForm || framesWithForms.size > 0, { form: form || framesWithForms.size > 0 }); return; }
   if (ownForm === frameVerdict) return;
   frameVerdict = ownForm;
   window.top.postMessage({ adcvFrameForm: ownForm }, '*');
@@ -737,7 +737,14 @@ function updateLauncher() {
     }
     if (job) { lastOwnForm = true; showLauncher(true); formChanged(); return; }
   }
-  if (!Fields.deepOne('input, textarea, select')) { lastOwnForm = false; showLauncher(false); return; }
+  if (!Fields.deepOne('input, textarea, select')) {
+    // A job page whose form is one click away (Ashby's Overview tab, Lever's posting):
+    // the button shows, and the panel offers to open the form. It opens by itself once
+    // the form is on the page.
+    lastOwnForm = false;
+    showLauncher(Boolean(Sites.formOpener()), { form: false });
+    return;
+  }
   scan();
   // Teamtailor and other boards on company domains are known by page structure.
   const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });

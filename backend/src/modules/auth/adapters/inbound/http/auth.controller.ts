@@ -1,10 +1,21 @@
 import { promisify } from 'node:util';
-import { Body, Controller, Get, Inject, Post, Req, UseFilters, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Post,
+  Req,
+  UseFilters,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { AUTH_API, AUTH_SETTINGS, type AuthSettings } from '../../../auth.tokens';
 import type { AuthApi, PublicUser } from '../../../contracts';
 import { AuthenticationErrorFilter } from './authentication-error.filter';
 import { AuthGuard } from './auth.guard';
+import { SyncTokenGuard } from './sync-token.guard';
 import { CurrentUser } from './current-user.decorator';
 import './session';
 
@@ -33,6 +44,20 @@ export class AuthController {
   async extension(@Body() body: { credential: string }) {
     const user = await this.auth.signInWithGoogle(body.credential);
     return { user: presentUser(user), syncToken: await this.auth.issueSyncToken(user.id) };
+  }
+  /** The extension asks for a one-time ticket right before opening Quick tailoring in a job page. */
+  @Post('embed-ticket')
+  @UseGuards(SyncTokenGuard)
+  async embedTicket(@CurrentUser() userId: string) {
+    return { ticket: await this.auth.issueEmbedTicket(userId) };
+  }
+  /** The framed app trades the ticket for its session token. */
+  @Post('embed-session')
+  async embedSession(@Body() body: { ticket?: unknown } | undefined) {
+    const ticket = body?.ticket;
+    if (typeof ticket !== 'string' || !ticket || ticket.length > 200)
+      throw new BadRequestException('Missing ticket.');
+    return { token: await this.auth.openEmbedSession(ticket) };
   }
   @Get('me')
   @UseGuards(AuthGuard)

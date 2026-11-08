@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { AuthApplication } from '../src/modules/auth/application/auth-api';
 import { AuthenticationError } from '../src/modules/auth/application/errors';
+import { EmbedSessions } from '../src/modules/auth/application/use-cases/embed-sessions';
+import { memoryEmbeds } from './fixtures/memory-embeds';
 import type {
   AccountRepository,
   GoogleAccount,
@@ -97,7 +99,12 @@ function setup() {
   };
   let sequence = 0;
   const tokens = new SyncTokens(accounts, { generate: () => `token-${++sequence}` });
-  const auth = new AuthApplication(new SignInWithGoogle(identities, accounts), accounts, tokens);
+  const auth = new AuthApplication(
+    new SignInWithGoogle(identities, accounts),
+    accounts,
+    tokens,
+    new EmbedSessions(memoryEmbeds(), { generate: () => `embed-${++sequence}` }),
+  );
   const repository = new Profiles();
   const directory = new EnsureProfile(repository, {
     find: (userId) =>
@@ -233,4 +240,25 @@ test('bearer profile lookup stays scoped to credential owner across rotation', a
   await auth.issueSyncToken('owner');
   await assert.rejects(profiles.bySyncToken(token), /Invalid sync token/);
   assert.equal((await profiles.contactOnly('other')).phone, 'other-phone');
+});
+
+test('an embed ticket opens one short session and nothing else', async () => {
+  let clock = 1_000_000;
+  let sequence = 0;
+  const embeds = new EmbedSessions(
+    memoryEmbeds(() => clock),
+    { generate: () => `t-${++sequence}` },
+    () => clock,
+  );
+  const ticket = await embeds.issueTicket('owner');
+  const token = await embeds.open(ticket);
+  assert.equal(await embeds.resolve(token), 'owner');
+  await assert.rejects(embeds.open(ticket), AuthenticationError, 'a ticket opens one session only');
+  await assert.rejects(embeds.resolve(ticket), AuthenticationError, 'a ticket is not a session');
+  const late = await embeds.issueTicket('owner');
+  clock += 61_000;
+  await assert.rejects(embeds.open(late), /expired/, 'a ticket lasts a minute');
+  assert.equal(await embeds.resolve(token), 'owner');
+  clock += 8 * 60 * 60_000;
+  await assert.rejects(embeds.resolve(token), /signed out/, 'a session lasts eight hours');
 });

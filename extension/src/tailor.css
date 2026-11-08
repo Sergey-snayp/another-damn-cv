@@ -1,0 +1,9 @@
+html, body { margin: 0; height: 100%; background: #fff; color-scheme: light; }
+#app { display: block; width: 100%; height: 100%; border: 0; }
+/* Until the app is signed in and drawn, or when it cannot be. */
+.wait { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; background: #fff;
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1d1d1b; text-align: center; padding: 24px; }
+.wait[hidden] { display: none; }
+.wait p { margin: 0; max-width: 420px; }
+.wait p.bad { color: #b42318; }
+.wait button { font: inherit; font-weight: 600; padding: 7px 14px; border-radius: 8px; border: 1px solid #c9c9bd; background: #fafaf5; cursor: pointer; }

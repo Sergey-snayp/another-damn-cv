@@ -11,6 +11,8 @@
  * with no token, no polling interval and nothing to press.
  */
 
+import { toParent } from './embed';
+
 const PROFILE = 'CV_PLATFORM_PROFILE';
 const ACK = 'CV_PLATFORM_PROFILE_ACK';
 const READY = 'CV_PLATFORM_EXTENSION_READY';
@@ -119,10 +121,13 @@ export function onResumesChanged(listener: () => void): () => void {
  */
 export function notifyResumesChanged(resumeId?: string): void {
   announceResumesChanged(resumeId);
+  // In a job page the extension's window around this frame passes it on.
+  toParent({ type: RESUMES_CHANGED, ...(resumeId ? { resumeId } : {}) });
   resumeChannel?.postMessage({ type: RESUMES_CHANGED });
 }
 
 /** Has the extension's Autofill use this CV, as Simplify's builder does after tailoring for a job. */
 export function useResumeInExtension(resumeId: string): void {
   window.postMessage({ type: USE_RESUME, resumeId }, window.location.origin);
+  toParent({ type: USE_RESUME, resumeId });
 }

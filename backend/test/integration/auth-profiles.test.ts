@@ -8,6 +8,8 @@ import { AuthApplication } from '../../src/modules/auth/application/auth-api';
 import { AuthenticationError } from '../../src/modules/auth/application/errors';
 import { SignInWithGoogle } from '../../src/modules/auth/application/use-cases/sign-in-with-google';
 import { SyncTokens } from '../../src/modules/auth/application/use-cases/sync-tokens';
+import { EmbedSessions } from '../../src/modules/auth/application/use-cases/embed-sessions';
+import { PrismaEmbedSessionStore } from '../../src/modules/auth/adapters/outbound/prisma-embed-session.store';
 import { AuthIdentityReader } from '../../src/modules/profiles/adapters/outbound/auth-identity.reader';
 import { PrismaProfileRepository } from '../../src/modules/profiles/adapters/outbound/prisma-profile.repository';
 import { ProfilesApplication } from '../../src/modules/profiles/application/profile-api';
@@ -24,6 +26,7 @@ const auth = new AuthApplication(
   ),
   accounts,
   new SyncTokens(accounts, new RandomSyncTokenGenerator()),
+  new EmbedSessions(new PrismaEmbedSessionStore(prisma), new RandomSyncTokenGenerator()),
 );
 const repository = new PrismaProfileRepository(prisma);
 const directory = new EnsureProfile(repository, new AuthIdentityReader(auth));
@@ -81,6 +84,27 @@ test('database token rotation preserves the other user and rejects the revoked c
   assert.equal(await auth.resolveSyncToken(otherToken), other.user.id);
   await assert.rejects(auth.resolveSyncToken(first), AuthenticationError);
   assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: owner.user.id } })).syncToken, next);
+});
+
+test('embed tickets and sessions are stored as hashed, expiring session rows', async () => {
+  const owner = await createUser('Embed owner');
+  const ticket = await auth.issueEmbedTicket(owner.user.id);
+  const rows = await prisma.userSession.findMany({ where: { sid: { startsWith: 'embed-ticket:' } } });
+  assert.ok(rows.length > 0 && rows.every((row) => !row.sid.includes(ticket)), 'only a hash is stored');
+  const token = await auth.openEmbedSession(ticket);
+  await assert.rejects(auth.openEmbedSession(ticket), AuthenticationError, 'a ticket opens one session');
+  assert.equal(await auth.resolveEmbedToken(token), owner.user.id);
+  await assert.rejects(auth.resolveEmbedToken(ticket), AuthenticationError);
+  const row = await prisma.userSession.findFirstOrThrow({
+    where: { sid: { startsWith: 'embed-session:' }, sess: { path: ['embedUserId'], equals: owner.user.id } },
+  });
+  assert.equal((row.sess as { userId?: unknown }).userId, undefined, 'never usable as a cookie session');
+  assert.ok(
+    row.expire.getTime() > Date.now() + 7 * 60 * 60_000 &&
+      row.expire.getTime() <= Date.now() + 8 * 60 * 60_000 + 1000,
+  );
+  await prisma.userSession.update({ where: { sid: row.sid }, data: { expire: new Date(Date.now() - 1000) } });
+  await assert.rejects(auth.resolveEmbedToken(token), AuthenticationError, 'an expired session is refused');
 });
 
 test('profile directory lazily creates exactly one row and retains nullable stored fields', async () => {

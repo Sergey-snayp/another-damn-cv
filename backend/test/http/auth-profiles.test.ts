@@ -7,6 +7,8 @@ import session from 'express-session';
 import { AuthController } from '../../src/modules/auth/adapters/inbound/http/auth.controller';
 import { AuthGuard } from '../../src/modules/auth/adapters/inbound/http/auth.guard';
 import { AuthenticationError } from '../../src/modules/auth/application/errors';
+import { EmbedSessions } from '../../src/modules/auth/application/use-cases/embed-sessions';
+import { memoryEmbeds } from '../fixtures/memory-embeds';
 import { AUTH_API, AUTH_SETTINGS } from '../../src/modules/auth/auth.tokens';
 import type { AuthApi, PublicUser } from '../../src/modules/auth/contracts';
 import { ProfilesController } from '../../src/modules/profiles/adapters/inbound/http/profiles.controller';
@@ -23,7 +25,11 @@ const users = new Map<string, PublicUser>([
 ]);
 const tokens = new Map<string, string>();
 let sequence = 0;
+const embeds = new EmbedSessions(memoryEmbeds(), { generate: () => `embed-${++sequence}` });
 const auth: AuthApi = {
+  issueEmbedTicket: (id) => embeds.issueTicket(id),
+  openEmbedSession: (ticket) => embeds.open(ticket),
+  resolveEmbedToken: (token) => embeds.resolve(token),
   signInWithGoogle(credential) {
     const user = users.get(credential);
     return user
@@ -190,4 +196,43 @@ test('HTTP extension login retains user/syncToken result and no web session', as
   const synced = await request('profile/sync', { token: `Bearer ${result.syncToken}` });
   assert.equal(synced.status, 200);
   assert.equal(((await synced.json()) as ContactFields).email, 'other@example.com');
+});
+
+test('HTTP Quick tailoring in a job page: the extension gets a ticket, the frame trades it for an embed session', async () => {
+  assert.equal(
+    (await request('auth/embed-ticket', { method: 'POST' })).status,
+    401,
+    'only the extension asks for tickets',
+  );
+  const cookie = await login('owner');
+  assert.equal(
+    (await request('auth/embed-ticket', { method: 'POST', cookie })).status,
+    401,
+    'a web session cannot mint tickets',
+  );
+  const sync = await auth.issueSyncToken('owner');
+  const issued = await request('auth/embed-ticket', { method: 'POST', token: `Bearer ${sync}` });
+  assert.equal(issued.status, 201);
+  const { ticket } = (await issued.json()) as { ticket: string };
+
+  assert.equal((await request('auth/embed-session', { method: 'POST', body: {} })).status, 400);
+  const opened = await request('auth/embed-session', { method: 'POST', body: { ticket } });
+  assert.equal(opened.status, 201);
+  assert.equal(opened.headers.get('set-cookie'), null, 'no cookie: the frame sends its token itself');
+  const { token } = (await opened.json()) as { token: string };
+  const again = await request('auth/embed-session', { method: 'POST', body: { ticket } });
+  assert.equal(again.status, 401, 'a ticket is used once');
+  assert.match(((await again.json()) as { message: string }).message, /expired/);
+
+  const me = await request('auth/me', { token: `Embed ${token}` });
+  assert.equal(me.status, 200);
+  assert.deepEqual(await me.json(), users.get('owner'));
+  assert.equal(
+    (await request('profile', { token: `Embed ${token}` })).status,
+    200,
+    "the app's own endpoints accept it",
+  );
+  for (const wrong of [`Embed ${ticket}`, `Embed nope`, `Bearer ${token}`, `Bearer ${sync}`]) {
+    assert.equal((await request('auth/me', { token: wrong })).status, 401, wrong);
+  }
 });

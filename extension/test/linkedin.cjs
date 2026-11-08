@@ -90,7 +90,7 @@ async function panelFixture(browser, jobPage) {
     window.chrome = {
       runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: { addListener: listener => window.__listeners.push(listener) }, sendMessage: async message => message.type === 'panel-tab' ? { tabId: 1 } : {} },
       storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async keys => [].concat(keys).forEach(key => delete store[key]) }, onChanged: event },
-      tabs: { get: async () => ({ id: 1, url }), sendMessage: async (_, message) => window.readJobPage(message), onUpdated: event, create: async options => window.__opened.push(options.url) },
+      tabs: { get: async () => ({ id: 1, url }), sendMessage: async (_, message) => (message?.type === 'tailor-open' ? (window.__opened.push(message.path), { ok: true }) : window.readJobPage(message)), onUpdated: event, create: async options => window.__opened.push(options.url) },
       scripting: { executeScript: async ({ func }) => {
         if (!func) return [];
         if (window.__captureFailure) { const message = window.__captureFailure; window.__captureFailure = ''; throw new Error(message); }
@@ -167,7 +167,7 @@ async function panelFixture(browser, jobPage) {
     assert.match(await panel.evaluate(() => window.__opened[0]), /\/popup\/jobs\/saved-111\/quick-tailor\?from=cv1$/);
     assert.match(requests.find(request => request.path === '/api/jobs/capture').body.text, /GraphQL/);
     assert.ok(!requests.some(request => request.method === 'POST' && /\/resumes(?:\/|$)/.test(request.path)), 'opening Quick Tailor creates no CV or PDF');
-    console.log('PASS: real panel analyzes the selected job and opens the existing unsaved Quick Tailor flow');
+    console.log('PASS: real panel analyzes the selected job and opens the existing unsaved Quick Tailor flow inside the job page');
 
     await page.evaluate(html => { document.querySelector('.jobs-search__job-details--container').outerHTML = html; }, details('222', 'Platform Engineer', 'Beta'));
     await panel.waitForFunction(() => document.getElementById('job-card')?.textContent.includes('Platform Engineer'));
@@ -214,6 +214,21 @@ async function panelFixture(browser, jobPage) {
     assert.doesNotMatch(publicCapture.text + publicCapture.html, /Wrong Python/);
     await publicPage.close();
     console.log('PASS: public and regional LinkedIn job pages work without JSON-LD');
+
+    // LinkedIn's own links carry the selected job's ID too ("Send Feedback" next to
+    // "Privacy & Terms"): they are not the job's card.
+    const footerUrl = 'https://www.linkedin.com/jobs/search-results/?currentJobId=4486197628&keywords=Node.JS';
+    const footer = await pageFixture(browser, `<!doctype html><title>Node.JS Jobs | LinkedIn</title><main><h1>Jobs</h1>
+      <div class="generated-12"><a href="https://www.linkedin.com/help/linkedin/ask/fb?currentJobId=4486197628">Send Feedback</a><span>Privacy &amp; Terms</span></div>
+      <ul><li><a href="/jobs/view/4486197628">Software Engineer, Full-Stack</a><img alt="Ema company logo" width="60" height="60"><p>Ema</p><p>Vancouver, BC</p></li></ul>
+      <section class="generated-448"><div><p><span>About the job</span></p></div><div>
+      <p>We build an AI employee for enterprises. Bring production experience in TypeScript, React and Node.js, and work across the stack with our product team.</p>
+      </div></section></main>`, footerUrl);
+    const footerCapture = await capture(footer);
+    assert.equal(footerCapture.hints.title, 'Software Engineer, Full-Stack', 'not "Send Feedback"');
+    assert.equal(footerCapture.hints.company, 'Ema', 'not "Privacy & Terms"');
+    await footer.close();
+    console.log('PASS: LinkedIn links that only carry the job ID are not read as the job');
 
     const modernUrl = 'https://www.linkedin.com/jobs/search-results/?currentJobId=4486197628&keywords=Node.JS';
     const modern = await pageFixture(browser, `<!doctype html><title>Node.JS Jobs | LinkedIn</title><main><h1>Jobs</h1>

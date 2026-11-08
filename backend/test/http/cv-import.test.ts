@@ -6,6 +6,8 @@ import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import { AuthGuard } from '../../src/modules/auth/http';
+import { AUTH_API } from '../../src/modules/auth/auth.tokens';
+import { AuthenticationError } from '../../src/modules/auth/application/errors';
 import { CvImportController } from '../../src/modules/resumes/adapters/inbound/http/cv-import.controller';
 import { ClaudeCvTranscriber } from '../../src/modules/resumes/adapters/outbound/ai/import/claude-cv.transcriber';
 import { CvDocumentTextExtractor } from '../../src/modules/resumes/adapters/outbound/documents/document-text.extractor';
@@ -29,7 +31,17 @@ const importer = new ImportCv(new CvDocumentTextExtractor(), new ClaudeCvTranscr
 
 @Module({
   controllers: [CvImportController],
-  providers: [AuthGuard, { provide: IMPORT_CV, useValue: importer }],
+  providers: [
+    AuthGuard,
+    { provide: IMPORT_CV, useValue: importer },
+    // Signed in by session only here: no embed session is ever valid.
+    {
+      provide: AUTH_API,
+      useValue: {
+        resolveEmbedToken: () => Promise.reject(new AuthenticationError('No embed sessions here.')),
+      },
+    },
+  ],
 })
 class HttpFixtureModule {}
 

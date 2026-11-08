@@ -12,7 +12,8 @@
   const shadow = host.attachShadow({ mode: 'open' });
   const sheet = new CSSStyleSheet();
   shadow.adoptedStyleSheets = [sheet];
-  let available = false, enabled = true, disabledHosts = [], dismissedUrl = null, position = null, panelOpen = false, keepAfterPanel = false;
+  // formHere: the form itself is on the page, not one click away on a job page.
+  let available = false, formHere = false, enabled = true, disabledHosts = [], dismissedUrl = null, position = null, panelOpen = false, keepAfterPanel = false;
   let settingsLoaded = false, autoOpenedUrl = null;
   const clamp = y => Math.max(48, Math.min(y, Math.max(48, innerHeight - 100)));
   const css = `
@@ -44,7 +45,7 @@
     // Open once for this page when an application form appears, including
     // forms found in iframes. Wait for saved hide/disable settings first.
     // Closing the panel leaves it closed through later scans of the same form.
-    if (settingsLoaded && available && !hiddenByChoice && !panelOpen && autoOpenedUrl !== location.href) {
+    if (settingsLoaded && available && formHere && !hiddenByChoice && !panelOpen && autoOpenedUrl !== location.href) {
       if (window.CVAutofillPanel?.open()) return;
     }
     if (!panelOpen && (keepAfterPanel || (available && !hiddenByChoice))) {
@@ -130,7 +131,7 @@
   });
   addEventListener('resize', renderVisibility);
   window.CVAutofillLauncher = {
-    update(value) { available = value; renderVisibility(); },
+    update(value, { form = true } = {}) { available = value; formHere = value && form; renderVisibility(); },
     /** Puts the button back after a page rebuilt its document and dropped it. */
     reattach() { if (!host.isConnected) renderVisibility(); },
     panelChanged(open) { panelOpen = open; autoOpenedUrl = location.href; if (open) keepAfterPanel = true; renderVisibility(); },

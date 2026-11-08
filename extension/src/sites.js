@@ -112,9 +112,39 @@ function siteForPage(hostname = location.hostname) {
   return siteFor(hostname) ?? SITES.find((site) => site.fingerprint?.()) ?? null;
 }
 
+/**
+ * The button on a job page that opens its application form: Ashby keeps the
+ * form on an "Application" tab, Lever and Workday behind "Apply". Facts about
+ * each site's markup, first gathered from the Simplify extension's site rules.
+ */
+const APPLY_BUTTONS = {
+  ashby: 'a[href$="/application"], a[href*="/application?"]',
+  ashbyhq: 'a[href$="/application"], a[href*="/application?"]',
+  lever: 'a[data-qa="show-page-apply"], a.template-btn-submit[href*="/apply"]',
+  workable: 'a[data-ui="apply-button"], button[data-ui="apply-button"]',
+  workday: 'a[role="button"][data-automation-id="adventureButton"], a[role="button"][data-uxi-element-id="Apply_adventureButton"]',
+  smartrecruiters: 'a.js-oneclick[href*="/oneclick-ui/"]',
+  icims: 'a.iCIMS_ApplyOnlineButton',
+  jobvite: 'a.jv-button-apply:not(.apply-later)',
+  breezy: 'a.button.apply[href$="/apply"], a[href$="/apply"]:not([href*="linkedin"])',
+  breezyhr: 'a.button.apply[href$="/apply"], a[href$="/apply"]:not([href*="linkedin"])',
+  comeet: 'button#showApplyForm',
+  gusto: 'a[href*="/applicants/new"]',
+  homerun: 'a.btn-apply',
+  jobscore: 'a.js-btn-apply',
+  paylocity: 'a.apply-link-marker',
+  pinpointhq: 'a[href$="/applications/new"]',
+  successfactors: 'button#applyButton_top, button#applyButton_bottom',
+  amazon: 'a#apply-button',
+  seek: 'a[data-automation="job-detail-apply"]',
+  oraclecloud: 'button.apply-now-button',
+  eightfold: 'button[data-test-id="apply-button"], a[href*="/careers/apply"]',
+};
+
 /** The button that opens this site's application form, when it is still closed. */
 function formOpener() {
-  const selector = siteForPage()?.openForm;
+  const site = siteForPage();
+  const selector = site?.openForm ?? APPLY_BUTTONS[site?.name];
   return selector ? [...document.querySelectorAll(selector)].find((button) => button.getClientRects().length) ?? null : null;
 }
 

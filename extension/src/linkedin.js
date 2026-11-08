@@ -156,8 +156,14 @@
    * has scrolled out of a virtualized details pane. */
   function selectedCard(id) {
     if (!id) return {};
+    // A job link: one to a job page. LinkedIn's own links (Send Feedback, Help, the footer)
+    // can carry the selected job's ID too, and are not its card.
+    const jobLink = link => {
+      try { return /^\/jobs(?:\/|$)/.test(new URL(link.href, location.href).pathname); } catch { return false; }
+    };
     const links = [...document.querySelectorAll('a[href*="/jobs/view/"], a[href*="currentJobId="]')]
-      .filter(link => idFromUrl(link.href) === id && visible(link));
+      .filter(link => idFromUrl(link.href) === id && visible(link) && jobLink(link)
+        && !link.closest('footer, nav, header, [role="contentinfo"], [role="navigation"], [role="banner"]'));
     for (const link of links) {
       const title = clean((link.innerText || link.textContent).split('\n')[0]);
       if (!title || /^(apply|save|view job|show.*details)$/i.test(title)) continue;

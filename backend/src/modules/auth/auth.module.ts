@@ -5,6 +5,8 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { AuthApplication } from './application/auth-api';
 import { SignInWithGoogle } from './application/use-cases/sign-in-with-google';
 import { SyncTokens } from './application/use-cases/sync-tokens';
+import { EmbedSessions } from './application/use-cases/embed-sessions';
+import { PrismaEmbedSessionStore } from './adapters/outbound/prisma-embed-session.store';
 import { GoogleIdentityVerifier } from './adapters/outbound/google-identity.verifier';
 import { PrismaAccountRepository } from './adapters/outbound/prisma-account.repository';
 import { RandomSyncTokenGenerator } from './adapters/outbound/random-sync-token.generator';
@@ -27,6 +29,7 @@ import { AUTH_API, AUTH_SETTINGS } from './auth.tokens';
           new SignInWithGoogle(new GoogleIdentityVerifier(config.google.clientId), accounts),
           accounts,
           new SyncTokens(accounts, new RandomSyncTokenGenerator()),
+          new EmbedSessions(new PrismaEmbedSessionStore(prisma), new RandomSyncTokenGenerator()),
         );
       },
     },

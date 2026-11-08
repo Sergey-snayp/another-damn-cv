@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CV Autofill",
-  "version": "0.48.0",
+  "version": "0.51.0",
   "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -93,7 +93,8 @@
       "resources": [
         "src/sidepanel.html",
         "assets/brand/d-stamp-logo.png",
-        "assets/theme/launcher-colors.css"
+        "assets/theme/launcher-colors.css",
+        "src/tailor.html"
       ],
       "matches": [
         "<all_urls>"

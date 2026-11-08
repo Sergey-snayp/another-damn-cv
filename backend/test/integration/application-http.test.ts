@@ -13,6 +13,8 @@ import { AuthApplication } from '../../src/modules/auth/application/auth-api';
 import { AuthenticationError } from '../../src/modules/auth/application/errors';
 import { SignInWithGoogle } from '../../src/modules/auth/application/use-cases/sign-in-with-google';
 import { SyncTokens } from '../../src/modules/auth/application/use-cases/sync-tokens';
+import { EmbedSessions } from '../../src/modules/auth/application/use-cases/embed-sessions';
+import { PrismaEmbedSessionStore } from '../../src/modules/auth/adapters/outbound/prisma-embed-session.store';
 import { PrismaAccountRepository } from '../../src/modules/auth/adapters/outbound/prisma-account.repository';
 import { RandomSyncTokenGenerator } from '../../src/modules/auth/adapters/outbound/random-sync-token.generator';
 import { AUTH_API, AUTH_SETTINGS } from '../../src/modules/auth/auth.tokens';
@@ -74,6 +76,7 @@ test(
       ),
       accounts,
       new SyncTokens(accounts, new RandomSyncTokenGenerator()),
+      new EmbedSessions(new PrismaEmbedSessionStore(prisma), new RandomSyncTokenGenerator()),
     );
     const aiCalls: string[] = [];
     const fakeRunner = {

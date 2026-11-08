@@ -1082,7 +1082,9 @@ async function reloadResumes(announceChoice) {
 // Simplify's site tells its extension. A burst of saves is fetched once.
 let appChangeTimer = 0;
 chrome.runtime.onMessage.addListener((message, sender) => {
-  if (!['app-resumes-changed', 'app-use-resume'].includes(message?.type) || !sender.tab?.url?.startsWith(APP_URL)) return false;
+  // From the app's own tab, or from Quick tailoring in a job page (src/tailor.js).
+  const fromApp = sender.tab?.url?.startsWith(APP_URL) || sender.url?.startsWith(chrome.runtime.getURL('src/tailor.html'));
+  if (!['app-resumes-changed', 'app-use-resume'].includes(message?.type) || !fromApp) return false;
   clearTimeout(appChangeTimer);
   appChangeTimer = setTimeout(() => void reloadResumes(message.type === 'app-use-resume'), 300);
   return false;
@@ -1264,8 +1266,23 @@ async function rescore(run = ++matchRun) {
 // Opening Quick Tailor loads a read-only job assessment; CV rewrites use its editor controls.
 const tailorButtons = () => document.querySelectorAll('[data-tailor]');
 let quickWindowId = null;
-/** Quick tailoring pops up over the job page, in a window of its own; a second click reuses it. */
+/**
+ * Quick tailoring opens in a window inside the job page (panel-host.js), the
+ * same size as the popup it replaced; where the page has no content script
+ * (a browser page, a reloaded extension), it pops up in a window of its own.
+ */
 async function openQuickTailor(url) {
+  const tab = currentTab;
+  if (tab?.id) {
+    try {
+      const answer = await chrome.tabs.sendMessage(tab.id, { type: 'tailor-open', path: new URL(url).pathname + new URL(url).search }, { frameId: 0 });
+      if (answer?.ok) return;
+    } catch { /* no content script here: the popup below */ }
+  }
+  await openQuickTailorWindow(url);
+}
+/** The popup window: a second click reuses it. */
+async function openQuickTailorWindow(url) {
   if (quickWindowId !== null) {
     try {
       const [tab] = await chrome.tabs.query({ windowId: quickWindowId });
