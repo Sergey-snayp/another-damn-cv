@@ -29,6 +29,7 @@
         "to": null,
         "current": true,
         "blurb": null,
+        "techStack": null,
         "position": 0,
         "createdInSnapshot": 1,
         "supersededInSnapshot": null,
@@ -161,6 +162,7 @@
           "to": null,
           "from": "2020",
           "blurb": null,
+          "techStack": null,
           "title": "Engineer",
           "client": null,
           "company": "Acme",
@@ -237,6 +239,7 @@
         "to": null,
         "current": true,
         "blurb": null,
+        "techStack": null,
         "position": 0,
         "createdInSnapshot": 1,
         "supersededInSnapshot": null

@@ -43,6 +43,7 @@ export function resumeText(resume: RenderedResume): string {
       role.title,
       role.company,
       role.blurb,
+      role.techStack,
       ...role.achievements.map((a) => a.bullet),
     ]),
     ...(resume.projects ?? []).flatMap((project) => [project.name, project.role, ...project.bullets]),

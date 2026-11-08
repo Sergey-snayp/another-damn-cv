@@ -51,10 +51,12 @@ const tailorLineSchema = z
   .object({
     text: z.string('There is nothing to tailor yet.').trim().max(5_000),
     // "blurb": the line under a job's title that says what the work was about.
-    kind: z.enum(['bullet', 'blurb', 'headline']),
+    // "techStack": the job's tools, a list under its bullets.
+    kind: z.enum(['bullet', 'blurb', 'headline', 'techStack']),
     /** What the person asked for in the card, such as "shorter". */
     instruction: z.string().trim().max(500).optional(),
-    context: z.string().max(1_000).optional(),
+    // For a tech stack: the job's own lines, the only place a tool may come from.
+    context: z.string().max(8_000).optional(),
     job: jobSchema,
   })
   .strict();
@@ -136,7 +138,7 @@ export class ResumeAssistantController {
     @Body(new ZodValidationPipe(tailorLineSchema))
     body: {
       text: string;
-      kind: 'bullet' | 'blurb' | 'headline';
+      kind: 'bullet' | 'blurb' | 'headline' | 'techStack';
       context?: string;
       instruction?: string;
       job: JobChoice;

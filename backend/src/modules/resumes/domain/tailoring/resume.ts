@@ -12,7 +12,7 @@ export type Achievement = Pick<
 export type RenderedExperience = Pick<
   ResumeExperience,
   'lineageId' | 'company' | 'client' | 'title' | 'location' | 'from' | 'to' | 'blurb'
-> & { achievements: Achievement[] };
+> & { techStack?: string | null; achievements: Achievement[] };
 export type RenderedResume = Pick<ResumeDocument, 'snapshot' | 'summaries'> & {
   contact: Pick<NonNullable<ResumeDocument['contact']>, 'firstName' | 'lastName' | 'location'> | null;
   experiences: RenderedExperience[];

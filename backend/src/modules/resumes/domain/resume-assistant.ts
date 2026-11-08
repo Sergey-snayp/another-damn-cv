@@ -157,3 +157,32 @@ export function checkedSkillGroups(
     return { category: group.category, skills: [...group.skills, ...added], added, dropped: [] };
   });
 }
+
+/**
+ * A tailored tech stack, checked in code: a comma-separated list, every tool it
+ * had before kept unless the model dropped it on request, and a new tool only
+ * when this job's own lines name it. Anything else is left out, with a note.
+ */
+export function checkedStack(
+  suggestion: string,
+  original: string,
+  evidence: string,
+): { list: string; notes: string[] } {
+  const split = (text: string) =>
+    text
+      .replace(/^\s*tech(nology)? stack\s*:\s*/i, '')
+      .replace(/\.\s*$/, '')
+      .split(/\s*[,;|]\s*|\s+and\s+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const before = split(original);
+  const has = (list: string[], item: string) => list.some((other) => sameSkill(other, item));
+  const kept: string[] = [];
+  const notes: string[] = [];
+  for (const item of split(suggestion)) {
+    if (has(kept, item)) continue;
+    if (has(before, item) || shownIn(evidence, item)) kept.push(item.slice(0, 80));
+    else notes.push(`${item} left out: this job's lines do not show it.`);
+  }
+  return { list: kept.length ? kept.join(', ') : before.join(', '), notes };
+}

@@ -194,6 +194,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       ] },
       { lineageId: 'role-2', company: 'Other Co', title: 'Developer', from: '2018', to: '2020', achievements: [
         { lineageId: 'bullet-3', experienceLineageId: 'role-2', bullet: 'Maintained internal tooling.' },
+        { lineageId: 'bullet-4', experienceLineageId: 'role-2', bullet: 'Tech stack: Go, Redis' },
       ] },
     ],
     educations: [
@@ -277,6 +278,10 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         const body = JSON.parse(request.postData() || '{}');
         aiRequests.push(body);
         // Bullets of a job arrive one by one and are long, as the real AI's are.
+        if (body.kind === 'techStack') {
+          await pause(150);
+          return reply({ original: body.text, suggestion: 'Redis, Go', cannotDo: [] });
+        }
         if (body.kind === 'bullet' && /Acme Labs/.test(body.context || '')) {
           await pause(300 + 500 * aiRequests.length % 1200);
           return reply({ suggestion: `${body.text} Rewritten for the job with reliable services, observability and clear ownership from design through production support for the team.`, cannotDo: [] });
@@ -430,18 +435,20 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       const asked = aiRequests.length;
       await page.click('[title="Tailor the summary for the job"]');
       await page.waitForSelector('.qt-unit .qt-screen');
-      // The line turns into a small screen over itself: its old text stays where the line was.
+      // The card opens as a window onto the line: the CV's own text shows through it.
       const lined = await page.evaluate(() => {
-        const old = document.querySelector('.qt-unit .qt-screen-before').getBoundingClientRect();
-        const line = document.querySelector('[data-section="summary"] [contenteditable="true"]').getBoundingClientRect();
-        return Math.abs(old.top - line.top) <= 4 && Math.abs(old.left - line.left) <= 4;
+        const pane = document.querySelector('.qt-unit .qt-window').getBoundingClientRect();
+        const line = document.querySelector('[data-section="summary"] .doc-summary').getBoundingClientRect();
+        return Math.abs(pane.top + 4 - line.top) <= 1 && Math.abs(pane.bottom - 4 - line.bottom) <= 1 && pane.left <= line.left && pane.right >= line.right;
       });
-      assert.ok(lined, 'the line inside the screen sits exactly where the CV line is');
+      assert.ok(lined, 'the window sits exactly over the CV line');
+      assert.equal(await page.$eval('.qt-unit', card => getComputedStyle(card).backgroundColor), 'rgba(0, 0, 0, 0)', 'the window is see-through');
       await pause(200);
       assert.equal(aiRequests.length, asked, 'pressing ✦ opens the screen; nothing is generated before Generate');
       await page.type('.qt-request textarea', 'Make it shorter');
       await page.click('.qt-unit .qt-generate');
-      assert.ok(await page.$('.qt-unit .qt-shimmer'), 'the screen shows the AI writing');
+      assert.ok(await page.$('.qt-unit .qt-screen.is-busy > .qt-window'), 'the window pulses while the AI writes');
+      await page.screenshot({ path: '/private/tmp/job-agent-qt-summary-writing.png' });
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(aiRequests.length, asked + 1);
       assert.equal(aiRequests.at(-1).instruction, 'Make it shorter', 'the request typed under the screen goes to the AI');
@@ -449,7 +456,11 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(aiRequests.length, asked + 2, 'Try again writes another version');
       await pause(400); // The line types itself in.
-      assert.match(await page.$eval('.qt-unit .qt-screen-text', element => element.innerHTML), /Built services for <b>Acme<\/b>\./);
+      // The new version shows as a change: the old words red and crossed out, the new ones green.
+      assert.deepEqual(await page.$$eval('.qt-unit .qt-change .qt-del', parts => parts.map(part => part.textContent).join('')), 'First edit');
+      assert.equal(await page.$$eval('.qt-unit .qt-change .qt-add', parts => parts.map(part => part.textContent).join('')), 'Built services for Acme');
+      assert.equal(await page.$eval('.qt-unit .qt-change', element => element.textContent), 'First edit Built services for Acme.');
+      assert.equal(await page.$eval('.qt-unit .qt-change b', element => element.textContent.trim()), 'Acme', 'with its bold');
       const report = await page.$eval('.qt-unit', element => element.innerText);
       for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'How it answers the posting'])
         assert.ok(report.includes(part), `the summary card shows: ${part}`);
@@ -505,9 +516,43 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         const moves = menus.filter((top, index) => index && top !== null && menus[index - 1] !== null && top !== menus[index - 1]).length;
         console.log('CARD TOPS', opened, JSON.stringify([...new Set(tops)]), 'LINE TOPS', JSON.stringify([...new Set(lines)]), 'MENU MOVES', moves, JSON.stringify(menus.filter((top, index) => top !== menus[index - 1])));
         assert.deepEqual([...new Set(tops.filter(top => top !== null))], [opened], 'the card stays where it opened while the bullets are written');
-        const lineCount = await page.$$eval('.qt-unit .qt-screen-line', rows => rows.length);
+        // The job's lines, as the CV draws them: each change in its place, with its own buttons.
+        const lineCount = await page.$$eval('.qt-unit .qt-slot', rows => rows.length);
+        assert.equal(lineCount, 2, 'both bullets are shown in the job');
+        assert.match(await page.$eval('.qt-unit .qt-screen-body', body => body.textContent), /Acme Labs/, 'with the job\'s own title line');
+        await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
+        await pause(1500); // The changes type themselves in.
+        assert.match(await page.$eval('.qt-unit .qt-slot', slot => slot.textContent), /Rewritten for the job/);
+        assert.ok(await page.$('.qt-unit .qt-slot .qt-add'), 'what was put in is marked');
+        const bulletsBefore = await page.$$eval('.qt-zoom [data-section="experience"] article:first-of-type li .pro-text', rows => rows.map(row => row.textContent));
+        await page.evaluate(() => document.querySelectorAll('.qt-unit .qt-slot')[1].querySelector('.qt-actions .primary').click());
+        const bulletsAfter = await page.$$eval('.qt-zoom [data-section="experience"] article:first-of-type li .pro-text', rows => rows.map(row => row.textContent));
+        assert.equal(bulletsAfter[0], bulletsBefore[0], 'the other bullet is not touched');
+        assert.match(bulletsAfter[1], /Rewritten for the job/, 'Use puts in only that line');
+        assert.match(await page.$$eval('.qt-unit .qt-slot', slots => slots[1].textContent), /✓ Used/);
+        await page.click(undo);
         assert.ok(moves <= lineCount, `the menu moves at most once per line as it arrives (${moves} moves, ${lineCount} lines), never while text types in`);
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close')?.click());
+      }
+
+      // The second job's "Tech stack:" bullet is its tech stack line, tailored as a list.
+      {
+        const other = '[data-section="experience"] article:nth-of-type(2)';
+        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Go, Redis/);
+        assert.ok(!(await page.$$eval(`${other} li[data-edit-item="bullet"]`, rows => rows.map(row => row.textContent))).some(text => /Tech stack/.test(text)), 'no longer a bullet');
+        await page.hover(`${other} .doc-role-stack`);
+        await page.click(`${other} .doc-role-stack [title="Tailor the tech stack for the job"]`);
+        await page.waitForSelector('.qt-unit .qt-generate');
+        assert.match(await page.$eval('.qt-unit .qt-screen-title', element => element.textContent), /Tech stack/);
+        await page.click('.qt-unit .qt-generate');
+        await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
+        const sent = aiRequests.at(-1);
+        assert.equal(sent.kind, 'techStack');
+        assert.match(sent.context, /Maintained internal tooling\./, "the job's own lines go with it");
+        await page.click('.qt-unit .qt-actions .primary');
+        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Redis, Go/);
+        await page.click(undo);
+        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Go, Redis/);
       }
 
       // Every skills line at once: the same screen over the section, one row per line.
@@ -516,9 +561,10 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.waitForSelector('.qt-unit .qt-generate');
       await pause(150);
       assert.equal(aiRequests.length, beforeSkills, 'nothing is generated before Generate');
-      assert.ok((await page.$$('.qt-unit .qt-screen-line')).length >= 2, 'each skills line is a row of the screen');
+      assert.ok(await page.$('.qt-unit .qt-window'), 'the section shows through the window');
       await page.click('.qt-unit .qt-generate');
       await page.waitForSelector('.qt-unit .qt-screen-line .qt-actions .primary');
+      assert.ok((await page.$$('.qt-unit .qt-screen-line')).length >= 2, 'each skills line is a row of the screen');
       await pause(500);
       assert.match(await page.$eval('.qt-unit .qt-screen', element => element.innerText), /Kubernetes/);
       await page.screenshot({ path: '/private/tmp/job-agent-qt-skills.png' });
@@ -528,7 +574,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.click('[title="Tailor the summary for the job"]');
       await page.waitForSelector('.qt-unit .qt-generate');
       await page.click('.qt-unit .qt-generate');
-      await page.waitForSelector('.qt-unit .qt-shimmer');
+      await page.waitForSelector('.qt-unit .qt-screen.is-busy');
       await page.click(undo);
       await pause(200);
       assert.equal(await page.$('.qt-card'), null, 'Undo dismisses suggestions and ignores late responses');

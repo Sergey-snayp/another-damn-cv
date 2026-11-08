@@ -63,6 +63,8 @@ export interface Experience extends VersionedRow {
   to: string | null;
   current: boolean;
   blurb: string | null;
+  /** The job's tools as a list ("Node.js, TypeScript, PostgreSQL"), printed under its bullets. */
+  techStack?: string | null;
   position: number;
 }
 export interface Achievement extends VersionedRow {
@@ -138,6 +140,7 @@ export interface ResumeChanges {
       to?: string | null;
       current?: boolean;
       blurb?: string | null;
+      techStack?: string | null;
       position?: number;
     }
   >;

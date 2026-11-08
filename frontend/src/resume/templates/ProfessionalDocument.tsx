@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { roleLines } from '../techStack';
 import type { RenderedResume } from '../../resumeApi';
 import { RewritePopover } from '../RewritePopover';
 import { DiffText } from '../DiffText';
@@ -223,6 +224,8 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const skillCard = useSkillCard(readOnly ? null : resumeId ?? null, resume);
   /** A job whose empty description is being written: shown until it is left empty. */
   const [describing, setDescribing] = useState<string | null>(null);
+  /** The job whose empty tech stack line is open for typing. */
+  const [stacking, setStacking] = useState<string | null>(null);
   useLayoutEffect(() => {
     if (!focusTarget || readOnly) return;
     const key = CSS.escape(focusTarget.key);
@@ -273,12 +276,14 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     const role = resume.experiences[i]!;
     const context = `${role.title} at ${role.company}`;
     const targets: RewriteTarget[] = [];
-    if ((role.blurb ?? '').trim()) targets.push({ text: role.blurb ?? '', context, kind: 'blurb', label: `${role.company || 'Job'} · Description`,
+    if ((role.blurb ?? '').trim()) targets.push({ text: role.blurb ?? '', context, kind: 'blurb', label: `${role.company || 'Job'} · Description`, key: `description:${role.lineageId ?? i}`,
       apply: (next, d) => { d.experiences[i]!.blurb = next; } });
     role.achievements.forEach((bullet, j) => {
-      if (bullet.bullet.trim()) targets.push({ text: bullet.bullet, context, kind: 'bullet', label: `${role.company || 'Job'} · bullet ${j + 1}`,
+      if (bullet.bullet.trim()) targets.push({ text: bullet.bullet, context, kind: 'bullet', label: `${role.company || 'Job'} · bullet ${j + 1}`, key: bullet.lineageId,
         apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; } });
     });
+    if ((role.techStack ?? '').trim()) targets.push({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack', label: `${role.company || 'Job'} · Tech stack`, key: `tech-stack:${role.lineageId ?? i}`,
+      apply: (next, d) => { d.experiences[i]!.techStack = next; } });
     return targets;
   };
   /** One skills line, tailored as a whole: reordered, maybe with skills the CV shows. */
@@ -458,8 +463,35 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                 </li>
               ))}
             </ul>
+            {/* The job's tools: one line under its bullets, "Tech stack: Node.js, TypeScript". */}
+            {((role.techStack ?? '').trim() || (!readOnly && stacking === (role.lineageId ?? String(i)))) && (
+              <div className="doc-role-stack" data-edit-item="tech-stack" data-edit-key={`tech-stack:${role.lineageId ?? i}`}
+                onBlur={(event) => {
+                  // Left empty: the line closes again, so it takes no room on the page.
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.querySelector('.pro-text')?.textContent?.trim()) setStacking(null);
+                }}>
+                <b className="doc-stack-label">Tech stack: </b>
+                <RichText line value={role.techStack ?? ''} bold={null} readOnly={readOnly} placeholder="The tools of this job, separated by commas"
+                  onChange={(v) => {
+                    const list = v.replace(/^\s*tech(?:nology)?\s+stack\s*:\s*/i, '').trim();
+                    onChange((d) => { d.experiences[i]!.techStack = list; });
+                    if (!list) setStacking(null);
+                  }} />
+                {!readOnly && <span className="doc-bulletmeta">
+                  {tailorButton('Tailor the tech stack for the job', (event) => ask({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack',
+                    apply: (next, d) => { d.experiences[i]!.techStack = next; } }, event))}
+                  <DocumentControl action="remove" compact label="Remove tech stack" description={`Remove the tech stack of ${role.title} at ${role.company}`}
+                    onClick={() => { setStacking(null); removeItem(`add-tech-stack:${role.lineageId ?? i}`, (d) => { d.experiences[i]!.techStack = ''; }); }} />
+                </span>}
+              </div>
+            )}
             {!readOnly && <DocumentControl action="add" label="Add bullet" className="pro-add-bullet" controlKey={`add-bullet:${role.lineageId ?? i}`}
               description={`Add a bullet to ${role.title} at ${role.company}`} onClick={() => addExperienceBullet(i, role.achievements.length)} />}
+            {!readOnly && !(role.techStack ?? '').trim() && stacking !== (role.lineageId ?? String(i)) && (
+              <DocumentControl action="add" label="Add tech stack" className="pro-add-stack" controlKey={`add-tech-stack:${role.lineageId ?? i}`}
+                description={`Add a tech stack to ${role.title} at ${role.company}`}
+                onClick={() => { setStacking(role.lineageId ?? String(i)); setFocusTarget({ key: `tech-stack:${role.lineageId ?? i}` }); }} />
+            )}
           </article>
         ))}
       </section>

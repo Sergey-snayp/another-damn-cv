@@ -19,6 +19,7 @@ export function linesMentioning(resume: RenderedResume, name: string, limit = 4)
   for (const role of resume.experiences) {
     const where = [role.title, role.company].filter(Boolean).join(' at ');
     add(where, role.blurb);
+    add(where, role.techStack ? `Tech stack: ${role.techStack}` : null);
     for (const achievement of role.achievements) add(where, achievement.bullet);
   }
   for (const project of resume.projects ?? [])

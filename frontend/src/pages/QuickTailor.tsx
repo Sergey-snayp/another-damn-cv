@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { withTechStacks } from '../resume/techStack';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { jobName, jobsApi, type JobDetail } from '../jobsApi';
 import { resumeApi, type QuickTailoringDraft, type RenderedResume } from '../resumeApi';
 import { DiffText } from '../resume/DiffText';
+import { lineDiff } from '../resume/lineDiff';
+import { closeEmbed, downloadFromApi, embedded } from '../embed';
 import { ResumeDocument, type RewriteTarget } from '../resume/ResumeDocument';
 import { PagedDocument, ScaledPage } from '../resume/PagedDocument';
 import { designOf } from '../resume/theme';
@@ -135,37 +139,101 @@ function WorkingStatus({ seconds, summary, skills, progress }: {
   );
 }
 
-/** "**Kafka**" shows as Kafka in the card's comparison; the CV draws the bold itself. */
-const unmarked = (text: string) => text.replace(/\*\*/g, '');
 /** "**Kafka**" in bold, as it will print. */
 const withBold = (text: string) => text.split(/\*\*(.+?)\*\*/g).map((part, index) => (index % 2 ? <b key={index}>{part}</b> : part));
 
-/** The AI's line types itself into the screen, then shows with its bold. */
-function TypedLine({ text }: { text: string }) {
-  const plain = unmarked(text);
+/**
+ * The new version as a change of the old: what was taken out in red and crossed out, what
+ * was put in in green. It types itself in, holding its finished size from the first letter.
+ */
+function DiffLine({ before, after }: { before: string; after: string }) {
+  const pieces = useMemo(() => lineDiff(before, after), [before, after]);
+  const total = pieces.reduce((sum, piece) => sum + piece.text.length + (piece.space ? 1 : 0), 0);
   const still = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const [shown, setShown] = useState(still ? plain.length : 0);
+  const [shown, setShown] = useState(still ? total : 0);
   useEffect(() => {
-    if (still) { setShown(plain.length); return; }
+    if (still) { setShown(total); return; }
     setShown(0);
     const timer = window.setInterval(() => setShown((count) => {
-      if (count >= plain.length) { window.clearInterval(timer); return count; }
-      return Math.min(plain.length, count + 3);
+      if (count >= total) { window.clearInterval(timer); return count; }
+      return Math.min(total, count + 3);
     }), 14);
     return () => window.clearInterval(timer);
-  }, [plain, still]);
-  if (shown >= plain.length) return <>{withBold(text)}</>;
-  // The finished line holds the space from the first letter, so nothing below moves as it types.
+  }, [pieces, total, still]);
+  const draw = (limit: number) => {
+    let left = limit;
+    return pieces.map((piece, index) => {
+      if (left <= 0) return null;
+      // The space before a word joins its highlight only when the word before has the same one.
+      const joined = piece.space && pieces[index - 1]?.op === piece.op;
+      const lead = piece.space && !joined ? ' ' : '';
+      const body = `${joined ? ' ' : ''}${piece.text}`;
+      const shownLead = lead.slice(0, left);
+      left -= lead.length;
+      const shownBody = body.slice(0, Math.max(0, left));
+      left -= body.length;
+      const text = piece.bold ? <b>{shownBody}</b> : shownBody;
+      return <Fragment key={index}>{shownLead}{piece.op === 'same' ? text : <span className={`qt-${piece.op}`}>{text}</span>}</Fragment>;
+    });
+  };
+  if (shown >= total) return <>{draw(total)}</>;
   return (
     <span className="qt-typing">
-      <span className="qt-typing-room" aria-hidden="true">{plain}</span>
-      <span className="qt-typing-live">{plain.slice(0, shown)}<span className="qt-caret" aria-hidden="true" /></span>
+      <span className="qt-typing-room" aria-hidden="true">{draw(total)}</span>
+      <span className="qt-typing-live">{draw(shown)}<span className="qt-caret" aria-hidden="true" /></span>
     </span>
   );
 }
 
+/** What the card covers on the CV: the line, or a whole job or section for several lines. */
+const regionOf = (anchor: HTMLElement, many: boolean) =>
+  many ? anchor.closest<HTMLElement>('article') ?? anchor.closest<HTMLElement>('.doc-section') ?? anchor : anchor;
+
+/**
+ * A still copy of the CV part under the card, drawn exactly as on the page (same template
+ * styles, same zoom), so the window can scroll through a whole job while the page holds.
+ */
+function copyOfRegion(region: HTMLElement, scale: number, live = false): HTMLElement {
+  let copy = region.cloneNode(true) as HTMLElement;
+  copy.classList.remove('qt-behind');
+  // A live copy holds the new versions and their buttons: the page's own controls go.
+  if (live) copy.querySelectorAll('button, .doc-bulletmeta, .doc-add, .doc-remove').forEach((el) => el.remove());
+  copy.style.margin = '0';
+  copy.style.width = `${region.offsetWidth}px`;
+  copy.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'));
+  copy.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+  // Its parents up to the page, empty and without their own spacing: the template's styles
+  // (".page.tpl-professional .doc-bullets li", "[data-section] article") still apply to it.
+  const top = region.closest<HTMLElement>('.paged') ?? region.closest<HTMLElement>('.page');
+  for (let el = region.parentElement; el && top && top.contains(el); el = el.parentElement) {
+    const shell = el.cloneNode(false) as HTMLElement;
+    shell.removeAttribute('id');
+    shell.style.cssText += ';margin:0;padding:0;border:0;min-height:0;height:auto;width:auto;box-shadow:none;background:transparent;';
+    shell.append(copy);
+    copy = shell;
+  }
+  const zoom = document.createElement('div');
+  if (live) {
+    // Its height follows what is written into it: zoomed rather than transformed.
+    zoom.className = 'qt-copy is-live';
+    zoom.style.cssText = `width:${region.offsetWidth}px;zoom:${scale};`;
+    zoom.append(copy);
+    return zoom;
+  }
+  zoom.style.cssText = `width:${region.offsetWidth}px;transform:scale(${scale});transform-origin:top left;`;
+  zoom.append(copy);
+  const sizer = document.createElement('div');
+  sizer.className = 'qt-copy';
+  sizer.style.cssText = `width:${region.offsetWidth * scale}px;height:${region.offsetHeight * scale}px;`;
+  sizer.append(zoom);
+  return sizer;
+}
+
+/** The window's margin above and below the CV lines it shows. */
+const WINDOW_PAD = 4;
+
 /** What the line is, for the screen's label. */
-const KIND_NAMES: Record<string, string> = { summary: 'Summary', bullet: 'Bullet', blurb: 'Job description', headline: 'Headline', skills: 'Skills' };
+const KIND_NAMES: Record<string, string> = { summary: 'Summary', bullet: 'Bullet', blurb: 'Job description', headline: 'Headline', skills: 'Skills', techStack: 'Tech stack' };
 
 /** The card under the part being tailored: one line, or every line of a job or section. */
 interface Tailoring {
@@ -183,6 +251,8 @@ interface Tailoring {
 /** One-click requests for the card's box. */
 const REQUESTS = ["Use the job's keywords", 'Shorter', 'Lead with the result', 'More technical'];
 
+/** Lines the CV shows as a list item, with its "-" marker and hanging indent. */
+const LISTED = new Set(['bullet', 'skills']);
 const isReady = (item: Suggestion) => !item.busy && !item.error && !item.decided && item.value !== undefined
   && item.after?.trim() !== item.before.trim();
 
@@ -227,14 +297,19 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const [creatingPdf, setCreatingPdf] = useState(false);
   const [pdfSnapshot, setPdfSnapshot] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Close was pressed with unsaved changes: the header asks before anything is lost. */
+  const [closing, setClosing] = useState(false);
+  /** The window this runs in: a popup window, or CV Autofill's window inside a job page. */
+  const closeWindow = () => { if (embedded) closeEmbed(); else window.close(); };
   const [tailoring, setTailoring] = useState<Tailoring | null>(null);
   const [cardTop, setCardTop] = useState(0);
   /** One line's card sits over that line: its left edge, width and the CV's type at this zoom. */
-  const [cardBox, setCardBox] = useState<{ left: number; width: number; font: React.CSSProperties } | null>(null);
+  const [cardBox, setCardBox] = useState<{ left: number; width: number; font: React.CSSProperties; window: number } | null>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const canvas = useRef<HTMLDivElement>(null);
   const tailorRun = useRef(0);
   const cardRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef<RenderedResume | null>(null);
 
   useEffect(() => {
@@ -244,6 +319,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       ([prepared, detail]) => {
         if (!active) return;
         setWorkspace(prepared);
+        // A "Tech stack:" bullet becomes the job's tech stack, so it is tailored as a list.
+        withTechStacks(prepared.document);
         setLoaded(prepared.document);
         const initial = history.reset(prepared.document);
         setDraft(initial.document);
@@ -371,6 +448,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   // It moves only when its line does: text typing into the card resizes it many times a
   // second, and redrawing the whole page each time made the card (and the CV) jump.
   const placed = useRef('');
+  const heldFrame = useRef<{ run: number; scale: number; height: number } | null>(null);
   useLayoutEffect(() => {
     const el = canvas.current;
     if (!tailoring || !el) return;
@@ -380,31 +458,61 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       const view = el.getBoundingClientRect();
       // The card is the line (or the lines) turned into a screen: the first line's text sits
       // exactly where it is on the CV, in the CV's own type, and the menu continues below.
+      // Before the new version is back, the screen is a window onto the CV itself: the line, or
+      // the whole job or section, shows through it. A job's lines then sit from the job's top.
       const card = cardRef.current;
-      const old = card?.querySelector<HTMLElement>('.qt-screen-before, .qt-screen-text, .qt-shimmer');
-      const lift = card && old ? old.getBoundingClientRect().top - card.getBoundingClientRect().top : 34;
+      const many = tailoring.items.length > 1;
+      const region = regionOf(tailoring.anchor, many);
+      const area = region.getBoundingClientRect();
+      const pane = card?.querySelector<HTMLElement>('.qt-window');
+      const frame = pane ?? card?.querySelector<HTMLElement>('.qt-screen-body');
+      const first = frame ?? card?.querySelector<HTMLElement>('.qt-screen-before, .qt-screen-text');
+      const lift = card && first ? first.getBoundingClientRect().top - card.getBoundingClientRect().top + (frame ? WINDOW_PAD : 0) : 34;
       const style = getComputedStyle(tailoring.anchor);
-      const pad = 15;
+      // The screen's padding and the card's border: the text inside starts where the CV's does.
+      const pad = 15 + (card ? parseFloat(getComputedStyle(card).borderLeftWidth) || 0 : 0);
       // Measured against the visible width: the card's own size must not move it.
       const width = Math.round(Math.min(el.clientWidth - 16, Math.max(line.width + 2 * pad, 460)));
-      const left = Math.round(Math.min(Math.max(8, line.left - view.left + el.scrollLeft - pad), el.scrollLeft + el.clientWidth - width - 8));
-      const top = Math.round(Math.max(0, line.top - view.top + el.scrollTop - lift));
+      const left = Math.min(Math.max(8, line.left - view.left + el.scrollLeft - pad), el.scrollLeft + el.clientWidth - width - 8);
+      const top = Math.round(Math.max(0, (pane || many ? area.top : line.top) - view.top + el.scrollTop - lift));
+      // The frame keeps the height it opened with while the card is open (using a line changes
+      // the CV under it), unless the zoom changes.
+      const held = heldFrame.current;
+      const windowHeight = held && held.run === tailoring.run && held.scale === scale ? held.height : Math.round(area.height + 2 * WINDOW_PAD);
+      heldFrame.current = { run: tailoring.run, scale, height: windowHeight };
       const lineHeight = parseFloat(style.lineHeight);
+      // The text is set as on the CV: a bullet's marker and hanging indent, the column's width
+      // (so lines break at the same words), the alignment (the summary is justified) and spacing.
+      const anchor = tailoring.anchor;
+      const item = anchor.matches('li') ? anchor : anchor.closest('article, .doc-section')?.querySelector<HTMLElement>('.doc-bullets li') ?? null;
+      const text = (item ?? anchor).querySelector<HTMLElement>('.pro-text, [contenteditable]') ?? anchor;
+      const textStyle = getComputedStyle(text);
+      const indent = item ? Math.max(0, Math.round(text.getBoundingClientRect().left - item.getBoundingClientRect().left)) : 0;
+      const mark = item ? (parseFloat(getComputedStyle(item, '::before').left) || 0) * scale : 0;
       const font = {
         fontFamily: style.fontFamily,
         fontSize: `${parseFloat(style.fontSize) * scale}px`,
         ...(Number.isFinite(lineHeight) && { lineHeight: `${lineHeight * scale}px` }),
-      };
-      const key = JSON.stringify([top, left, width, font]);
+        textAlign: textStyle.textAlign,
+        letterSpacing: textStyle.letterSpacing,
+        wordSpacing: textStyle.wordSpacing,
+        hyphens: textStyle.hyphens,
+        '--qt-column': `${Math.round(line.width)}px`,
+        '--qt-indent': `${indent}px`,
+        '--qt-mark': `${mark}px`,
+      } as React.CSSProperties;
+      const key = JSON.stringify([top, left, width, font, windowHeight]);
       if (key === placed.current) return;
       placed.current = key;
-      setCardBox({ left, width, font });
+      setCardBox({ left, width, font, window: windowHeight });
       setCardTop(top);
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(place); };
     place();
     const observer = new ResizeObserver(schedule);
     observer.observe(tailoring.anchor);
+    const region = regionOf(tailoring.anchor, tailoring.items.length > 1);
+    if (region !== tailoring.anchor) observer.observe(region);
     if (cardRef.current) observer.observe(cardRef.current);
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [tailoring, draft, scale]);
@@ -475,7 +583,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       const result = await post<{ suggestion: string; cannotDo: string[] }>('tailor-line', {
         text: target.text, kind: target.kind,
         ...(request.trim() ? { instruction: request.trim().slice(0, 500) } : {}),
-        ...(target.context ? { context: target.context.slice(0, 1_000) } : {}),
+        // A tech stack is sent with the job's own lines, the only place a tool may come from.
+        ...(target.context ? { context: target.context.slice(0, target.kind === 'techStack' ? 8_000 : 1_000) } : {}),
         job: { jobId },
       });
       updateItem(run, item.key, { busy: false, after: result.suggestion, value: result.suggestion, cannotDo: result.cannotDo });
@@ -562,15 +671,56 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     decide(ready.map((item) => item.key), 'used');
   }
 
-  // While the AI works: a running timer in the card, and the part being tailored pulses on the CV.
+  // The part of the CV under the card holds still while it is open: no hover outline and no
+  // editing buttons showing through the window, and nothing there to click by accident.
+  const behind = tailoring ? regionOf(tailoring.anchor, tailoring.items.length > 1) : null;
+  useEffect(() => {
+    if (!behind) return;
+    behind.classList.add('qt-behind');
+    return () => behind.classList.remove('qt-behind');
+  }, [behind]);
+
+  // The window shows a still copy of that part of the CV, exactly where it is on the page; a
+  // whole job scrolls inside the window while the window and the page hold still.
+  const windowedNow = Boolean(tailoring && (tailoring.stage === 'compose'
+    || tailoring.items.filter((item) => !item.decided).every((item) => item.after === undefined && !item.error)));
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    if (!pane || !behind || !windowedNow) return;
+    pane.replaceChildren(copyOfRegion(behind, scale));
+    pane.scrollTop = 0;
+  }, [behind, windowedNow, scale, draft]);
+
+  // A job's new versions are shown in the job as the CV draws it (title, description, bullets,
+  // tech stack): each line's change in its own place, with its own Use, Try again and Skip.
+  const jobRef = useRef<HTMLDivElement>(null);
+  const [slots, setSlots] = useState<{ run: number; at: Record<string, HTMLElement> } | null>(null);
+  const keyOnPage = (key?: string) => Boolean(key && behind?.querySelector(`[data-edit-key="${CSS.escape(key)}"]`));
+  const inJob = Boolean(tailoring && tailoring.items.length > 1 && behind?.matches('article')
+    && tailoring.items.every((item) => keyOnPage(item.target.key)));
+  const run = tailoring?.run;
+  useLayoutEffect(() => {
+    const host = jobRef.current;
+    if (!host || !behind || !tailoring || windowedNow || !inJob) return;
+    const copy = copyOfRegion(behind, scale, true);
+    const at: Record<string, HTMLElement> = {};
+    for (const item of tailoring.items) {
+      const line = copy.querySelector<HTMLElement>(`[data-edit-key="${CSS.escape(item.target.key!)}"]`);
+      if (!line) continue;
+      const slot = document.createElement('span');
+      slot.className = 'qt-slot qt-change';
+      (line.querySelector<HTMLElement>('.pro-text') ?? line).replaceChildren(slot);
+      at[item.key] = slot;
+    }
+    host.replaceChildren(copy);
+    setSlots({ run: tailoring.run, at });
+    // Built once per run; the lines' changes are drawn into it as they arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [behind, windowedNow, inJob, scale, run]);
+
+  // While the AI works: a running timer in the card; the window onto the CV pulses.
   const working = Boolean(tailoring?.items.some((item) => item.busy));
   const elapsed = useElapsed(working);
-  const workingAnchor = working ? tailoring?.anchor : undefined;
-  useEffect(() => {
-    if (!workingAnchor) return;
-    workingAnchor.classList.add('qt-working');
-    return () => workingAnchor.classList.remove('qt-working');
-  }, [workingAnchor]);
 
   if (!jobId) return <div className="studio-message"><h1>Quick tailoring</h1><p className="error">Open this page from a job: the job is missing.</p></div>;
   if (error) return <div className="studio-message"><h1>Quick tailoring</h1><p className="error">{error}</p></div>;
@@ -594,17 +744,20 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const waiting = tailoring?.items.filter((item) => item.busy).length ?? 0;
   const ready = tailoring?.items.filter(isReady) ?? [];
   const many = (tailoring?.items.length ?? 0) > 1;
-  /** Use / Skip / Try again / Dismiss for one suggestion, once it has come back. */
+  /** Asked for (or queued) and not back yet. */
+  const pending = (item: Suggestion) => !item.decided && item.after === undefined && !item.error;
+  /** Use / Skip / Try again / Dismiss for one suggestion: shown from Generate on, usable once it is back. */
   const itemActions = (item: Suggestion) => {
     if (item.decided) return null;
     const same = item.after !== undefined && item.after.trim() === item.before.trim();
+    const waits = item.busy || pending(item);
     return (
       <div className="ra-row qt-actions">
-        {(item.after !== undefined || item.busy) && (
-          <button className="primary" disabled={same || saving || item.busy} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
+        {(item.after !== undefined || waits) && (
+          <button className="primary" disabled={same || saving || waits} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
         )}
         {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
-        <button className="ghost" disabled={saving || item.busy} onClick={() => retry(item)}>Try again</button>
+        <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Try again</button>
         {!many && <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>}
       </div>
     );
@@ -656,11 +809,23 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             {saving ? creatingPdf ? 'Creating PDF…' : 'Saving…' : 'Save'}
           </button>
           {pdfReady && !saving
-            ? <a className="ghost" href={`/api/resumes/${resumeId}/pdf?download=1`}>Export PDF</a>
+            ? <a className="ghost" href={`/api/resumes/${resumeId}/pdf?download=1`}
+                onClick={embedded ? (event) => {
+                  // In a job page a plain link would not carry this window's sign-in.
+                  event.preventDefault();
+                  downloadFromApi(event.currentTarget.href, `${name || 'CV'}.pdf`).catch((err: Error) => setSaveError(err.message));
+                } : undefined}>Export PDF</a>
             : <button className="ghost" disabled title="Click Save to create the PDF first.">Export PDF</button>}
-          {popup && (
-            <button className="ghost" disabled={saving} title="Close this window" onClick={() => window.close()}>Close</button>
-          )}
+          {popup && (closing ? (
+            <span className="qt-close-confirm" role="alert">
+              Unsaved changes.
+              <button className="ghost" onClick={closeWindow}>Close anyway</button>
+              <button className="ghost" autoFocus onClick={() => setClosing(false)}>Keep editing</button>
+            </span>
+          ) : (
+            <button className="ghost" disabled={saving} title="Close this window"
+              onClick={() => { if (dirty || pendingEdit) setClosing(true); else closeWindow(); }}>Close</button>
+          ))}
         </span>
       </header>
       {saveError && (
@@ -691,34 +856,58 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             // ✦ turns what it was pressed on into a small screen over it: each line as it is,
             // then the AI's version typed in under it. The menu continues right below, as one piece.
             const composing = tailoring.stage === 'compose';
+            // Until a new version (or an error) is back, the screen shows the CV through it.
+            const windowed = windowedNow;
             const solo = many ? null : tailoring.items[0]!;
             const company = job?.company || (job ? jobName(job) : 'the job');
             const forJob = job ? jobName(job) : 'the job';
             const title = waiting > 0 ? `Writing for ${company}…`
               : many ? `${tailoring.items.length} lines · ${composing ? 'for' : 'tailored for'} ${forJob}`
                 : `${KIND_NAMES[solo!.target.kind] ?? 'Line'} · ${composing ? 'for' : 'tailored for'} ${forJob}`;
+            const wrapLines = (lines: ReactNode) => many ? <div key="lines" className="qt-screen-body" style={{ height: cardBox?.window }}>{lines}</div> : lines;
             return (
-              <div className="qt-card qt-unit" ref={cardRef} role="dialog" aria-label={many ? 'AI versions of these lines' : 'AI version of this line'}
+              <div className={`qt-card qt-unit${many ? ' is-many' : ''}${windowed ? ' is-windowed' : ''}`} ref={cardRef} role="dialog" aria-label={many ? 'AI versions of these lines' : 'AI version of this line'}
                 style={{ top: cardTop, ...(cardBox && { left: cardBox.left, width: cardBox.width }) }}>
-                <div className="qt-screen" style={cardBox?.font}>
+                <div className={`qt-screen${waiting > 0 ? ' is-busy' : ''}${windowed ? ' is-window' : ''}`} style={cardBox?.font}>
                   <div className="qt-screen-label">
                     <span className={`qt-dot${waiting > 0 ? ' busy' : ''}`} aria-hidden="true" />
                     <span className="qt-screen-title">{title}</span>
                     {waiting > 0 && <span className="qt-elapsed">{elapsed}s</span>}
                     <button className="qt-close" title="Close" aria-label="Close" onClick={() => setTailoring(null)}>×</button>
                   </div>
-                  {tailoring.items.map((item) => {
-                    const before = unmarked(item.before).trim();
+                  {/* A job or a section keeps one frame from the start: first a window onto the CV, then
+                      the same frame with the new versions, which scroll inside it while it holds still. */}
+                  {windowed ? <div key="window" className="qt-window" ref={paneRef} style={{ height: cardBox?.window }} aria-hidden="true" /> : inJob ? (
+                    <div key="job" className="qt-screen-body" style={{ height: cardBox?.window }}>
+                      <div ref={jobRef} />
+                      {slots?.run === tailoring.run && tailoring.items.map((item) => {
+                        const slot = slots.at[item.key];
+                        if (!slot) return null;
+                        const back = item.after !== undefined && !item.busy;
+                        return createPortal(
+                          <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
+                            {back ? <DiffLine key={item.after} before={item.before.trim()} after={item.after!} /> : withBold(item.before.trim())}
+                            {item.error && !item.busy && <span className="qt-slot-note ra-error">{item.error}</span>}
+                            {item.decided
+                              ? <span className="qt-slot-note">{item.decided === 'used' ? '✓ Used' : 'Skipped'}</span>
+                              : itemActions(item)}
+                            {back && item.cannotDo?.map((note, index) => <span key={index} className="qt-slot-note">⚠ {note}</span>)}
+                          </span>,
+                          slot,
+                          item.key,
+                        );
+                      })}
+                    </div>
+                  ) : wrapLines(tailoring.items.map((item) => {
+                    const back = item.after !== undefined && !item.busy;
                     return (
-                      <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}`}>
+                      <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}${LISTED.has(item.target.kind) ? ' is-listed' : ''}`}>
                         {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
-                        {before ? <div className={`qt-screen-before${composing ? ' is-current' : ''}`}>{before}</div>
-                          : composing && <div className="qt-screen-text qt-screen-empty">A new summary, written from your CV.</div>}
-                        {composing ? null : item.busy ? <div className="qt-shimmer qt-shimmer-line" aria-hidden="true">{before || 'A new version is being written for this job.'}</div>
-                          : item.error ? <p className="ra-error">{item.error}</p>
-                            : item.after !== undefined ? <div className="qt-screen-text"><TypedLine key={item.after} text={item.after} /></div>
-                              : null}
-                        {many && !composing && itemActions(item)}
+                        {/* Back: the change, red out and green in. Still waiting: the line as it is. */}
+                        {back ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={item.before.trim()} after={item.after!} /></div>
+                          : <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>}
+                        {item.error && !item.busy && <p className="ra-error">{item.error}</p>}
+                        {many && itemActions(item)}
                         {many && !item.busy && item.after !== undefined && (
                           <>
                             {item.added?.length ? <p className="qt-note">+ From your CV: {item.added.join(', ')}</p> : null}
@@ -728,7 +917,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         )}
                       </div>
                     );
-                  })}
+                  }))}
                 </div>
                 <div className="qt-menu">
                   {composing ? (
@@ -749,7 +938,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                       skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
                       progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
                   )}
-                  {/* Several lines: the progress line stays when done, so the menu does not move up. */}
+                  {/* Several lines: the progress line's place is kept before Generate and after the
+                      lines are back, so the menu never moves. */}
+                  {many && composing && <p className="qt-working-status qt-screen-room" aria-hidden="true"><span>&nbsp;</span></p>}
                   {waiting === 0 && many && !composing && (
                     <p className="qt-working-status qt-working-done" role="status"><span>{tailoring.items.length} lines ready. Use each one, or all at once.</span></p>
                   )}

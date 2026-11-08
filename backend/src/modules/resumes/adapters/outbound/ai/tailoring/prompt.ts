@@ -16,8 +16,10 @@ export const TAILOR_SYSTEM = `You tailor a candidate's resume to one job posting
 ABSOLUTE RULES. Breaking any of these makes the output unusable:
 - Use ONLY facts already in the resume. Never add a technology, number, metric,
   company, client, title, scale or outcome that the resume does not state.
-- A bullet may use only facts from its own role: its text and the facts listed
-  under it. Never move a technology or number from one role to another.
+- A bullet may use only facts from its own role: its text, the facts listed
+  under it and the role's <tech_stack>. Never move a technology or number from
+  one role to another. The tech stack is a list kept as it is: never write it
+  as a bullet.
 - The summary may use facts from anywhere in the resume, and nothing else.
 - Never inflate. Keep the original verb's level of ownership: "built" stays
   "built" (not "designed" or "architected"), "worked on" does not become "led",
@@ -105,6 +107,7 @@ export function tailorPrompt(
       `<role id="${roleId}" name="${attr(name)}" dates="${attr(`${role.from} - ${role.to ?? 'present'}`)}">`,
     );
     if (role.blurb) parts.push(`<about>${role.blurb}</about>`);
+    if (role.techStack?.trim()) parts.push(`<tech_stack>${role.techStack.trim()}</tech_stack>`);
 
     for (const achievement of byPosition(role.achievements)) {
       const bulletId = `b${++bulletNo}`;

@@ -39,6 +39,7 @@ export const experienceInputSchema = z.object({
   to: nullableText,
   current: z.boolean().optional(),
   blurb: nullableText,
+  techStack: nullableText,
   position,
 });
 

@@ -65,7 +65,7 @@ export function numbersIn(text: string): string[] {
 
 /** Everything one role says: the only facts its bullets may use. */
 export function roleText(role: RenderedExperience): string {
-  const head = [role.title, role.company, role.client, role.location, role.blurb];
+  const head = [role.title, role.company, role.client, role.location, role.blurb, role.techStack];
   const body = role.achievements.flatMap((a) => [a.bullet, a.problem, a.action, a.result]);
   return [...head, ...body].filter(Boolean).join('\n');
 }

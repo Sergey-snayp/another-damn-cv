@@ -1,4 +1,5 @@
 import type { RenderedResume } from './resume';
+import { withoutEmDashes } from './cv-writing-guide';
 import { experienceSpan } from './cv-writing-guide';
 
 /**
@@ -337,6 +338,26 @@ export function checkNoToolListEnding(summary: string, record: ExperienceRecord)
 }
 
 /** All 10, in order. */
+/**
+ * What the code can put right without asking the AI again: an em dash becomes
+ * a comma, British -ise/-isation spelling becomes -ize/-ization, and a bolded
+ * term the record does not name loses its bold. Each would otherwise cost a
+ * whole fix round (12 to 17 seconds) for a mechanical change.
+ */
+export function repairSummary(summary: string, record: ExperienceRecord): string {
+  let text = withoutEmDashes(summary);
+  text = text.replace(/\b(\w+?)is(e|ed|es|ing)\b/gi, (word: string, stem: string, ending: string) =>
+    allowedIse(word.toLowerCase()) ? word : `${stem}iz${ending}`,
+  );
+  text = text.replace(/\b(\w+?)isation(s?)\b/gi, (word: string, stem: string, plural: string) =>
+    allowedIse(word.toLowerCase()) ? word : `${stem}ization${plural}`,
+  );
+  text = text.replace(/\*\*([^*]+)\*\*/g, (whole: string, term: string) =>
+    names(record.text, term) ? whole : term,
+  );
+  return text;
+}
+
 export function runSummaryChecks(summary: string, record: ExperienceRecord): CheckResult[] {
   return [
     checkWordCount(summary),
@@ -377,10 +398,13 @@ export function experienceRecord(resume: RenderedResume, now = new Date()): Expe
     const lines = [
       `Description: ${role.blurb ?? ''}`.trim(),
       ...role.achievements.map((achievement) => `- ${achievement.bullet}`),
-    ].filter((line) => line !== 'Description:');
+      role.techStack?.trim() ? `Tech stack: ${role.techStack.trim()}` : '',
+    ].filter((line) => line && line !== 'Description:');
     for (const achievement of role.achievements)
       if (STACK_LINE.test(achievement.bullet))
         stackItems(achievement.bullet).forEach((item) => technologies.add(item));
+    if (role.techStack?.trim())
+      stackItems(`Tech stack: ${role.techStack}`).forEach((item) => technologies.add(item));
     const body = [role.title, ...lines].join('\n');
     employers.push({ employer, text: body });
     const dates = `${monthYearOf(role.from)} - ${role.current ? 'present' : monthYearOf(role.to)}`;

@@ -18,9 +18,11 @@ export class PublicCvEvidenceReader implements CvEvidenceReader {
         title: role.title,
         from: role.from,
         to: role.current ? null : role.to,
-        bullets: [role.blurb, ...role.achievements.map((item) => item.bullet)].filter(
-          (text): text is string => Boolean(text?.trim()),
-        ),
+        bullets: [
+          role.blurb,
+          ...role.achievements.map((item) => item.bullet),
+          role.techStack ? `Tech stack: ${role.techStack}` : null,
+        ].filter((text): text is string => Boolean(text?.trim())),
       })),
       skills: resume.skills.map((skill) => skill.name),
       education: resume.educations.map((entry) =>

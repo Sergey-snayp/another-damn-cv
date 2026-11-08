@@ -1,4 +1,5 @@
 import {
+  repairSummary,
   runSummaryChecks,
   wordsOf,
   type CheckResult,
@@ -55,11 +56,15 @@ export async function writeCheckedSummary(
   input: SummaryInput,
   record: ExperienceRecord,
 ): Promise<CheckedSummary> {
-  const checked = (draft: SummaryDraft) => ({
-    // The count is the code's, not the model's.
-    draft: { ...draft, wordCount: wordsOf(draft.summary).length },
-    failed: runSummaryChecks(draft.summary, record).filter((check) => !check.ok),
-  });
+  const checked = (raw: SummaryDraft) => {
+    // Mechanical slips are put right in code first; only what needs rewording goes back to the AI.
+    const draft = { ...raw, summary: repairSummary(raw.summary, record) };
+    return {
+      // The count is the code's, not the model's.
+      draft: { ...draft, wordCount: wordsOf(draft.summary).length },
+      failed: runSummaryChecks(draft.summary, record).filter((check) => !check.ok),
+    };
+  };
   let current = checked(await writer.write(input));
   let best = current;
   let attempts = 1;

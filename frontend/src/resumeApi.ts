@@ -64,6 +64,8 @@ export interface Experience {
   to?: string | null;
   current?: boolean;
   blurb?: string | null;
+  /** The job's tools as a list, printed under its bullets: "Node.js, TypeScript, PostgreSQL". */
+  techStack?: string | null;
   position?: number;
   achievements: Achievement[];
 }

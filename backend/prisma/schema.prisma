@@ -389,18 +389,18 @@ model ContactInformation {
   lineageId String
   resumeId  String
 
-  firstName String  @default("")
-  lastName  String  @default("")
-  email     String  @default("")
+  firstName        String  @default("")
+  lastName         String  @default("")
+  email            String  @default("")
   /// One line under the name, such as "Senior Backend Engineer".
-  headline  String?
+  headline         String?
   /// Shows "Open for relocation" after the location.
   openToRelocation Boolean @default(false)
-  phone     String?
-  location  String?
-  linkedin  String?
-  github    String?
-  website   String?
+  phone            String?
+  location         String?
+  linkedin         String?
+  github           String?
+  website          String?
 
   createdInSnapshot    Int
   supersededInSnapshot Int?
@@ -417,15 +417,17 @@ model ExperienceEntry {
   lineageId String
   resumeId  String
 
-  company  String
-  client   String?
-  title    String
-  location String?
-  from     String
-  to       String?
-  current  Boolean @default(false)
-  blurb    String?
-  position Int     @default(0)
+  company   String
+  client    String?
+  title     String
+  location  String?
+  from      String
+  to        String?
+  current   Boolean @default(false)
+  blurb     String?
+  /// The tools of this job, as a list ("Node.js, TypeScript, PostgreSQL"), printed under its bullets.
+  techStack String?
+  position  Int     @default(0)
 
   createdInSnapshot    Int
   supersededInSnapshot Int?

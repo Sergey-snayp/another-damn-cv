@@ -43,6 +43,7 @@ export function searchableText(resume: RenderedResume): string {
       role.company,
       role.client,
       role.blurb,
+      role.techStack,
       ...role.achievements.flatMap((item) => [item.bullet, item.problem, item.action, item.result]),
     ]),
     ...resume.skills.flatMap((skill) => [skill.name, skill.category, ...skill.aliases]),

@@ -171,6 +171,11 @@ export function ExperienceForm({ resume, resumeId, onChange }: { resume: Rendere
                     <textarea rows={3} value={role.blurb ?? ''} placeholder="What the role or project was: the product, the team, the scale."
                       onChange={(e) => onChange((d) => { d.experiences[i]!.blurb = e.target.value; })} />
                   </label>
+                  <label className="sf-field wide">
+                    <span>Tech stack</span>
+                    <input value={role.techStack ?? ''} placeholder="Node.js, TypeScript, PostgreSQL"
+                      onChange={(e) => onChange((d) => { d.experiences[i]!.techStack = e.target.value; })} />
+                  </label>
                 </div>
 
                 <p className="sf-label">Bullets</p>

@@ -6,6 +6,7 @@ import { scoreResume, type ResumeScore } from '../../domain/resume-score';
 import {
   aiSettingsFrom,
   checkedSkillGroups,
+  checkedStack,
   checkedSuggestions,
   settingsForPrompt,
   type AiSettings,
@@ -34,8 +35,21 @@ const TAILOR_LINE = `Tailor this line for the job below, so a recruiter for this
 Return your best tailored version. Return the line unchanged only if no honest
 improvement for this job exists, and say why in cannotDo.`;
 
+/** A job's tech stack is a list of tools, not a line of prose. */
+const TAILOR_TECH_STACK = `This is the job's tech stack: a list of the tools it used, printed under its bullets.
+Tailor it for the job below:
+- Return a comma-separated list of tool names only: no "Tech stack:" label, no sentence,
+  no full stop at the end.
+- Put the tools this job posting asks for first, then the rest in their current order.
+- Keep every tool the list has, spelled as it is, unless the candidate asks for a shorter list.
+- You may add a tool only when this job's own lines in <cv_facts> name it. Never add a tool
+  the job posting asks for that those lines do not show, and never a tool from another job.
+Return the list unchanged only if no honest improvement for this job exists, and say why
+in cannotDo.`;
+
 /** What each kind of line is told: the shared tailoring rules, then the guide for that kind. */
 const TAILOR_BY_KIND = {
+  techStack: TAILOR_TECH_STACK,
   bullet: `${TAILOR_LINE}\n\n${BULLET_RULES}`,
   blurb: `${TAILOR_LINE}\n\n${DESCRIPTION_RULES}`,
   headline: `${TAILOR_LINE}\n\n${HEADLINE_RULES}`,
@@ -163,7 +177,7 @@ export class ResumeAssistant {
     id: string,
     input: {
       text: string;
-      kind: 'bullet' | 'blurb' | 'headline';
+      kind: 'bullet' | 'blurb' | 'headline' | 'techStack';
       context?: string;
       instruction?: string;
       job: JobChoice;
@@ -173,7 +187,23 @@ export class ResumeAssistant {
     const jobText = `The job: ${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 8_000)}`;
     await this.resumes.assertOwned(userId, id);
     if (!input.text.trim()) throw new ResumeError('invalid', 'There is nothing to tailor yet.');
-    const context = [input.context, jobText, await this.promptSettings(id)].filter(Boolean).join('\n\n');
+    if (input.kind === 'techStack') {
+      // The job's own lines are the only facts a tool may come from, and the answer is checked against them.
+      const own = (input.context ?? '').slice(0, 8_000);
+      const result = await this.rewriter.rewrite({
+        text: input.text,
+        kind: 'techStack',
+        instruction: withRequest(TAILOR_BY_KIND.techStack, input.instruction),
+        context: [`<cv_facts>\n${own}\n</cv_facts>`, jobText, await this.promptSettings(id)]
+          .filter(Boolean)
+          .join('\n\n'),
+      });
+      const checked = checkedStack(result.suggestion, input.text, own);
+      return { ...result, suggestion: checked.list, cannotDo: [...result.cannotDo, ...checked.notes] };
+    }
+    const context = [input.context?.slice(0, 1_000), jobText, await this.promptSettings(id)]
+      .filter(Boolean)
+      .join('\n\n');
     // The posting's words for practices this line already shows ("observability" for CloudWatch alarms).
     const hints = practiceHintText(practiceHints(job.description, input.text));
     return this.rewriter.rewrite({

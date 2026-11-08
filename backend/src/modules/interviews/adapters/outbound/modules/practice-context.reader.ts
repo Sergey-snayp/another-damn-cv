@@ -42,7 +42,13 @@ export class PublicPracticeContextReader implements PracticeContextReader {
             id: `cv-role-${i}`,
             source: 'cv',
             label,
-            text: [role.from, role.current ? 'Present' : role.to, role.client, role.blurb]
+            text: [
+              role.from,
+              role.current ? 'Present' : role.to,
+              role.client,
+              role.blurb,
+              role.techStack && `Tech stack: ${role.techStack}`,
+            ]
               .filter(Boolean)
               .join(' · '),
           });

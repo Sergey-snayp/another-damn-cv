@@ -479,7 +479,8 @@ test('Quick Tailor summary: written from the instructions, checked in code, fail
     attempts: number;
   };
   assert.equal(body.original, 'Backend engineer.');
-  assert.equal(body.summary, 'Engineer — optimised **Node.js** APIs on **PostgreSQL** with **Docker**.');
+  // The dash and the British spelling are put right in code; the length and opening are not.
+  assert.equal(body.summary, 'Engineer, optimized **Node.js** APIs on **PostgreSQL** with **Docker**.');
   assert.equal(body.wordCount, 8, 'counted in code');
   assert.deepEqual(body.gaps, ['Kafka and event-driven systems']);
   assert.equal(body.decidingGap, 'Kafka and event-driven systems');
@@ -487,7 +488,8 @@ test('Quick Tailor summary: written from the instructions, checked in code, fail
   assert.equal(body.attempts, 3, 'the same failures every time: 3 attempts, then stop');
   assert.equal(prompts.length, before + 3);
   const failed = body.failedChecks.map((check) => check.id);
-  for (const id of ['word-count', 'em-dash', 'us-spelling', 'opening']) assert.ok(failed.includes(id), id);
+  for (const id of ['word-count', 'opening']) assert.ok(failed.includes(id), id);
+  for (const id of ['em-dash', 'us-spelling']) assert.ok(!failed.includes(id), `${id} is repaired in code`);
 
   const first = prompts[before];
   assert.match(first, /<job_description>[\s\S]*Node\.js and TypeScript[\s\S]*<\/job_description>/);
@@ -497,7 +499,8 @@ test('Quick Tailor summary: written from the instructions, checked in code, fail
   );
   assert.match(first, /<candidate_request>\nStress payments/);
   assert.match(prompts.at(-1)!, /<previous_answer>/);
-  assert.match(prompts.at(-1)!, /- No em dashes: 1 em dash/);
+  assert.doesNotMatch(prompts.at(-1)!, /- No em dashes/, 'a repaired slip is not sent back');
+  assert.match(prompts.at(-1)!, /- Word count:/);
 
   // Not valid JSON twice: an error to try again, not a broken summary.
   answer = 'Sorry, I cannot.';
@@ -848,4 +851,42 @@ test('an empty Profile asks for details even with a populated CV, and editing ne
     'explicit empty lists clear a section',
   );
   assert.equal(await prisma.resume.count({ where: { profileId: fresh.profile.id } }), 0);
+});
+
+test("a job's tech stack is saved, changed in a new version, and counts in the keyword score", async () => {
+  const created = (await (
+    await call('/resumes', { method: 'POST', user: owner.user.id, body: { name: 'Stack CV' } })
+  ).json()) as { id: string };
+  const role = randomUUID();
+  const save = (techStack: string | null) =>
+    call(`/resumes/${created.id}/save`, {
+      method: 'POST',
+      user: owner.user.id,
+      body: {
+        experiences: [
+          { lineageId: role, company: 'Acme', title: 'Engineer', from: '2020', current: true, techStack },
+        ],
+        achievements: [{ lineageId: randomUUID(), experienceLineageId: role, bullet: 'Built payment APIs.' }],
+      },
+    });
+  assert.equal((await save('Node.js, Kafka')).status, 201);
+  const read = async () =>
+    (await (await call(`/resumes/${created.id}`, { user: owner.user.id })).json()) as {
+      snapshot: number;
+      experiences: Array<{ techStack: string | null }>;
+    };
+  const first = await read();
+  assert.equal(first.experiences[0].techStack, 'Node.js, Kafka');
+  assert.equal((await save('Node.js, Kafka, PostgreSQL')).status, 201);
+  const second = await read();
+  assert.equal(second.experiences[0].techStack, 'Node.js, Kafka, PostgreSQL');
+  assert.ok(second.snapshot > first.snapshot, 'a changed tech stack is a new version');
+  const score = (await (
+    await call(`/resumes/${created.id}/score`, {
+      method: 'POST',
+      user: owner.user.id,
+      body: { title: 'Backend', description: 'Requirements:\n- Kafka\n- PostgreSQL' },
+    })
+  ).json()) as { keywords: { matched: string[] } };
+  assert.deepEqual(score.keywords.matched.sort(), ['Kafka', 'PostgreSQL']);
 });

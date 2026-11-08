@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { withTechStacks } from '../resume/techStack';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { careerApi } from '../profile/careerApi';
@@ -169,7 +170,8 @@ export function ResumeEditor() {
         setHeld(true);
         message.current = 'imported from CV';
       } else {
-        setDraft(structuredClone(resume));
+        // A "Tech stack:" bullet becomes the job's tech stack; the next save keeps it.
+        setDraft(withTechStacks(structuredClone(resume)));
       }
     } catch (err) {
       setError((err as Error).message);

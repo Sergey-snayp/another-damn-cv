@@ -20,6 +20,8 @@ const sentence = (words: number) =>
     .join(' ')} end.`;
 const GOOD = `Senior backend engineer with 7 years building integrations on **NestJS** at scale today. ${sentence(30)} ${sentence(30)} ${sentence(20)}`;
 const BAD = 'Senior backend engineer with 7 years — optimised things.';
+/** BAD after the code's own repairs: what goes back to the model when rewording is still needed. */
+const BAD_REPAIRED = 'Senior backend engineer with 7 years, optimized things.';
 const draft = (summary: string): SummaryDraft => ({
   summary,
   wordCount: 0,
@@ -44,7 +46,7 @@ test('failed checks go back to the model by name, and a fixed summary is returne
   const writer: SummaryWriter = {
     write: () => Promise.resolve(draft(BAD)),
     fix: ({ failed, previous }) => {
-      assert.equal(previous.summary, BAD);
+      assert.equal(previous.summary, BAD_REPAIRED, 'the dash and spelling are repaired in code first');
       fixes.push(failed.map((check) => check.name));
       return Promise.resolve(draft(GOOD));
     },
@@ -52,7 +54,11 @@ test('failed checks go back to the model by name, and a fixed summary is returne
   const result = await writeCheckedSummary(writer, { job: 'Job', experience: record.text }, record);
   assert.equal(result.attempts, 2);
   assert.equal(result.summary, GOOD);
-  assert.ok(fixes[0].includes('No em dashes') && fixes[0].includes('US spelling'));
+  assert.ok(fixes[0].includes('Word count'), 'what needs rewording goes back by name');
+  assert.ok(
+    !fixes[0].includes('No em dashes') && !fixes[0].includes('US spelling'),
+    'mechanical slips do not',
+  );
 });
 
 test('after 3 attempts the best version comes back with its failed checks listed', async () => {
@@ -66,9 +72,9 @@ test('after 3 attempts the best version comes back with its failed checks listed
   assert.equal(result.attempts, 3);
   assert.equal(call, 3, 'never a 4th attempt');
   assert.ok(result.failedChecks.length > 0);
-  // The third has no British spelling: it fails the fewest checks.
-  assert.equal(result.summary, answers[2]);
-  assert.ok(!result.failedChecks.some((check) => check.id === 'us-spelling'));
+  // All three are repaired in code and fail the same checks: the latest stands.
+  assert.equal(result.summary, 'Senior backend engineer with 7 years, again.');
+  assert.ok(!result.failedChecks.some((check) => check.id === 'us-spelling' || check.id === 'em-dash'));
 });
 
 test('a fix that never comes back as valid JSON ends the loop with the best so far', async () => {
@@ -77,7 +83,7 @@ test('a fix that never comes back as valid JSON ends the loop with the best so f
     fix: () => Promise.reject(new Error('invalid JSON')),
   };
   const result = await writeCheckedSummary(writer, { job: 'Job', experience: record.text }, record);
-  assert.equal(result.summary, BAD);
+  assert.equal(result.summary, BAD_REPAIRED);
   assert.equal(result.attempts, 2);
 });
 
@@ -140,4 +146,18 @@ test('invalid JSON is retried once with what was wrong; twice invalid is an erro
   assert.equal(retried.summary, GOOD);
   assert.match(prompts[2], /<previous_answer>[\s\S]*optimised things[\s\S]*<\/previous_answer>/);
   assert.match(prompts[2], /- No em dashes: 1 em dash/);
+});
+
+test('mechanical slips are repaired in code, without another round with the model', async () => {
+  const slipped = GOOD.replace(
+    'building integrations',
+    'building integrations — optimised for scale —',
+  ).replace('at scale today', 'and **Git** today');
+  const writer: SummaryWriter = {
+    write: () => Promise.resolve(draft(slipped)),
+    fix: () => assert.fail('no fix round for a dash, a spelling or a bold'),
+  };
+  const result = await writeCheckedSummary(writer, { job: 'Job', experience: record.text }, record);
+  assert.equal(result.attempts, 1);
+  assert.match(result.summary, /building integrations, optimized for scale, on \*\*NestJS\*\* and Git today/);
 });
