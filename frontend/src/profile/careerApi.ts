@@ -1,6 +1,7 @@
 import type { ContactFields } from "../api";
 import type { RenderedResume } from "../resumeApi";
 import type { ImportProposal } from "../resume/fromImport";
+import { splitStackBullet } from "../resume/techStack";
 
 export const IMPORT_CONTACT_LABELS = {
   firstName: "First name",
@@ -29,6 +30,8 @@ export interface CareerExperience {
   current: boolean;
   description: string;
   bullets: string[];
+  /** The job's tools as one line; empty when not given. */
+  techStack: string;
 }
 export interface CareerEducation {
   institution: string;
@@ -100,18 +103,30 @@ function notifyCareerSaved(state: CareerState): CareerState {
   }
   return state;
 }
+/** Older saves have no tech stack, or kept it as a "Tech stack: …" bullet: both read as the field. */
+function withStacks(state: CareerState): CareerState {
+  const roles = state.data.experiences;
+  if (!roles) return state;
+  return {
+    ...state,
+    data: {
+      ...state.data,
+      experiences: { ...roles, value: roles.value.map((role) => ({ ...role, ...splitStackBullet(role.bullets ?? [], role.techStack ?? "") })) },
+    },
+  };
+}
 export const careerApi = {
-  read: () => request<CareerState>(""),
+  read: () => request<CareerState>("").then(withStacks),
   save: (expectedRevision: number, sections: Partial<CareerSections>) =>
     request<CareerState>("", {
       method: "PUT",
       body: JSON.stringify({ expectedRevision, sections }),
-    }).then(notifyCareerSaved),
+    }).then(withStacks).then(notifyCareerSaved),
   apply: (input: ProfileImportInput) =>
     request<CareerState>("/import", {
       method: "POST",
       body: JSON.stringify(input),
-    }).then(notifyCareerSaved),
+    }).then(withStacks).then(notifyCareerSaved),
 };
 
 const text = (value: unknown, max = 12000): string => {
@@ -170,9 +185,12 @@ export function profileDraftFromFile(
           to: text(r.to, 80),
           current: r.current === true,
           description: text(r.description),
-          bullets: list(r.bullets, 100)
-            .map((value) => text(value, 4000))
-            .filter(Boolean),
+          ...splitStackBullet(
+            list(r.bullets, 100)
+              .map((value) => text(value, 4000))
+              .filter(Boolean),
+            text(r.techStack, 2000),
+          ),
         };
       }),
       educations: list(p.education, 50).map((value) => {
@@ -225,6 +243,7 @@ export function profileDraftFromResume(
           current: r.current === true,
           description: r.blurb || "",
           bullets: r.achievements.map((b) => b.bullet),
+          techStack: r.techStack || "",
         })),
         education: cv.educations.map((r) => ({
           institution: r.institution,

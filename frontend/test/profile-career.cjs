@@ -93,10 +93,13 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.deepEqual(await page.$$eval('.profile-career-editor .career-edit-entry h3', rows => rows.map(row => row.textContent)), ['Developer · Earlier Employer'], 'only the job that was clicked');
     assert.equal(await page.$$eval('.profile-career-editor button', buttons => buttons.some(item => item.textContent.includes('Add experience'))), false, 'no adding other jobs here');
     await input('Job title').fill('Backend Developer');
+    await input('Tech stack (optional)').fill('Go, Redis');
     const untouched = structuredClone(state.data.experiences.value[0]);
     await save();
     assert.deepEqual(state.data.experiences.value[0], untouched, 'the other job is saved as it was');
     assert.equal(state.data.experiences.value[1].title, 'Backend Developer');
+    assert.equal(state.data.experiences.value[1].techStack, 'Go, Redis', 'the tech stack is saved with the job');
+    assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Tech stack: Go, Redis/);
     assert.equal(state.data.experiences.value.length, 2);
     // Removing it from its own editor asks for Save, and Cancel keeps it.
     await button('Edit Backend Developer at Earlier Employer in Profile').click();
@@ -153,6 +156,14 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(contactWrites.at(-1).workAuthorization, 'Yes');
     await page.evaluate(() => [...document.querySelectorAll('.profile-tabs button')].find(tab => tab.textContent === 'Autofill answers').click());
     await page.waitForSelector('#saved-answers-heading');
+    // An older save kept the tech stack as a bullet: it shows, and is edited, as the job's tech stack.
+    state = { revision: state.revision + 1, data: { ...state.data, experiences: { value: [{ title: 'Engineer', company: 'Old Co', client: '', location: '', from: '2019', to: '2020', current: false, description: '', bullets: ['Shipped things.', 'Tech stack: Kafka, Go'] }], source, importedAt } } };
+    await visit();
+    assert.equal(await page.$eval('.profile-stack', element => element.textContent), 'Tech stack: Kafka, Go');
+    assert.deepEqual(await page.$$eval('.profile-bullets li', rows => rows.map(row => row.textContent)), ['Shipped things.']);
+    await button('Edit Engineer at Old Co in Profile').click();
+    assert.equal(await page.$eval('.profile-career-editor ::-p-aria([name="Tech stack (optional)"][role="textbox"])', field => field.value), 'Kafka, Go');
+    await button('Cancel').click();
     assert.deepEqual(unexpected, [], 'Profile editing never reads CV contents or writes CV/PDF endpoints');
     assert.deepEqual(errors, []);
     console.log('PASS Profile career editing: roles, descriptions, bullet add/remove, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');

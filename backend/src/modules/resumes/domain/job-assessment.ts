@@ -10,6 +10,7 @@ export interface AssessmentCareer {
     current: boolean;
     description: string;
     bullets: string[];
+    techStack?: string;
   }>;
   educations: Array<{ institution: string; degree: string; field: string }>;
   skills: string[];
@@ -58,6 +59,7 @@ export function assessmentEvidence(profile: AssessmentCareer): string {
     if (role.location) lines.push(`Role location: ${role.location}`);
     if (role.description) lines.push(role.description);
     lines.push(...role.bullets);
+    if (role.techStack?.trim()) lines.push(`Tech stack: ${role.techStack.trim()}`);
   }
   for (const row of profile.educations)
     lines.push(`Education: ${[row.degree, row.field, row.institution].filter(Boolean).join(', ')}`);

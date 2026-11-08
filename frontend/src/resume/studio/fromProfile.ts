@@ -35,6 +35,7 @@ export function resumeFromProfile(current: RenderedResume, profile: ContactField
         to: role.current ? '' : role.to,
         current: role.current,
         blurb: role.description || null,
+        techStack: role.techStack?.trim() || null,
         position,
         achievements: role.bullets.filter((bullet) => bullet.trim()).map((bullet, order) => ({
           lineageId: newId(), experienceLineageId: lineageId, bullet, verified: false, position: order,

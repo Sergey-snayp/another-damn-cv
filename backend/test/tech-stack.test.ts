@@ -58,3 +58,61 @@ test('the tech stack reaches full tailoring as a fact list and the summary recor
   assert.ok(record.technologies.includes('Kafka'));
   assert.match(record.text, /Tech stack: Node\.js, Kafka/);
 });
+
+test('a Profile job keeps its tech stack: saved, read from a CV, and seen by the job assessment', async () => {
+  const { careerUpdateSchema, careerDataSchema } = await import(
+    '../src/modules/profiles/adapters/career.schemas'
+  );
+  const { ResumeSectionsAdapter } = await import(
+    '../src/modules/profiles/adapters/outbound/resume-sections.reader'
+  );
+  const { assessmentEvidence } = await import('../src/modules/resumes/domain/job-assessment');
+  const role = {
+    company: 'Ciklum',
+    title: 'Senior Software Engineer',
+    client: '',
+    location: '',
+    from: '2024-10',
+    to: '',
+    current: true,
+    description: '',
+    bullets: ['Built payment APIs.'],
+  };
+  const saved = careerUpdateSchema.parse({
+    expectedRevision: 1,
+    sections: { experiences: [{ ...role, techStack: '  Node.js, Kafka ' }] },
+  });
+  assert.equal(saved.sections.experiences?.[0]?.techStack, 'Node.js, Kafka');
+  assert.ok(
+    careerDataSchema.parse({ experiences: { value: [role], source: { kind: 'profile' }, importedAt: 'x' } }),
+    'older saves without a tech stack still read',
+  );
+
+  const cv = {
+    summaries: { default: '' },
+    experiences: [
+      {
+        ...role,
+        blurb: '',
+        techStack: 'Node.js, Kafka',
+        achievements: [{ bullet: 'Built payment APIs.' }],
+      },
+    ],
+    educations: [],
+    skills: [],
+  };
+  const sections = await new ResumeSectionsAdapter({ current: () => Promise.resolve(cv as never) }).read(
+    'u',
+    'cv',
+  );
+  assert.deepEqual(sections.experiences[0]?.bullets, ['Built payment APIs.'], 'not a bullet any more');
+  assert.equal(sections.experiences[0]?.techStack, 'Node.js, Kafka');
+
+  const evidence = assessmentEvidence({
+    summary: '',
+    experiences: [{ ...role, techStack: 'Node.js, Kafka' }],
+    educations: [],
+    skills: [],
+  });
+  assert.match(evidence, /Tech stack: Node\.js, Kafka/);
+});

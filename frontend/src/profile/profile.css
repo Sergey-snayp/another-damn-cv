@@ -50,6 +50,7 @@
 .profile-entry > .profile-body { margin-top: 10px; }
 .profile-bullets { margin: 10px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.55; }
 .profile-bullets li + li { margin-top: 5px; }
+.profile-panel .profile-stack { margin: 10px 0 0; color: var(--color-text); font-size: 14px; }
 .profile-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .profile-chips li { padding: 5px 11px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); font-size: 13px; }
 

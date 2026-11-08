@@ -127,6 +127,7 @@ export function ProfileCareerEditor({
           ? {
               experiences: draft.experiences.map((role) => ({
                 ...role,
+                techStack: role.techStack.trim(),
                 bullets: role.bullets
                   .map((value) => value.trim())
                   .filter(Boolean),
@@ -384,6 +385,17 @@ export function ProfileCareerEditor({
                     >
                       + Add bullet
                     </button>
+                    <label>
+                      Tech stack (optional)
+                      <input
+                        maxLength={2000}
+                        placeholder="Node.js, TypeScript, PostgreSQL"
+                        value={role.techStack}
+                        onChange={(event) =>
+                          updateRole(index, { techStack: event.target.value })
+                        }
+                      />
+                    </label>
                   </section>
                 ))}
                 {single && removed && (
@@ -414,6 +426,7 @@ export function ProfileCareerEditor({
                           current: false,
                           description: "",
                           bullets: [],
+                          techStack: "",
                         },
                       ],
                     }))

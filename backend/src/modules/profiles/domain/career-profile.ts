@@ -27,6 +27,8 @@ export interface CareerExperience {
   current: boolean;
   description: string;
   bullets: string[];
+  /** The job's tools as one line, "Node.js, TypeScript, PostgreSQL". Missing on older saves. */
+  techStack?: string;
 }
 export interface CareerEducation {
   institution: string;

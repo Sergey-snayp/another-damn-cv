@@ -18,10 +18,8 @@ export class ResumeSectionsAdapter implements ResumeSectionsReader {
         to: role.to || '',
         current: role.current === true,
         description: role.blurb || '',
-        bullets: [
-          ...role.achievements.map((item) => item.bullet),
-          ...(role.techStack?.trim() ? [`Tech stack: ${role.techStack.trim()}`] : []),
-        ],
+        bullets: role.achievements.map((item) => item.bullet),
+        techStack: role.techStack?.trim() ?? '',
       })),
       educations: cv.educations.map((entry) => ({
         institution: entry.institution,

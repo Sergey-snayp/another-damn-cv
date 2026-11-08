@@ -19,6 +19,17 @@ export function withTechStacks<T extends RenderedResume>(resume: T): T {
   return resume;
 }
 
+/** The same for a Profile job: its "Tech stack: …" bullet becomes its tech stack, when it has none. */
+export function splitStackBullet(bullets: string[], techStack = ''): { bullets: string[]; techStack: string } {
+  if (techStack.trim()) return { bullets, techStack };
+  const at = bullets.findIndex((bullet) => STACK_LINE.test(bullet.replace(/\*\*/g, '')));
+  if (at < 0) return { bullets, techStack: '' };
+  return {
+    bullets: bullets.filter((_, index) => index !== at),
+    techStack: STACK_LINE.exec(bullets[at]!.replace(/\*\*/g, ''))![1]!,
+  };
+}
+
 /** A job's own lines, for tailoring its tech stack: the only place a tool may come from. */
 export function roleLines(role: RenderedResume['experiences'][number]): string {
   return [`${role.title} at ${role.company}`, role.blurb ?? '', ...role.achievements.map((item) => item.bullet)]

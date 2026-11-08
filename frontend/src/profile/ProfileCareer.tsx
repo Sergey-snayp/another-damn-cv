@@ -94,6 +94,9 @@ export function ProfileCareer({
                   {role.bullets.map((bullet, i) => <li key={i}>{bullet}</li>)}
                 </ul>
               )}
+              {role.techStack?.trim() && (
+                <p className="profile-stack"><strong>Tech stack:</strong> {role.techStack}</p>
+              )}
             </article>
           ))
         ) : (

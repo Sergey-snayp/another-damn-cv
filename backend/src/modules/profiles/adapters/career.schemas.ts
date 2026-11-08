@@ -29,6 +29,7 @@ const sectionsSchema = z
             current: z.boolean(),
             description: z.string().max(12000),
             bullets: z.array(z.string().trim().min(1).max(4000)).max(100),
+            techStack: z.string().trim().max(2000).optional(),
           })
           .strict(),
       )

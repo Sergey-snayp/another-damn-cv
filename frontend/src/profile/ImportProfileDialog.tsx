@@ -632,6 +632,24 @@ export function ImportProfileDialog({
                               }
                             />
                           </label>
+                          <label>
+                            Tech stack (optional)
+                            <input
+                              maxLength={2000}
+                              placeholder="Node.js, TypeScript, PostgreSQL"
+                              value={role.techStack}
+                              onChange={(event) =>
+                                section(
+                                  "experiences",
+                                  draft.sections.experiences.map((r, i) =>
+                                    i === index
+                                      ? { ...r, techStack: event.target.value }
+                                      : r,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
                         </details>
                       ))
                     ) : (
