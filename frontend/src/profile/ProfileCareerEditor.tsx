@@ -22,11 +22,14 @@ function sectionsOf(career: CareerState): CareerSections {
 /** Profile edits keep the complete career history independently of every CV. */
 export function ProfileCareerEditor({
   section,
+  entry,
   career,
   onClose,
   onSaved,
 }: {
   section: CareerSectionKey;
+  /** Only this job or education entry is shown and changed; the others are saved as they are. */
+  entry?: number;
   career: CareerState;
   onClose(): void;
   onSaved(state: CareerState): void;
@@ -41,6 +44,11 @@ export function ProfileCareerEditor({
   const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // One entry: removing it leaves nothing to show, and Save then removes it.
+  const [removed, setRemoved] = useState(false);
+  const single = entry !== undefined;
+  const shown = (index: number) => !single || (!removed && index === entry);
+  const singular = section === "educations" ? "Education" : "Experience";
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
@@ -152,7 +160,7 @@ export function ProfileCareerEditor({
       <form onSubmit={save}>
         <header className="profile-import-header">
           <div>
-            <h2 id="career-editor-title">{LABELS[section]}</h2>
+            <h2 id="career-editor-title">{single ? singular : LABELS[section]}</h2>
             <p>
               Keep your full career details here. Job recommendations use this
               Profile, including details left out of your CVs.
@@ -212,7 +220,7 @@ export function ProfileCareerEditor({
             )}
             {section === "experiences" && (
               <>
-                {draft.experiences.map((role, index) => (
+                {draft.experiences.map((role, index) => !shown(index) ? null : (
                   <section
                     className="profile-import-section career-edit-entry"
                     key={index}
@@ -227,13 +235,15 @@ export function ProfileCareerEditor({
                         type="button"
                         className="profile-button is-secondary career-remove"
                         onClick={() =>
+                        {
                           setDraft((value) => ({
                             ...value,
                             experiences: value.experiences.filter(
                               (_, i) => i !== index,
                             ),
-                          }))
-                        }
+                          }));
+                          if (single) setRemoved(true);
+                        }}
                       >
                         Remove experience {index + 1}
                       </button>
@@ -376,13 +386,16 @@ export function ProfileCareerEditor({
                     </button>
                   </section>
                 ))}
-                {!draft.experiences.length && (
+                {single && removed && (
+                  <p>This experience will be removed when you save. Close to keep it.</p>
+                )}
+                {!single && !draft.experiences.length && (
                   <p>
                     Add each role with its full responsibilities and
                     achievements.
                   </p>
                 )}
-                <button
+                {!single && <button
                   type="button"
                   className="profile-button"
                   disabled={draft.experiences.length >= 100}
@@ -407,12 +420,12 @@ export function ProfileCareerEditor({
                   }
                 >
                   + Add experience
-                </button>
+                </button>}
               </>
             )}
             {section === "educations" && (
               <>
-                {draft.educations.map((row, index) => (
+                {draft.educations.map((row, index) => !shown(index) ? null : (
                   <section
                     className="profile-import-section career-edit-entry"
                     key={index}
@@ -424,13 +437,15 @@ export function ProfileCareerEditor({
                         type="button"
                         className="profile-button is-secondary career-remove"
                         onClick={() =>
+                        {
                           setDraft((value) => ({
                             ...value,
                             educations: value.educations.filter(
                               (_, i) => i !== index,
                             ),
-                          }))
-                        }
+                          }));
+                          if (single) setRemoved(true);
+                        }}
                       >
                         Remove education {index + 1}
                       </button>
@@ -497,7 +512,10 @@ export function ProfileCareerEditor({
                     </div>
                   </section>
                 ))}
-                <button
+                {single && removed && (
+                  <p>This education entry will be removed when you save. Close to keep it.</p>
+                )}
+                {!single && <button
                   type="button"
                   className="profile-button"
                   disabled={draft.educations.length >= 50}
@@ -518,7 +536,7 @@ export function ProfileCareerEditor({
                   }
                 >
                   + Add education
-                </button>
+                </button>}
               </>
             )}
           </fieldset>

@@ -59,10 +59,7 @@ export function SavedAnswers() {
       <div className="profile-panel-heading">
         <h2 id="saved-answers-heading">Saved answers</h2>
       </div>
-      <p className="profile-muted">
-        Answers to application questions, saved in the extension from a question's icon on the form.
-        Autofill uses them when the same or a similar question appears again.
-      </p>
+      <p className="profile-muted">Autofill reuses these when the same question comes up again.</p>
       {error && (
         <p className="profile-error" role="alert">
           {error}{" "}

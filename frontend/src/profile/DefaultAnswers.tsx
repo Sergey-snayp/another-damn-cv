@@ -68,10 +68,7 @@ export function DefaultAnswers() {
       <div className="profile-panel-heading">
         <h2 id="default-answers-heading">Default answers</h2>
       </div>
-      <p className="profile-muted">
-        Chosen in the extension from a field's icon. Sponsorship, work authorization and relocation are kept per country.
-        "Worked here before" is one answer for every company.
-      </p>
+      <p className="profile-muted">Your usual answers to common questions, set from the extension. Some are kept per country.</p>
       {error && (
         <p className="profile-error" role="alert">
           {error}{" "}

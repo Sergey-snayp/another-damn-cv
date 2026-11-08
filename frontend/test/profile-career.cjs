@@ -12,7 +12,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     page = await browser.newPage();
     page.setDefaultTimeout(10000);
     await page.setViewport({ width: 1200, height: 900 });
-    const errors = [], writes = [], unexpected = [];
+    const errors = [], writes = [], unexpected = [], contactWrites = [];
+    let contact = { firstName: 'Sam', lastName: 'Lee', fullName: 'Sam Lee', email: 'sam@example.com', phone: '', location: '', city: '', linkedin: '', github: '', website: '', portfolio: '', telegram: '', workArrangements: '', workAuthorization: '', requiresSponsorship: '' };
     let failSave = true;
     const source = { kind: 'file', name: 'full-career.txt' }, importedAt = '2026-11-06T12:00:00Z';
     let state = { revision: 1, data: {
@@ -30,7 +31,10 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
         if (!pathname.startsWith('/api/')) return request.continue();
         const reply = (value, status = 200) => request.respond({ status, contentType: 'application/json', body: JSON.stringify(value) });
         if (pathname === '/api/auth/me') return reply({ id: 'owner', name: 'Sam Lee', email: 'sam@example.com' });
-        if (pathname === '/api/profile') return reply({ firstName: 'Sam', lastName: 'Lee', fullName: 'Sam Lee', email: 'sam@example.com', phone: '', location: '', city: '', linkedin: '', github: '', website: '', portfolio: '', telegram: '', workArrangements: '' });
+        if (pathname === '/api/profile') {
+          if (request.method() === 'PUT') { const body = JSON.parse(request.postData()); contactWrites.push(body); contact = { ...contact, ...body }; }
+          return reply(contact);
+        }
         if (pathname === '/api/resumes') return reply([{ id: 'source', name: 'Short CV', isPrimary: true, currentSnapshotId: 'snapshot-1', updatedAt: importedAt }]);
         if (pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
         if (pathname === '/api/profile/career') {
@@ -82,6 +86,30 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.deepEqual(state.data.educations, original.data.educations, 'editing experience preserves education');
     await visit();
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Senior Backend Engineer/);
+    // A job's own edit button edits that job only; Save keeps the other jobs as they are.
+    await button('Edit Developer at Earlier Employer in Profile').click();
+    await page.waitForSelector('.profile-career-editor .career-edit-entry');
+    assert.equal(await page.$eval('#career-editor-title', element => element.textContent), 'Experience');
+    assert.deepEqual(await page.$$eval('.profile-career-editor .career-edit-entry h3', rows => rows.map(row => row.textContent)), ['Developer · Earlier Employer'], 'only the job that was clicked');
+    assert.equal(await page.$$eval('.profile-career-editor button', buttons => buttons.some(item => item.textContent.includes('Add experience'))), false, 'no adding other jobs here');
+    await input('Job title').fill('Backend Developer');
+    const untouched = structuredClone(state.data.experiences.value[0]);
+    await save();
+    assert.deepEqual(state.data.experiences.value[0], untouched, 'the other job is saved as it was');
+    assert.equal(state.data.experiences.value[1].title, 'Backend Developer');
+    assert.equal(state.data.experiences.value.length, 2);
+    // Removing it from its own editor asks for Save, and Cancel keeps it.
+    await button('Edit Backend Developer at Earlier Employer in Profile').click();
+    await button('Remove experience 2').click();
+    assert.match(await page.$eval('.profile-career-editor', element => element.textContent), /will be removed when you save/);
+    assert.equal(await page.$$eval('.profile-career-editor .career-edit-entry', rows => rows.length), 0, 'no other job takes its place');
+    await button('Cancel').click();
+    assert.equal(state.data.experiences.value.length, 2);
+    // The same for one education entry.
+    await button('Edit Training Provider in Profile').click();
+    assert.equal(await page.$eval('#career-editor-title', element => element.textContent), 'Education');
+    assert.equal(await page.$$eval('.profile-career-editor .career-edit-entry', rows => rows.length), 1);
+    await button('Cancel').click();
     await button('Edit profile summary').click();
     await input('Professional summary').fill('Unsaved temporary summary.');
     await button('Cancel').click();
@@ -103,6 +131,28 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await save();
     assert.deepEqual(state.data.experiences.value, []);
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /No work experience saved in Profile/);
+    // The page itself: only real content, tabs, and what is still missing.
+    const pageText = await page.$eval('.profile-page', element => element.textContent);
+    assert.doesNotMatch(pageText, /coming soon|subscription|Profile Strength/i, 'no placeholders');
+    assert.deepEqual(await page.$$eval('.profile-tabs button', tabs => tabs.map(tab => tab.textContent)), ['Career', 'Personal info', 'Job preferences', 'Autofill answers']);
+    const missing = await page.$$eval('.profile-checklist button', items => items.map(item => item.textContent));
+    assert.deepEqual(missing, ['Phone', 'Location', 'Work experience', 'A link (LinkedIn, GitHub…)'], 'what is missing, and only that');
+    await page.screenshot({ path: '/private/tmp/job-agent-profile-page.png', fullPage: true });
+    await button('Phone').click();
+    assert.equal(await page.$eval('.profile-tabs .is-active', tab => tab.textContent), 'Personal info', 'each missing item opens where to fill it');
+    // Job preferences: type of work and Yes/No answers, saved together with Save changes.
+    await page.evaluate(() => [...document.querySelectorAll('.profile-tabs button')].find(tab => tab.textContent === 'Job preferences').click());
+    await page.click('.profile-choice:first-child input');
+    await page.select('select', 'Yes');
+    assert.match(await page.$eval('.profile-savebar', bar => bar.textContent), /Unsaved changes/);
+    assert.ok(await page.$('.profile-tabs .profile-dot'), 'the tab shows it has unsaved changes');
+    assert.equal(contactWrites.length, 0, 'nothing is saved before Save changes');
+    await button('Save changes').click();
+    await page.waitForFunction(() => /All changes saved/.test(document.querySelector('.profile-savebar')?.textContent ?? ''));
+    assert.equal(contactWrites.at(-1).workArrangements, 'remote');
+    assert.equal(contactWrites.at(-1).workAuthorization, 'Yes');
+    await page.evaluate(() => [...document.querySelectorAll('.profile-tabs button')].find(tab => tab.textContent === 'Autofill answers').click());
+    await page.waitForSelector('#saved-answers-heading');
     assert.deepEqual(unexpected, [], 'Profile editing never reads CV contents or writes CV/PDF endpoints');
     assert.deepEqual(errors, []);
     console.log('PASS Profile career editing: roles, descriptions, bullet add/remove, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');
