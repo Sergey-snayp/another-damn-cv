@@ -10,7 +10,7 @@ import { DefaultAnswers } from "../profile/DefaultAnswers";
 import { usePrimaryResume } from "../profile/usePrimaryResume";
 import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerState } from "../profile/careerApi";
-import { ProfileCareerEditor, type CareerSectionKey } from "../profile/ProfileCareerEditor";
+import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
 import "../profile/profile.css";
 
 type ProfileTab = "career" | "personal" | "preferences" | "answers";
@@ -61,7 +61,7 @@ export function Profile() {
   // false, or the import dialog's options: a saved CV to start from.
   const [importing, setImporting] = useState<false | { resumeId?: string }>(false);
   // A whole section, or (from a job's or school's own edit button) just that entry.
-  const [editingCareer, setEditingCareer] = useState<{ section: CareerSectionKey; entry?: number } | null>(null);
+  const [editingCareer, setEditingCareer] = useState<{ section: CareerSectionKey; entry?: CareerEntry } | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -133,7 +133,7 @@ export function Profile() {
         { done: !!profile.email?.trim(), label: "Email", go: () => setActive("personal") },
         { done: !!profile.phone?.trim(), label: "Phone", go: () => setActive("personal") },
         { done: !!place, label: "Location", go: () => setActive("personal") },
-        { done: roles.length > 0, label: "Work experience", go: () => setEditingCareer({ section: "experiences" }) },
+        { done: roles.length > 0, label: "Work experience", go: () => setEditingCareer({ section: "experiences", entry: "new" }) },
         { done: LINKS.some((link) => profile[link.key]?.trim()), label: "A link (LinkedIn, GitHub…)", go: () => setActive("personal") },
       ].filter((item) => !item.done)
     : [];

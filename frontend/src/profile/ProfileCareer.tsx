@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { usePrimaryResume } from "./usePrimaryResume";
 import type { CareerData, CareerSection } from "./careerApi";
-import type { CareerSectionKey } from "./ProfileCareerEditor";
+import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
 
 type Career = ReturnType<typeof usePrimaryResume>;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -37,14 +37,20 @@ export function ProfileCareer({
 }: {
   imported: CareerData;
   importDisabled: boolean;
-  /** With `entry`, only that job or education entry is edited. */
-  onEditCareer(section: CareerSectionKey, entry?: number): void;
+  /** With `entry`, only that job or education entry is edited, or a new one added. */
+  onEditCareer(section: CareerSectionKey, entry?: CareerEntry): void;
 }) {
   const experiences = imported.experiences?.value ?? [];
   const educations = imported.educations?.value ?? [];
   const skills = imported.skills?.value ?? [];
   const summary = imported.summary?.value ?? "";
   const source = sourceLine(imported);
+  const add = (section: CareerSectionKey, label: string) => (
+    <button className="profile-add-button" aria-label={label} onClick={() => onEditCareer(section, "new")} disabled={importDisabled}>
+      <Icon name="plus" size={15} />
+      Add
+    </button>
+  );
   const edit = (section: CareerSectionKey, label: string, entry?: number) => (
     <button
       className="profile-edit-button"
@@ -75,7 +81,7 @@ export function ProfileCareer({
       <section className="profile-panel" aria-labelledby="profile-work-heading">
         <div className="profile-panel-heading">
           <h2 id="profile-work-heading">Experience</h2>
-          {edit("experiences", "Edit profile work experience")}
+          {add("experiences", "Add work experience")}
         </div>
         {experiences.length ? (
           experiences.map((role, index) => (
@@ -107,7 +113,7 @@ export function ProfileCareer({
       <section className="profile-panel" aria-labelledby="profile-education-heading">
         <div className="profile-panel-heading">
           <h2 id="profile-education-heading">Education</h2>
-          {edit("educations", "Edit profile education")}
+          {add("educations", "Add education")}
         </div>
         {educations.length ? (
           educations.map((row, index) => (

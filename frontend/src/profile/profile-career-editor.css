@@ -1,65 +1,62 @@
-.career-edit-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.career-edit-heading h3 {
-  overflow-wrap: anywhere;
-}
-.career-edit-heading button {
-  flex-shrink: 0;
-}
-.career-edit-bullet {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px;
-  margin: 0 -8px 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-}
-.career-edit-bullet label {
-  flex: 1;
-  min-width: 0;
-}
-.career-edit-bullet textarea {
-  margin-bottom: 0;
-}
-.career-edit-entry:has(> .career-edit-heading .career-remove:hover),
-.career-edit-entry:has(> .career-edit-heading .career-remove:focus-visible),
-.career-edit-bullet:has(.career-remove:hover),
-.career-edit-bullet:has(.career-remove:focus-visible) {
-  border-color: var(--color-error-border);
-  background: var(--color-error-soft);
-}
-@media (max-width: 550px) {
-  .career-edit-heading,
-  .career-edit-bullet {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .profile-career-editor > form {
-    max-height: calc(100dvh - 20px);
-  }
-}
-.profile-career-editor {
-  overflow: hidden;
-}
-.profile-career-editor > form {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100dvh - 40px);
-}
+/* ── The career editor: one job, school or section; the form scrolls between a fixed header and footer. */
+.profile-career-editor { width: min(720px, calc(100vw - 32px)); overflow: hidden; }
+.profile-career-editor > form { display: flex; flex-direction: column; max-height: calc(100dvh - 40px); }
 .profile-career-editor .profile-import-header,
-.profile-career-editor .profile-import-footer {
-  flex-shrink: 0;
-}
-.profile-career-editor .profile-import-body {
-  overflow-y: auto;
-  min-height: 0;
-}
-.profile-career-editor .profile-import-footer {
-  position: static;
+.profile-career-editor .profile-import-footer { flex-shrink: 0; }
+.profile-career-editor .profile-import-body { overflow-y: auto; min-height: 0; padding: 20px 24px 24px; }
+.profile-career-editor .profile-import-footer { position: static; }
+
+.career-editor-header { align-items: center; padding: 18px 24px; }
+.career-editor-header h2 { font-size: 20px; }
+.profile-import-dialog .career-editor-subtitle { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.career-close { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border: 0; border-radius: 9px; background: none; color: var(--color-muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.career-close:hover { background: var(--color-background); color: var(--color-text); }
+
+/* Fields: labels above, two columns where they pair up. */
+.career-form > * + * { margin-top: 18px; }
+.career-form label { font-weight: 600; }
+.profile-import-dialog .career-form input:not([type=checkbox]), .profile-import-dialog .career-form textarea, .profile-import-dialog .career-form select { margin: 6px 0 0; font-weight: 400; }
+.career-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 16px; }
+.profile-career-editor input::placeholder, .profile-career-editor textarea::placeholder { color: var(--color-muted); opacity: .75; }
+/* Text boxes grow with what is written, up to a point. */
+.profile-career-editor .career-grow { field-sizing: content; min-height: 2.6em; max-height: 45vh; resize: none; }
+.profile-career-editor label > .career-grow[rows="8"], .profile-career-editor label > .career-grow[rows="10"] { min-height: 12em; }
+
+/* Dates: month and year side by side; "I currently work here" with them. */
+.career-dates { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 16px; align-items: end; }
+.career-date { min-width: 0; margin: 0; padding: 0; border: 0; font-size: 13px; font-weight: 600; }
+.career-date legend { padding: 0; margin-bottom: 6px; }
+.career-date > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.profile-import-dialog .career-date select { margin: 0; }
+.career-date-fixed { display: flex; align-items: center; height: 44px; padding: 0 12px; border: 1px dashed var(--color-border); border-radius: 8px; color: var(--color-muted); font-weight: 400; }
+.profile-import-dialog .career-current { grid-column: 1 / -1; margin: 0; font-weight: 500; }
+
+/* Achievements: a list of growing boxes, each with small move and remove buttons. */
+.career-bullets { padding: 0; border: 0; min-width: 0; }
+.profile-import-dialog .career-form > .career-bullets { margin: 20px 0 0; }
+.career-bullets legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.career-bullets ol { display: grid; gap: 6px; margin: 0 0 6px; padding: 0; list-style: none; }
+.career-edit-bullet { display: flex; align-items: flex-start; gap: 8px; padding: 4px; margin: 0 -4px; border: 1px solid transparent; border-radius: 10px; }
+.career-bullet-mark { flex: none; width: 10px; padding-top: 12px; color: var(--color-muted); text-align: center; }
+.profile-import-dialog .career-edit-bullet textarea { flex: 1; margin: 0; font-size: 13px; }
+.career-bullet-tools { display: flex; flex: none; gap: 2px; padding-top: 6px; opacity: 0; transition: opacity .12s; }
+.career-edit-bullet:hover .career-bullet-tools, .career-edit-bullet:focus-within .career-bullet-tools { opacity: 1; }
+.career-bullet-tools button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--color-muted); font: inherit; font-size: 15px; cursor: pointer; }
+.career-bullet-tools button:hover:not(:disabled) { background: var(--color-background); color: var(--color-text); }
+.career-bullet-tools button:disabled { opacity: .3; cursor: default; }
+.career-bullet-tools .career-remove:hover { color: var(--color-error); }
+.career-edit-bullet:has(.career-remove:hover), .career-edit-bullet:has(.career-remove:focus-visible) { border-color: var(--color-error-border); background: var(--color-error-soft); }
+.profile-import-dialog .career-hint { margin: 2px 0 0; font-size: 12px; }
+
+/* Footer: delete on the left, cancel and save on the right; a question takes its place. */
+.career-editor-footer { align-items: center; }
+.career-delete { margin-right: auto; padding: 8px 4px; border: 0; background: none; color: var(--color-error); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.career-delete:hover { text-decoration: underline; }
+.career-confirm { display: flex; flex: 1; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.career-confirm > span { margin-right: auto; font-size: 14px; font-weight: 600; }
+
+@media (max-width: 550px) {
+  .career-grid, .career-dates { grid-template-columns: minmax(0, 1fr); }
+  .career-bullet-tools { opacity: 1; }
+  .profile-career-editor > form { max-height: calc(100dvh - 20px); }
 }

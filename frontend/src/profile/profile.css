@@ -81,6 +81,9 @@
 .profile-edit-button { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--color-muted); cursor: pointer; }
 .profile-edit-button:hover, .profile-edit-button:focus-visible { color: var(--color-text); border-color: var(--color-border); background: var(--color-background); }
 .profile-edit-button:disabled { opacity: .4; cursor: default; }
+.profile-add-button { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 30px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.profile-add-button:hover { background: var(--color-background); }
+.profile-add-button:disabled { opacity: .45; cursor: default; }
 .profile-tag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--color-background); color: var(--color-muted); font-size: 11px; line-height: 1.6; font-weight: 600; vertical-align: middle; }
 .profile-tag.is-success { background: var(--color-success-soft); color: var(--color-success); }
 .profile-muted { color: var(--color-muted); }
