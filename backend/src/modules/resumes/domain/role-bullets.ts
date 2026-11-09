@@ -1,37 +1,46 @@
 /**
  * A job's bullets on a CV, chosen for one posting from everything the person
- * keeps about that job in their Profile, plus what the CV already says.
+ * keeps about that job in their Profile and saved CVs.
  *
  * The AI chooses and rewords; this file decides what may be shown. A reworded
  * line keeps only the numbers its own achievement has, and the CV keeps the
  * same number of bullets for the job, so its layout does not change.
  */
-import { withoutAddedPurpose, withoutEmDashes } from './cv-writing-guide';
+import { withoutAddedPurpose, withoutDashPunctuation } from './cv-writing-guide';
+import { unsupportedClaims } from './tailoring/claims';
 
 export interface CvRole {
   company: string;
   title: string;
   from: string;
+  client?: string;
+  description?: string;
+  techStack?: string;
+  /** Set by the saved-CV reader to disambiguate roles within each document. */
+  resumeId?: string;
   bullets: string[];
 }
 export interface ProfileRole extends CvRole {
   starred?: string[];
+  notes?: string[];
 }
-/** One achievement the AI may choose: from the CV's own bullets, or from the Profile. */
+/** One supported achievement or context item from the selected CV, Profile or another saved CV. */
 export interface PoolItem {
   id: string;
   text: string;
-  source: 'cv' | 'profile';
+  source: 'cv' | 'profile' | 'saved-cv';
   /** The CV bullet it is, for a CV item. */
   cvIndex: number | null;
   starred: boolean;
+  /** Context may become a supported bullet; raw notes are never copied into the CV. */
+  kind?: 'bullet' | 'context';
 }
 export interface ChosenBullet extends PoolItem {
   /** The achievement as written before rewording. */
   original: string;
 }
 export interface RoleBulletChoice {
-  /** The CV's job was found in the Profile with achievements the CV does not show yet. */
+  /** Additional evidence was found for the selected role. */
   matched: boolean;
   profileRole: { title: string; company: string } | null;
   chosen: ChosenBullet[];
@@ -48,23 +57,41 @@ const company = (name: string) =>
   name
     .toLowerCase()
     .replace(SUFFIX, ' ')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^a-z0-9]+/g, '')
     .trim();
 const plain = (text: string) =>
   text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+const evidenceKey = (text: string) => text.replace(/\*\*/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
 
-/** The Profile's entry for a CV job: same company, then the same title or start year. */
+/** Match employer/client first, then dates; use title only when it identifies one role. */
 export function matchProfileRole(roles: ProfileRole[], cv: CvRole): ProfileRole | null {
-  const same = roles.filter((role) => company(role.company) && company(role.company) === company(cv.company));
-  if (!same.length) return null;
-  return (
-    same.find((role) => plain(role.title) === plain(cv.title)) ??
-    same.find((role) => role.from.slice(0, 4) && role.from.slice(0, 4) === cv.from.slice(0, 4)) ??
-    (same.length === 1 ? same[0] : null)
+  const employer = company(cv.company),
+    client = company(cv.client ?? '');
+  let same = roles.filter(
+    (role) => employer && (company(role.company) === employer || company(role.client ?? '') === employer),
   );
+  if (client) {
+    const exactClient = same.filter(
+      (role) => company(role.client ?? '') === client || company(role.company) === client,
+    );
+    same = exactClient.length ? exactClient : same.filter((role) => !role.client?.trim());
+  }
+  if (!same.length) return null;
+  const unique = (candidates: ProfileRole[]) => (candidates.length === 1 ? candidates[0] : null);
+  if (cv.from.trim()) {
+    const exactDate = same.filter((role) => role.from.trim() === cv.from.trim());
+    if (exactDate.length)
+      return unique(exactDate) ?? unique(exactDate.filter((role) => plain(role.title) === plain(cv.title)));
+    const year = cv.from.match(/(?:19|20)\d{2}/)?.[0];
+    const sameYear = year ? same.filter((role) => role.from.includes(year)) : [];
+    if (sameYear.length)
+      return unique(sameYear) ?? unique(sameYear.filter((role) => plain(role.title) === plain(cv.title)));
+    same = same.filter((role) => !role.from.trim());
+  }
+  return unique(same.filter((role) => plain(role.title) === plain(cv.title))) ?? unique(same);
 }
 
 const STOP = new Set(
@@ -88,9 +115,9 @@ function overlap(a: string, b: string): number {
   return shared / (left.size + right.size - shared);
 }
 
-/** What the AI chooses from: the CV's bullets, then the Profile's that the CV does not already say. */
-export function rolePool(cv: CvRole, profile: ProfileRole): PoolItem[] {
-  const starred = profile.starred ?? [];
+/** Pool matching-role facts without discarding similar bullets that contain different technologies. */
+export function rolePool(cv: CvRole, profile: ProfileRole | null, otherCvs: CvRole[] = []): PoolItem[] {
+  const starred = profile?.starred ?? [];
   const items: PoolItem[] = cv.bullets
     .map((text, index) => ({ text: text.trim(), index }))
     .filter((bullet) => bullet.text)
@@ -101,9 +128,13 @@ export function rolePool(cv: CvRole, profile: ProfileRole): PoolItem[] {
       cvIndex: index,
       starred: starred.some((star) => overlap(star, text) >= 0.8),
     }));
-  profile.bullets.forEach((text, index) => {
-    if (!text.trim() || items.some((item) => overlap(item.text, text) >= 0.8)) return;
-    items.push({
+  const add = (item: PoolItem) => {
+    if (!item.text.trim() || items.some((existing) => evidenceKey(existing.text) === evidenceKey(item.text)))
+      return;
+    items.push({ ...item, text: item.text.trim() });
+  };
+  profile?.bullets.forEach((text, index) => {
+    add({
       id: `p${index + 1}`,
       text: text.trim(),
       source: 'profile',
@@ -111,7 +142,25 @@ export function rolePool(cv: CvRole, profile: ProfileRole): PoolItem[] {
       starred: starred.includes(text),
     });
   });
-  return items.slice(0, 120);
+  const context = (role: CvRole, prefix: string, source: PoolItem['source'], notes: string[] = []) => {
+    for (const [index, text] of [
+      role.description,
+      role.techStack ? `Tools used in this role: ${role.techStack}` : '',
+      ...notes,
+    ].entries()) {
+      if (text?.trim())
+        add({ id: `${prefix}f${index + 1}`, text, source, cvIndex: null, starred: false, kind: 'context' });
+    }
+  };
+  context(cv, 'c', 'cv');
+  if (profile) context(profile, 'p', 'profile', profile.notes);
+  otherCvs.forEach((role, index) => {
+    role.bullets.forEach((text, bullet) =>
+      add({ id: `r${index + 1}b${bullet + 1}`, text, source: 'saved-cv', cvIndex: null, starred: false }),
+    );
+    context(role, `r${index + 1}`, 'saved-cv');
+  });
+  return items;
 }
 
 /** Numbers as values ("20k" is 20,000); digits inside names (Route53, EC2) are not numbers. */
@@ -158,19 +207,26 @@ export function checkChoice(
       const item = byId.get(id);
       if (!item || used.has(id) || out.length === limit) continue;
       used.add(id);
-      const reworded = withoutAddedPurpose(withoutEmDashes(text.replace(/\s+/g, ' ').trim()), item.text);
+      const reworded = withoutDashPunctuation(
+        withoutAddedPurpose(text.replace(/\s+/g, ' ').trim(), item.text),
+      );
       const fine =
         reworded.length >= 8 &&
         reworded.length <= 400 &&
         keepsNumbers(reworded, item.text) &&
+        !unsupportedClaims(reworded, item.text).length &&
         !tackedOn(reworded, item.text);
-      out.push({ ...item, text: fine ? reworded : item.text, original: item.text });
+      if (!fine && item.kind === 'context') {
+        used.delete(id);
+        continue;
+      }
+      out.push({ ...item, text: fine ? reworded : withoutDashPunctuation(item.text), original: item.text });
     }
     return out;
   };
   const chosen = take(answer.chosen, count);
   const rest = pool
-    .filter((item) => !used.has(item.id))
+    .filter((item) => !used.has(item.id) && item.kind !== 'context')
     .sort(
       (a, b) =>
         Number(b.starred) - Number(a.starred) ||
@@ -179,14 +235,14 @@ export function checkChoice(
   while (chosen.length < count && rest.length) {
     const item = rest.shift()!;
     used.add(item.id);
-    chosen.push({ ...item, original: item.text });
+    chosen.push({ ...item, text: withoutDashPunctuation(item.text), original: item.text });
   }
   const alternates = take(answer.alternates, 4);
   for (const item of rest) {
     if (alternates.length === 4) break;
     if (used.has(item.id)) continue;
     used.add(item.id);
-    alternates.push({ ...item, original: item.text });
+    alternates.push({ ...item, text: withoutDashPunctuation(item.text), original: item.text });
   }
   return { chosen, alternates };
 }

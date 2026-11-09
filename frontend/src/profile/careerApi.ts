@@ -45,7 +45,7 @@ export interface CareerNote {
 }
 /** "Turn into bullets": what the AI proposes from your notes, already checked. */
 export interface AchievementProposal {
-  achievements: { text: string; ask: string | null; duplicateOf: string | null }[];
+  achievements: { text: string; asks: string[]; duplicateOf: string | null }[];
   techStack: string[];
   description: string;
   dropped: number;
@@ -151,6 +151,16 @@ export const careerApi = {
     request<AchievementProposal>("/achievements", {
       method: "POST",
       body: JSON.stringify(source),
+    }),
+  /** "Rewrite with my answers": one achievement filled out with the answers to its questions. */
+  deepenAchievement: (input: {
+    source: { title: string; company: string; client: string; description: string; bullets: string[]; techStack: string; notes: string };
+    text: string;
+    answers: { question: string; answer: string }[];
+  }) =>
+    request<{ text: string; asks: string[]; changed: boolean }>("/achievements/deepen", {
+      method: "POST",
+      body: JSON.stringify(input),
     }),
   apply: (input: ProfileImportInput) =>
     request<CareerState>("/import", {

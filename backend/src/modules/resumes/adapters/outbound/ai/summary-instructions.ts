@@ -4,6 +4,8 @@
  * the checks, which run in code: domain/summary-checks.ts). Copied as written,
  * without a stray "I don" before the first heading.
  */
+import { DASH_PUNCTUATION_RULE } from '../../../domain/cv-writing-guide';
+
 export const SUMMARY_INSTRUCTIONS = `# Instructions: write a tailored CV summary
 
 You write the PROFESSIONAL SUMMARY of a CV, tailored to one job posting.
@@ -59,7 +61,7 @@ Style rules:
 - US/Canadian spelling: "-ize" and "-ization" ("optimize", "normalizing", "modeling"), never "-ise" or "-isation".
 - Numbers as digits: "7 years", "4 card networks".
 - No schema or codebase counts (models, migrations, components, packages).
-- No em dashes (—). Use commas, colons, or split the sentence.
+- ${DASH_PUNCTUATION_RULE}
 - Plain words a recruiter understands. No internal jargon such as "concurrency-only defect"; write "a defect that appeared only under concurrent load".
 - No filler: "passionate", "results-driven", "proven track record", "dynamic".
 - Bold key technologies with \`**...**\`, each once.

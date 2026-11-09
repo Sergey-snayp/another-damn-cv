@@ -68,6 +68,7 @@ export const EXTENSION_PROFILE_KEYS = [
   'preferredName',
   'phone',
   'location',
+  'addressLine',
   'city',
   'state',
   'country',

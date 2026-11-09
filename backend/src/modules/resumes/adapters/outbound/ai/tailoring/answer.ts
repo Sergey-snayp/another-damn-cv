@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { firstJsonObject } from '../../../../../../shared/ai/json';
 import { tidyLine } from '../../../../domain/tailoring/text';
-import { withoutEmDashes } from '../../../../domain/cv-writing-guide';
+import { withoutDashPunctuation } from '../../../../domain/cv-writing-guide';
 
-/** One line as the CV will show it: spacing tidied, no em dashes (the writing guide). */
-const cvLine = (text: string) => withoutEmDashes(tidyLine(text));
+/** One line as the CV will show it: spacing tidied, no sentence dashes. */
+const cvLine = (text: string) => withoutDashPunctuation(tidyLine(text));
 import type { TailoringCandidate, RetryCandidate } from '../../../../domain/tailoring/candidate';
 import type { PromptIds } from './prompt-ids';
 const answerBulletSchema = z.object({
@@ -31,7 +31,7 @@ const answerSchema = z.object({
     .transform((items) =>
       items
         .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-        .map((item) => item.trim())
+        .map((item) => withoutDashPunctuation(item.trim()))
         .slice(0, 20),
     )
     .catch([]),

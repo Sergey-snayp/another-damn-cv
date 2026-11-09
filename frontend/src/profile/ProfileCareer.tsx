@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { usePrimaryResume } from "./usePrimaryResume";
-import type { CareerData, CareerExperience, CareerSection } from "./careerApi";
+import type { CareerData, CareerExperience } from "./careerApi";
 import { AchievementList, type RolePatch } from "./AchievementList";
 import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
 
@@ -18,17 +18,6 @@ export function careerDate(value: string): string {
 
 const dateRange = (from: string, to: string, current = false) =>
   [careerDate(from), current ? "Present" : careerDate(to)].filter(Boolean).join(" – ");
-
-/** Where the career details came from, once for the whole page. */
-function sourceLine(data: CareerData): string {
-  const sections = Object.values(data).filter(Boolean) as CareerSection<unknown>[];
-  if (!sections.length) return "";
-  const latest = sections.reduce((a, b) => (a.importedAt > b.importedAt ? a : b));
-  const date = new Date(latest.importedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-  const imported = sections.find((section) => section.source.kind !== "profile")?.source;
-  const from = imported?.kind === "file" ? imported.name : imported?.kind === "resume" ? "your CV" : "";
-  return from ? `Imported from ${from} · last updated ${date}. Edits here do not change your CVs.` : `Last updated ${date}.`;
-}
 
 /** The career overview: summary, experience, education and skills, each edited in place. */
 export function ProfileCareer({
@@ -51,7 +40,6 @@ export function ProfileCareer({
   const educations = imported.educations?.value ?? [];
   const skills = imported.skills?.value ?? [];
   const summary = imported.summary?.value ?? "";
-  const source = sourceLine(imported);
   const add = (section: CareerSectionKey, label: string) => (
     <button className="profile-add-button" aria-label={label} onClick={() => onEditCareer(section, "new")} disabled={importDisabled}>
       <Icon name="plus" size={15} />
@@ -71,7 +59,6 @@ export function ProfileCareer({
   );
   return (
     <>
-      {source && <p className="profile-source-line">{source}</p>}
 
       <section className="profile-panel" aria-labelledby="profile-summary-heading">
         <div className="profile-panel-heading">

@@ -19,15 +19,15 @@ export interface AchievementSource {
 
 /** The AI's answer before checking. */
 export interface AchievementDraft {
-  achievements: { text: string; ask: string | null }[];
+  achievements: { text: string; asks: string[] }[];
   techStack: string[];
   description: string;
 }
 
 export interface ProposedAchievement {
   text: string;
-  /** A question for a number or a result the line would be stronger with. */
-  ask: string | null;
+  /** Up to 2 questions whose answers would make the line fuller: before, reason, part, count, still used. */
+  asks: string[];
   /** The job's existing line this one repeats, when it does. */
   duplicateOf: string | null;
 }
@@ -38,7 +38,7 @@ export interface AchievementProposal {
   techStack: string[];
   /** A role description, offered only when the job has none. */
   description: string;
-  /** Lines left out because they held a number the notes do not. */
+  /** Lines left out because they held a number or a name the notes do not. */
   dropped: number;
 }
 
@@ -51,9 +51,9 @@ const STOP = new Set(
   ),
 );
 
+/** Tidy: no list marker and single spaces; the writer enforces prose punctuation. */
 const plain = (text: string) =>
   text
-    .replace(/\s*[—–]\s*/g, ', ')
     .replace(/^\s*(?:[-•*·]|\d+[.)])\s+/, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -105,6 +105,47 @@ function numbersSupported(line: string, source: Set<number>): boolean {
   return true;
 }
 
+/** Words a line may use without the facts naming them. */
+const GENERIC = new Set(
+  'API APIS REST UI UX QA CI CD SDK HTTP HTTPS JSON SQL ID IDS PDF CSV AI ML US EU UK'.split(' '),
+);
+/**
+ * Names in a line that the facts do not have: technologies, products, companies,
+ * codenames. A name copied from an example or guessed cannot pass.
+ */
+export function unknownNames(line: string, facts: string): string[] {
+  const known = facts.toLowerCase();
+  const tokens = line.replace(/\*\*/g, '').trim().split(/\s+/);
+  const names = tokens
+    .map((token, index) => ({
+      word: token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9.+#]+$/g, '').replace(/\.$/, ''),
+      index,
+    }))
+    .filter(({ word, index }) => {
+      if (
+        word.length < 2 ||
+        GENERIC.has(word.toUpperCase()) ||
+        GENERIC.has(word.replace(/s$/, '').toUpperCase())
+      )
+        return false;
+      const shaped = /[a-z][A-Z]|\d[A-Za-z]|[A-Za-z]\d|\.js$|^[A-Z]{2,}s?$/.test(word);
+      const capital = /^[A-Z]/.test(word) && index > 0 && !/[.!?:]$/.test(tokens[index - 1] ?? '');
+      return shaped || capital;
+    })
+    .map(({ word }) => word);
+  return [...new Set(names.filter((word) => !known.includes(word.toLowerCase())))];
+}
+
+/**
+ * One rewritten line, checked against everything the person wrote: a number or
+ * a name they did not give drops the line (null), and a benefit they did not
+ * state is cut by the caller.
+ */
+export function supported(line: string, facts: string): boolean {
+  const known = numbersIn(facts);
+  return [...numbersIn(line)].every((value) => known.has(value)) && !unknownNames(line, facts).length;
+}
+
 const toolList = (stack: string) =>
   stack
     .split(/[,|;\n]/)
@@ -125,17 +166,21 @@ export function checkProposal(draft: AchievementDraft, source: AchievementSource
   const achievements: ProposedAchievement[] = [];
   let dropped = 0;
   for (const item of draft.achievements) {
-    const text = plain(item.text).slice(0, 400);
+    const text = plain(item.text).slice(0, 700);
     if (text.length < 8) continue;
-    if (!numbersSupported(text, known)) {
+    if (!numbersSupported(text, known) || unknownNames(text, everything).length) {
       dropped++;
       continue;
     }
     // The same line twice in one answer is kept once.
     if (achievements.some((kept) => overlap(kept.text, text) >= 0.75)) continue;
     const duplicateOf = source.bullets.find((bullet) => overlap(bullet, text) >= 0.6) ?? null;
-    const ask = item.ask?.trim() ? item.ask.trim().slice(0, 200) : null;
-    achievements.push({ text, ask: numbersIn(text).size ? null : ask, duplicateOf });
+    const asks = item.asks
+      .map((ask) => ask.trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((ask) => ask.slice(0, 200));
+    achievements.push({ text, asks, duplicateOf });
     if (achievements.length === MAX_ACHIEVEMENTS) break;
   }
   const have = toolList(source.techStack);

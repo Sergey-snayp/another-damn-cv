@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test test/*.test.mjs",
-    "test:browser": "node test/quick-tailor-save.cjs && node test/profile-career.cjs"
+    "test:browser": "node test/quick-tailor-save.cjs && node test/profile-career.cjs && node test/profile-employment.cjs",
+    "test:browser:documents": "node test/document-library.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

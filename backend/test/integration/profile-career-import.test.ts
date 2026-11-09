@@ -41,6 +41,62 @@ async function json<T>(path: string, method = 'GET', body?: unknown, userId?: st
   return response.json() as Promise<T>;
 }
 const read = () => json<CareerState>('/profile/career');
+
+test('saved notes can be removed one at a time or cleared, persist after reading, and stay gone after re-import', async () => {
+  const fresh = await createUser('Notes removal');
+  const notes = [
+    { text: 'First saved note.', at: '2026-11-01' },
+    { text: 'Second saved note.', at: '2026-11-02' },
+  ];
+  const roles = [
+    { ...role, notes, techStack: 'Node.js' },
+    { ...role, company: 'Other employer', notes: [{ text: 'Other job notes.', at: '2026-11-03' }] },
+  ];
+  let state = await json<CareerState>(
+    '/profile/career',
+    'PUT',
+    { expectedRevision: 0, sections: { experiences: roles } },
+    fresh.user.id,
+  );
+  state = await json<CareerState>(
+    '/profile/career',
+    'PUT',
+    {
+      expectedRevision: state.revision,
+      sections: { experiences: [{ ...roles[0], notes: [notes[1]] }, roles[1]] },
+    },
+    fresh.user.id,
+  );
+  let loaded = await json<CareerState>('/profile/career', 'GET', undefined, fresh.user.id);
+  assert.deepEqual(loaded.data.experiences!.value[0].notes, [notes[1]]);
+  state = await json<CareerState>(
+    '/profile/career',
+    'PUT',
+    { expectedRevision: state.revision, sections: { experiences: [{ ...roles[0], notes: [] }, roles[1]] } },
+    fresh.user.id,
+  );
+  loaded = await json<CareerState>('/profile/career', 'GET', undefined, fresh.user.id);
+  assert.deepEqual(loaded.data.experiences!.value[0].notes, []);
+  assert.deepEqual(loaded.data.experiences!.value[0].bullets, role.bullets);
+  assert.equal(loaded.data.experiences!.value[0].techStack, 'Node.js');
+  assert.deepEqual(loaded.data.experiences!.value[1], roles[1]);
+  await json<CareerState>(
+    '/profile/career/import',
+    'POST',
+    {
+      expectedRevision: state.revision,
+      contact: {},
+      expectedContact: {},
+      source: { kind: 'file', name: 'later-cv.txt' },
+      sections: { experiences: [{ ...roles[0], notes: undefined }, roles[1]] },
+    },
+    fresh.user.id,
+  );
+  loaded = await json<CareerState>('/profile/career', 'GET', undefined, fresh.user.id);
+  assert.deepEqual(loaded.data.experiences!.value[0].notes ?? [], []);
+  assert.deepEqual(loaded.data.experiences!.value[1].notes, roles[1].notes);
+  assert.equal(await prisma.resume.count({ where: { profileId: fresh.profile.id } }), 0);
+});
 function input(revision: number): CareerImport {
   return {
     expectedRevision: revision,

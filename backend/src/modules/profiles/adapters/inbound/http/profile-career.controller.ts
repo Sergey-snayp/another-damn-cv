@@ -20,8 +20,15 @@ import { ImportProfileCareer } from '../../../application/use-cases/import-profi
 import { SaveProfileCareer } from '../../../application/use-cases/save-profile-career';
 import { CareerImportError, type CareerImport, type CareerSections } from '../../../domain/career-profile';
 import { DraftAchievements } from '../../../application/use-cases/draft-achievements';
+import { DeepenAchievement } from '../../../application/use-cases/deepen-achievement';
+import type { DeepenInput } from '../../../application/ports/achievement-writer';
 import { AchievementError, type AchievementSource } from '../../../domain/achievements';
-import { achievementDraftSchema, careerImportSchema, careerUpdateSchema } from '../../career.schemas';
+import {
+  achievementDraftSchema,
+  careerImportSchema,
+  careerUpdateSchema,
+  deepenAchievementSchema,
+} from '../../career.schemas';
 @Catch(AchievementError)
 class AchievementErrorFilter implements ExceptionFilter {
   catch(error: AchievementError, host: ArgumentsHost) {
@@ -48,7 +55,14 @@ export class ProfileCareerController {
     @Inject(ImportProfileCareer) private readonly importer: ImportProfileCareer,
     @Inject(SaveProfileCareer) private readonly editor: SaveProfileCareer,
     @Inject(DraftAchievements) private readonly achievements: DraftAchievements,
+    @Inject(DeepenAchievement) private readonly deepen: DeepenAchievement,
   ) {}
+  /** "Rewrite with my answers": one achievement filled out with the answers to its questions. */
+  @Post('achievements/deepen') @HttpCode(200) deepenAchievement(
+    @Body(new ZodValidationPipe(deepenAchievementSchema)) input: DeepenInput,
+  ) {
+    return this.deepen.execute(input);
+  }
   /** "Turn into bullets": achievements proposed from the notes about one job. Nothing is saved. */
   @Post('achievements') @HttpCode(200) draftAchievements(
     @Body(new ZodValidationPipe(achievementDraftSchema)) source: AchievementSource,

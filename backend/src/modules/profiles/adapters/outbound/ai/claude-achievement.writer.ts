@@ -1,55 +1,83 @@
 import { z } from 'zod';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
-import { RECRUITER_RULES, withoutAddedPurpose } from '../../../../resumes/contracts';
 import { firstJsonObject } from '../../../../../shared/ai/json';
-import type { AchievementWriter } from '../../../application/ports/achievement-writer';
+import { BULLET_RULES, withoutAddedPurpose, withoutDashPunctuation } from '../../../../resumes/contracts';
+import type { AchievementWriter, DeepenInput } from '../../../application/ports/achievement-writer';
 import {
   AchievementError,
   type AchievementDraft,
   type AchievementSource,
 } from '../../../domain/achievements';
 
+const HONESTY = `ABSOLUTE RULES. Breaking any of these makes the output unusable:
+- Use ONLY facts written in <notes>, <job>, <current_bullets> or <answers>. Never add a
+  number, tool, product, company, scale, team size, reason, outcome or claim that is not
+  written there.
+- Keep every number exactly as written ("~20k" may become "~20,000", nothing else).
+- Never inflate: "helped with" does not become "led", "did 2 audits" becomes "Completed 2
+  audits", not "Led 2 audits", and never add an action the notes do not state ("used" does
+  not become "migrated", "worked on" does not become "built").`;
+
 const SYSTEM = `You turn a person's own notes about one job into achievements for their career profile.
 The profile keeps everything they did; later, a few of these are chosen for each CV.
 
-ABSOLUTE RULES. Breaking any of these makes the output unusable:
-- Use ONLY facts written in <notes>, <job> or <current_bullets>. Never add a number, tool,
-  company, scale, team size, outcome or claim that is not written there.
-- Keep every number exactly as written ("~20k" may become "~20,000", nothing else).
-- Never inflate: "helped with" does not become "led", and never add an action the notes do
-  not state ("used" does not become "migrated", "worked on" does not become "built";
-  "secrets in AWS Secrets Manager" becomes "Stored secrets in AWS Secrets Manager", not "Moved…").
+${HONESTY}
 
-How to write each achievement:
-- One fact per achievement. Split a note that holds several facts into several achievements.
-- Start with a strong past-tense verb (Built, Cut, Led, Designed, Automated, Integrated).
-- 8 to 30 words. No first person, no "responsible for", no buzzwords.
-- Say what changed because of it when the notes say so.
-- US English. No em dashes.
-- Do not repeat a line from <current_bullets>; write only what is new or more specific.
-- When an achievement states a result without a number and a number would make it stronger,
-  set "ask" to one short question the person can answer (e.g. "About how many incidents a month?").
-  Otherwise "ask" is null.
+How to split the notes:
+- One achievement per piece of work (a system, a feature, a fix, a migration, an audit, a
+  team they led), told fully with everything the notes say about it. Do not split one piece
+  of work into thin one-fact lines, and do not merge two pieces of work.
+- Do not repeat a line from <current_bullets>; write only what is new or fuller.
+
+${BULLET_RULES}
+
+Follow-up questions ("asks"): for each achievement, up to 2 short questions whose answers
+would make it fuller, only about what the notes leave out:
+- what it was like before ("How were certificates renewed before?"),
+- why it was done this way ("Why Step Functions rather than a cron job?"),
+- what part was theirs ("Did you build it alone or with a team?"),
+- how many or how much ("About how many alerts a week?"),
+- whether it lasted ("Is it still in use?").
+An achievement that already has these gets no questions.
 
 Also:
 - "techStack": the technologies the notes name, as written: languages, frameworks, libraries,
   databases, cloud services, protocols and developer tools. Not companies, clients, card
-  networks, payment providers or chat apps (no "Visa", "Cardinal", "Slack").
+  networks, payment providers or chat apps.
 - "description": when <job> has no description, one or two sentences on what the role or
   project was (product, team, scale), from the notes only; otherwise "".
 
-${RECRUITER_RULES}
+Return ONLY JSON, no prose and no code fences:
+{"achievements": [{"text": "...", "asks": ["..."]}], "techStack": ["..."], "description": ""}`;
+
+const DEEPEN_SYSTEM = `You rewrite one achievement on a person's career profile with their answers to follow-up questions.
+
+${HONESTY}
+
+- Rewrite only this one achievement. Keep everything it already says, and add only what the
+  answers give: the before and after, the reason, their part, the counts, whether it lasted.
+- Never bring in other work: only this achievement and the answers are facts here.
+- An answer that says "no", "don't know" or nothing adds nothing.
+
+${BULLET_RULES}
 
 Return ONLY JSON, no prose and no code fences:
-{"achievements": [{"text": "...", "ask": null}], "techStack": ["..."], "description": ""}`;
+{"text": "...", "asks": ["any question still worth asking, at most 1"]}`;
 
 const answerSchema = z.object({
   achievements: z
-    .array(z.object({ text: z.string().catch(''), ask: z.string().nullable().catch(null) }))
+    .array(
+      z.object({
+        text: z.string().catch(''),
+        asks: z.array(z.string()).catch([]),
+        ask: z.string().nullable().optional(),
+      }),
+    )
     .catch([]),
   techStack: z.array(z.string()).catch([]),
   description: z.string().catch(''),
 });
+const deepenSchema = z.object({ text: z.string().catch(''), asks: z.array(z.string()).catch([]) });
 
 export function achievementPrompt(source: AchievementSource): string {
   return `<job>
@@ -68,9 +96,21 @@ ${source.notes}
 </notes>`;
 }
 
+const factsOf = (source: AchievementSource) =>
+  [
+    source.title,
+    source.company,
+    source.client,
+    source.description,
+    source.techStack,
+    source.notes,
+    ...source.bullets,
+  ].join('\n');
+
 /** Writes with the local Claude CLI: prompt only, no tools, no saved session. */
 export class ClaudeAchievementWriter implements AchievementWriter {
   constructor(private readonly llm: Pick<ClaudeProcessRunner, 'complete'>) {}
+
   async draft(source: AchievementSource): Promise<AchievementDraft> {
     const raw = await this.llm.complete(achievementPrompt(source), SYSTEM, {
       effort: 'medium',
@@ -80,17 +120,44 @@ export class ClaudeAchievementWriter implements AchievementWriter {
     const json = firstJsonObject(raw);
     if (!json) throw new AchievementError('The AI did not return achievements. Try again.');
     const answer = answerSchema.parse(json);
+    const facts = factsOf(source);
     return {
       // A benefit the notes do not state ("…to reduce risk") is cut.
       achievements: answer.achievements.map((item) => ({
-        text: withoutAddedPurpose(
-          item.text,
-          `${source.notes}\n${source.description}\n${source.bullets.join('\n')}`,
-        ),
-        ask: item.ask,
+        text: withoutDashPunctuation(withoutAddedPurpose(item.text, facts)),
+        asks: (item.asks.length ? item.asks : item.ask ? [item.ask] : []).map(withoutDashPunctuation),
       })),
       techStack: answer.techStack,
-      description: answer.description,
+      description: withoutDashPunctuation(answer.description),
+    };
+  }
+
+  async deepen(input: DeepenInput): Promise<{ text: string; asks: string[] }> {
+    const answers = input.answers.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join('\n\n');
+    // Only the job, this line and the answers: other work in the notes stays out of view.
+    const prompt = `<job>
+Title: ${input.source.title}
+Company: ${input.source.company}${input.source.client ? `\nClient: ${input.source.client}` : ''}
+</job>
+
+<achievement>
+${input.text}
+</achievement>
+
+<answers>
+${answers}
+</answers>${input.avoid?.length ? `\n\nDo not mention ${input.avoid.join(', ')}: they belong to other work.` : ''}`;
+    const raw = await this.llm.complete(prompt, DEEPEN_SYSTEM, {
+      effort: 'medium',
+      timeoutMs: 120_000,
+      maxOutputChars: 20_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) throw new AchievementError('The AI did not rewrite the line. Try again.');
+    const answer = deepenSchema.parse(json);
+    return {
+      text: withoutDashPunctuation(withoutAddedPurpose(answer.text, `${input.text}\n${answers}`)),
+      asks: answer.asks.map(withoutDashPunctuation),
     };
   }
 }

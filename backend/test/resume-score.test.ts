@@ -46,7 +46,14 @@ test('a keyword named only in the skills list is called out: it counts for less 
 
 test('bullets are written for a non-technical recruiter and the search filters', () => {
   assert.match(BULLET_RULES, /NON-TECHNICAL RECRUITER/);
-  assert.match(RECRUITER_RULES, /at most 2 key tools/);
+  assert.doesNotMatch(RECRUITER_RULES, /at most 2/, 'a bullet may show its mechanism');
+  assert.match(BULLET_RULES, /One piece of work per bullet, told fully/);
+  assert.match(BULLET_RULES, /before and after/);
+  assert.match(
+    BULLET_RULES,
+    /Never use their names, numbers, tools or outcomes/,
+    'examples from other fields are style only',
+  );
   assert.match(RECRUITER_RULES, /Never guess what a name is/);
 });
 

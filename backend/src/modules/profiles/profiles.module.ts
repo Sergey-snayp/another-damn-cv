@@ -8,6 +8,7 @@ import { AiModule } from '../../shared/ai/ai.module';
 import { ClaudeProcessRunner } from '../../shared/ai/claude-process.runner';
 import { ClaudeAchievementWriter } from './adapters/outbound/ai/claude-achievement.writer';
 import { DraftAchievements } from './application/use-cases/draft-achievements';
+import { DeepenAchievement } from './application/use-cases/deepen-achievement';
 import { RESUMES_API } from '../resumes/resumes.tokens';
 import type { ResumesApi } from '../resumes/contracts';
 import { ExtensionProfileController, ProfilesController } from './adapters/inbound/http/profiles.controller';
@@ -37,6 +38,11 @@ import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITO
       provide: DraftAchievements,
       inject: [ClaudeProcessRunner],
       useFactory: (runner: ClaudeProcessRunner) => new DraftAchievements(new ClaudeAchievementWriter(runner)),
+    },
+    {
+      provide: DeepenAchievement,
+      inject: [ClaudeProcessRunner],
+      useFactory: (runner: ClaudeProcessRunner) => new DeepenAchievement(new ClaudeAchievementWriter(runner)),
     },
     {
       provide: SaveProfileCareer,

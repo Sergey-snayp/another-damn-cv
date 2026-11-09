@@ -1,5 +1,6 @@
 import type { RenderedResume } from './resume';
 import { shownIn } from './resume-assistant';
+import { withoutDashPunctuation } from './cv-writing-guide';
 
 /** How a technology is looked up: "Node.js" and " node.js " are the same note. */
 export function technologyKey(name: string): string {
@@ -29,7 +30,7 @@ export function linesMentioning(resume: RenderedResume, name: string, limit = 4)
 
 /** The model's answer as one plain sentence or two, or null when there is nothing usable. */
 export function cleanDescription(raw: string): string | null {
-  const text = raw
+  const text = withoutDashPunctuation(raw)
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/[*_`#>]/g, '')
     .split(/\n\s*\n/)[0]

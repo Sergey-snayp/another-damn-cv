@@ -476,3 +476,50 @@ test('the extension gets when a job was posted from its job board', async () => 
   ).json()) as { posting: unknown };
   assert.equal(other.posting, null);
 });
+
+test('Personal info saves explicit employment details and country defaults shared with the extension', async () => {
+  const fresh = await createUser('Employment Profile');
+  const token = `employment-${randomUUID()}`;
+  await prisma.user.update({ where: { id: fresh.user.id }, data: { syncToken: token } });
+  const defaults = [
+    { kind: 'workAuthorization', scope: 'United States', value: 'No' },
+    { kind: 'workAuthorization', scope: 'Canada', value: 'Yes' },
+    { kind: 'workAuthorization', scope: 'United Kingdom', value: 'No' },
+  ];
+  assert.equal((await call('/defaults', { method: 'POST', body: { defaults } })).status, 401);
+  assert.equal(
+    (await call('/defaults', { method: 'POST', user: fresh.user.id, body: { defaults } })).status,
+    200,
+  );
+  const synced = await call('/extension/defaults', { token });
+  assert.equal(synced.status, 200);
+  const rows = (await synced.json()) as Array<{ scope: string; value: string }>;
+  assert.deepEqual(Object.fromEntries(rows.map((row) => [row.scope, row.value])), {
+    'United States': 'No',
+    Canada: 'Yes',
+    'United Kingdom': 'No',
+  });
+  const details = {
+    eeoRace: '',
+    eeoGender: 'Man',
+    eeoVeteran: 'No',
+    eeoDisability: 'No',
+    eeoLgbtq: 'Prefer not to answer',
+    requiresSponsorship: 'Yes',
+  };
+  assert.equal((await call('/profile', { method: 'PUT', user: fresh.user.id, body: details })).status, 200);
+  const saved = (await (await call('/profile', { user: fresh.user.id })).json()) as Record<string, string>;
+  for (const [key, value] of Object.entries(details)) assert.equal(saved[key], value);
+  const separate = (await (await call('/profile', { user: other.user.id })).json()) as Record<string, string>;
+  assert.equal(separate.eeoGender, '', 'another account never receives these personal answers');
+  assert.equal(
+    (await call('/profile', { method: 'PUT', user: fresh.user.id, body: { eeoGender: '' } })).status,
+    200,
+  );
+  assert.equal(
+    ((await (await call('/profile', { user: fresh.user.id })).json()) as Record<string, string>).eeoGender,
+    '',
+    'a saved answer can be cleared',
+  );
+  assert.equal(await prisma.resume.count({ where: { profileId: fresh.profile.id } }), 0);
+});

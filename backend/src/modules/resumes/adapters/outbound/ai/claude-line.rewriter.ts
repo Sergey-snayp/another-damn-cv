@@ -6,7 +6,7 @@ import type {
   RewriteResult,
 } from '../../../application/use-cases/rewrite-resume-line';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
-import { WRITING_RULES, withoutEmDashes } from '../../../domain/cv-writing-guide';
+import { WRITING_RULES, withoutDashPunctuation } from '../../../domain/cv-writing-guide';
 
 /**
  * Rewriting one piece of a resume.
@@ -64,8 +64,8 @@ cannotDo.`;
     const answer = readAnswer(await this.llm.complete(prompt, SYSTEM, { effort: 'medium' }));
     return {
       original: text,
-      suggestion: withoutEmDashes(answer.suggestion.trim()) || text,
-      cannotDo: answer.cannotDo,
+      suggestion: withoutDashPunctuation(answer.suggestion.trim() || text),
+      cannotDo: answer.cannotDo.map(withoutDashPunctuation),
     };
   }
 }

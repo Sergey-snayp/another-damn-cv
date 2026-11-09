@@ -9,13 +9,19 @@ import { resumeText } from './resume-score';
  */
 
 /** For every piece of CV text the AI writes. */
+export const DASH_PUNCTUATION_RULE = `Do not use dashes as sentence punctuation: no em dash, en dash, or spaced hyphen.
+Use commas, colons, semicolons or a new sentence instead. This also applies when rewriting
+source text that contains dashes. Preserve real hyphenated words, technology names, URLs,
+numeric/date ranges and code; do not change quoted source evidence or exact form options.`;
+
 export const WRITING_RULES = `HOW TO WRITE (a recruiter scans a CV in about 7 seconds):
 - Every line should help with this job. Where a fact on the CV matches the posting,
   use the posting's own words for it.
 - Write numbers as digits: "3 teams", "16 integrations".
 - US spelling ("optimize", "modeling", "behavior") unless the candidate's standing
   instructions ask for another.
-- No em dashes. No "I", "me" or "my". No filler such as "passionate", "results-driven",
+- ${DASH_PUNCTUATION_RULE}
+- No "I", "me" or "my". No filler such as "passionate", "results-driven",
   "detail-oriented", "dynamic", "proven track record", "cutting-edge" or "world-class".
 - No markdown or bold: the CV marks technologies itself.`;
 
@@ -40,9 +46,9 @@ export const SUMMARY_RULES = `HOW TO WRITE THE SUMMARY (3 or 4 sentences, about 
  * fact, a benefit or an explanation the candidate's own facts do not give.
  */
 export const RECRUITER_RULES = `WRITE FOR A NON-TECHNICAL RECRUITER AND FOR THE SEARCH FILTERS:
-- Lead with what changed, in plain words (faster, cheaper, safer, fewer errors, less manual
-  work, more customers), then how, then at most 2 key tools. The full tool list belongs in
-  the job's tech stack line, not in a bullet.
+- The first words carry what changed, in words a recruiter who is not technical follows
+  (faster, cheaper, safer, fewer errors, less manual work, more customers); the mechanism
+  and its tools come after.
 - Say why it mattered to the business or its users only when the facts say so. Never add a
   purpose or benefit the facts do not state ("to reduce risk", "to improve quality",
   "for reliability", "instead of hardcoding").
@@ -55,22 +61,48 @@ export const RECRUITER_RULES = `WRITE FOR A NON-TECHNICAL RECRUITER AND FOR THE 
 - Make numbers easy to picture: "20,000 card payments a day" rather than "30-40k API requests",
   when the facts say what was counted.`;
 
-/** One bullet under a job or project. */
-export const BULLET_RULES = `HOW TO WRITE A BULLET:
-- Start with a strong past-tense verb and the result: the first 2 or 3 words are what
-  gets read.
-- An accomplishment, not a duty. "Reviewed pull requests" is a duty; "Cleared 2 security
-  remediation cycles" is an accomplishment, when the facts say so.
-- Pattern: what was done, how, and the result. Keep a number only when the line has
-  one; never make one up.
-- One idea per bullet, at most 2 lines (about 30 words). End with a period.
-- Let the wording show ownership and follow-through, without claiming more than the
-  line says.
+/**
+ * Bullets from another field, written to the standard: they show how a bullet
+ * reads, never what it says. The checks in code drop any name or number the
+ * candidate's own facts do not have, so a fact copied from here cannot survive.
+ */
+export const STYLE_EXAMPLES = `STYLE EXAMPLES from other people's CVs in other fields. They show the standard only;
+their facts belong to them. Never use their names, numbers, tools or outcomes.
+- Cut late deliveries from 12% to 4% by re-sequencing driver routes each morning from the
+  overnight order file. Dispatchers stopped re-planning by hand, and the schedule still
+  runs across 3 depots.
+- Led a 40-bed ward's move from paper charts to electronic records, training 25 nurses in
+  pairs on night shifts so that no shift ran without someone who knew the system.
+- Rebuilt the month-end close checklist after 2 late closes, splitting reconciliations by
+  owner so a missing bank statement held up one line instead of the whole close.`;
+
+/** One bullet under a job or project: the standard every bullet is held to. */
+export const BULLET_RULES = `HOW TO WRITE A BULLET (the standard every bullet is held to):
+- One piece of work per bullet, told fully: what changed, how it worked, and why it was
+  done that way. An accomplishment, never a bare duty ("Reviewed pull requests").
+- Start with a strong past-tense verb and what changed: the first words carry the result.
+- Show the mechanism, not just the tool: "a daily renewal sweep over the expiry index",
+  not "used a database".
+- When the facts give them, show:
+  - before and after ("...rejected with a reason instead of failing the whole batch");
+  - the decision and its reason ("chose X over Y so that Z");
+  - honest ownership ("as its principal author", "led a 3-person team", "alongside its
+    owner");
+  - real counts (services, models, integrations, audits, people);
+  - that it lasted ("still in production", "now used to onboard new engineers").
+- Leave out any of these the facts do not give. Never invent a reason, a before, an
+  outcome, a count or a role, and never claim more than the facts say.
+- Up to about 45 words, one or two sentences. End with a period.
+- ${DASH_PUNCTUATION_RULE}
+- Technologies by their real names; the CV marks them in bold itself.
+
+${STYLE_EXAMPLES}
 
 ${RECRUITER_RULES}`;
 
 /** The line under a job's title that says what the work was about. */
 export const DESCRIPTION_RULES = `HOW TO WRITE A JOB'S DESCRIPTION LINE:
+- ${DASH_PUNCTUATION_RULE}
 - One sentence: what the system or product does, for whom, and its scale when the
   facts give it. No duties and no list of technologies: the bullets and the tech stack
   line carry those.`;
@@ -111,15 +143,39 @@ export function cvFacts(resume: RenderedResume, limit = 8_000): string {
 }
 
 /**
- * Em dashes out of AI-written text, as the guide asks: "Waivio — a platform"
- * becomes "Waivio, a platform". A dash between numbers (2019–2021) stays.
+ * Enforce the writing preference on generated prose even when a model ignores it.
+ * Preserve factual ranges, hyphenated names, URLs and code. Source records stay untouched.
  */
-export function withoutEmDashes(text: string): string {
-  return text
-    .replace(/\s*—\s*/g, ', ')
-    .replace(/(\D)\s+–\s+(\D)/g, '$1, $2')
-    .replace(/,\s*([,.;:])/g, '$1')
-    .replace(/^,\s*/, '');
+export function withoutDashPunctuation(text: string): string {
+  const prose = (part: string) =>
+    part
+      .replace(/[ \t]*[—–‒―][ \t]*|[ \t]+-+[ \t]+/g, (dash, offset: number, whole: string) => {
+        const before = whole.slice(0, offset).trimEnd();
+        const after = whole.slice(offset + dash.length).trimStart();
+        if (!after || whole[offset + dash.length] === '\n') return '';
+        const numericRange = /\d[\d.,]*\s*[kKmMbB%]?$/.test(before) && /^\d/.test(after);
+        const dateRange =
+          /(?:19|20)\d{2}$/.test(before) &&
+          /^(?:present|current|now|Jan\w*|Feb\w*|Mar\w*|Apr\w*|May|Jun\w*|Jul\w*|Aug\w*|Sep\w*|Oct\w*|Nov\w*|Dec\w*)\b/i.test(
+            after,
+          );
+        if (numericRange || dateRange) return dash.replace(/[—‒―]/g, '-');
+        return ', ';
+      })
+      .replace(/[ \t]+,/g, ',')
+      .replace(/,[ \t]*([,.;:!?])/g, '$1')
+      .replace(/(^|\n),[ \t]*/g, '$1');
+  const protectedParts: string[] = [];
+  let prefix = '\uE000';
+  while (text.includes(prefix)) prefix += '\uE000';
+  const masked = text.replace(
+    /```[\s\S]*?```|`[^`\n]+`|https?:\/\/[^\s<>]+/g,
+    (part) => `${prefix}${protectedParts.push(part) - 1}\uE001`,
+  );
+  return prose(masked).replace(
+    new RegExp(`${prefix}(\\d+)\uE001`, 'g'),
+    (_match, index: string) => protectedParts[Number(index)],
+  );
 }
 
 const PURPOSE =

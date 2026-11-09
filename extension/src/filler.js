@@ -756,6 +756,7 @@ function valueFor(field, profile) {
   if (field.compound) {
     return [profile.city, profile.state, profile.country, profile.postalCode].filter(Boolean).join(', ') || profile.location;
   }
+  if (field.key === 'location') return profile.location?.trim() || [profile.city, profile.state, profile.country].filter(part => part?.trim()).join(', ');
   return profile[field.key];
 }
 

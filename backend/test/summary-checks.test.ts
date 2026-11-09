@@ -161,7 +161,16 @@ test('3. the first sentence has a job title and "years"', () => {
 test('4. no em dash', () => {
   assert.equal(checkNoEmDash(GOOD).ok, true);
   assert.equal(checkNoEmDash('Built it — fast.').ok, false);
-  assert.equal(checkNoEmDash('From 2019–2021, built it - fast.').ok, true, 'en dashes and hyphens are fine');
+  assert.equal(
+    checkNoEmDash('From 2019–2021, built it - fast.').ok,
+    false,
+    'a spaced hyphen is sentence punctuation',
+  );
+  assert.equal(
+    checkNoEmDash('From 2019–2021, built Node-RED integrations.').ok,
+    true,
+    'ranges and names stay intact',
+  );
 });
 
 test('5. no British -ise or -isation spellings, with the allowlist', () => {

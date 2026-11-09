@@ -3,6 +3,7 @@ import { firstJsonObject } from '../../../../../shared/ai/json';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
 import type { CoverLetterWriter } from '../../../application/use-cases/cover-letters';
 import { TailoringError } from '../../../application/tailoring-error';
+import { DASH_PUNCTUATION_RULE, withoutDashPunctuation } from '../../../domain/cv-writing-guide';
 
 /**
  * The rules, drawn from the candidate's own cover letters (28 letters sent in
@@ -56,8 +57,8 @@ VOICE (as in the candidate's letters):
 - Use the posting's own words where they are true for the candidate.
 - Pick 2 or 3 stories; never retell the CV line by line or list tools for their own sake.
 - No "I am excited to apply", "passionate", "thrilled", "proven track record",
-  "results-driven", "dynamic" or "synergy". No dashes as punctuation (neither "—" nor " - "):
-  use commas, colons or a new sentence. No markdown, no bullet points.
+  "results-driven", "dynamic" or "synergy". No markdown, no bullet points.
+- ${DASH_PUNCTUATION_RULE}
 - No schema or codebase counts (models, migrations, components, packages).
 - US or Canadian spelling, as the posting uses.
 
@@ -108,7 +109,7 @@ function parse(raw: string): { letter: string; cannotClaim: string[] } | null {
   const result = json ? answerSchema.safeParse(json) : null;
   if (!result?.success) return null;
   return {
-    letter: result.data.letter,
-    cannotClaim: result.data.cannotClaim.map((item) => item.trim()).filter(Boolean),
+    letter: withoutDashPunctuation(result.data.letter),
+    cannotClaim: result.data.cannotClaim.map((item) => withoutDashPunctuation(item.trim())).filter(Boolean),
   };
 }

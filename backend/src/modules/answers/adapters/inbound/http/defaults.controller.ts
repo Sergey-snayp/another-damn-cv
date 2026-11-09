@@ -55,9 +55,16 @@ export class DefaultsController {
     @Inject(ListDefaults) private readonly listDefaults: ListDefaults,
     @Inject(UpdateDefault) private readonly updateDefault: UpdateDefault,
     @Inject(DeleteDefault) private readonly deleteDefault: DeleteDefault,
+    @Inject(SaveDefaults) private readonly saveDefaults: SaveDefaults,
   ) {}
   @Get() list(@CurrentUser() userId: string) {
     return this.listDefaults.execute(userId);
+  }
+  @Post() @HttpCode(200) save(
+    @CurrentUser() userId: string,
+    @Body(new ZodValidationPipe(saveDefaultsSchema)) body: { defaults: NewDefault[] },
+  ) {
+    return this.saveDefaults.execute(userId, body.defaults);
   }
   @Patch(':id') update(
     @CurrentUser() userId: string,

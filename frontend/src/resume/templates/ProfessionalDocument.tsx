@@ -280,7 +280,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
       apply: (next, d) => { d.experiences[i]!.blurb = next; } });
     role.achievements.forEach((bullet, j) => {
       if (bullet.bullet.trim()) targets.push({ text: bullet.bullet, context, kind: 'bullet', label: `${role.company || 'Job'} · bullet ${j + 1}`, key: bullet.lineageId,
-        role: { company: role.company, title: role.title, from: role.from },
+        role: { company: role.company, title: role.title, from: role.from, client: role.client ?? '', description: role.blurb ?? '', techStack: role.techStack ?? '' },
         apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; } });
     });
     if ((role.techStack ?? '').trim()) targets.push({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack', label: `${role.company || 'Job'} · Tech stack`, key: `tech-stack:${role.lineageId ?? i}`,
@@ -459,6 +459,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                           text: bullet.bullet,
                           context: `${role.title} at ${role.company}`,
                           kind: 'bullet',
+                          role: { company: role.company, title: role.title, from: role.from, client: role.client ?? '', description: role.blurb ?? '', techStack: role.techStack ?? '' },
                           apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; },
                         }, event)} />}
                 </li>

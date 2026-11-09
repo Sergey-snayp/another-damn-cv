@@ -1,4 +1,4 @@
-import { withoutEmDashes } from './cv-writing-guide';
+import { withoutDashPunctuation } from './cv-writing-guide';
 
 /** Who the letter is from, for its header and file name. */
 export interface LetterAuthor {
@@ -39,18 +39,10 @@ export function paragraphsOf(text: string): string[] {
     .filter(Boolean);
 }
 
-/** A spaced hyphen used as a dash ("most - payments"); "2019 - 2021" stays. */
-const spacedHyphen = (line: string) => line.replace(/(\D)\s+-\s+(\D)/g, '$1, $2');
-
 /** An AI-written letter as it is kept: paragraphs tidied, no dashes as punctuation, no markdown. */
 export function tidyLetter(text: string): string {
   return paragraphsOf(text.replace(/\*\*|__/g, ''))
-    .map((paragraph) =>
-      paragraph
-        .split('\n')
-        .map((line) => withoutEmDashes(spacedHyphen(line)))
-        .join('\n'),
-    )
+    .map((paragraph) => paragraph.split('\n').map(withoutDashPunctuation).join('\n'))
     .join('\n\n');
 }
 

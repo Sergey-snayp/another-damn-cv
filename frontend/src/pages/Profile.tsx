@@ -12,6 +12,7 @@ import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerExperience, type CareerState } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
 import { DescribeJob } from "../profile/DescribeJob";
+import { EmploymentInformation } from '../profile/EmploymentInformation';
 import "../profile/profile.css";
 
 type ProfileTab = "career" | "personal" | "preferences" | "answers";
@@ -304,6 +305,7 @@ export function Profile() {
           <DefaultAnswers />
         </div>
       ) : (
+        <>
         <form className="profile-form profile-panel" onSubmit={(event) => void save(event)}>
           <fieldset disabled={saving}>
             {active === "preferences" && (
@@ -358,6 +360,8 @@ export function Profile() {
             </button>
           </div>
         </form>
+        {active === 'personal' && <EmploymentInformation profile={profile} disabled={dirty || saving} onSaved={next => { setProfile(next); setDraft({ ...next }); setNotice('Employment information saved.'); }} />}
+        </>
       )}
 
       {importing && careerState && (
@@ -407,7 +411,6 @@ export function Profile() {
           onSaved={(state) => {
             setCareerState(state);
             setEditingCareer(null);
-            setNotice("Profile career details saved.");
             void api
               .profile()
               .then((next) => {

@@ -212,6 +212,32 @@ test('CLI adapter applies restricted mode, distinct prompts, and validates the f
   await assert.rejects(broken.generate('hr', context), /incomplete question set/);
 });
 
+test('practice prose is cleaned while code examples and evidence identifiers stay unchanged', async () => {
+  const raw = content(true);
+  raw.questions[0] = {
+    ...raw.questions[0],
+    question: 'Your work — what changed?',
+    why: 'Relevant - to this role.',
+    answer: 'Used Node-RED — to process flows. Compute `a - b`.',
+    talkingPoints: ['Results — measured.'],
+    followUps: ['Which users - and why?'],
+    needsInput: ['Impact — how much?'],
+    evidenceIds: ['cv-bullet-0-0'],
+  };
+  const result = await new ClaudeCliPracticeGenerator({
+    complete: () => Promise.resolve(JSON.stringify(raw)),
+  }).generate('technical', context);
+  assert.deepEqual(result.questions[0], {
+    ...raw.questions[0],
+    question: 'Your work, what changed?',
+    why: 'Relevant, to this role.',
+    answer: 'Used Node-RED, to process flows. Compute `a - b`.',
+    talkingPoints: ['Results, measured.'],
+    followUps: ['Which users, and why?'],
+    needsInput: ['Impact, how much?'],
+  });
+});
+
 test('provider errors give safe instructions without exposing raw private process output', async () => {
   for (const [message, expected] of [
     ['The Claude CLI is not signed in.', /claude auth login/],

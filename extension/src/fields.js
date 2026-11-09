@@ -28,7 +28,7 @@ const CATEGORIES = [
   { key: 'pronouns', group: 'Personal', match: ['pronouns'] },
 
   // --- location -------------------------------------------------------------
-  { key: 'location', group: 'Location', match: ['location', 'current location', 'where are you based', 'where do you live'] },
+  { key: 'location', group: 'Location', match: ['location', 'current location', 'where are you based', 'where do you live', 'where are you located', 'where are you currently located'] },
   { key: 'city', group: 'Location', match: ['city', 'town'] },
   { key: 'state', group: 'Location', match: ['state', 'province', 'region', 'state/province'] },
   { key: 'country', group: 'Location', match: ['country', 'current residence', 'country of residence'] },
@@ -521,9 +521,12 @@ function detectFields() {
 
     // A site rule is evidence; the heuristic is a guess. Prefer evidence.
     const fromSite = window.CVAutofillSites?.siteKeyFor(element) ?? null;
+    const addressTokens = { 'street-address': 'addressLine', 'address-line1': 'addressLine', 'address-level2': 'city', 'address-level1': 'state', 'country': 'country', 'country-name': 'country', 'postal-code': 'postalCode' };
+    const autocomplete = element.getAttribute('autocomplete')?.trim().toLowerCase().split(/\s+/).at(-1);
+    const fromAutocomplete = ['text', 'search', 'tel', ''].includes(element.type ?? '') && autocomplete ? addressTokens[autocomplete] ?? null : null;
     const label = labelOf(element);
     const { key: guessed, sensitive, compound, office } = categorise(signals, { long: label.length > LONG_LABEL, yesNo: YES_NO.test(label) });
-    const key = fromSite ?? guessed;
+    const key = fromSite ?? fromAutocomplete ?? guessed;
 
     if (sensitive) {
       const question = (groupQuestion(element) ?? '').toLowerCase().replace(/\s+/g, ' ') || signals;
@@ -543,7 +546,7 @@ function detectFields() {
         kind: kindOf(element),
         signals,
         source: fromSite ? 'site' : 'heuristic',
-        ...(compound && !fromSite && { compound: true }),
+        ...(compound && !fromSite && !fromAutocomplete && { compound: true }),
         ...(country && { country }),
         // "Authorized to work in the US or Canada?": every country it names, so a person
         // from any of them gets their own answer.

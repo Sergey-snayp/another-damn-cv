@@ -95,19 +95,16 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.ok(saves[1].bullets.includes('Built a TLS certificate service with ACME and Route53, replacing manual renewals.'));
     assert.ok(saves[1].starred.includes('Built a TLS certificate service with ACME and Route53, replacing manual renewals.'), 'the star follows the edit');
 
-    // Delete, then restore.
+    // Delete: removed for good, nothing kept to restore.
     await page.hover('.ach-row:nth-child(3)');
     const third = (await texts())[2];
     await button(`Delete: ${third}`).click();
     await waitSaves(3);
     assert.ok(!saves[2].bullets.includes(third));
-    assert.equal(saves[2].removed[0].text, third);
-    await button('1 deleted · Restore').click();
-    assert.match(await page.$eval('.ach-removed', list => list.textContent), new RegExp(third.slice(0, 20)));
-    await page.evaluate(() => document.querySelector('.ach-removed button').click());
-    await waitSaves(4);
-    assert.ok(saves[3].bullets.includes(third));
-    assert.deepEqual(saves[3].removed, []);
+    assert.deepEqual(saves[2].removed, [], 'nothing is kept to restore');
+    assert.ok(!(await texts()).includes(third));
+    assert.equal(await page.$('.ach-removed'), null);
+    assert.doesNotMatch(await page.$eval('.ach', element => element.textContent), /deleted|Restore/);
 
     // Paste several lines: several achievements, cleaned, no repeats.
     await page.click('[aria-label="Add an achievement"]');
@@ -118,12 +115,12 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
       box.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await button('Add 3').click();
-    await waitSaves(5);
-    assert.deepEqual(saves[4].bullets.slice(-2), ['Led the migration to Node.js 20.', 'Added rate limiting to the public API.']);
-    assert.equal(saves[4].bullets.filter(item => item === 'Stored token state in DynamoDB.').length, 1, 'a repeat is not added twice');
+    await waitSaves(4);
+    assert.deepEqual(saves[3].bullets.slice(-2), ['Led the migration to Node.js 20.', 'Added rate limiting to the public API.']);
+    assert.equal(saves[3].bullets.filter(item => item === 'Stored token state in DynamoDB.').length, 1, 'a repeat is not added twice');
     assert.equal(await page.$eval('[aria-label="Add an achievement"]', box => box.value), '');
     assert.deepEqual(errors, []);
-    console.log('PASS achievement list: best five, show all, tag filters, stars, edit in place, delete and restore, paste several');
+    console.log('PASS achievement list: best five, show all, tag filters, stars, edit in place, delete for good, paste several');
   } finally {
     await browser.close();
   }

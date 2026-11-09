@@ -212,6 +212,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
     projects: [{ lineageId: 'project-1', name: 'Side project', bullets: ['Built a dashboard.', 'Added monitoring.'] }],
     certifications: [], customSections: [{ lineageId: 'custom-1', title: 'Community', bullets: ['Mentored developers.', 'Organised meetups.'] }],
   };
+  if (historyMode) resume.experiences[0].client = 'SymphonyAI';
   const source = structuredClone(resume);
   const prepared = () => ({ resumeId: savedId, sourceResumeId: 'source', name: 'Sam_Lee_CV_Acme_Engineer', document: savedId ? resume : source, theme: null });
   const apply = changes => {
@@ -282,6 +283,14 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         roleRequests.push(body);
         await pause(200);
         if (!profileChoice) return reply({ matched: false, profileRole: null, chosen: [], alternates: [] });
+        if (body.role.bullets.length === 1) {
+          const other = body.role.company === 'Other Co';
+          return reply({
+            matched: true, profileRole: null,
+            chosen: [{ id: 'pf3', text: other ? 'Maintained Go tooling.' : 'Built React Native screens with Expo Router.', original: 'Role notes.', source: 'profile', cvIndex: null }],
+            alternates: [{ id: 'r1b1', text: other ? 'Built Redis operational tooling.' : 'Implemented offline persistence with AsyncStorage.', original: 'Saved CV bullet.', source: 'saved-cv', cvIndex: null }],
+          });
+        }
         return reply({
           matched: true,
           profileRole: { title: 'Backend Engineer', company: 'Acme Labs' },
@@ -557,8 +566,10 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
 
       // With more achievements for the job in the Profile: the bullets are chosen from them.
       {
-        assert.equal(roleRequests.length, 1, 'the job above asked the Profile first');
-        assert.deepEqual(roleRequests[0].role, { company: 'Acme Labs', title: 'Backend Engineer', from: '2020', bullets: roleRequests[0].role.bullets });
+        assert.ok(roleRequests.length >= 1, 'the job above asked the Profile first');
+        const latestRole = roleRequests.at(-1);
+        const choicesBefore = roleRequests.length;
+        assert.deepEqual(latestRole.role, { company: 'Acme Labs', client: 'SymphonyAI', title: 'Backend Engineer', from: '2020', description: '', techStack: '', bullets: latestRole.role.bullets });
         profileChoice = true;
         const bulletLines = () => aiRequests.filter(body => body.kind === 'bullet').length;
         const linesBefore = bulletLines();
@@ -568,7 +579,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
         await pause(1500); // The lines type themselves in.
         assert.equal(bulletLines(), linesBefore, 'no bullet is tailored line by line');
-        assert.equal(roleRequests.length, 2);
+        assert.equal(roleRequests.length, choicesBefore + 1);
         const slots = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
         assert.match(slots[0], /Built Node\.js payment APIs\./, 'a CV bullet chosen stays in its own place');
         assert.doesNotMatch(slots[0], /From your Profile/);
@@ -588,6 +599,55 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         const roleBullets = await page.$$eval('.qt-zoom [data-section="experience"] article:first-of-type li .pro-text', rows => rows.map(row => row.textContent));
         assert.deepEqual(roleBullets.slice(0, 2), ['Built Node.js payment APIs.', 'Mentored two engineers on code review.']);
         await page.click(undo);
+        profileChoice = false;
+      }
+
+      // One bullet and Try again use the same full-role evidence, with source labels.
+      {
+        profileChoice = true;
+        const before = roleRequests.length, linesBefore = aiRequests.length;
+        const first = '.qt-zoom [data-section="experience"] article:first-of-type';
+        const bulletsBefore = await page.$$eval(`${first} li .pro-text`, rows => rows.map(row => row.textContent));
+        await page.hover(`${first} li:first-of-type`);
+        await page.click(`${first} li:first-of-type [title="Tailor this bullet for the job"]`);
+        await page.waitForSelector('.qt-unit .qt-generate');
+        assert.equal(roleRequests.length, before, 'opening the menu makes no generation request');
+        await page.click('.qt-unit .qt-generate');
+        await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
+        assert.equal(roleRequests.length, before + 1);
+        assert.equal(roleRequests.at(-1).role.client, 'SymphonyAI');
+        assert.deepEqual(roleRequests.at(-1).role.bullets, [bulletsBefore[0]]);
+        assert.match(await page.$eval('.qt-unit', card => card.textContent), /From your Profile/);
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Try again').click());
+        await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
+        assert.equal(roleRequests.length, before + 2, 'Try again also reads Profile and CV evidence');
+        assert.equal(aiRequests.length, linesBefore, 'neither request falls back to the CV-only line rewriter');
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Swap').click());
+        assert.match(await page.$eval('.qt-unit', card => card.textContent), /From your saved CVs/);
+        await page.click('.qt-unit .qt-actions .primary');
+        const after = await page.$$eval(`${first} li .pro-text`, rows => rows.map(row => row.textContent));
+        assert.equal(after[0], 'Implemented offline persistence with AsyncStorage.');
+        assert.equal(after[1], bulletsBefore[1], 'the other bullet stays as written');
+        await page.click(undo);
+        assert.deepEqual(await page.$$eval(`${first} li .pro-text`, rows => rows.map(row => row.textContent)), bulletsBefore);
+
+        // A section request keeps each role and its Swap alternatives separate.
+        const groupedBefore = roleRequests.length;
+        await page.click('[title="Tailor every job for this job posting"]');
+        await page.waitForSelector('.qt-unit .qt-generate');
+        await page.click('.qt-unit .qt-generate');
+        await page.waitForFunction(() => [...document.querySelectorAll('.qt-unit .qt-screen-line')].some(slot => /Other Co.*bullet/.test(slot.querySelector('.qt-screen-line-label')?.textContent || '') && slot.querySelector('.primary:not([disabled])')));
+        assert.equal(roleRequests.length, groupedBefore + 2);
+        assert.deepEqual(roleRequests.slice(groupedBefore).map(body => [body.role.company, body.role.bullets.length]).sort(), [['Acme Labs', 2], ['Other Co', 1]]);
+        await page.evaluate(() => {
+          const slot = [...document.querySelectorAll('.qt-unit .qt-screen-line')].find(slot => /Other Co.*bullet/.test(slot.querySelector('.qt-screen-line-label')?.textContent || ''));
+          [...slot.querySelectorAll('button')].find(button => button.textContent === 'Swap').click();
+        });
+        const slots = await page.$$eval('.qt-unit .qt-screen-line', rows => rows.map(row => row.textContent));
+        assert.ok(slots.some(text => /Other Co.*bullet/.test(text) && text.includes('Redis operational') && text.includes('From your saved CVs')));
+        assert.ok(slots.some(text => /Acme Labs.*bullet/.test(text) && text.includes('30%')));
+        assert.ok(!slots.some(text => text.includes('Mentored two engineers')), 'Swap never borrows another role’s alternatives');
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close').click());
         profileChoice = false;
       }
 

@@ -10,6 +10,10 @@ export class PublicProfileRolesReader implements ProfileRolesReader {
       company: role.company,
       title: role.title,
       from: role.from,
+      client: role.client,
+      description: role.description,
+      techStack: role.techStack,
+      notes: (role.notes ?? []).map((note) => note.text),
       bullets: role.bullets,
       starred: role.starred ?? [],
     }));

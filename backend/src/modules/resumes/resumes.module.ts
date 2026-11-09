@@ -13,6 +13,7 @@ import { PROFILE_DIRECTORY, PROFILE_CAREER_API } from '../profiles/profiles.toke
 import type { ProfileCareerApi } from '../profiles/contracts';
 import { PublicAssessmentProfileReader } from './adapters/outbound/modules/assessment-profile.reader';
 import { PublicProfileRolesReader } from './adapters/outbound/modules/profile-roles.reader';
+import { PublicSavedCvRolesReader } from './adapters/outbound/modules/saved-cv-roles.reader';
 import { ClaudeBulletChooser } from './adapters/outbound/ai/claude-bullet.chooser';
 import { ChooseRoleBullets } from './application/use-cases/choose-role-bullets';
 import type { ProfileDirectory } from './application/ports/resume-repository';
@@ -190,6 +191,7 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           new PublicTailoringJobReader(jobs),
           new PublicProfileRolesReader(profiles),
           new ClaudeBulletChooser(runner),
+          new PublicSavedCvRolesReader(resumes),
         ),
     },
     {

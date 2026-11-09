@@ -5,6 +5,7 @@ import { firstJsonObject } from '../../../../../shared/ai/json';
 import type { AnswerDrafter } from '../../../application/ports/answers';
 import { DraftError, type DraftContext } from '../../../domain/drafts';
 import { DRAFT_SYSTEM, draftPrompt } from './draft-prompt';
+import { withoutDashPunctuation } from '../../../../resumes/contracts';
 
 const draftSchema = z
   .object({ answer: z.string().max(20000), needsInput: z.array(z.string().max(400)).max(5) })
@@ -40,6 +41,12 @@ export class ClaudeCliAnswerDrafter implements AnswerDrafter {
     const parsed = draftSchema.safeParse(firstJsonObject(raw));
     if (!parsed.success)
       throw new DraftError('invalid-output', 'Claude returned an unusable draft. Try again.');
-    return parsed.data;
+    return {
+      answer:
+        context.kind === 'text' || context.kind === 'textarea'
+          ? withoutDashPunctuation(parsed.data.answer)
+          : parsed.data.answer,
+      needsInput: parsed.data.needsInput.map(withoutDashPunctuation),
+    };
   }
 }

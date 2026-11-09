@@ -1,19 +1,17 @@
 import { useState, type KeyboardEvent } from "react";
-import type { CareerExperience, CareerNote } from "./careerApi";
+import type { CareerExperience } from "./careerApi";
 import { tagCounts, tagsOf } from "./achievementTags";
 
 const SHOWN = 5;
-const KEEP_REMOVED_MS = 30 * 24 * 60 * 60 * 1000;
 export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed">;
 
 /** "- Built X" / "• Built X" / "1. Built X" → "Built X". */
 const clean = (line: string) => line.replace(/^\s*(?:[-•*·–]|\d+[.)])\s+/, "").replace(/\s+/g, " ").trim();
-const recent = (removed: CareerNote[] = []) => removed.filter((item) => Date.now() - Date.parse(item.at) < KEEP_REMOVED_MS);
 
 /**
  * One job's achievements on the Profile page: the best five (starred first),
  * all of them on demand with tag filters, edited in place, added one or many
- * at a time, and deleted ones restorable for 30 days.
+ * at a time, and deleted for good.
  */
 export function AchievementList({
   role,
@@ -29,7 +27,6 @@ export function AchievementList({
   const [filter, setFilter] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
   const [adding, setAdding] = useState("");
-  const [showRemoved, setShowRemoved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,7 +38,6 @@ export function AchievementList({
   const filtered = filter ? ordered.filter((item) => tagsOf(item.text).includes(filter)) : ordered;
   const visible = expanded ? filtered : ordered.slice(0, SHOWN);
   const tags = role.bullets.length > SHOWN ? tagCounts(role.bullets) : [];
-  const removed = recent(role.removed);
   const pasted = adding.split("\n").map(clean).filter((line) => line.length > 1).length;
 
   async function run(patch: (current: CareerExperience) => Partial<RolePatch>) {
@@ -64,17 +60,12 @@ export function AchievementList({
       return { starred: list.includes(text) ? list.filter((item) => item !== text) : [...list, text] };
     });
 
+  // Deleted for good: nothing is kept to restore (older saves' kept copies go too).
   const remove = (text: string) =>
     void run((current) => ({
       bullets: current.bullets.filter((item) => item !== text),
       starred: (current.starred ?? []).filter((item) => item !== text),
-      removed: [{ text, at: new Date().toISOString() }, ...recent(current.removed)].slice(0, 50),
-    }));
-
-  const restore = (note: CareerNote) =>
-    void run((current) => ({
-      bullets: current.bullets.includes(note.text) ? current.bullets : [...current.bullets, note.text],
-      removed: (current.removed ?? []).filter((item) => !(item.text === note.text && item.at === note.at)),
+      removed: [],
     }));
 
   async function finishEdit() {
@@ -175,7 +166,7 @@ export function AchievementList({
                   type="button"
                   className="ach-remove"
                   aria-label={`Delete: ${text}`}
-                  title="Delete (restorable for 30 days)"
+                  title="Delete"
                   disabled={disabled || busy}
                   onClick={() => remove(text)}
                 >
@@ -201,25 +192,7 @@ export function AchievementList({
             {expanded ? "Show fewer" : `Show all ${role.bullets.length}`}
           </button>
         )}
-        {removed.length > 0 && (
-          <button type="button" className="profile-text-button ach-muted" aria-expanded={showRemoved} onClick={() => setShowRemoved(!showRemoved)}>
-            {removed.length} deleted · {showRemoved ? "Hide" : "Restore"}
-          </button>
-        )}
       </div>
-      {showRemoved && removed.length > 0 && (
-        <ul className="ach-removed">
-          {removed.map((note) => (
-            <li key={`${note.at}:${note.text}`}>
-              <span>{note.text}</span>
-              <button type="button" className="profile-text-button" disabled={disabled || busy} onClick={() => restore(note)}>
-                Restore
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
       <div className="ach-add">
         <textarea
           aria-label="Add an achievement"

@@ -13,7 +13,13 @@ import {
 } from '../documents/DocumentFilters';
 import { DocumentIcon } from '../documents/DocumentIcon';
 import { DocumentPopover } from '../documents/DocumentPopover';
-import { DocumentKindSwitch } from '../documents/DocumentKindSwitch';
+import {
+  DocumentLibraryToolbar,
+  DocumentLibraryCard,
+  DocumentLibraryLoading,
+  DocumentLibrarySelection,
+  NewDocumentCard,
+} from '../documents/DocumentLibrary';
 import { DocumentPreview } from '../documents/DocumentPreview';
 import '../documents/documents.css';
 
@@ -48,9 +54,11 @@ function readPreferences(key: string): Preferences {
       version: 1,
       // Older preferences persisted the implicit "My resumes" filter. Start
       // with the complete library once, then remember deliberate filters.
-      type: stored.version === 1 && ['mine', 'generated', 'all'].includes(stored.type ?? '')
-        ? stored.type!
-        : defaults.type,
+      type:
+        stored.version === 1 &&
+        ['mine', 'generated', 'all'].includes(stored.type ?? '')
+          ? stored.type!
+          : defaults.type,
       sortBy: ['updatedAt', 'createdAt', 'name'].includes(stored.sortBy ?? '')
         ? stored.sortBy!
         : defaults.sortBy,
@@ -130,7 +138,8 @@ export function Documents() {
 
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState === 'visible') setReload((value) => value + 1);
+      if (document.visibilityState === 'visible')
+        setReload((value) => value + 1);
     };
     const unsubscribe = onResumesChanged(refresh);
     window.addEventListener('focus', refresh);
@@ -167,7 +176,10 @@ export function Documents() {
   // CVs the type filter hides, so the page can say so instead of looking empty.
   const hiddenByType = (rows ?? []).filter((row) => {
     const generated = Boolean(row.jobId || row.sourceResumeId);
-    return (preferences.type === 'mine' && generated) || (preferences.type === 'generated' && !generated);
+    return (
+      (preferences.type === 'mine' && generated) ||
+      (preferences.type === 'generated' && !generated)
+    );
   }).length;
 
   const visible = useMemo(() => {
@@ -212,10 +224,18 @@ export function Documents() {
 
   /** Deletes after asking; the CV, its versions and its PDF are gone for good. */
   async function remove(ids: string[]) {
-    const names = (rows ?? []).filter((row) => ids.includes(row.id)).map((row) => row.name);
+    const names = (rows ?? [])
+      .filter((row) => ids.includes(row.id))
+      .map((row) => row.name);
     if (!names.length) return;
-    const what = names.length === 1 ? `"${names[0]}"` : `${names.length} resumes`;
-    if (!confirm(`Delete ${what}? Its versions and PDF are deleted too. This cannot be undone.`)) return;
+    const what =
+      names.length === 1 ? `"${names[0]}"` : `${names.length} resumes`;
+    if (
+      !confirm(
+        `Delete ${what}? Its versions and PDF are deleted too. This cannot be undone.`,
+      )
+    )
+      return;
     setError(null);
     const failed: string[] = [];
     for (const id of ids) {
@@ -225,9 +245,18 @@ export function Documents() {
         failed.push(id);
       }
     }
-    setRows((current) => current && current.filter((row) => !ids.includes(row.id) || failed.includes(row.id)));
+    setRows(
+      (current) =>
+        current &&
+        current.filter(
+          (row) => !ids.includes(row.id) || failed.includes(row.id),
+        ),
+    );
     setSelected(new Set(failed));
-    if (failed.length) setError(`${failed.length === 1 ? 'One resume' : `${failed.length} resumes`} could not be deleted. Try again.`);
+    if (failed.length)
+      setError(
+        `${failed.length === 1 ? 'One resume' : `${failed.length} resumes`} could not be deleted. Try again.`,
+      );
   }
 
   function openCreate(trigger: HTMLElement) {
@@ -278,73 +307,38 @@ export function Documents() {
 
   return (
     <section className="documents-page" aria-label="Documents">
-      <h1 className="documents-sr-only">Documents</h1>
-      <div className="documents-toolbar">
-        <label className="documents-search">
-          <DocumentIcon name="search" />
-          <span className="documents-sr-only">Search documents</span>
-          <input
-            type="search"
-            placeholder="Search documents"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {query && (
+      <DocumentLibraryToolbar
+        query={query}
+        onQuery={setQuery}
+        panel={panel}
+        onPanel={setPanel}
+        addMenu={
+          <>
             <button
               type="button"
-              className="documents-icon-button"
-              aria-label="Clear search"
-              onClick={() => setQuery('')}
+              className="documents-menu-item"
+              disabled={importing}
+              onClick={(event) => openCreate(event.currentTarget)}
             >
-              <DocumentIcon name="close" size={17} />
+              <DocumentIcon name="file" />
+              <span>New Resume</span>
             </button>
-          )}
-        </label>
-        <DocumentKindSwitch />
-        <DocumentPopover
-          open={panel === 'add'}
-          onToggle={() => setPanel(panel === 'add' ? null : 'add')}
-          onClose={closePanel}
-          label="Add document"
-          className="documents-add"
-          trigger={
-            <>
-              <DocumentIcon name="plus" />
-              <span>Add</span>
-            </>
-          }
-        >
-          <button
-            type="button"
-            className="documents-menu-item"
-            disabled={importing}
-            onClick={(event) => openCreate(event.currentTarget)}
-          >
-            <DocumentIcon name="file" />
-            <span>New Resume</span>
-          </button>
-          <div className="documents-menu-divider" />
-          <button
-            type="button"
-            className="documents-menu-item"
-            disabled={importing}
-            onClick={() => {
-              closePanel();
-              fileInput.current?.click();
-            }}
-          >
-            <DocumentIcon name="upload" />
-            <span>Upload</span>
-          </button>
-        </DocumentPopover>
-        <DocumentPopover
-          open={panel === 'filters'}
-          onToggle={() => setPanel(panel === 'filters' ? null : 'filters')}
-          onClose={closePanel}
-          label="Filter and sort documents"
-          className="documents-filter"
-          trigger={<DocumentIcon name="filters" />}
-        >
+            <div className="documents-menu-divider" />
+            <button
+              type="button"
+              className="documents-menu-item"
+              disabled={importing}
+              onClick={() => {
+                closePanel();
+                fileInput.current?.click();
+              }}
+            >
+              <DocumentIcon name="upload" />
+              <span>Upload</span>
+            </button>
+          </>
+        }
+        filters={
           <DocumentFilters
             type={preferences.type}
             sortBy={preferences.sortBy}
@@ -359,8 +353,8 @@ export function Documents() {
               setPreferences((current) => ({ ...current, order }))
             }
           />
-        </DocumentPopover>
-      </div>
+        }
+      />
 
       <input
         ref={fileInput}
@@ -399,120 +393,72 @@ export function Documents() {
         </div>
       )}
 
-      {selected.size > 0 && (
-        <div className="documents-selection" aria-live="polite">
-          <span>{selected.size} selected</span>
-          <button
-            type="button"
-            onClick={() => {
-              setPreferences((current) => ({
-                ...current,
-                pins: {
-                  ...current.pins,
-                  ...Object.fromEntries([...selected].map((id) => [id, true])),
-                },
-              }));
-              setSelected(new Set());
-            }}
-          >
-            <DocumentIcon name="star" size={15} />
-            Pin selected
-          </button>
-          <button type="button" className="documents-danger" onClick={() => void remove([...selected])}>
-            <DocumentIcon name="trash" size={15} />
-            Delete selected
-          </button>
-          <button type="button" onClick={() => setSelected(new Set())}>
-            Clear selection
-          </button>
-        </div>
-      )}
+      <DocumentLibrarySelection
+        count={selected.size}
+        onClear={() => setSelected(new Set())}
+        onDelete={() => void remove([...selected])}
+        onPin={() => {
+          setPreferences((current) => ({
+            ...current,
+            pins: {
+              ...current.pins,
+              ...Object.fromEntries([...selected].map((id) => [id, true])),
+            },
+          }));
+          setSelected(new Set());
+        }}
+      />
 
       {hiddenByType > 0 && (
         <div className="documents-hidden-note" role="status">
           <span>
-            {hiddenByType === 1 ? '1 resume is' : `${hiddenByType} resumes are`} hidden by the filter
-            {preferences.type === 'mine' ? ': made for a job by tailoring.' : ': your own resumes.'}
+            {hiddenByType === 1 ? '1 resume is' : `${hiddenByType} resumes are`}{' '}
+            hidden by the filter
+            {preferences.type === 'mine'
+              ? ': made for a job by tailoring.'
+              : ': your own resumes.'}
           </span>
-          <button type="button" onClick={() => setPreferences((current) => ({ ...current, type: 'all' }))}>Show all</button>
+          <button
+            type="button"
+            onClick={() =>
+              setPreferences((current) => ({ ...current, type: 'all' }))
+            }
+          >
+            Show all
+          </button>
         </div>
       )}
 
       <div className="documents-grid" aria-busy={rows === null && !error}>
-        <button
-          type="button"
-          className="documents-new-card"
+        <NewDocumentCard
+          title="New Resume"
+          label="Create a new resume"
           disabled={importing}
           onClick={(event) => openCreate(event.currentTarget)}
-          aria-label="Create a new resume"
-        >
-          <span className="documents-new-page">
-            <DocumentIcon name="plus" size={52} />
-          </span>
-          <span className="documents-card-title">New Resume</span>
-        </button>
-
-        {!rows &&
-          !error &&
-          Array.from({ length: 5 }, (_, index) => (
-            <div
-              className="documents-card documents-loading-card"
-              key={index}
-              aria-hidden="true"
-            >
-              <div className="documents-preview">
-                <div className="documents-preview-skeleton">
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              </div>
-              <span className="documents-loading-label" />
-              <span className="documents-loading-label short" />
-            </div>
-          ))}
+        />
+        {!rows && !error && <DocumentLibraryLoading />}
 
         {visible.map((row) => {
           const pinned = preferences.pins[row.id] ?? row.isPrimary;
           const checked = selected.has(row.id);
           return (
-            <article
-              className={`documents-card${checked ? ' is-selected' : ''}`}
+            <DocumentLibraryCard
               key={row.id}
+              title={row.name}
+              to={`/documents/${row.id}`}
+              preview={<DocumentPreview row={row} />}
+              pinned={pinned}
+              selected={checked}
+              onPin={() => pin(row)}
+              onSelect={() =>
+                setSelected((current) => {
+                  const next = new Set(current);
+                  if (checked) next.delete(row.id);
+                  else next.add(row.id);
+                  return next;
+                })
+              }
             >
-              <Link
-                className="documents-preview-link"
-                to={`/documents/${row.id}`}
-                aria-label={`Open ${row.name}`}
-              >
-                <DocumentPreview row={row} />
-              </Link>
-              <input
-                className="documents-select"
-                type="checkbox"
-                aria-label={`Select ${row.name}`}
-                checked={checked}
-                onChange={() =>
-                  setSelected((current) => {
-                    const next = new Set(current);
-                    if (checked) next.delete(row.id);
-                    else next.add(row.id);
-                    return next;
-                  })
-                }
-              />
-              <button
-                type="button"
-                className={`documents-pin${pinned ? ' is-pinned' : ''}`}
-                aria-label={`${pinned ? 'Unpin' : 'Pin'} ${row.name}`}
-                aria-pressed={pinned}
-                title={pinned ? 'Unpin resume' : 'Pin to top'}
-                onClick={() => pin(row)}
-              >
-                <DocumentIcon name="star" size={16} filled={pinned} />
-              </button>
               <div className="documents-card-info">
                 <Link
                   className="documents-card-title"
@@ -584,10 +530,16 @@ export function Documents() {
                     {timeAgo(row.updatedAt)}
                   </time>
                   <span aria-hidden="true">·</span>
-                  <span>{!row.currentSnapshotId ? 'Draft' : row.jobId || row.sourceResumeId ? 'For a job' : 'Resume'}</span>
+                  <span>
+                    {!row.currentSnapshotId
+                      ? 'Draft'
+                      : row.jobId || row.sourceResumeId
+                        ? 'For a job'
+                        : 'Resume'}
+                  </span>
                 </p>
               </div>
-            </article>
+            </DocumentLibraryCard>
           );
         })}
       </div>

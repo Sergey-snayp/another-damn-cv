@@ -36,39 +36,47 @@ function RadioGroup<T extends string>({
 }
 
 export function DocumentFilters({
-  type,
+  type = 'all',
   sortBy,
   order,
   onType,
   onSort,
   onOrder,
+  showResumeType = true,
+  showCreated = true,
 }: {
-  type: ResumeType;
+  type?: ResumeType;
   sortBy: SortBy;
   order: SortOrder;
-  onType(value: ResumeType): void;
+  onType?(value: ResumeType): void;
   onSort(value: SortBy): void;
   onOrder(value: SortOrder): void;
+  showResumeType?: boolean;
+  showCreated?: boolean;
 }) {
   return (
     <div className="documents-filter-menu">
-      <RadioGroup
-        label="Resume type"
-        value={type}
-        onChange={onType}
-        options={[
-          { value: 'mine', label: 'My resumes' },
-          { value: 'generated', label: 'Generated resumes' },
-          { value: 'all', label: 'All resumes' },
-        ]}
-      />
+      {showResumeType && onType && (
+        <RadioGroup
+          label="Resume type"
+          value={type}
+          onChange={onType}
+          options={[
+            { value: 'mine', label: 'My resumes' },
+            { value: 'generated', label: 'Generated resumes' },
+            { value: 'all', label: 'All resumes' },
+          ]}
+        />
+      )}
       <RadioGroup
         label="Sort By"
         value={sortBy}
         onChange={onSort}
         options={[
           { value: 'updatedAt', label: 'Last Edited' },
-          { value: 'createdAt', label: 'Created' },
+          ...(showCreated
+            ? [{ value: 'createdAt' as const, label: 'Created' }]
+            : []),
           { value: 'name', label: 'Name' },
         ]}
       />

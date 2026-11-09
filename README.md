@@ -41,7 +41,11 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
 - **Dashboard** tracks active and archived applications in Board, List or Chart
   view. Search by role/company; filter by applied dates, job type, status and
   favorites. Drag cards or use their Move menu; recent moves and archives offer Undo.
-- **Documents** holds resumes, previews, editing, history and tailoring review.
+- **Documents** holds resumes and cover letters, with shared search, Add and sort
+  controls, card sizes, pinning, selection and empty/loading layouts. Switching
+  document types keeps the toolbar and grid aligned on desktop and mobile.
+  Its centered layout, underlined tabs, panels and controls follow Profile's styling.
+  Resumes also support version history and tailoring review.
   It opens with all resumes, including copies tailored for jobs; the type filter
   can narrow the list. Open libraries refresh after edits in other app tabs and
   check the backend every 15 seconds while visible. Old `/resumes` bookmarks redirect here.
@@ -51,6 +55,15 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   creates its PDF and selects it for the extension. In the full editor,
   **Save & export PDF** saves the content and layout before making the PDF.
   Autosaves, layout changes, previews and extension downloads never create PDFs.
+  Generating experience bullets uses the matching role's Profile bullets,
+  description, technology stack and notes, plus bullets from your saved CVs.
+  Matching checks employer, client and dates to keep different projects separate.
+  Single-bullet generation, whole-role generation and **Try again** use this same
+  evidence, prioritized for the job description; suggestions stay unsaved until Save.
+  Generated prose avoids sentence dashes across CVs, Profile achievements, cover
+  letters, job recommendations, application answers and interview preparation.
+  Prompts and output cleanup enforce this while preserving technology names,
+  factual ranges, code, exact form options and quoted source evidence.
   In Quick Tailor, **Should you apply?** → **Check the fit** compares the job
   description with your saved Profile: a 0 to 10 score, a recommendation,
   relevant strengths, gaps, questions to clarify and supporting quotes. The
@@ -72,10 +85,17 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   experience, role descriptions, individual bullets, education and skills directly;
   these changes do not alter any CV. Courses can leave Degree blank. Job assessments
   use this full Profile history even when a selected CV omits those details.
+  In **Describe in your own words → Earlier notes**, remove individual notes or
+  all saved notes for a job, undo pending removals, then choose **Save changes**.
+  Removed notes stop contributing to new bullet suggestions and stay deleted after reload.
   File parsing uses Claude; choosing a saved CV makes no AI call. Neither action
   changes your documents or CV versions attached to applications.
 - **Profile → Saved answers** lists answers saved from application forms in
   the extension, with when each was last used. Edit or delete them here.
+  **Personal info → Employment Information** shows editable ethnicity, US/Canada/UK
+  work authorization, sponsorship, disability, LGBTQ+, gender and veteran answers.
+  Unanswered values stay blank. Country authorization uses the same saved defaults
+  as the extension, so an answer for Canada is never substituted for the US or UK.
 - **Interview Prep** collects active jobs in Screening or Interviewing, with
   search, status filters, job details and the saved application CV version.
   Jobs appear automatically from Dashboard; archived and other statuses stay out.

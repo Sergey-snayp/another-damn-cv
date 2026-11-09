@@ -19,8 +19,9 @@ export function recruiterFlags(line: string, context = ''): string[] {
   const text = line.replace(/\*\*/g, '');
   const terms = new Set([...text.matchAll(TOOLS), ...text.matchAll(SHAPED)].map((match) => match[0].toLowerCase()));
   const notes: string[] = [];
-  if (terms.size > 3)
-    notes.push(`${terms.size} technical terms in one line. Keep 1 or 2 for a recruiter; the rest fit the tech stack line.`);
+  // A bullet may show its mechanism (the standard), but a line that is mostly names loses a recruiter.
+  if (terms.size > 6)
+    notes.push(`${terms.size} technical terms in one line. Keep the ones that show how it worked; the rest fit the tech stack line.`);
   const spelled = `${context}\n${text}`;
   const unknown = [
     ...new Set(

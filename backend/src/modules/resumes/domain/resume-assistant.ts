@@ -1,6 +1,6 @@
 import type { RenderedResume } from './resume';
 import { resumeText } from './resume-score';
-import { withoutEmDashes } from './cv-writing-guide';
+import { withoutDashPunctuation } from './cv-writing-guide';
 
 /** How the editor's AI writes for one CV. */
 export interface AiSettings {
@@ -71,8 +71,8 @@ export function checkedSuggestions(resume: RenderedResume, raw: RawSuggestion[])
   const text = resumeText(resume).toLowerCase();
   const skills = new Set(resume.skills.map((skill) => skill.name.trim().toLowerCase()));
   for (const item of raw) {
-    const after = withoutEmDashes((item.after ?? '').trim());
-    const reason = (item.reason ?? '').trim().slice(0, 300);
+    const after = withoutDashPunctuation((item.after ?? '').trim());
+    const reason = withoutDashPunctuation((item.reason ?? '').trim()).slice(0, 300);
     if (!after || after.length > 2_000) continue;
     if (item.target === 'summary') {
       const before = resume.summaries.default ?? '';

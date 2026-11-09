@@ -84,4 +84,10 @@ export interface TailoringApi {
 }
 
 /** How CV lines are written for recruiters and search filters, for any module that writes them. */
-export { RECRUITER_RULES, withoutAddedPurpose } from './domain/cv-writing-guide';
+export {
+  BULLET_RULES,
+  RECRUITER_RULES,
+  DASH_PUNCTUATION_RULE,
+  withoutAddedPurpose,
+  withoutDashPunctuation,
+} from './domain/cv-writing-guide';

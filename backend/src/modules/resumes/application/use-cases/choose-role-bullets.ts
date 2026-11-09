@@ -8,17 +8,15 @@ import {
   type RoleBulletChoice,
 } from '../../domain/role-bullets';
 import { ResumeError } from '../errors';
-import type { BulletChooser, ProfileRolesReader } from '../ports/role-bullets';
+import type { BulletChooser, ProfileRolesReader, SavedCvRolesReader } from '../ports/role-bullets';
 import type { TailoringJobReader } from '../ports/tailoring';
 import type { JobChoice } from './resume-assistant';
 
 const NONE: RoleBulletChoice = { matched: false, profileRole: null, chosen: [], alternates: [] };
 
 /**
- * Quick tailoring of a whole job: its bullets chosen for the posting from the
- * Profile's full list for that job and the CV's own bullets. When the Profile
- * has nothing more for the job, the answer says so and each line is tailored on
- * its own instead.
+ * Choose one or more bullets using the matching role in Profile and saved CVs.
+ * Without additional evidence, the caller can tailor each existing line instead.
  */
 export class ChooseRoleBullets {
   constructor(
@@ -26,6 +24,7 @@ export class ChooseRoleBullets {
     private readonly jobs: TailoringJobReader,
     private readonly profile: ProfileRolesReader,
     private readonly chooser: BulletChooser,
+    private readonly savedCvs?: SavedCvRolesReader,
   ) {}
 
   async execute(
@@ -34,14 +33,23 @@ export class ChooseRoleBullets {
     input: { role: CvRole; instruction?: string; job: JobChoice },
   ): Promise<RoleBulletChoice> {
     await this.resumes.assertOwned(userId, id);
-    const profileRole = matchProfileRole(await this.profile.roles(userId), input.role);
-    if (!profileRole) return NONE;
-    const pool = rolePool(input.role, profileRole);
-    if (!pool.some((item) => item.source === 'profile')) return NONE;
     const job = await this.job(userId, input.job);
+    const profileRole = matchProfileRole(await this.profile.roles(userId), input.role);
+    const cvRoles = (await this.savedCvs?.roles(userId)) ?? [];
+    const byDocument = new Map<string, CvRole[]>();
+    for (const role of cvRoles) {
+      const key = role.resumeId ?? 'saved';
+      byDocument.set(key, [...(byDocument.get(key) ?? []), role]);
+    }
+    const matchingCvs = [...byDocument.values()].flatMap((roles) => {
+      const match = matchProfileRole(roles, input.role);
+      return match ? [match] : [];
+    });
+    const pool = rolePool(input.role, profileRole, matchingCvs);
+    if (!pool.some((item) => item.source === 'profile' || item.cvIndex === null)) return NONE;
     const count = Math.min(pool.length, input.role.bullets.filter((bullet) => bullet.trim()).length || 5);
     const answer = await this.chooser.choose({
-      job: `${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 8_000)}`,
+      job: `${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 30_000)}`,
       items: pool.map((item) => ({
         ...item,
         hint: practiceHints(job.description, item.text)
@@ -53,7 +61,7 @@ export class ChooseRoleBullets {
     });
     return {
       matched: true,
-      profileRole: { title: profileRole.title, company: profileRole.company },
+      profileRole: profileRole ? { title: profileRole.title, company: profileRole.company } : null,
       ...checkChoice(answer, pool, count),
     };
   }

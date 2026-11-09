@@ -29,6 +29,7 @@ export const SECTIONS: { title: string; hint?: string; fields: FieldSpec[] }[] =
     title: 'Location',
     fields: [
       { key: 'location', label: 'Location', placeholder: 'Vancouver, BC, Canada' },
+      { key: 'addressLine', label: 'Street address', placeholder: '123 Main St, Apt 4' },
       { key: 'city', label: 'City', half: true },
       { key: 'state', label: 'State / province', half: true },
       { key: 'country', label: 'Country', half: true },

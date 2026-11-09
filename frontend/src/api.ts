@@ -46,9 +46,12 @@ export interface ContactFields {
   firstName: string; lastName: string; fullName: string; preferredName: string;
   email: string; phone: string;
   location: string; city: string; state: string; country: string; postalCode: string;
+  /** Street address, for forms that ask for one. */
+  addressLine?: string;
   linkedin: string; github: string; portfolio: string; website: string; telegram: string;
   currentCompany: string; currentTitle: string; yearsExperience: string;
   workAuthorization: string; requiresSponsorship: string;
+  eeoRace?: string; eeoGender?: string; eeoVeteran?: string; eeoDisability?: string; eeoLgbtq?: string;
   salaryExpectation: string; noticePeriod: string;
   /** Types of work accepted: "remote,hybrid,onsite" or any of them. */
   workArrangements: string;

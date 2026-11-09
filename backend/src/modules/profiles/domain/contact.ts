@@ -6,6 +6,8 @@ export interface ContactFields {
   email: string;
   phone: string;
   location: string;
+  /** Street address, for forms that ask for one. */
+  addressLine: string;
   city: string;
   state: string;
   country: string;
@@ -19,6 +21,11 @@ export interface ContactFields {
   currentTitle: string;
   yearsExperience: string;
   workAuthorization: string;
+  eeoRace: string;
+  eeoGender: string;
+  eeoVeteran: string;
+  eeoDisability: string;
+  eeoLgbtq: string;
   requiresSponsorship: string;
   salaryExpectation: string;
   noticePeriod: string;
@@ -34,6 +41,7 @@ export const EMPTY_CONTACT: ContactFields = {
   email: '',
   phone: '',
   location: '',
+  addressLine: '',
   city: '',
   state: '',
   country: '',
@@ -47,6 +55,11 @@ export const EMPTY_CONTACT: ContactFields = {
   currentTitle: '',
   yearsExperience: '',
   workAuthorization: '',
+  eeoRace: '',
+  eeoGender: '',
+  eeoVeteran: '',
+  eeoDisability: '',
+  eeoLgbtq: '',
   requiresSponsorship: '',
   salaryExpectation: '',
   noticePeriod: '',

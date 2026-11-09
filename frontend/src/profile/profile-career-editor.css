@@ -74,6 +74,14 @@
 .describe-earlier .profile-import-check { margin: 10px 0 6px; font-weight: 500; }
 .describe-earlier blockquote { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--color-border); background: var(--color-background); border-radius: 0 8px 8px 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .describe-earlier blockquote small { display: block; margin-bottom: 3px; color: var(--color-muted); }
+.describe-note-toolbar, .describe-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.describe-earlier .describe-note-heading small { margin: 0; }
+.describe-earlier .describe-saved-note { transition: background .12s, border-color .12s; }
+.describe-saved-note:has(.describe-remove-note:hover), .describe-saved-note:has(.describe-remove-note:focus-visible), .describe-saved-note.is-removed { border-left-color: var(--color-danger, #b42318); background: color-mix(in srgb, var(--color-danger, #b42318) 7%, var(--color-background)); }
+.describe-note-text { display: block; margin-top: 5px; }
+.describe-saved-note.is-removed .describe-note-text { text-decoration: line-through; color: var(--color-muted); }
+.describe-remove-note, .describe-remove-all { flex: none; font-size: 12px; }
+.profile-import-dialog .describe-removal-status { margin: 8px 0 0; color: var(--color-muted); font-size: 12px; }
 .describe-working { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--color-text); }
 .describe-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 2px var(--color-text); animation: describe-pulse 1s ease-in-out infinite; }
 @keyframes describe-pulse { 50% { transform: scale(.55); } }
@@ -104,3 +112,9 @@
 
 .profile-import-dialog .describe-hint { color: var(--color-text); }
 .profile-import-dialog .describe-hint::before { content: "For recruiters: "; font-weight: 700; }
+
+.describe-asks { grid-column: 1 / -1; display: grid; gap: 6px; margin: 2px 12px 4px; padding: 10px 12px; border-radius: 9px; background: var(--color-surface); border: 1px solid var(--color-accent-border); }
+.profile-import-dialog .describe-asks .describe-ask { margin: 0; }
+.describe-asks label { display: grid; gap: 3px; font-size: 12px; font-weight: 600; }
+.profile-import-dialog .describe-asks input { margin: 0; padding: 6px 9px; font-size: 13px; font-weight: 400; }
+.describe-asks .profile-text-button { justify-self: start; margin-top: 2px; font-size: 12px; }

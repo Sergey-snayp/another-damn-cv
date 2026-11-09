@@ -403,13 +403,9 @@
       ['name', 'candidate[phone]', 'phone'],
     ] },
     { name: 'rippling', hosts: [/(^|\.)rippling\-ats\.com$/, /^ats\.rippling\.com$/], fields: [
-      ['data-testid', 'field', 'requiresSponsorship'],
-      ['data-testid', 'field', 'workAuthorization'],
       ['data-testid', 'input-cover_letter', 'coverLetter'],
       ['data-testid', 'input-resume', 'resume'],
       ['data-testid', 'location', 'location'],
-      ['data-testid', 'select-controller', 'requiresSponsorship'],
-      ['data-testid', 'select-controller', 'workAuthorization'],
       ['id', 'files.CoverLetter', 'coverLetter'],
       ['id', 'files.Resume', 'resume'],
     ] },

@@ -163,12 +163,13 @@ function siteKeyFor(element, hostname = location.hostname) {
   }
   // An attribute the site puts on the input or on a box right around it
   // (Workday: data-automation-id="legalNameSection_firstName").
-  for (const site of sites) {
-    for (const [attribute, value, key] of site.fields ?? []) {
-      for (let node = element, depth = 0; node && depth < 4; node = node.parentElement, depth++) {
+  // The nearest explicit marker wins. A generic ancestor must not override
+  // the input's own location marker just because its rule occurs first.
+  for (let node = element, depth = 0; node && depth < 4; node = node.parentElement, depth++) {
+    if (node !== element && node.querySelectorAll('input:not([type="hidden"]), textarea, select').length > 1) break;
+    for (const site of sites) {
+      for (const [attribute, value, key] of site.fields ?? []) {
         if (node.getAttribute?.(attribute) !== value) continue;
-        // A box that holds other fields too is not this field's own.
-        if (node !== element && node.querySelectorAll('input:not([type="hidden"]), textarea, select').length > 1) break;
         return key;
       }
     }

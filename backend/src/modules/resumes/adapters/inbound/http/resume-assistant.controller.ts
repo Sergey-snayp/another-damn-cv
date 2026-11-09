@@ -71,6 +71,9 @@ const tailorRoleSchema = z
         company: z.string().trim().max(300),
         title: z.string().trim().max(300),
         from: z.string().max(80).default(''),
+        client: z.string().trim().max(300).optional(),
+        description: z.string().max(12000).optional(),
+        techStack: z.string().max(8000).optional(),
         bullets: z.array(z.string().max(5_000)).max(60),
       })
       .strict(),

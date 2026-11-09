@@ -244,6 +244,32 @@ test('model output is checked and retried once without accepting invented Profil
   assert.equal(attempts, 2);
 });
 
+test('assessment prose has no sentence dashes while exact supporting quotes remain untouched', async () => {
+  const raw = answer();
+  raw.summary = 'Apply — your experience matches - clarify the scope.';
+  raw.strengths[0] = {
+    point: 'Relevant work — clearly supported.',
+    jobQuote: 'Build Node.js services — in production.',
+    profileQuote: 'Built Node.js services — on PostgreSQL.',
+  };
+  raw.gaps[0].point = 'Kubernetes - not shown.';
+  raw.questions = ['Team scope — how broad?'];
+  const input = {
+    job: { ...JOB, description: `${raw.strengths[0].jobQuote} Preferred: Kubernetes experience.` },
+    evidence: raw.strengths[0].profileQuote,
+    asOf: '2026-11-09',
+  };
+  const result = await new ClaudeJobAssessor({ complete: () => Promise.resolve(JSON.stringify(raw)) }).assess(
+    input,
+  );
+  assert.equal(result.summary, 'Apply, your experience matches, clarify the scope.');
+  assert.equal(result.strengths[0].point, 'Relevant work, clearly supported.');
+  assert.equal(result.gaps[0].point, 'Kubernetes, not shown.');
+  assert.equal(result.questions[0], 'Team scope, how broad?');
+  assert.equal(result.strengths[0].jobQuote, raw.strengths[0].jobQuote);
+  assert.equal(result.strengths[0].profileQuote, raw.strengths[0].profileQuote);
+});
+
 test('the Profile adapter reads only saved sections, including intentionally empty sections', async () => {
   const calls: string[] = [];
   const reader = new PublicAssessmentProfileReader({

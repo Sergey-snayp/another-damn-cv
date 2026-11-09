@@ -17,7 +17,13 @@ const IDEAS = [
 interface ReviewItem {
   text: string;
   keep: boolean;
-  ask: string | null;
+  /** Follow-up questions that would make the line fuller, with the person's answers so far. */
+  asks: string[];
+  answers: string[];
+  /** Questions answered and used, kept with the notes on Save. */
+  answered: { question: string; answer: string }[];
+  deepening?: boolean;
+  note?: string;
   duplicateOf: string | null;
 }
 
@@ -65,7 +71,9 @@ export function DescribeJob({
   const dialog = useRef<HTMLDialogElement>(null);
   const notesBox = useRef<HTMLTextAreaElement>(null);
   const role = career.data.experiences?.value[index];
-  const earlier = role?.notes ?? [];
+  const savedNotes = role?.notes ?? [];
+  const [removedNotes, setRemovedNotes] = useState<number[]>([]);
+  const earlier = savedNotes.filter((_note, at) => !removedNotes.includes(at));
   const [text, setText] = useState(() => (role ? readDraft(role) : ""));
   const [useEarlier, setUseEarlier] = useState(true);
   const [stage, setStage] = useState<"write" | "working" | "review">("write");
@@ -100,7 +108,7 @@ export function DescribeJob({
   // Closing keeps what you typed (it is saved in this browser); a review not saved yet is asked about.
   const requestClose = () => {
     if (saving || stage === "working") return;
-    if (stage === "review" && kept.length) setConfirmClose(true);
+    if ((stage === "review" && kept.length) || removedNotes.length) setConfirmClose(true);
     else onClose();
   };
 
@@ -128,7 +136,7 @@ export function DescribeJob({
         techStack: role.techStack ?? "",
         notes: source,
       });
-      setItems(proposal.achievements.map((item) => ({ ...item, keep: !item.duplicateOf })));
+      setItems(proposal.achievements.map((item) => ({ ...item, keep: !item.duplicateOf, answers: item.asks.map(() => ""), answered: [] })));
       setTools(proposal.techStack.map((name) => ({ name, keep: true })));
       setDescription({ text: proposal.description, keep: Boolean(proposal.description) });
       setDropped(proposal.dropped);
@@ -148,12 +156,23 @@ export function DescribeJob({
       const latest = await careerApi.read();
       const roles = latest.data.experiences?.value ?? [];
       const current = roles[index];
-      if (!current || current.company !== role.company || current.title !== role.title)
+      if (!current || current.company !== role.company || current.title !== role.title || current.client !== role.client || current.from !== role.from)
         throw new Error("This job changed in another window. Close this and open it again.");
       const added = withAchievements ? kept.map((item) => item.text.trim()) : [];
+      const answered = withAchievements ? items.flatMap((item) => item.answered) : [];
+      const written = [text.trim(), ...answered.map((pair) => `${pair.question} ${pair.answer}`)].filter(Boolean).join("\n");
+      // Remove only the notes reviewed here, keeping any notes added in another window.
+      const removals = removedNotes.map(at => savedNotes[at]!);
+      const retainedNotes = (current.notes ?? []).filter(note => {
+        const at = removals.findIndex(removed => removed.at === note.at && removed.text === note.text);
+        if (at < 0) return true;
+        removals.splice(at, 1);
+        return false;
+      });
       const next: CareerExperience = {
         ...current,
-        notes: text.trim() ? [...(current.notes ?? []), { text: text.trim(), at: new Date().toISOString() }] : current.notes,
+        // The notes, and the answers given in the review: facts the next generation can use too.
+        notes: written ? [...retainedNotes, { text: written, at: new Date().toISOString() }] : retainedNotes,
         bullets: [...current.bullets, ...added],
         techStack: withAchievements ? withTools(current.techStack ?? "", tools.filter((tool) => tool.keep).map((tool) => tool.name)) : current.techStack,
         description:
@@ -172,6 +191,27 @@ export function DescribeJob({
 
   const update = (at: number, patch: Partial<ReviewItem>) =>
     setItems((list) => list.map((item, i) => (i === at ? { ...item, ...patch } : item)));
+
+  /** "Rewrite with my answers": the line filled out with what the person told us. */
+  async function deepen(at: number) {
+    const item = items[at];
+    if (!role || !item) return;
+    const answers = item.asks.map((question, i) => ({ question, answer: item.answers[i]?.trim() ?? "" })).filter((pair) => pair.answer);
+    if (!answers.length) return;
+    update(at, { deepening: true, note: undefined });
+    try {
+      const result = await careerApi.deepenAchievement({
+        source: { title: role.title, company: role.company, client: role.client, description: role.description, bullets: role.bullets, techStack: role.techStack ?? "", notes: source },
+        text: item.text,
+        answers,
+      });
+      update(at, result.changed
+        ? { text: result.text, asks: result.asks, answers: result.asks.map(() => ""), answered: [...item.answered, ...answers], deepening: false }
+        : { deepening: false, answered: [...item.answered, ...answers], note: "Your answers didn't add anything this line can use. Edit it yourself, or keep it." });
+    } catch (reason) {
+      update(at, { deepening: false, note: reason instanceof Error ? reason.message : "Could not rewrite this line. Try again." });
+    }
+  }
 
   return (
     <dialog
@@ -225,21 +265,32 @@ export function DescribeJob({
                   </button>
                 ))}
               </div>
-              {earlier.length > 0 && (
+              {savedNotes.length > 0 && (
                 <details className="describe-earlier">
                   <summary>
-                    Earlier notes ({earlier.length}) · last {noteDate(earlier[earlier.length - 1]!.at)}
+                    Earlier notes ({earlier.length}){earlier.length ? ` · last ${noteDate(earlier[earlier.length - 1]!.at)}` : ""}
                   </summary>
-                  <label className="profile-import-check">
-                    <input type="checkbox" checked={useEarlier} onChange={(event) => setUseEarlier(event.target.checked)} />
-                    Use them too
-                  </label>
-                  {earlier.map((note, i) => (
-                    <blockquote key={i}>
-                      <small>{noteDate(note.at)}</small>
-                      {note.text}
+                  <div className="describe-note-toolbar">
+                    <label className="profile-import-check">
+                      <input type="checkbox" checked={useEarlier} disabled={saving || stage === "working" || !earlier.length} onChange={(event) => setUseEarlier(event.target.checked)} />
+                      Use them too
+                    </label>
+                    {earlier.length > 1 && <button type="button" className="profile-text-button describe-remove-all" disabled={saving || stage === "working"} onClick={() => setRemovedNotes(savedNotes.map((_note, at) => at))}>Remove all notes</button>}
+                  </div>
+                  {savedNotes.map((note, i) => (
+                    <blockquote key={i} className={`describe-saved-note${removedNotes.includes(i) ? " is-removed" : ""}`}>
+                      <div className="describe-note-heading">
+                        <small>{noteDate(note.at)}</small>
+                        <button type="button" className="profile-text-button describe-remove-note" disabled={saving || stage === "working"}
+                          aria-label={`${removedNotes.includes(i) ? "Undo removal of" : "Remove"} saved note ${i + 1}`}
+                          onClick={() => setRemovedNotes(list => list.includes(i) ? list.filter(at => at !== i) : [...list, i])}>
+                          {removedNotes.includes(i) ? "Undo" : "Remove"}
+                        </button>
+                      </div>
+                      <span className="describe-note-text">{note.text}</span>
                     </blockquote>
                   ))}
+                  {removedNotes.length > 0 && <p className="describe-removal-status" role="status">{removedNotes.length === 1 ? "1 note will" : `${removedNotes.length} notes will`} be removed when you save.</p>}
                 </details>
               )}
               {stage === "working" && (
@@ -253,7 +304,7 @@ export function DescribeJob({
               {items.length === 0 && <p>No new achievements came from these notes. Add more detail and try again.</p>}
               <ol>
                 {items.map((item, at) => (
-                  <li key={at} className={`describe-item${item.keep ? "" : " is-dropped"}${item.duplicateOf ? " is-duplicate" : ""}${item.ask && item.keep ? " has-ask" : ""}`}>
+                  <li key={at} className={`describe-item${item.keep ? "" : " is-dropped"}${item.duplicateOf ? " is-duplicate" : ""}${item.asks.length && item.keep ? " has-ask" : ""}`}>
                     <textarea
                       className="career-grow"
                       aria-label={`Achievement ${at + 1}`}
@@ -264,7 +315,38 @@ export function DescribeJob({
                       onChange={(event) => update(at, { text: event.target.value })}
                     />
                     {item.duplicateOf && <p className="describe-note">Already in this job: “{item.duplicateOf}”</p>}
-                    {item.ask && item.keep && <p className="describe-ask">{item.ask} <span>Add it to the line, or keep it as is.</span></p>}
+                    {item.asks.length > 0 && item.keep && (
+                      <div className="describe-asks">
+                        <p className="describe-ask">Make it fuller <span>(optional)</span></p>
+                        {item.asks.map((question, i) => (
+                          <label key={question}>
+                            <span>{question}</span>
+                            <input
+                              value={item.answers[i] ?? ""}
+                              maxLength={2000}
+                              disabled={item.deepening}
+                              placeholder="Your answer, in plain words"
+                              onChange={(event) => update(at, { answers: item.answers.map((answer, j) => (j === i ? event.target.value : answer)) })}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void deepen(at);
+                                }
+                              }}
+                            />
+                          </label>
+                        ))}
+                        <button
+                          type="button"
+                          className="profile-text-button"
+                          disabled={item.deepening || !item.answers.some((answer) => answer.trim())}
+                          onClick={() => void deepen(at)}
+                        >
+                          {item.deepening ? "Rewriting…" : "✦ Rewrite with my answers"}
+                        </button>
+                      </div>
+                    )}
+                    {item.note && <p className="describe-note">{item.note}</p>}
                     {item.keep && recruiterFlags(item.text, `${role.bullets.join("\n")}\n${source}`).map((note, index) => (
                       <p key={index} className="describe-note describe-hint">{note}</p>
                     ))}
@@ -324,7 +406,7 @@ export function DescribeJob({
         <footer className="profile-import-footer career-editor-footer">
           {confirmClose ? (
             <div className="career-confirm" role="alertdialog" aria-label="Close without saving?">
-              <span>Close without saving these achievements?</span>
+              <span>Close without saving your changes?</span>
               <button type="button" className="profile-button is-secondary" autoFocus onClick={() => setConfirmClose(false)}>
                 Keep reviewing
               </button>
@@ -346,11 +428,11 @@ export function DescribeJob({
               <button
                 type="button"
                 className="profile-button is-secondary"
-                disabled={saving || stage === "working" || !text.trim()}
-                title="Keep these notes on the job without writing achievements yet."
+                disabled={saving || stage === "working" || (!text.trim() && !removedNotes.length)}
+                title="Save changes to this job's notes without adding achievements."
                 onClick={() => void save(false)}
               >
-                Save notes only
+                {saving ? "Saving…" : removedNotes.length ? "Save changes" : "Save notes only"}
               </button>
               <button type="submit" className="profile-button" disabled={saving || stage === "working" || !source.trim()}>
                 {stage === "working" ? "Writing…" : "✦ Turn into bullets"}

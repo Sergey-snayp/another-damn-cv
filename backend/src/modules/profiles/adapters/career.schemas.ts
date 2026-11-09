@@ -122,3 +122,15 @@ export const achievementDraftSchema = z
     notes: z.string().trim().min(1, 'Write a few words about the job first.').max(60000),
   })
   .strict();
+
+/** "Rewrite with my answers": one proposed achievement, its job, and the answers to its questions. */
+export const deepenAchievementSchema = z
+  .object({
+    source: achievementDraftSchema,
+    text: z.string().trim().min(1).max(4000),
+    answers: z
+      .array(z.object({ question: z.string().trim().max(300), answer: z.string().trim().max(2000) }).strict())
+      .min(1)
+      .max(4),
+  })
+  .strict();

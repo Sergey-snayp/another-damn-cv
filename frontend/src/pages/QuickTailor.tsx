@@ -59,6 +59,9 @@ interface Suggestion {
   chosenId?: string;
   original?: string;
   fromProfile?: boolean;
+  fromSavedCv?: boolean;
+  /** Alternatives belong to this generation batch and cannot cross role boundaries. */
+  choiceGroup?: string;
 }
 
 /** An achievement chosen for a job from the Profile and the CV (see tailor-role). */
@@ -66,7 +69,7 @@ interface ChosenBullet {
   id: string;
   text: string;
   original: string;
-  source: 'cv' | 'profile';
+  source: 'cv' | 'profile' | 'saved-cv';
   cvIndex: number | null;
 }
 
@@ -264,7 +267,7 @@ interface Tailoring {
   /** Notes for the whole card, such as skills the job asks for that the CV does not show. */
   notes?: string[];
   /** A job's next-best achievements, for Swap. */
-  alternates?: ChosenBullet[];
+  alternates?: Record<string, ChosenBullet[]>;
 }
 
 /** One-click requests for the card's box. */
@@ -651,14 +654,15 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   }
 
   /**
-   * A whole job's bullets, chosen for the posting from the Profile's full list for the job
-   * and the CV's own bullets. A CV bullet chosen stays in its place; Profile ones fill the
-   * others. False when the Profile has nothing more for this job: each line is then tailored alone.
+   * One role's selected bullets, chosen from Profile facts and matching saved CVs.
+   * Selected CV bullets keep their positions; other evidence fills the remaining slots.
+   * Without additional evidence, each selected line is tailored on its own.
    */
   async function tailorRoleBullets(run: number, items: Suggestion[], request: string): Promise<boolean> {
     const role = items[0]?.target.role;
     if (!role) return false;
-    for (const item of items) updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, chosenId: undefined, fromProfile: undefined, original: undefined });
+    const choiceGroup = items.map(item => item.key).join('|');
+    for (const item of items) updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, chosenId: undefined, fromProfile: undefined, fromSavedCv: undefined, original: undefined });
     try {
       const result = await post<{ matched: boolean; chosen: ChosenBullet[]; alternates: ChosenBullet[] }>('tailor-role', {
         role: { ...role, bullets: items.map((item) => item.target.text) },
@@ -671,11 +675,12 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         if (chosen.cvIndex !== null && chosen.cvIndex < slots.length && !slots[chosen.cvIndex]) slots[chosen.cvIndex] = chosen;
       const rest = result.chosen.filter((chosen) => !slots.includes(chosen));
       for (let i = 0; i < slots.length; i++) if (!slots[i]) slots[i] = rest.shift();
-      setTailoring((current) => (current && current.run === run ? { ...current, alternates: result.alternates } : current));
+      setTailoring((current) => (current && current.run === run
+        ? { ...current, alternates: { ...current.alternates, [choiceGroup]: result.alternates } } : current));
       items.forEach((item, i) => {
         const chosen = slots[i];
         updateItem(run, item.key, chosen
-          ? { busy: false, after: chosen.text, value: chosen.text, chosenId: chosen.id, fromProfile: chosen.source === 'profile', original: chosen.original }
+          ? { busy: false, after: chosen.text, value: chosen.text, chosenId: chosen.id, choiceGroup, fromProfile: chosen.source === 'profile', fromSavedCv: chosen.source === 'saved-cv', original: chosen.original }
           : { busy: false, after: item.before, value: item.before });
       });
       return true;
@@ -688,16 +693,17 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   /** Swap: the next-best achievement in this bullet's place; the one it replaces goes back to the list. */
   function swap(item: Suggestion) {
     setTailoring((current) => {
-      if (!current?.alternates?.length) return current;
-      const [next, ...rest] = current.alternates;
+      const choices = current?.alternates?.[item.choiceGroup ?? ''];
+      if (!current || !choices?.length) return current;
+      const [next, ...rest] = choices;
       const back: ChosenBullet[] = item.chosenId && item.after
-        ? [{ id: item.chosenId, text: item.after, original: item.original ?? item.before, source: item.fromProfile ? 'profile' : 'cv', cvIndex: null }]
+        ? [{ id: item.chosenId, text: item.after, original: item.original ?? item.before, source: item.fromProfile ? 'profile' : item.fromSavedCv ? 'saved-cv' : 'cv', cvIndex: null }]
         : [];
       return {
         ...current,
-        alternates: [...rest, ...back],
+        alternates: { ...current.alternates, [item.choiceGroup!]: [...rest, ...back] },
         items: current.items.map((row) => row.key === item.key
-          ? { ...row, after: next!.text, value: next!.text, chosenId: next!.id, fromProfile: next!.source === 'profile', original: next!.original, cannotDo: undefined, error: undefined }
+          ? { ...row, after: next!.text, value: next!.text, chosenId: next!.id, fromProfile: next!.source === 'profile', fromSavedCv: next!.source === 'saved-cv', original: next!.original, cannotDo: undefined, error: undefined }
           : row),
       };
     });
@@ -711,8 +717,14 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     setTailoring({ ...current, stage: 'generated', notes: undefined });
     const skills = open.filter((item) => item.target.kind === 'skills');
     const lines = open.filter((item) => item.target.kind !== 'skills');
-    // A whole job: its bullets are chosen from the Profile's full list for it, when it has one.
-    const bullets = current.items.length > 1 ? lines.filter((item) => item.target.kind === 'bullet' && item.target.role) : [];
+    // Keep each employer/client's evidence separate, including when tailoring the whole section.
+    const bullets = lines.filter((item) => item.target.kind === 'bullet' && item.target.role);
+    const byRole = new Map<string, Suggestion[]>();
+    for (const item of bullets) {
+      const role = item.target.role!;
+      const key = JSON.stringify([role.company, role.client ?? '', role.title, role.from]);
+      byRole.set(key, [...(byRole.get(key) ?? []), item]);
+    }
     const work: Promise<unknown>[] = [];
     if (skills.length) work.push(tailorSkills(run, skills, request));
     // Four lines at a time: each is a few seconds, and they do not wait on one another.
@@ -722,15 +734,18 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       return Promise.all([worker(), worker(), worker(), worker()]);
     };
     work.push(eachLine(lines.filter((item) => !bullets.includes(item))));
-    if (bullets.length)
-      work.push(tailorRoleBullets(run, bullets, request).then((chosen) => (chosen ? undefined : eachLine(bullets))));
+    for (const group of byRole.values())
+      work.push(tailorRoleBullets(run, group, request).then((chosen) => (chosen ? undefined : eachLine(group))));
     await Promise.all(work);
   }
 
   function retry(item: Suggestion) {
     if (!tailoring) return;
     if (item.target.kind === 'skills') void tailorSkills(tailoring.run, [item], tailoring.request);
-    else void tailorLine(tailoring.run, item, tailoring.request);
+    else if (item.target.kind === 'bullet' && item.target.role) {
+      const { run, request } = tailoring;
+      void tailorRoleBullets(run, [item], request).then(chosen => chosen ? undefined : tailorLine(run, item, request));
+    } else void tailorLine(tailoring.run, item, tailoring.request);
   }
 
   /** Marks lines decided; the card closes when every line is. */
@@ -843,7 +858,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
           <button className="primary" disabled={same || saving || waits} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
         )}
         {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
-        {item.chosenId && Boolean(tailoring?.alternates?.length) && (
+        {item.chosenId && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
           <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
         )}
         <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Try again</button>
@@ -976,7 +991,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
                             {back ? <DiffLine key={item.after} before={item.before.trim()} after={item.after!} /> : withBold(item.before.trim())}
-                            {back && item.fromProfile && <span className="qt-slot-note qt-from">From your Profile</span>}
+                            {back && (item.fromProfile || item.fromSavedCv) && <span className="qt-slot-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</span>}
                             {back && READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after!, cvText).map((note, index) => (
                               <span key={`r${index}`} className="qt-slot-note qt-hint">{note}</span>
                             ))}
@@ -1003,7 +1018,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {many && itemActions(item)}
                         {many && !item.busy && item.after !== undefined && (
                           <>
-                            {item.fromProfile ? <p className="qt-note qt-from">From your Profile</p> : null}
+                            {item.fromProfile || item.fromSavedCv ? <p className="qt-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</p> : null}
                             {READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after, cvText).map((note, index) => (
                               <p key={`r${index}`} className="qt-note qt-hint">{note}</p>
                             ))}
@@ -1044,6 +1059,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
                   {solo && !solo.busy && solo.after !== undefined && (
                     <>
+                      {solo.fromProfile || solo.fromSavedCv ? <p className="qt-note qt-from">{solo.fromProfile ? 'From your Profile' : 'From your saved CVs'}</p> : null}
                       {solo.report && <SummaryReportView report={solo.report} />}
                       {solo.added?.length ? <p className="qt-note">+ From your CV: {solo.added.join(', ')}</p> : null}
                       {solo.dropped?.length ? <p className="qt-note">− Left out for this job: {solo.dropped.join(', ')}</p> : null}

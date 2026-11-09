@@ -289,11 +289,15 @@ model Profile {
   email         String  @default("")
   phone         String?
 
-  location   String?
-  city       String?
-  state      String?
-  country    String?
-  postalCode String?
+  location    String?
+  /**
+   * Street address, for forms that ask for one.
+   */
+  addressLine String?
+  city        String?
+  state       String?
+  country     String?
+  postalCode  String?
 
   linkedin  String?
   github    String?
@@ -302,6 +306,11 @@ model Profile {
   telegram  String?
 
   workAuthorization   String?
+  eeoRace             String?
+  eeoGender           String?
+  eeoVeteran          String?
+  eeoDisability       String?
+  eeoLgbtq            String?
   requiresSponsorship String?
   salaryExpectation   String?
   noticePeriod        String?

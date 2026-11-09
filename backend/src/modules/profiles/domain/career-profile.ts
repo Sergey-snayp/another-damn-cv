@@ -101,7 +101,11 @@ export function mergeCareer(state: CareerState, input: CareerImport, importedAt:
   for (const key of Object.keys(input.sections) as (keyof CareerSections)[]) {
     const value =
       key === 'experiences'
-        ? keepNotes(state.data.experiences?.value ?? [], input.sections.experiences ?? [])
+        ? keepNotes(
+            state.data.experiences?.value ?? [],
+            input.sections.experiences ?? [],
+            input.source.kind !== 'profile',
+          )
         : input.sections[key];
     Object.assign(data, { [key]: { value, source: input.source, importedAt } });
   }
@@ -112,7 +116,11 @@ export function mergeCareer(state: CareerState, input: CareerImport, importedAt:
  * A CV import replaces the jobs; what was written and chosen on the Profile page
  * about a job (notes, stars of achievements it still has, deleted ones) stays with the same job.
  */
-function keepNotes(before: CareerExperience[], after: CareerExperience[]): CareerExperience[] {
+function keepNotes(
+  before: CareerExperience[],
+  after: CareerExperience[],
+  fromImport: boolean,
+): CareerExperience[] {
   const key = (role: CareerExperience) => `${role.company}\u0000${role.title}`.trim().toLowerCase();
   const earlier = new Map(before.map((role) => [key(role), role]));
   return after.map((role) => {
@@ -121,7 +129,8 @@ function keepNotes(before: CareerExperience[], after: CareerExperience[]): Caree
     const starred = (old.starred ?? []).filter((text) => role.bullets.includes(text));
     return {
       ...role,
-      ...(!role.notes?.length && old.notes?.length && { notes: old.notes }),
+      ...((role.notes === undefined || (fromImport && !role.notes.length)) &&
+        old.notes?.length && { notes: old.notes }),
       ...(starred.length && { starred }),
       ...(old.removed?.length && { removed: old.removed }),
     };

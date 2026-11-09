@@ -5,6 +5,7 @@ import type { PracticeGenerator } from '../../../application/ports/practice';
 import { PracticeError, type PracticeContext, type PracticeKind } from '../../../domain/practice';
 import { PRACTICE_SYSTEM, practicePrompt } from './practice-prompts';
 import { practiceContentSchema } from './practice-output.schema';
+import { withoutDashPunctuation } from '../../../../resumes/contracts';
 
 export class ClaudeCliPracticeGenerator implements PracticeGenerator {
   readonly identity = { provider: 'claude-cli', model: config.interviewModel };
@@ -46,6 +47,16 @@ export class ClaudeCliPracticeGenerator implements PracticeGenerator {
         'Claude returned an incomplete question set. Your previous answers are unchanged. Try again.',
       );
     }
-    return parsed.data;
+    return {
+      questions: parsed.data.questions.map((row) => ({
+        ...row,
+        question: withoutDashPunctuation(row.question),
+        why: withoutDashPunctuation(row.why),
+        answer: withoutDashPunctuation(row.answer),
+        talkingPoints: row.talkingPoints.map(withoutDashPunctuation),
+        followUps: row.followUps.map(withoutDashPunctuation),
+        needsInput: row.needsInput.map(withoutDashPunctuation),
+      })),
+    };
   }
 }

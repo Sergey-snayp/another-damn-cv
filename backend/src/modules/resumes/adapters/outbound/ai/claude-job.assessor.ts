@@ -4,6 +4,7 @@ import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-proces
 import type { JobAssessor } from '../../../application/use-cases/assess-job-fit';
 import { TailoringError } from '../../../application/tailoring-error';
 import { assessmentHasSources, type JobAssessmentInput } from '../../../domain/job-assessment';
+import { DASH_PUNCTUATION_RULE, withoutDashPunctuation } from '../../../domain/cv-writing-guide';
 
 const answerSchema = z.object({
   verdict: z.enum(['apply', 'stretch', 'skip', 'unclear']),
@@ -32,6 +33,7 @@ const answerSchema = z.object({
 });
 
 const SYSTEM = `You are a candid career adviser beside a CV tailoring editor.
+${DASH_PUNCTUATION_RULE}
 Give a concise recommendation on whether this candidate should spend time applying.
 Use ONLY the supplied saved Profile evidence and job posting. The selected CV is
 not supplied and must not inform your recommendation. Profile contains the full
@@ -81,7 +83,17 @@ export class ClaudeJobAssessor implements JobAssessor {
         { timeoutMs: 120_000, maxOutputChars: 14000, effort: 'low' },
       );
       const parsed = answerSchema.safeParse(firstJsonObject(raw));
-      if (parsed.success && assessmentHasSources(parsed.data, input)) return parsed.data;
+      if (parsed.success && assessmentHasSources(parsed.data, input))
+        return {
+          ...parsed.data,
+          summary: withoutDashPunctuation(parsed.data.summary),
+          strengths: parsed.data.strengths.map((item) => ({
+            ...item,
+            point: withoutDashPunctuation(item.point),
+          })),
+          gaps: parsed.data.gaps.map((item) => ({ ...item, point: withoutDashPunctuation(item.point) })),
+          questions: parsed.data.questions.map(withoutDashPunctuation),
+        };
       correction =
         'The previous answer could not be verified. Return the specified JSON shape and copy supporting quotes exactly from the supplied job and Profile. Do not invent or paraphrase quoted evidence.';
     }

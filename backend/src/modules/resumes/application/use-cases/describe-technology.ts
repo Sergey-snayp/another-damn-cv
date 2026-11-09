@@ -36,7 +36,7 @@ export class DescribeTechnology {
     if (!clean) throw new ResumeError('invalid', 'Name a technology.');
     const key = technologyKey(clean);
     const saved = await this.notes.find(userId, key);
-    if (saved) return { name: clean, description: saved.description };
+    if (saved) return { name: clean, description: cleanDescription(saved.description) ?? saved.description };
     const runKey = `${userId}\n${key}`;
     let run = this.running.get(runKey);
     if (!run) {

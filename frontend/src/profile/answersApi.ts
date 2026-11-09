@@ -56,6 +56,8 @@ async function callDefaults(path: string, init?: RequestInit): Promise<Response>
 
 export const defaultsApi = {
   list: async () => (await callDefaults("")).json() as Promise<AutofillDefault[]>,
+  save: async (defaults: Array<Pick<AutofillDefault, 'kind' | 'scope' | 'value'>>) =>
+    (await callDefaults('', { method: 'POST', body: JSON.stringify({ defaults }) })).json() as Promise<AutofillDefault[]>,
   update: async (id: string, value: string) =>
     (await callDefaults(`/${id}`, { method: "PATCH", body: JSON.stringify({ value }) })).json() as Promise<AutofillDefault>,
   remove: async (id: string) => {

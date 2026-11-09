@@ -3,7 +3,12 @@ import { firstJsonObject } from '../../../../../shared/ai/json';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
 import type { ResumeChatModel } from '../../../application/use-cases/resume-assistant';
 import type { RenderedResume } from '../../../domain/resume';
-import { BULLET_RULES, SUMMARY_RULES, WRITING_RULES } from '../../../domain/cv-writing-guide';
+import {
+  BULLET_RULES,
+  SUMMARY_RULES,
+  WRITING_RULES,
+  withoutDashPunctuation,
+} from '../../../domain/cv-writing-guide';
 
 /**
  * The editor's chat about one CV.
@@ -112,10 +117,10 @@ const answerSchema = z.object({
 /** Prose without JSON still answered: it is the reply, with nothing to apply. */
 function readAnswer(raw: string) {
   const json = firstJsonObject(raw);
-  if (!json) return { reply: raw.trim(), suggestions: [] };
+  if (!json) return { reply: withoutDashPunctuation(raw.trim()), suggestions: [] };
   const answer = answerSchema.parse(json);
   return {
-    reply: answer.reply.trim() || 'I could not answer that. Try asking another way.',
+    reply: withoutDashPunctuation(answer.reply.trim()) || 'I could not answer that. Try asking another way.',
     suggestions: answer.suggestions,
   };
 }

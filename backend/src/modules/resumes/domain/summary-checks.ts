@@ -1,5 +1,5 @@
 import type { RenderedResume } from './resume';
-import { withoutEmDashes } from './cv-writing-guide';
+import { withoutDashPunctuation } from './cv-writing-guide';
 import { experienceSpan } from './cv-writing-guide';
 
 /**
@@ -116,16 +116,14 @@ export function checkOpening(summary: string): CheckResult {
   };
 }
 
-/** 4. No em dash. */
+/** 4. No dashes used as sentence punctuation. */
 export function checkNoEmDash(summary: string): CheckResult {
-  const count = (summary.match(/—/g) ?? []).length;
+  const changed = withoutDashPunctuation(summary) !== summary;
   return {
     id: 'em-dash',
-    name: 'No em dashes',
-    ok: !count,
-    ...(count
-      ? { detail: `${count} em dash${count === 1 ? '' : 'es'} (—); use commas, colons or a new sentence.` }
-      : {}),
+    name: 'No dash punctuation',
+    ok: !changed,
+    ...(changed ? { detail: 'Replace sentence dashes with commas, colons or a new sentence.' } : {}),
   };
 }
 
@@ -345,7 +343,7 @@ export function checkNoToolListEnding(summary: string, record: ExperienceRecord)
  * whole fix round (12 to 17 seconds) for a mechanical change.
  */
 export function repairSummary(summary: string, record: ExperienceRecord): string {
-  let text = withoutEmDashes(summary);
+  let text = withoutDashPunctuation(summary);
   text = text.replace(/\b(\w+?)is(e|ed|es|ing)\b/gi, (word: string, stem: string, ending: string) =>
     allowedIse(word.toLowerCase()) ? word : `${stem}iz${ending}`,
   );

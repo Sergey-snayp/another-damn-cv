@@ -34,7 +34,9 @@ const TAILOR_LINE = `Tailor this line for the job below, so a recruiter for this
   and the line describes services fed by Kafka events, say event-driven; if it says
   "observability" and the line has CloudWatch alarms and dashboards, say observability).
   Name the practice; keep the line's own tools and numbers next to it.
-- Make it tighter and more concrete: an active verb first, no filler.
+- Keep it as written where it already shows the work: swap in the job's word only where it
+  means the same thing, and never shorten away its mechanism, reason, before and after,
+  ownership or counts. Tighten only filler.
 - Keep every number, technology and fact the line has. Add none it does not have:
   no new technology, number, scale or responsibility.
 Return your best tailored version. Return the line unchanged only if no honest

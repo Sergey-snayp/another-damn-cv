@@ -1,8 +1,11 @@
-import type { ChooserAnswer, PoolItem, ProfileRole } from '../../domain/role-bullets';
+import type { ChooserAnswer, PoolItem, ProfileRole, CvRole } from '../../domain/role-bullets';
 
 /** The jobs saved in the person's Profile, with every achievement. */
 export interface ProfileRolesReader {
   roles(userId: string): Promise<ProfileRole[]>;
+}
+export interface SavedCvRolesReader {
+  roles(userId: string): Promise<CvRole[]>;
 }
 
 /** Chooses and rewords a job's bullets for one posting. */

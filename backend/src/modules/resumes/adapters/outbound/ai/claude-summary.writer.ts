@@ -9,6 +9,7 @@ import type {
 import type { CheckResult } from '../../../domain/summary-checks';
 import { TailoringError } from '../../../application/tailoring-error';
 import { SUMMARY_INSTRUCTIONS } from './summary-instructions';
+import { withoutDashPunctuation } from '../../../domain/cv-writing-guide';
 
 const answerSchema = z.object({
   summary: z.string().trim().min(1),
@@ -111,8 +112,8 @@ function parse(raw: string): { ok: true; draft: SummaryDraft } | { ok: false; pr
       summary: answer.summary,
       wordCount: answer.word_count,
       mapping: answer.mapping.map((line) => ({ ...line, employer: line.employer?.trim() || null })),
-      gaps: answer.gaps.map((gap) => gap.trim()).filter(Boolean),
-      decidingGap: answer.deciding_gap?.trim() || null,
+      gaps: answer.gaps.map((gap) => withoutDashPunctuation(gap.trim())).filter(Boolean),
+      decidingGap: withoutDashPunctuation(answer.deciding_gap?.trim() || '') || null,
     },
   };
 }
