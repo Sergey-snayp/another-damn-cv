@@ -121,7 +121,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.deepEqual(state.data.experiences.value[0], untouched, 'the other job is saved as it was');
     assert.equal(state.data.experiences.value[1].title, 'Backend Developer');
     assert.equal(state.data.experiences.value[1].techStack, 'Go, Redis', 'the tech stack is saved with the job');
-    assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Tech stack: Go, Redis/);
+    assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Technologies: Go, Redis/);
 
     // Delete asks first; Keep keeps it.
     await button('Edit Backend Developer at Earlier Employer in Profile').click();
@@ -204,12 +204,23 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     // An older save kept the tech stack as a bullet: it shows, and is edited, as the job's tech stack.
     state = { revision: state.revision + 1, data: { ...state.data, experiences: { value: [{ title: 'Engineer', company: 'Old Co', client: '', location: '', from: '2019', to: '2020', current: false, description: '', bullets: ['Shipped things.', 'Tech stack: Kafka, Go'] }], source, importedAt } } };
     await visit();
-    assert.equal(await page.$eval('.profile-stack', element => element.textContent), 'Tech stack: Kafka, Go');
+    assert.equal(await page.$eval('.profile-stack', element => element.textContent), 'Technologies: Kafka, Go');
     assert.deepEqual(await page.$$eval('.ach-text', rows => rows.map(row => row.textContent)), ['Shipped things.']);
     await button('Edit Engineer at Old Co in Profile').click();
     await page.waitForSelector('.profile-career-editor .career-edit-entry');
     assert.equal(await page.$eval('.profile-career-editor ::-p-aria([name="Tech stack (optional)"][role="textbox"])', field => field.value), 'Kafka, Go');
     await button('Cancel').click();
+    await page.waitForFunction(() => !document.querySelector('.profile-career-editor'));
+    // The bin on a job deletes it, after asking; "Cancel" in that question keeps it.
+    let answer = false;
+    page.on('dialog', dialog => void (answer ? dialog.accept() : dialog.dismiss()));
+    await button('Delete Engineer at Old Co').click();
+    assert.equal(state.data.experiences.value.length, 1, 'kept when the question is cancelled');
+    answer = true;
+    await button('Delete Engineer at Old Co').click();
+    await page.waitForFunction(() => !document.querySelector('[aria-labelledby="profile-work-heading"] .profile-entry'));
+    assert.deepEqual(state.data.experiences.value, []);
+    assert.match(await page.$eval('.profile-success', element => element.textContent), /Deleted Engineer at Old Co/);
     assert.deepEqual(unexpected, [], 'Profile editing never reads CV contents or writes CV/PDF endpoints');
     assert.deepEqual(errors, []);
     console.log('PASS Profile career editing: roles, descriptions, bullet add/remove, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');

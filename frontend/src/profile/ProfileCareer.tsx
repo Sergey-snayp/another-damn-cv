@@ -29,6 +29,7 @@ export function ProfileCareer({
   onEditCareer,
   onDescribe,
   onCollect,
+  onDelete,
   onSaveRole,
 }: {
   imported: CareerData;
@@ -37,6 +38,8 @@ export function ProfileCareer({
   onDescribe(entry: number): void;
   /** Opens "Collect from my CVs". */
   onCollect?(): void;
+  /** Deletes one job or education entry, after asking. */
+  onDelete?(section: "experiences" | "educations", entry: number): void;
   /** Saves one job's achievements (stars, edits, additions, deletions) on the latest Profile. */
   onSaveRole(entry: number, patch: (current: CareerExperience) => Partial<RolePatch>): Promise<void>;
   /** With `entry`, only that job or education entry is edited, or a new one added. */
@@ -62,6 +65,20 @@ export function ProfileCareer({
       <Icon name="edit" size={16} />
     </button>
   );
+  const remove = (section: "experiences" | "educations", label: string, entry: number) =>
+    onDelete && (
+      <button className="profile-edit-button" aria-label={label} title="Delete" onClick={() => onDelete(section, entry)} disabled={importDisabled}>
+        <Icon name="trash" size={16} />
+      </button>
+    );
+  const pills = (items: (string | false | undefined)[]) => {
+    const shown = items.filter((item): item is string => Boolean(item && item.trim()));
+    return shown.length ? (
+      <ul className="profile-pills">
+        {shown.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    ) : null;
+  };
   return (
     <>
 
@@ -86,35 +103,41 @@ export function ProfileCareer({
         {experiences.length ? (
           experiences.map((role, index) => (
             <article className="profile-entry" key={index}>
-              <div className="profile-entry-heading">
-                <div className="profile-entry-title">
-                  <h3>{role.title}</h3>
-                  <p>{[role.company, role.client && `for ${role.client}`, role.location].filter(Boolean).join(" · ")}</p>
+              <span className="profile-entry-icon" aria-hidden="true"><Icon name="briefcase" size={24} /></span>
+              <div className="profile-entry-main">
+                <div className="profile-entry-heading">
+                  <div className="profile-entry-title">
+                    <h3>{role.title}</h3>
+                    <p>{role.company}</p>
+                  </div>
+                  <div className="profile-entry-tools">
+                    {edit("experiences", `Edit ${role.title} at ${role.company} in Profile`, index)}
+                    {remove("experiences", `Delete ${role.title} at ${role.company}`, index)}
+                  </div>
                 </div>
-                <span className="profile-entry-dates">{dateRange(role.from, role.to, role.current)}</span>
-                {edit("experiences", `Edit ${role.title} at ${role.company} in Profile`, index)}
-              </div>
-              {role.description && <p className="profile-body profile-preserve-lines">{role.description}</p>}
-              <AchievementList role={role} disabled={importDisabled} onSave={(patch) => onSaveRole(index, patch)} />
-              {role.techStack?.trim() && (
-                <p className="profile-stack"><strong>Tech stack:</strong> {role.techStack}</p>
-              )}
-              <div className="profile-entry-more">
-                <button
-                  type="button"
-                  className="profile-describe-button"
-                  disabled={importDisabled}
-                  aria-label={`Describe ${role.title} at ${role.company} in your own words`}
-                  onClick={() => onDescribe(index)}
-                >
-                  ✦ Describe in your own words
-                </button>
-                {role.notes?.length ? (
-                  <span className="profile-muted">
-                    {role.notes.length === 1 ? "1 note" : `${role.notes.length} notes`} · last{" "}
-                    {new Date(role.notes[role.notes.length - 1]!.at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                  </span>
-                ) : null}
+                {pills([role.client && `for ${role.client}`, role.location, dateRange(role.from, role.to, role.current)])}
+                {role.description && <p className="profile-body profile-preserve-lines">{role.description}</p>}
+                <AchievementList role={role} disabled={importDisabled} onSave={(patch) => onSaveRole(index, patch)} />
+                {role.techStack?.trim() && (
+                  <p className="profile-stack">Technologies: {role.techStack}</p>
+                )}
+                <div className="profile-entry-more">
+                  <button
+                    type="button"
+                    className="profile-describe-button"
+                    disabled={importDisabled}
+                    aria-label={`Describe ${role.title} at ${role.company} in your own words`}
+                    onClick={() => onDescribe(index)}
+                  >
+                    ✦ Describe in your own words
+                  </button>
+                  {role.notes?.length ? (
+                    <span className="profile-muted">
+                      {role.notes.length === 1 ? "1 note" : `${role.notes.length} notes`} · last{" "}
+                      {new Date(role.notes[role.notes.length - 1]!.at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </article>
           ))
@@ -131,13 +154,19 @@ export function ProfileCareer({
         {educations.length ? (
           educations.map((row, index) => (
             <article className="profile-entry" key={index}>
-              <div className="profile-entry-heading">
-                <div className="profile-entry-title">
-                  <h3>{row.institution}</h3>
-                  {(row.degree || row.field) && <p>{[row.degree, row.field].filter(Boolean).join(", ")}</p>}
+              <span className="profile-entry-icon is-education" aria-hidden="true"><Icon name="education" size={24} /></span>
+              <div className="profile-entry-main">
+                <div className="profile-entry-heading">
+                  <div className="profile-entry-title">
+                    <h3>{row.institution}</h3>
+                    {(row.degree || row.field) && <p>{[row.degree, row.field].filter(Boolean).join(", ")}</p>}
+                  </div>
+                  <div className="profile-entry-tools">
+                    {edit("educations", `Edit ${row.institution} in Profile`, index)}
+                    {remove("educations", `Delete ${row.institution}`, index)}
+                  </div>
                 </div>
-                <span className="profile-entry-dates">{dateRange(row.from, row.to)}</span>
-                {edit("educations", `Edit ${row.institution} in Profile`, index)}
+                {pills([dateRange(row.from, row.to)])}
               </div>
             </article>
           ))

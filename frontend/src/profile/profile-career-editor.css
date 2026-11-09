@@ -133,3 +133,4 @@
 .collect-cvs .collect-tools .profile-choice { display: inline-flex; line-height: 1; padding: 6px 10px; }
 .collect-cvs .collect-tools .profile-choice input { width: 14px; height: 14px; margin: 0; align-self: center; }
 .collect-cvs .collect-job > header p { color: var(--color-text); }
+.profile-heading-actions .profile-text-button { margin: 0; }

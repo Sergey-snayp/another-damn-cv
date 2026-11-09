@@ -128,17 +128,6 @@ export function AchievementList({
             const star = starred.has(text);
             return (
               <li key={`${index}:${text}`} className={`ach-row${star ? " is-starred" : ""}`}>
-                <button
-                  type="button"
-                  className="ach-star"
-                  aria-label={star ? `Unstar: ${text}` : `Star: ${text}`}
-                  aria-pressed={star}
-                  title={star ? "Starred: shown first" : "Star: show first"}
-                  disabled={disabled || busy}
-                  onClick={() => toggleStar(text)}
-                >
-                  {star ? "★" : "☆"}
-                </button>
                 {editing?.index === index ? (
                   <textarea
                     className="ach-edit"
@@ -162,16 +151,29 @@ export function AchievementList({
                     {text}
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="ach-remove"
-                  aria-label={`Delete: ${text}`}
-                  title="Delete"
-                  disabled={disabled || busy}
-                  onClick={() => remove(text)}
-                >
-                  ×
-                </button>
+                <span className="ach-tools">
+                  <button
+                    type="button"
+                    className="ach-star"
+                    aria-label={star ? `Unstar: ${text}` : `Star: ${text}`}
+                    aria-pressed={star}
+                    title={star ? "Starred: shown first" : "Star: show first"}
+                    disabled={disabled || busy}
+                    onClick={() => toggleStar(text)}
+                  >
+                    {star ? "★" : "☆"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ach-remove"
+                    aria-label={`Delete: ${text}`}
+                    title="Delete"
+                    disabled={disabled || busy}
+                    onClick={() => remove(text)}
+                  >
+                    ×
+                  </button>
+                </span>
               </li>
             );
           })}

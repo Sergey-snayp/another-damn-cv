@@ -156,6 +156,25 @@ export function Profile() {
     });
     setCareerState(state);
   }
+  /** Deletes one job or education entry for good, after asking. */
+  async function deleteEntry(section: "experiences" | "educations", index: number) {
+    const shown = careerState?.data[section]?.value[index];
+    if (!shown) return;
+    const name = "title" in shown ? `${shown.title} at ${shown.company}` : shown.institution;
+    if (!confirm(`Delete ${name} from your Profile? This cannot be undone.`)) return;
+    setNotice("");
+    setError("");
+    try {
+      const latest = await careerApi.read();
+      const rows = latest.data[section]?.value ?? [];
+      if (JSON.stringify(rows[index]) !== JSON.stringify(shown))
+        throw new Error("Your Profile changed in another window. Reload the page and try again.");
+      setCareerState(await careerApi.save(latest.revision, { [section]: rows.filter((_, i) => i !== index) }));
+      setNotice(`Deleted ${name}.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not delete. Try again.");
+    }
+  }
   const update = (key: ContactKey, value: string) => {
     if (!draft) return;
     setDraft({ ...draft, [key]: value });
@@ -272,6 +291,7 @@ export function Profile() {
               importDisabled={dirty || saving || !careerState}
               onEditCareer={(section, entry) => setEditingCareer({ section, entry })}
               onDescribe={setDescribing}
+              onDelete={(section, entry) => void deleteEntry(section, entry)}
               onCollect={() => {
                 setNotice("");
                 setCollecting(true);
