@@ -93,6 +93,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.equal(await page.$$eval('.describe-item.is-dropped', rows => rows.length), 1, 'a repeat starts dropped');
     assert.match(await page.$eval('.describe-item.is-duplicate', row => row.textContent), /Already in this job/);
     assert.match(await page.$eval('.describe-item.has-ask', row => row.textContent), /How long did renewals take before\?/);
+    assert.match(await page.$eval('.describe-item.has-ask', row => row.textContent), /A recruiter may not know ACME/, 'an unknown acronym is pointed out');
     assert.match(await page.$eval('.describe-review', element => element.textContent), /1 more left out/);
     await page.screenshot({ path: '/private/tmp/job-agent-describe-review.png' });
     // Edit one, drop one, leave a tool out.

@@ -17,7 +17,12 @@ import {
   type SkillGroupSuggestion,
 } from '../../domain/resume-assistant';
 import { resumeText } from '../../domain/resume-score';
-import { BULLET_RULES, DESCRIPTION_RULES, HEADLINE_RULES } from '../../domain/cv-writing-guide';
+import {
+  BULLET_RULES,
+  DESCRIPTION_RULES,
+  HEADLINE_RULES,
+  withoutAddedPurpose,
+} from '../../domain/cv-writing-guide';
 import type { RenderedResume } from '../../domain/resume';
 import type { LineRewriter, RewriteResult } from './rewrite-resume-line';
 import { experienceRecord } from '../../domain/summary-checks';
@@ -206,7 +211,7 @@ export class ResumeAssistant {
       .join('\n\n');
     // The posting's words for practices this line already shows ("observability" for CloudWatch alarms).
     const hints = practiceHintText(practiceHints(job.description, input.text));
-    return this.rewriter.rewrite({
+    const result = await this.rewriter.rewrite({
       text: input.text,
       kind: input.kind,
       instruction: withRequest(
@@ -215,6 +220,11 @@ export class ResumeAssistant {
       ),
       context,
     });
+    // A benefit the line and its job do not state ("…to reduce risk") is cut.
+    return {
+      ...result,
+      suggestion: withoutAddedPurpose(result.suggestion, `${input.text}\n${input.context ?? ''}`),
+    };
   }
 
   async score(

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
+import { RECRUITER_RULES, withoutAddedPurpose } from '../../../../resumes/contracts';
 import { firstJsonObject } from '../../../../../shared/ai/json';
 import type { AchievementWriter } from '../../../application/ports/achievement-writer';
 import {
@@ -36,6 +37,8 @@ Also:
   networks, payment providers or chat apps (no "Visa", "Cardinal", "Slack").
 - "description": when <job> has no description, one or two sentences on what the role or
   project was (product, team, scale), from the notes only; otherwise "".
+
+${RECRUITER_RULES}
 
 Return ONLY JSON, no prose and no code fences:
 {"achievements": [{"text": "...", "ask": null}], "techStack": ["..."], "description": ""}`;
@@ -78,7 +81,14 @@ export class ClaudeAchievementWriter implements AchievementWriter {
     if (!json) throw new AchievementError('The AI did not return achievements. Try again.');
     const answer = answerSchema.parse(json);
     return {
-      achievements: answer.achievements.map((item) => ({ text: item.text, ask: item.ask })),
+      // A benefit the notes do not state ("…to reduce risk") is cut.
+      achievements: answer.achievements.map((item) => ({
+        text: withoutAddedPurpose(
+          item.text,
+          `${source.notes}\n${source.description}\n${source.bullets.join('\n')}`,
+        ),
+        ask: item.ask,
+      })),
       techStack: answer.techStack,
       description: answer.description,
     };

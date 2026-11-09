@@ -82,3 +82,6 @@ export interface TailoringApi {
   /** This job's copy of a CV, made now if there is none yet. No AI runs. */
   copyForJob(userId: string, jobId: string, sourceResumeId?: string): Promise<{ resumeId: string }>;
 }
+
+/** How CV lines are written for recruiters and search filters, for any module that writes them. */
+export { RECRUITER_RULES, withoutAddedPurpose } from './domain/cv-writing-guide';

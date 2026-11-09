@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { careerApi, type AchievementProposal, type CareerExperience, type CareerState } from "./careerApi";
+import { recruiterFlags } from "../resume/readability";
 import "./profile-import.css";
 import "./profile-career-editor.css";
 
@@ -264,6 +265,9 @@ export function DescribeJob({
                     />
                     {item.duplicateOf && <p className="describe-note">Already in this job: “{item.duplicateOf}”</p>}
                     {item.ask && item.keep && <p className="describe-ask">{item.ask} <span>Add it to the line, or keep it as is.</span></p>}
+                    {item.keep && recruiterFlags(item.text, `${role.bullets.join("\n")}\n${source}`).map((note, index) => (
+                      <p key={index} className="describe-note describe-hint">{note}</p>
+                    ))}
                     <div className="describe-actions">
                       {item.keep ? (
                         <button type="button" onClick={() => update(at, { keep: false })}>Drop</button>

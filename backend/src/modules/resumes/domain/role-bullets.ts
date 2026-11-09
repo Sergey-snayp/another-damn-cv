@@ -6,7 +6,7 @@
  * line keeps only the numbers its own achievement has, and the CV keeps the
  * same number of bullets for the job, so its layout does not change.
  */
-import { withoutEmDashes } from './cv-writing-guide';
+import { withoutAddedPurpose, withoutEmDashes } from './cv-writing-guide';
 
 export interface CvRole {
   company: string;
@@ -158,7 +158,7 @@ export function checkChoice(
       const item = byId.get(id);
       if (!item || used.has(id) || out.length === limit) continue;
       used.add(id);
-      const reworded = withoutEmDashes(text.replace(/\s+/g, ' ').trim());
+      const reworded = withoutAddedPurpose(withoutEmDashes(text.replace(/\s+/g, ' ').trim()), item.text);
       const fine =
         reworded.length >= 8 &&
         reworded.length <= 400 &&

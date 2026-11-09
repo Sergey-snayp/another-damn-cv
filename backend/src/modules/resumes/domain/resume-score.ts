@@ -1,4 +1,4 @@
-import { findKeywords, scoreCv, type KeywordMatch } from './job-keywords';
+import { findKeywords, keywordIn, scoreCv, type KeywordMatch } from './job-keywords';
 import type { RenderedResume } from './resume';
 
 /** The editor's sections an issue points at, so its card can show a badge. */
@@ -23,7 +23,8 @@ export interface ResumeIssue {
 export interface ResumeScore {
   /** 0–100 for the job; null without a job to score against. */
   score: number | null;
-  keywords: KeywordMatch | null;
+  /** `skillsOnly`: keywords the CV names only in its skills list, not in any job's lines. */
+  keywords: (KeywordMatch & { skillsOnly: string[] }) | null;
   issues: ResumeIssue[];
 }
 
@@ -51,6 +52,24 @@ export function resumeText(resume: RenderedResume): string {
     ...(resume.certifications ?? []).flatMap((item) => [item.name, item.issuer]),
     ...resume.skills.map((skill) => skill.name),
     ...(resume.customSections ?? []).flatMap((section) => [section.title, section.text, ...section.bullets]),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** The CV's work: summary, headline, jobs and projects, without the skills list. */
+function workText(resume: RenderedResume): string {
+  return [
+    resume.contact?.headline,
+    ...Object.values(resume.summaries),
+    ...resume.experiences.flatMap((role) => [
+      role.title,
+      role.blurb,
+      role.techStack,
+      ...role.achievements.map((a) => a.bullet),
+    ]),
+    ...(resume.projects ?? []).flatMap((project) => [project.name, project.role, ...project.bullets]),
+    ...(resume.customSections ?? []).flatMap((section) => [section.text, ...section.bullets]),
   ]
     .filter(Boolean)
     .join('\n');
@@ -159,10 +178,18 @@ export function scoreResume(resume: RenderedResume, jobText?: string | null): Re
     kind: 'keyword',
     message: `The job asks for ${name}. Add it where you have used it.`,
   }));
+  // Searches and recruiters weigh a skill shown in real work above one only listed.
+  const work = workText(resume);
+  const skillsOnly = match.matched.filter((name) => !keywordIn(name, work));
+  const listedOnly = skillsOnly.map<ResumeIssue>((name) => ({
+    section: 'experience',
+    kind: 'keyword',
+    message: `${name} is only in your skills list. Add it to a bullet or tech stack where you used it.`,
+  }));
   const quality = Math.max(0, 100 - 8 * issues.length);
   return {
     score: Math.round(0.75 * match.score + 0.25 * quality),
-    keywords: match,
-    issues: [...missing, ...issues],
+    keywords: { ...match, skillsOnly },
+    issues: [...missing, ...listedOnly, ...issues],
   };
 }

@@ -27,7 +27,8 @@ export interface ResumeIssue {
 
 export interface ResumeScore {
   score: number | null;
-  keywords: { score: number; matched: string[]; missing: string[] } | null;
+  /** `skillsOnly`: keywords the CV names only in its skills list, not in any job's lines. */
+  keywords: { score: number; matched: string[]; missing: string[]; skillsOnly?: string[] } | null;
   issues: ResumeIssue[];
   job: { id: string | null; title: string; company: string | null };
 }

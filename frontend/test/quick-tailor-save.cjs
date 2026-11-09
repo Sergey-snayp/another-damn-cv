@@ -257,7 +257,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       }
       if (pathname === '/api/jobs') return reply([]);
       if (pathname === '/api/jobs/job-1') return reply({ id: 'job-1', title: 'Engineer', company: 'Acme', description: 'Build Node.js services.' });
-      if (pathname.endsWith('/score')) return reply({ score: historyMode ? 50 : null, keywords: historyMode ? { matched: ['Node.js'], missing: ['Docker'] } : null, issues: [], job: { id: 'job-1', title: 'Engineer', company: 'Acme' } });
+      if (pathname.endsWith('/score')) return reply({ score: historyMode ? 50 : null, keywords: historyMode ? { matched: ['Node.js', 'TypeScript'], missing: ['Docker'], skillsOnly: ['TypeScript'] } : null, issues: [], job: { id: 'job-1', title: 'Engineer', company: 'Acme' } });
       if (pathname.endsWith('/job-assessment')) {
         assessmentRequests.push({ path: pathname, body: JSON.parse(request.postData() || '{}') });
         await pause(200);
@@ -574,6 +574,12 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         assert.doesNotMatch(slots[0], /From your Profile/);
         assert.match(slots[1], /Cut checkout latency by 30% with Redis caching\./);
         assert.match(slots[1], /From your Profile/);
+        assert.doesNotMatch(slots[1], /For recruiters/, 'a plain line has no recruiter note');
+        // A keyword only in the skills list is marked as such.
+        assert.deepEqual(
+          await page.$$eval('.ra-kw.have', chips => chips.map(chip => chip.textContent)),
+          ['✓ Node.js', '✓ TypeScript · skills only'],
+        );
         await page.screenshot({ path: '/private/tmp/job-agent-qt-profile-choice.png' });
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Swap').click());
         await pause(1500);

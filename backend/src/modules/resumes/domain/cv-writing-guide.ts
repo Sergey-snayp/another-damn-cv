@@ -31,6 +31,30 @@ export const SUMMARY_RULES = `HOW TO WRITE THE SUMMARY (3 or 4 sentences, about 
   for AI, and leadership only if it asks for leadership.
 - No schema or table counts. Never mix two employers in one clause.`;
 
+/**
+ * How a CV line reads for the people and the software that screen it: a
+ * recruiter who is often not technical and skims for about 7 seconds, and
+ * search filters that match the posting's words, sometimes literally.
+ *
+ * Style only: every prompt's honesty rules still win. Nothing here allows a
+ * fact, a benefit or an explanation the candidate's own facts do not give.
+ */
+export const RECRUITER_RULES = `WRITE FOR A NON-TECHNICAL RECRUITER AND FOR THE SEARCH FILTERS:
+- Lead with what changed, in plain words (faster, cheaper, safer, fewer errors, less manual
+  work, more customers), then how, then at most 2 key tools. The full tool list belongs in
+  the job's tech stack line, not in a bullet.
+- Say why it mattered to the business or its users only when the facts say so. Never add a
+  purpose or benefit the facts do not state ("to reduce risk", "to improve quality",
+  "for reliability", "instead of hardcoding").
+- A name a recruiter would not know (an internal system, a codename, a niche vendor): explain
+  it only with words the facts give, or leave it out when the line still holds without it.
+  Never guess what a name is.
+- Put the posting's matching term early in the line, in the posting's exact words.
+- An acronym the posting spells out ("Continuous Integration and Delivery (CI/CD)") is written
+  the same way: full words, then the acronym. Common ones (API, AWS, SQL) stay short.
+- Make numbers easy to picture: "20,000 card payments a day" rather than "30-40k API requests",
+  when the facts say what was counted.`;
+
 /** One bullet under a job or project. */
 export const BULLET_RULES = `HOW TO WRITE A BULLET:
 - Start with a strong past-tense verb and the result: the first 2 or 3 words are what
@@ -41,7 +65,9 @@ export const BULLET_RULES = `HOW TO WRITE A BULLET:
   one; never make one up.
 - One idea per bullet, at most 2 lines (about 30 words). End with a period.
 - Let the wording show ownership and follow-through, without claiming more than the
-  line says.`;
+  line says.
+
+${RECRUITER_RULES}`;
 
 /** The line under a job's title that says what the work was about. */
 export const DESCRIPTION_RULES = `HOW TO WRITE A JOB'S DESCRIPTION LINE:
@@ -94,4 +120,32 @@ export function withoutEmDashes(text: string): string {
     .replace(/(\D)\s+–\s+(\D)/g, '$1, $2')
     .replace(/,\s*([,.;:])/g, '$1')
     .replace(/^,\s*/, '');
+}
+
+const PURPOSE =
+  /,?\s+(?:to (?:improve|reduce|ensure|enhance|increase|boost|speed up|support|enable|guard against|protect|drive|maximi[sz]e|minimi[sz]e|strengthen|harden|streamline|optimi[sz]e|prevent)|for (?:better |improved |greater |higher )?(?:reliability|scalability|security|performance|efficiency|resilience|maintainability|quality|visibility|stability)|in order to|instead of|ensuring|improving|enabling|reducing|resulting in|leading to)\b[^.;]*/i;
+const CONTENT = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(
+      (word) =>
+        word.length > 3 && !['with', 'that', 'into', 'from', 'more', 'less', 'their', 'than'].includes(word),
+    );
+
+/**
+ * A purpose or benefit the AI tacked on ("…to reduce risk", "…for reliability")
+ * that the facts do not state is cut, ending the line where the fact ends. A
+ * clause whose words the facts do give stays.
+ */
+export function withoutAddedPurpose(line: string, facts: string): string {
+  const match = PURPOSE.exec(line);
+  if (!match) return line;
+  const known = new Set(CONTENT(facts));
+  const words = CONTENT(match[0]).filter(
+    (word) => !['ensure', 'improve', 'reduce', 'enable', 'support'].includes(word),
+  );
+  if (words.length && words.filter((word) => known.has(word)).length / words.length >= 0.6) return line;
+  const kept = line.slice(0, match.index).replace(/[\s,;:]+$/, '');
+  return kept.length >= 8 ? `${kept}.` : line;
 }

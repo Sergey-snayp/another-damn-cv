@@ -101,3 +101,6 @@
 .career-back { margin-right: auto; padding: 8px 4px; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .career-back:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) { .describe-dot { animation: none; } }
+
+.profile-import-dialog .describe-hint { color: var(--color-text); }
+.profile-import-dialog .describe-hint::before { content: "For recruiters: "; font-weight: 700; }

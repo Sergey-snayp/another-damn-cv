@@ -6,6 +6,7 @@ import { jobName, jobsApi, type JobDetail } from '../jobsApi';
 import { resumeApi, type QuickTailoringDraft, type RenderedResume } from '../resumeApi';
 import { DiffText } from '../resume/DiffText';
 import { lineDiff } from '../resume/lineDiff';
+import { recruiterFlags } from '../resume/readability';
 import { closeEmbed, downloadFromApi, embedded } from '../embed';
 import { ResumeDocument, type RewriteTarget } from '../resume/ResumeDocument';
 import { PagedDocument, ScaledPage } from '../resume/PagedDocument';
@@ -244,6 +245,9 @@ function copyOfRegion(region: HTMLElement, scale: number, live = false): HTMLEle
 
 /** The window's margin above and below the CV lines it shows. */
 const WINDOW_PAD = 4;
+
+/** Lines read by a recruiter as prose: checked for tool names and unknown acronyms. */
+const READ_AS_PROSE = new Set(['bullet', 'blurb']);
 
 /** What the line is, for the screen's label. */
 const KIND_NAMES: Record<string, string> = { summary: 'Summary', bullet: 'Bullet', blurb: 'Job description', headline: 'Headline', skills: 'Skills', techStack: 'Tech stack' };
@@ -795,6 +799,11 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   }, [behind, windowedNow, inJob, scale, run]);
 
   // While the AI works: a running timer in the card; the window onto the CV pulses.
+  // The CV's own words, where an acronym may already be spelled out.
+  const cvText = useMemo(() => (draft ? [
+    ...Object.values(draft.summaries ?? {}),
+    ...draft.experiences.flatMap((role) => [role.blurb ?? '', role.techStack ?? '', ...role.achievements.map((item) => item.bullet)]),
+  ].join('\n') : ''), [draft]);
   const working = Boolean(tailoring?.items.some((item) => item.busy));
   const elapsed = useElapsed(working);
 
@@ -815,6 +824,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     ? draft.customSections?.find((section) => `custom:${section.lineageId}` === key)?.title || 'Section'
     : ({ summary: 'Professional Summary', experience: 'Professional Experience', projects: 'Projects', skills: 'Skills', education: 'Education', certifications: 'Certifications' } as Record<string, string>)[key] ?? key;
   const matched = score?.keywords?.matched ?? [];
+  const skillsOnly = new Set(score?.keywords?.skillsOnly ?? []);
   const missing = score?.keywords?.missing ?? [];
   const skills = new Set(draft.skills.map((skill) => skill.name.toLowerCase()));
   const waiting = tailoring?.items.filter((item) => item.busy).length ?? 0;
@@ -967,6 +977,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
                             {back ? <DiffLine key={item.after} before={item.before.trim()} after={item.after!} /> : withBold(item.before.trim())}
                             {back && item.fromProfile && <span className="qt-slot-note qt-from">From your Profile</span>}
+                            {back && READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after!, cvText).map((note, index) => (
+                              <span key={`r${index}`} className="qt-slot-note qt-hint">{note}</span>
+                            ))}
                             {item.error && !item.busy && <span className="qt-slot-note ra-error">{item.error}</span>}
                             {item.decided
                               ? <span className="qt-slot-note">{item.decided === 'used' ? '✓ Used' : 'Skipped'}</span>
@@ -991,6 +1004,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {many && !item.busy && item.after !== undefined && (
                           <>
                             {item.fromProfile ? <p className="qt-note qt-from">From your Profile</p> : null}
+                            {READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after, cvText).map((note, index) => (
+                              <p key={`r${index}`} className="qt-note qt-hint">{note}</p>
+                            ))}
                             {item.added?.length ? <p className="qt-note">+ From your CV: {item.added.join(', ')}</p> : null}
                             {item.dropped?.length ? <p className="qt-note">− Left out for this job: {item.dropped.join(', ')}</p> : null}
                             {item.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
@@ -1065,7 +1081,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                 <div className="ra-score"><Gauge score={score.score} /></div>
                 <p className="ra-muted center">Mentions {matched.length} of {matched.length + missing.length} keywords from the job</p>
                 <div className="ra-keywords">
-                  {matched.map((kw) => <span key={kw} className="ra-kw have" tabIndex={0} {...keywordCard(kw)}>✓ {kw}</span>)}
+                  {matched.map((kw) => skillsOnly.has(kw)
+                    ? <span key={kw} className="ra-kw have only" tabIndex={0} title={`${kw} is only in your skills list. Add it to a bullet or tech stack where you used it.`} {...keywordCard(kw)}>✓ {kw} · skills only</span>
+                    : <span key={kw} className="ra-kw have" tabIndex={0} {...keywordCard(kw)}>✓ {kw}</span>)}
                   {missing.map((kw) => <span key={kw} className="ra-kw miss" tabIndex={0} {...keywordCard(kw)}>{kw}</span>)}
                 </div>
                 {missing.some((kw) => !skills.has(kw.toLowerCase())) && (

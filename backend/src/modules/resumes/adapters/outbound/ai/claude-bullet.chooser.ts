@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
 import { firstJsonObject } from '../../../../../shared/ai/json';
 import type { BulletChooser } from '../../../application/ports/role-bullets';
-import { WRITING_RULES } from '../../../domain/cv-writing-guide';
+import { BULLET_RULES, WRITING_RULES } from '../../../domain/cv-writing-guide';
 import { ResumeError } from '../../../application/errors';
 
 const SYSTEM = `You choose the bullets for one job on a CV, for one job posting.
@@ -31,7 +31,9 @@ How to choose:
 Return ONLY JSON, no prose and no code fences:
 {"chosen": [{"id": "p3", "text": "..."}], "alternates": [{"id": "c1", "text": "..."}]}
 
-${WRITING_RULES}`;
+${WRITING_RULES}
+
+${BULLET_RULES}`;
 
 const pick = z.array(z.object({ id: z.string().catch(''), text: z.string().catch('') })).catch([]);
 const answerSchema = z.object({ chosen: pick, alternates: pick });

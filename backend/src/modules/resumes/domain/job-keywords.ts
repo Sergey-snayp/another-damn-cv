@@ -324,3 +324,9 @@ export function scoreCv(keywords: Keyword[], cvText: string): KeywordMatch {
   }
   return { score: total ? Math.round((100 * have) / total) : 0, matched, missing };
 }
+
+/** True when the text names the keyword (by any of its spellings). */
+export function keywordIn(name: string, text: string): boolean {
+  const skill = COMPILED.find((entry) => entry.name === name);
+  return skill ? mentions(skill, text) : false;
+}
