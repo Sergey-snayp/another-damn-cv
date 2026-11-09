@@ -61,7 +61,7 @@
   .profile-career-editor > form { max-height: calc(100dvh - 20px); }
 }
 
-/* ── Describe in your own words: a calm box for notes, then a list to review. */
+/* ── Add a note: a calm box for notes, then a list to review. */
 .describe-job { width: min(760px, calc(100vw - 32px)); }
 .describe-write { display: grid; gap: 12px; }
 .describe-write > label { font-weight: 600; }

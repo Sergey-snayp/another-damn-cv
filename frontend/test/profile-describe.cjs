@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(__dirname, '../../backend')] }));
 
-// Describe in your own words → Turn into bullets → review → saved to the job.
+// Add a note → Turn into bullets → review → saved to the job.
 // Isolated browser and synthetic API data: no account or real document is changed.
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 (async () => {
@@ -74,9 +74,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.match(await page.$eval('.profile-entry-more', element => element.textContent), /1 note · last/);
 
     // Write: notes, an idea, and the text kept when the box closes.
-    await button('Describe Senior Software Engineer at Ciklum in your own words').click();
+    await button('Add a note to Senior Software Engineer at Ciklum').click();
     await page.waitForSelector('#describe-notes');
-    assert.equal(await page.$eval('#describe-title', element => element.textContent), 'Describe your work');
+    assert.equal(await page.$eval('#describe-title', element => element.textContent), 'Add a note');
     await page.type('#describe-notes', 'built the TLS cert service from scratch, ACME + route53 + step functions. ~20k transactions a day.');
     await button('What changed because of it?').click();
     await pause(100);
@@ -85,7 +85,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.keyboard.type('renewals became automatic');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.describe-job'));
-    await button('Describe Senior Software Engineer at Ciklum in your own words').click();
+    await button('Add a note to Senior Software Engineer at Ciklum').click();
     await page.waitForSelector('#describe-notes');
     assert.match(await page.$eval('#describe-notes', box => box.value), /renewals became automatic$/, 'closing keeps what you typed');
 
@@ -139,7 +139,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Ran payment APIs handling ~20,000 transactions a day/);
 
     // Save notes only: kept with the job, no achievements, and the box starts empty next time.
-    await button('Describe Software Engineer at EPAM in your own words').click();
+    await button('Add a note to Software Engineer at EPAM').click();
     await page.waitForSelector('#describe-notes');
     assert.equal(await page.$eval('#describe-notes', box => box.value), '');
     await page.type('#describe-notes', 'migrated the AML rules engine to Kafka');
@@ -148,7 +148,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(saves.at(-1).sections.experiences[1].bullets, ['Built REST APIs.']);
     assert.equal(saves.at(-1).sections.experiences[1].notes[0].text, 'migrated the AML rules engine to Kafka');
     assert.match(await page.$eval('.profile-success', element => element.textContent), /Notes saved/);
-    await button('Describe Senior Software Engineer at Ciklum in your own words').click();
+    await button('Add a note to Senior Software Engineer at Ciklum').click();
     await page.waitForSelector('#describe-notes');
     assert.equal(await page.$eval('#describe-notes', box => box.value), '', 'saved notes leave the box empty');
     assert.match(await page.$eval('.describe-earlier summary', element => element.textContent), /Earlier notes \(2\)/);
@@ -187,7 +187,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(state.data.experiences.value[0].bullets, beforeRemoval[0].bullets);
     assert.deepEqual(state.data.experiences.value[1], beforeRemoval[1]);
     await visit();
-    await button('Describe Senior Software Engineer at Ciklum in your own words').click();
+    await button('Add a note to Senior Software Engineer at Ciklum').click();
     await page.waitForSelector('.describe-earlier');
     await page.click('.describe-earlier summary');
     assert.equal(await page.$$eval('.describe-saved-note', notes => notes.length), 1);
@@ -197,7 +197,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForFunction(() => !document.querySelector('.describe-job'));
     assert.deepEqual(state.data.experiences.value[0].notes, [], 'the final note can be cleared');
     await visit();
-    await button('Describe Senior Software Engineer at Ciklum in your own words').click();
+    await button('Add a note to Senior Software Engineer at Ciklum').click();
     await page.waitForSelector('#describe-notes');
     assert.equal(await page.$('.describe-earlier'), null, 'deleted notes stay gone after reloading');
     await button('Close').click();
@@ -205,7 +205,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     // Remove all, then cancel: unsaved removals leave the stored notes intact.
     state.data.experiences.value[0].notes = structuredClone(beforeRemoval[0].notes);
     await visit();
-    await button('Describe Senior Software Engineer at Ciklum in your own words').click();
+    await button('Add a note to Senior Software Engineer at Ciklum').click();
     await page.waitForSelector('.describe-earlier');
     await page.click('.describe-earlier summary');
     await button('Remove all notes').click();
@@ -214,7 +214,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('.career-confirm');
     await page.evaluate(() => [...document.querySelectorAll('.career-confirm button')].find(button => button.textContent === 'Close').click());
     assert.equal(state.data.experiences.value[0].notes.length, 2);
-    await button('Describe Senior Software Engineer at Ciklum in your own words').click();
+    await button('Add a note to Senior Software Engineer at Ciklum').click();
     await page.waitForSelector('.describe-earlier');
     await page.click('.describe-earlier summary');
     await button('Remove all notes').click();

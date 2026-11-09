@@ -65,7 +65,7 @@ export function Profile() {
   const [importing, setImporting] = useState<false | { resumeId?: string }>(false);
   // A whole section, or (from a job's or school's own edit button) just that entry.
   const [editingCareer, setEditingCareer] = useState<{ section: CareerSectionKey; entry?: CareerEntry } | null>(null);
-  // "Describe in your own words" open for one job.
+  // "Add a note" open for one job.
   const [describing, setDescribing] = useState<number | null>(null);
   const [collecting, setCollecting] = useState(false);
 

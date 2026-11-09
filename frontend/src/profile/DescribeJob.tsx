@@ -54,7 +54,7 @@ function withTools(stack: string, tools: string[]): string {
 }
 
 /**
- * Describe in your own words: notes about one job, kept as written, turned into
+ * Add a note: notes about one job, kept as written, turned into
  * achievements you keep, edit or drop. Nothing changes in Profile until Save.
  */
 export function DescribeJob({
@@ -232,7 +232,7 @@ export function DescribeJob({
       >
         <header className="profile-import-header career-editor-header">
           <div>
-            <h2 id="describe-title">{stage === "review" ? `Review ${items.length} achievements` : "Describe your work"}</h2>
+            <h2 id="describe-title">{stage === "review" ? `Review ${items.length} achievements` : "Add a note"}</h2>
             <p className="career-editor-subtitle">
               {[role.title, role.company].filter(Boolean).join(" · ")}
             </p>

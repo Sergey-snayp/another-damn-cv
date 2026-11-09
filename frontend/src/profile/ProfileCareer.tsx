@@ -34,7 +34,7 @@ export function ProfileCareer({
 }: {
   imported: CareerData;
   importDisabled: boolean;
-  /** Opens "Describe in your own words" for one job. */
+  /** Opens "Add a note" for one job: what you did, in your own words. */
   onDescribe(entry: number): void;
   /** Opens "Collect from my CVs". */
   onCollect?(): void;
@@ -126,10 +126,11 @@ export function ProfileCareer({
                     type="button"
                     className="profile-describe-button"
                     disabled={importDisabled}
-                    aria-label={`Describe ${role.title} at ${role.company} in your own words`}
+                    aria-label={`Add a note to ${role.title} at ${role.company}`}
                     onClick={() => onDescribe(index)}
                   >
-                    ✦ Describe in your own words
+                    <Icon name="plus" size={14} />
+                    Add a note
                   </button>
                   {role.notes?.length ? (
                     <span className="profile-muted">
