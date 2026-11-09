@@ -19,7 +19,15 @@ import { GetProfileCareer } from '../../../application/use-cases/get-profile-car
 import { ImportProfileCareer } from '../../../application/use-cases/import-profile-career';
 import { SaveProfileCareer } from '../../../application/use-cases/save-profile-career';
 import { CareerImportError, type CareerImport, type CareerSections } from '../../../domain/career-profile';
-import { careerImportSchema, careerUpdateSchema } from '../../career.schemas';
+import { DraftAchievements } from '../../../application/use-cases/draft-achievements';
+import { AchievementError, type AchievementSource } from '../../../domain/achievements';
+import { achievementDraftSchema, careerImportSchema, careerUpdateSchema } from '../../career.schemas';
+@Catch(AchievementError)
+class AchievementErrorFilter implements ExceptionFilter {
+  catch(error: AchievementError, host: ArgumentsHost) {
+    host.switchToHttp().getResponse<Response>().status(502).json({ statusCode: 502, message: error.message });
+  }
+}
 @Catch(CareerImportError)
 class CareerErrorFilter implements ExceptionFilter {
   catch(error: CareerImportError, host: ArgumentsHost) {
@@ -33,13 +41,20 @@ class CareerErrorFilter implements ExceptionFilter {
 }
 @Controller('profile/career')
 @UseGuards(AuthGuard)
-@UseFilters(CareerErrorFilter)
+@UseFilters(CareerErrorFilter, AchievementErrorFilter)
 export class ProfileCareerController {
   constructor(
     @Inject(GetProfileCareer) private readonly get: GetProfileCareer,
     @Inject(ImportProfileCareer) private readonly importer: ImportProfileCareer,
     @Inject(SaveProfileCareer) private readonly editor: SaveProfileCareer,
+    @Inject(DraftAchievements) private readonly achievements: DraftAchievements,
   ) {}
+  /** "Turn into bullets": achievements proposed from the notes about one job. Nothing is saved. */
+  @Post('achievements') @HttpCode(200) draftAchievements(
+    @Body(new ZodValidationPipe(achievementDraftSchema)) source: AchievementSource,
+  ) {
+    return this.achievements.execute(source);
+  }
   @Get() read(@CurrentUser() userId: string) {
     return this.get.execute(userId);
   }

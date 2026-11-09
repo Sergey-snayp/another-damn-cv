@@ -32,6 +32,19 @@ export interface CareerExperience {
   bullets: string[];
   /** The job's tools as one line; empty when not given. */
   techStack: string;
+  /** What you wrote about this job in your own words, kept as written. */
+  notes?: CareerNote[];
+}
+export interface CareerNote {
+  text: string;
+  at: string;
+}
+/** "Turn into bullets": what the AI proposes from your notes, already checked. */
+export interface AchievementProposal {
+  achievements: { text: string; ask: string | null; duplicateOf: string | null }[];
+  techStack: string[];
+  description: string;
+  dropped: number;
 }
 export interface CareerEducation {
   institution: string;
@@ -122,6 +135,19 @@ export const careerApi = {
       method: "PUT",
       body: JSON.stringify({ expectedRevision, sections }),
     }).then(withStacks).then(notifyCareerSaved),
+  draftAchievements: (source: {
+    title: string;
+    company: string;
+    client: string;
+    description: string;
+    bullets: string[];
+    techStack: string;
+    notes: string;
+  }) =>
+    request<AchievementProposal>("/achievements", {
+      method: "POST",
+      body: JSON.stringify(source),
+    }),
   apply: (input: ProfileImportInput) =>
     request<CareerState>("/import", {
       method: "POST",

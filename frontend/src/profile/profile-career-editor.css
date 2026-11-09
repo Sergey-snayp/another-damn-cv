@@ -60,3 +60,44 @@
   .career-bullet-tools { opacity: 1; }
   .profile-career-editor > form { max-height: calc(100dvh - 20px); }
 }
+
+/* ── Describe in your own words: a calm box for notes, then a list to review. */
+.describe-job { width: min(760px, calc(100vw - 32px)); }
+.describe-write { display: grid; gap: 12px; }
+.describe-write > label { font-weight: 600; }
+.profile-import-dialog .describe-notes { margin: 0; min-height: 12em; max-height: 50vh; font-size: 14px; line-height: 1.6; }
+.describe-ideas { display: flex; flex-wrap: wrap; gap: 6px; }
+.describe-ideas button { padding: 5px 11px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); color: var(--color-text); font: inherit; font-size: 12px; cursor: pointer; }
+.describe-ideas button:hover:not(:disabled) { border-color: var(--color-text); }
+.describe-earlier { border-top: 1px solid var(--color-border); padding-top: 10px; }
+.describe-earlier > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--color-muted); }
+.describe-earlier .profile-import-check { margin: 10px 0 6px; font-weight: 500; }
+.describe-earlier blockquote { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--color-border); background: var(--color-background); border-radius: 0 8px 8px 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.describe-earlier blockquote small { display: block; margin-bottom: 3px; color: var(--color-muted); }
+.describe-working { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--color-text); }
+.describe-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 2px var(--color-text); animation: describe-pulse 1s ease-in-out infinite; }
+@keyframes describe-pulse { 50% { transform: scale(.55); } }
+.describe-review { display: grid; gap: 14px; }
+.describe-review ol { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.describe-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px; border: 1px solid var(--color-border); border-radius: 10px; }
+.profile-import-dialog .describe-item textarea { margin: 0; border-color: transparent; background: none; font-size: 13px; }
+.profile-import-dialog .describe-item textarea:focus { border-color: var(--color-border); background: var(--color-surface); }
+.describe-item.has-ask { border-color: var(--color-accent-border); background: var(--color-accent-soft); }
+.describe-item.is-duplicate { border-style: dashed; }
+.describe-item.is-dropped { opacity: .55; }
+.describe-item.is-dropped textarea { text-decoration: line-through; }
+.describe-actions { grid-column: 2; grid-row: 1; display: flex; align-items: flex-start; padding-top: 4px; }
+.describe-actions button { padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.describe-actions button:hover { border-color: var(--color-text); }
+.profile-import-dialog .describe-ask, .profile-import-dialog .describe-note { grid-column: 1 / -1; margin: 0 12px 2px; font-size: 12px; line-height: 1.45; }
+.profile-import-dialog .describe-ask { color: var(--color-text); font-weight: 600; }
+.describe-ask span { color: var(--color-muted); font-weight: 400; }
+.describe-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; }
+.describe-tools legend { width: 100%; margin-bottom: 8px; padding: 0; font-size: 13px; font-weight: 600; }
+.describe-tools .profile-choice { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.describe-tools .profile-choice:has(input:checked) { border-color: var(--color-text); background: var(--color-accent-soft); }
+.describe-description { display: grid; gap: 6px; }
+.profile-import-dialog .describe-description textarea { margin: 0; }
+.career-back { margin-right: auto; padding: 8px 4px; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.career-back:hover { text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) { .describe-dot { animation: none; } }

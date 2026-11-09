@@ -4,6 +4,10 @@ import { AuthModule } from '../auth/auth.module';
 import { AUTH_API } from '../auth/auth.tokens';
 import type { AuthApi } from '../auth/contracts';
 import { ResumesModule } from '../resumes/resumes.module';
+import { AiModule } from '../../shared/ai/ai.module';
+import { ClaudeProcessRunner } from '../../shared/ai/claude-process.runner';
+import { ClaudeAchievementWriter } from './adapters/outbound/ai/claude-achievement.writer';
+import { DraftAchievements } from './application/use-cases/draft-achievements';
 import { RESUMES_API } from '../resumes/resumes.tokens';
 import type { ResumesApi } from '../resumes/contracts';
 import { ExtensionProfileController, ProfilesController } from './adapters/inbound/http/profiles.controller';
@@ -26,9 +30,14 @@ import { ProfileDirectoryModule } from './profile-directory.module';
 import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITORY } from './profiles.tokens';
 
 @Module({
-  imports: [AuthModule, ProfileDirectoryModule, ResumesModule, DatabaseModule],
+  imports: [AuthModule, ProfileDirectoryModule, ResumesModule, DatabaseModule, AiModule],
   controllers: [ProfilesController, ExtensionProfileController, ProfileCareerController],
   providers: [
+    {
+      provide: DraftAchievements,
+      inject: [ClaudeProcessRunner],
+      useFactory: (runner: ClaudeProcessRunner) => new DraftAchievements(new ClaudeAchievementWriter(runner)),
+    },
     {
       provide: SaveProfileCareer,
       inject: [PROFILE_DIRECTORY, PrismaCareerProfileRepository],

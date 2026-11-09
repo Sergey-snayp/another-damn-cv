@@ -148,6 +148,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(await page.$$eval('.profile-career-editor .career-edit-entry', rows => rows.length), 1);
     await button('Cancel').click();
     await closed();
+    await page.evaluate(() => scrollTo(0, 0)); // The app's sticky header must not cover the button.
     await button('Edit profile summary').click();
     await input('Professional summary').fill('Unsaved temporary summary.');
     await button('Cancel').click();

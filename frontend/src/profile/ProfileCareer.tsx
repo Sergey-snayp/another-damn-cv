@@ -34,9 +34,12 @@ export function ProfileCareer({
   imported,
   importDisabled,
   onEditCareer,
+  onDescribe,
 }: {
   imported: CareerData;
   importDisabled: boolean;
+  /** Opens "Describe in your own words" for one job. */
+  onDescribe(entry: number): void;
   /** With `entry`, only that job or education entry is edited, or a new one added. */
   onEditCareer(section: CareerSectionKey, entry?: CareerEntry): void;
 }) {
@@ -103,6 +106,23 @@ export function ProfileCareer({
               {role.techStack?.trim() && (
                 <p className="profile-stack"><strong>Tech stack:</strong> {role.techStack}</p>
               )}
+              <div className="profile-entry-more">
+                <button
+                  type="button"
+                  className="profile-describe-button"
+                  disabled={importDisabled}
+                  aria-label={`Describe ${role.title} at ${role.company} in your own words`}
+                  onClick={() => onDescribe(index)}
+                >
+                  ✦ Describe in your own words
+                </button>
+                {role.notes?.length ? (
+                  <span className="profile-muted">
+                    {role.notes.length === 1 ? "1 note" : `${role.notes.length} notes`} · last{" "}
+                    {new Date(role.notes[role.notes.length - 1]!.at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                  </span>
+                ) : null}
+              </div>
             </article>
           ))
         ) : (

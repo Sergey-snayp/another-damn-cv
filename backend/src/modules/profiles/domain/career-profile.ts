@@ -29,6 +29,13 @@ export interface CareerExperience {
   bullets: string[];
   /** The job's tools as one line, "Node.js, TypeScript, PostgreSQL". Missing on older saves. */
   techStack?: string;
+  /** What the person wrote about this job in their own words, kept as written. */
+  notes?: CareerNote[];
+}
+export interface CareerNote {
+  text: string;
+  /** When it was written (ISO). */
+  at: string;
 }
 export interface CareerEducation {
   institution: string;
@@ -88,9 +95,22 @@ export function validateCareerImport(input: CareerImport): void {
 export function mergeCareer(state: CareerState, input: CareerImport, importedAt: string): CareerState {
   const data = { ...state.data };
   for (const key of Object.keys(input.sections) as (keyof CareerSections)[]) {
-    Object.assign(data, { [key]: { value: input.sections[key], source: input.source, importedAt } });
+    const value =
+      key === 'experiences'
+        ? keepNotes(state.data.experiences?.value ?? [], input.sections.experiences ?? [])
+        : input.sections[key];
+    Object.assign(data, { [key]: { value, source: input.source, importedAt } });
   }
   return { revision: state.revision + 1, data };
+}
+
+/** A CV import replaces the jobs; the notes written about a job stay with the same job. */
+function keepNotes(before: CareerExperience[], after: CareerExperience[]): CareerExperience[] {
+  const key = (role: CareerExperience) => `${role.company}\u0000${role.title}`.trim().toLowerCase();
+  const notes = new Map(before.filter((role) => role.notes?.length).map((role) => [key(role), role.notes!]));
+  return after.map((role) =>
+    role.notes?.length || !notes.has(key(role)) ? role : { ...role, notes: notes.get(key(role)) },
+  );
 }
 export const conflict = () =>
   new CareerImportError(

@@ -30,6 +30,10 @@ const sectionsSchema = z
             description: z.string().max(12000),
             bullets: z.array(z.string().trim().min(1).max(4000)).max(100),
             techStack: z.string().trim().max(2000).optional(),
+            notes: z
+              .array(z.object({ text: z.string().trim().min(1).max(20000), at: z.string().max(40) }).strict())
+              .max(50)
+              .optional(),
           })
           .strict(),
       )
@@ -98,5 +102,18 @@ export const careerDataSchema = z
     skills: z
       .object({ value: sectionsSchema.shape.skills.unwrap(), source: sourceSchema, importedAt: z.string() })
       .optional(),
+  })
+  .strict();
+
+/** "Turn into bullets" on one Profile job: the job as saved and the notes to write from. */
+export const achievementDraftSchema = z
+  .object({
+    title: text,
+    company: text,
+    client: text.default(''),
+    description: z.string().max(12000).default(''),
+    bullets: z.array(z.string().max(4000)).max(100).default([]),
+    techStack: z.string().max(2000).default(''),
+    notes: z.string().trim().min(1, 'Write a few words about the job first.').max(60000),
   })
   .strict();

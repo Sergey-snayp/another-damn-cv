@@ -11,6 +11,7 @@ import { usePrimaryResume } from "../profile/usePrimaryResume";
 import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerState } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
+import { DescribeJob } from "../profile/DescribeJob";
 import "../profile/profile.css";
 
 type ProfileTab = "career" | "personal" | "preferences" | "answers";
@@ -62,6 +63,8 @@ export function Profile() {
   const [importing, setImporting] = useState<false | { resumeId?: string }>(false);
   // A whole section, or (from a job's or school's own edit button) just that entry.
   const [editingCareer, setEditingCareer] = useState<{ section: CareerSectionKey; entry?: CareerEntry } | null>(null);
+  // "Describe in your own words" open for one job.
+  const [describing, setDescribing] = useState<number | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -252,6 +255,7 @@ export function Profile() {
               imported={careerState?.data ?? {}}
               importDisabled={dirty || saving || !careerState}
               onEditCareer={(section, entry) => setEditingCareer({ section, entry })}
+              onDescribe={setDescribing}
             />
           </div>
           <aside className="profile-side">
@@ -360,6 +364,23 @@ export function Profile() {
                 setDraft({ ...next });
               })
               .catch(() => setError("The import was saved, but personal details could not refresh. Reload the page to see them."));
+          }}
+        />
+      )}
+      {describing !== null && careerState && (
+        <DescribeJob
+          career={careerState}
+          index={describing}
+          onClose={() => setDescribing(null)}
+          onSaved={(state, added) => {
+            const role = state.data.experiences?.value[describing];
+            setCareerState(state);
+            setDescribing(null);
+            setNotice(
+              added
+                ? `Added ${added} ${added === 1 ? "achievement" : "achievements"} to ${role?.company || "this job"}.`
+                : "Notes saved.",
+            );
           }}
         />
       )}
