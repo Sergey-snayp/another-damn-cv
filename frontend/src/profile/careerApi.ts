@@ -43,6 +43,17 @@ export interface CareerNote {
   text: string;
   at: string;
 }
+/** "Collect from all my CVs": what one job gains from your saved CVs. */
+export interface CollectedJob {
+  /** The Profile job, by its place in the list; null for a job the Profile does not have yet. */
+  index: number | null;
+  company: string;
+  title: string;
+  job: CareerExperience | null;
+  bullets: string[];
+  tools: string[];
+  from: string[];
+}
 /** "Turn into bullets": what the AI proposes from your notes, already checked. */
 export interface AchievementProposal {
   achievements: { text: string; asks: string[]; duplicateOf: string | null }[];
@@ -139,6 +150,7 @@ export const careerApi = {
       method: "PUT",
       body: JSON.stringify({ expectedRevision, sections }),
     }).then(withStacks).then(notifyCareerSaved),
+  collectFromCvs: () => request<{ revision: number; jobs: CollectedJob[] }>("/collect", { method: "POST" }),
   draftAchievements: (source: {
     title: string;
     company: string;

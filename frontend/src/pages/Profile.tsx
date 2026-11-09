@@ -12,6 +12,7 @@ import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerExperience, type CareerState } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
 import { DescribeJob } from "../profile/DescribeJob";
+import { CollectFromCvs } from "../profile/CollectFromCvs";
 import { EmploymentInformation } from '../profile/EmploymentInformation';
 import "../profile/profile.css";
 
@@ -66,6 +67,7 @@ export function Profile() {
   const [editingCareer, setEditingCareer] = useState<{ section: CareerSectionKey; entry?: CareerEntry } | null>(null);
   // "Describe in your own words" open for one job.
   const [describing, setDescribing] = useState<number | null>(null);
+  const [collecting, setCollecting] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -270,6 +272,10 @@ export function Profile() {
               importDisabled={dirty || saving || !careerState}
               onEditCareer={(section, entry) => setEditingCareer({ section, entry })}
               onDescribe={setDescribing}
+              onCollect={() => {
+                setNotice("");
+                setCollecting(true);
+              }}
               onSaveRole={saveRole}
             />
           </div>
@@ -382,6 +388,16 @@ export function Profile() {
                 setDraft({ ...next });
               })
               .catch(() => setError("The import was saved, but personal details could not refresh. Reload the page to see them."));
+          }}
+        />
+      )}
+      {collecting && (
+        <CollectFromCvs
+          onClose={() => setCollecting(false)}
+          onSaved={(state, added) => {
+            setCareerState(state);
+            setCollecting(false);
+            setNotice(added ? `Added ${added} ${added === 1 ? "achievement" : "achievements"} from your CVs.` : "Profile updated from your CVs.");
           }}
         />
       )}

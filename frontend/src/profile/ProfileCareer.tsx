@@ -25,12 +25,15 @@ export function ProfileCareer({
   importDisabled,
   onEditCareer,
   onDescribe,
+  onCollect,
   onSaveRole,
 }: {
   imported: CareerData;
   importDisabled: boolean;
   /** Opens "Describe in your own words" for one job. */
   onDescribe(entry: number): void;
+  /** Opens "Collect from my CVs". */
+  onCollect?(): void;
   /** Saves one job's achievements (stars, edits, additions, deletions) on the latest Profile. */
   onSaveRole(entry: number, patch: (current: CareerExperience) => Partial<RolePatch>): Promise<void>;
   /** With `entry`, only that job or education entry is edited, or a new one added. */
@@ -75,7 +78,20 @@ export function ProfileCareer({
       <section className="profile-panel" aria-labelledby="profile-work-heading">
         <div className="profile-panel-heading">
           <h2 id="profile-work-heading">Experience</h2>
-          {add("experiences", "Add work experience")}
+          <div className="profile-heading-actions">
+            {onCollect && (
+              <button
+                type="button"
+                className="profile-text-button"
+                disabled={importDisabled}
+                title="Add the achievements and jobs your saved CVs have that this Profile doesn't"
+                onClick={onCollect}
+              >
+                Collect from my CVs
+              </button>
+            )}
+            {add("experiences", "Add work experience")}
+          </div>
         </div>
         {experiences.length ? (
           experiences.map((role, index) => (

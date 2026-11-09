@@ -118,3 +118,18 @@
 .describe-asks label { display: grid; gap: 3px; font-size: 12px; font-weight: 600; }
 .profile-import-dialog .describe-asks input { margin: 0; padding: 6px 9px; font-size: 13px; font-weight: 400; }
 .describe-asks .profile-text-button { justify-self: start; margin-top: 2px; font-size: 12px; }
+
+/* Collect from my CVs */
+.profile-heading-actions { display: flex; align-items: center; gap: 12px; }
+.collect-cvs .collect-job { padding: 14px 0; border-top: 1px solid var(--color-border); }
+.collect-cvs .collect-job:first-child { border-top: 0; padding-top: 0; }
+.collect-cvs .collect-job > header { margin-bottom: 8px; }
+.collect-cvs .collect-job > header p, .collect-cvs .collect-job > header .profile-import-check { margin: 0 0 2px; }
+.collect-cvs .collect-job > header small { color: var(--color-muted); font-size: 12px; }
+.collect-cvs .collect-line { display: flex; align-items: flex-start; gap: 9px; padding: 6px 0; font-size: 14px; line-height: 1.45; cursor: pointer; }
+.collect-cvs .collect-line input { margin-top: 3px; flex: none; }
+.collect-cvs .collect-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--color-muted); }
+.collect-cvs .collect-tools .profile-choice { gap: 6px; padding: 4px 10px; font-size: 13px; color: var(--color-text); }
+.collect-cvs .collect-tools .profile-choice { display: inline-flex; line-height: 1; padding: 6px 10px; }
+.collect-cvs .collect-tools .profile-choice input { width: 14px; height: 14px; margin: 0; align-self: center; }
+.collect-cvs .collect-job > header p { color: var(--color-text); }

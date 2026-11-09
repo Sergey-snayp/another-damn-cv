@@ -9,6 +9,8 @@ import { ClaudeProcessRunner } from '../../shared/ai/claude-process.runner';
 import { ClaudeAchievementWriter } from './adapters/outbound/ai/claude-achievement.writer';
 import { DraftAchievements } from './application/use-cases/draft-achievements';
 import { DeepenAchievement } from './application/use-cases/deepen-achievement';
+import { CollectFromCvs } from './application/use-cases/collect-from-cvs';
+import { ResumeJobsReader } from './adapters/outbound/resume-jobs.reader';
 import { RESUMES_API } from '../resumes/resumes.tokens';
 import type { ResumesApi } from '../resumes/contracts';
 import { ExtensionProfileController, ProfilesController } from './adapters/inbound/http/profiles.controller';
@@ -38,6 +40,12 @@ import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITO
       provide: DraftAchievements,
       inject: [ClaudeProcessRunner],
       useFactory: (runner: ClaudeProcessRunner) => new DraftAchievements(new ClaudeAchievementWriter(runner)),
+    },
+    {
+      provide: CollectFromCvs,
+      inject: [PrismaCareerProfileRepository, RESUMES_API],
+      useFactory: (repository: PrismaCareerProfileRepository, resumes: ResumesApi) =>
+        new CollectFromCvs(repository, new ResumeJobsReader(resumes)),
     },
     {
       provide: DeepenAchievement,
