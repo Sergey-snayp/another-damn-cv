@@ -19,7 +19,10 @@ export function careerDate(value: string): string {
 const dateRange = (from: string, to: string, current = false) =>
   [careerDate(from), current ? "Present" : careerDate(to)].filter(Boolean).join(" – ");
 
-/** The career overview: summary, experience, education and skills, each edited in place. */
+/**
+ * The career overview: experience, education and skills, each edited in place.
+ * No summary: each CV's summary is written for its job posting.
+ */
 export function ProfileCareer({
   imported,
   importDisabled,
@@ -42,7 +45,6 @@ export function ProfileCareer({
   const experiences = imported.experiences?.value ?? [];
   const educations = imported.educations?.value ?? [];
   const skills = imported.skills?.value ?? [];
-  const summary = imported.summary?.value ?? "";
   const add = (section: CareerSectionKey, label: string) => (
     <button className="profile-add-button" aria-label={label} onClick={() => onEditCareer(section, "new")} disabled={importDisabled}>
       <Icon name="plus" size={15} />
@@ -62,18 +64,6 @@ export function ProfileCareer({
   );
   return (
     <>
-
-      <section className="profile-panel" aria-labelledby="profile-summary-heading">
-        <div className="profile-panel-heading">
-          <h2 id="profile-summary-heading">Summary</h2>
-          {edit("summary", "Edit profile summary")}
-        </div>
-        {summary ? (
-          <p className="profile-body profile-preserve-lines">{summary}</p>
-        ) : (
-          <p className="profile-empty-line">Describe your background and the work you want to do.</p>
-        )}
-      </section>
 
       <section className="profile-panel" aria-labelledby="profile-work-heading">
         <div className="profile-panel-heading">

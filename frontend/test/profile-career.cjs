@@ -149,12 +149,13 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await button('Cancel').click();
     await closed();
     await page.evaluate(() => scrollTo(0, 0)); // The app's sticky header must not cover the button.
-    await button('Edit profile summary').click();
-    await input('Professional summary').fill('Unsaved temporary summary.');
+    assert.equal(await page.$('#profile-summary-heading'), null, 'the Profile has no summary: each CV writes its own for the job');
+    await button('Edit profile skills').click();
+    await input('Skills — one per line').fill('Unsaved skill');
     await button('Cancel').click();
     await button('Discard').click();
     await closed();
-    assert.equal(state.data.summary.value, original.data.summary.value, 'Cancel discards edits');
+    assert.deepEqual(state.data.skills.value, original.data.skills.value, 'Cancel discards edits');
     state = { revision: state.revision + 1, data: { ...state.data, summary: { value: 'Updated in another session.', source: { kind: 'profile' }, importedAt } } };
     await button('Edit profile skills').click();
     await input('Skills — one per line').fill('Node.js\nTypeScript\nNode.js\n');

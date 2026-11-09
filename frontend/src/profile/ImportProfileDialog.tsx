@@ -126,7 +126,8 @@ export function ImportProfileDialog({
     );
     setSelectedSections(
       (Object.keys(next.sections) as (keyof CareerSections)[]).filter(
-        (key) => !!next.sections[key].length && !base.career.data[key],
+        // No summary: each CV writes its own for the job.
+        (key) => key !== "summary" && !!next.sections[key].length && !base.career.data[key],
       ),
     );
     requestAnimationFrame(() =>
@@ -436,10 +437,9 @@ export function ImportProfileDialog({
                 </section>
               )}
               {(
-                ["summary", "experiences", "educations", "skills"] as const
+                ["experiences", "educations", "skills"] as const
               ).map((key) => {
                 const label = {
-                  summary: "Summary",
                   experiences: "Work experience",
                   educations: "Education",
                   skills: "Skills",
@@ -467,20 +467,6 @@ export function ImportProfileDialog({
                         No {label.toLowerCase()} found. Your saved information
                         will stay unchanged.
                       </p>
-                    ) : key === "summary" ? (
-                      <label>
-                        <span className="profile-import-sr-only">
-                          Summary from CV
-                        </span>
-                        <textarea
-                          rows={5}
-                          maxLength={10000}
-                          value={draft.sections.summary}
-                          onChange={(event) =>
-                            section("summary", event.target.value)
-                          }
-                        />
-                      </label>
                     ) : key === "skills" ? (
                       <label>
                         Skills, one per line
