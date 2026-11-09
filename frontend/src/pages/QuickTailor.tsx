@@ -54,6 +54,19 @@ interface Suggestion {
   decided?: 'used' | 'skipped';
   /** For the summary: how it answers the posting, and the checks it still fails. */
   report?: SummaryReport;
+  /** A job's bullet chosen from the Profile: which achievement, as written there, and where it came from. */
+  chosenId?: string;
+  original?: string;
+  fromProfile?: boolean;
+}
+
+/** An achievement chosen for a job from the Profile and the CV (see tailor-role). */
+interface ChosenBullet {
+  id: string;
+  text: string;
+  original: string;
+  source: 'cv' | 'profile';
+  cvIndex: number | null;
 }
 
 /** What the summary writer returns besides the summary. */
@@ -246,6 +259,8 @@ interface Tailoring {
   request: string;
   /** Notes for the whole card, such as skills the job asks for that the CV does not show. */
   notes?: string[];
+  /** A job's next-best achievements, for Swap. */
+  alternates?: ChosenBullet[];
 }
 
 /** One-click requests for the card's box. */
@@ -581,7 +596,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         return;
       }
       const result = await post<{ suggestion: string; cannotDo: string[] }>('tailor-line', {
-        text: target.text, kind: target.kind,
+        // A bullet chosen from the Profile is reworded from the achievement as written there.
+        text: item.original ?? target.text, kind: target.kind,
         ...(request.trim() ? { instruction: request.trim().slice(0, 500) } : {}),
         // A tech stack is sent with the job's own lines, the only place a tool may come from.
         ...(target.context ? { context: target.context.slice(0, target.kind === 'techStack' ? 8_000 : 1_000) } : {}),
@@ -630,6 +646,59 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     setTailoring({ run, anchor, items, stage: 'compose', request: '' });
   }
 
+  /**
+   * A whole job's bullets, chosen for the posting from the Profile's full list for the job
+   * and the CV's own bullets. A CV bullet chosen stays in its place; Profile ones fill the
+   * others. False when the Profile has nothing more for this job: each line is then tailored alone.
+   */
+  async function tailorRoleBullets(run: number, items: Suggestion[], request: string): Promise<boolean> {
+    const role = items[0]?.target.role;
+    if (!role) return false;
+    for (const item of items) updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, chosenId: undefined, fromProfile: undefined, original: undefined });
+    try {
+      const result = await post<{ matched: boolean; chosen: ChosenBullet[]; alternates: ChosenBullet[] }>('tailor-role', {
+        role: { ...role, bullets: items.map((item) => item.target.text) },
+        ...(request.trim() ? { instruction: request.trim().slice(0, 500) } : {}),
+        job: { jobId },
+      });
+      if (!result.matched || !result.chosen.length) return false;
+      const slots: (ChosenBullet | undefined)[] = items.map(() => undefined);
+      for (const chosen of result.chosen)
+        if (chosen.cvIndex !== null && chosen.cvIndex < slots.length && !slots[chosen.cvIndex]) slots[chosen.cvIndex] = chosen;
+      const rest = result.chosen.filter((chosen) => !slots.includes(chosen));
+      for (let i = 0; i < slots.length; i++) if (!slots[i]) slots[i] = rest.shift();
+      setTailoring((current) => (current && current.run === run ? { ...current, alternates: result.alternates } : current));
+      items.forEach((item, i) => {
+        const chosen = slots[i];
+        updateItem(run, item.key, chosen
+          ? { busy: false, after: chosen.text, value: chosen.text, chosenId: chosen.id, fromProfile: chosen.source === 'profile', original: chosen.original }
+          : { busy: false, after: item.before, value: item.before });
+      });
+      return true;
+    } catch (err) {
+      for (const item of items) updateItem(run, item.key, { busy: false, error: (err as Error).message });
+      return true;
+    }
+  }
+
+  /** Swap: the next-best achievement in this bullet's place; the one it replaces goes back to the list. */
+  function swap(item: Suggestion) {
+    setTailoring((current) => {
+      if (!current?.alternates?.length) return current;
+      const [next, ...rest] = current.alternates;
+      const back: ChosenBullet[] = item.chosenId && item.after
+        ? [{ id: item.chosenId, text: item.after, original: item.original ?? item.before, source: item.fromProfile ? 'profile' : 'cv', cvIndex: null }]
+        : [];
+      return {
+        ...current,
+        alternates: [...rest, ...back],
+        items: current.items.map((row) => row.key === item.key
+          ? { ...row, after: next!.text, value: next!.text, chosenId: next!.id, fromProfile: next!.source === 'profile', original: next!.original, cannotDo: undefined, error: undefined }
+          : row),
+      };
+    });
+  }
+
   /** Generate (again): every line not yet used or skipped, four at a time, skills together. */
   async function generate(current: Tailoring | null = tailoring) {
     if (!current || current.items.some((item) => item.busy)) return;
@@ -638,12 +707,19 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     setTailoring({ ...current, stage: 'generated', notes: undefined });
     const skills = open.filter((item) => item.target.kind === 'skills');
     const lines = open.filter((item) => item.target.kind !== 'skills');
+    // A whole job: its bullets are chosen from the Profile's full list for it, when it has one.
+    const bullets = current.items.length > 1 ? lines.filter((item) => item.target.kind === 'bullet' && item.target.role) : [];
     const work: Promise<unknown>[] = [];
     if (skills.length) work.push(tailorSkills(run, skills, request));
-    const queue = [...lines];
-    const worker = async () => { for (let next = queue.shift(); next; next = queue.shift()) await tailorLine(run, next, request); };
     // Four lines at a time: each is a few seconds, and they do not wait on one another.
-    work.push(worker(), worker(), worker(), worker());
+    const eachLine = (list: Suggestion[]) => {
+      const queue = [...list];
+      const worker = async () => { for (let next = queue.shift(); next; next = queue.shift()) await tailorLine(run, next, request); };
+      return Promise.all([worker(), worker(), worker(), worker()]);
+    };
+    work.push(eachLine(lines.filter((item) => !bullets.includes(item))));
+    if (bullets.length)
+      work.push(tailorRoleBullets(run, bullets, request).then((chosen) => (chosen ? undefined : eachLine(bullets))));
     await Promise.all(work);
   }
 
@@ -757,6 +833,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
           <button className="primary" disabled={same || saving || waits} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
         )}
         {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
+        {item.chosenId && Boolean(tailoring?.alternates?.length) && (
+          <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
+        )}
         <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Try again</button>
         {!many && <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>}
       </div>
@@ -887,6 +966,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
                             {back ? <DiffLine key={item.after} before={item.before.trim()} after={item.after!} /> : withBold(item.before.trim())}
+                            {back && item.fromProfile && <span className="qt-slot-note qt-from">From your Profile</span>}
                             {item.error && !item.busy && <span className="qt-slot-note ra-error">{item.error}</span>}
                             {item.decided
                               ? <span className="qt-slot-note">{item.decided === 'used' ? '✓ Used' : 'Skipped'}</span>
@@ -910,6 +990,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {many && itemActions(item)}
                         {many && !item.busy && item.after !== undefined && (
                           <>
+                            {item.fromProfile ? <p className="qt-note qt-from">From your Profile</p> : null}
                             {item.added?.length ? <p className="qt-note">+ From your CV: {item.added.join(', ')}</p> : null}
                             {item.dropped?.length ? <p className="qt-note">− Left out for this job: {item.dropped.join(', ')}</p> : null}
                             {item.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}

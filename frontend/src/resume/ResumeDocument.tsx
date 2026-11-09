@@ -18,6 +18,8 @@ export interface RewriteTarget {
   label?: string;
   /** The line's data-edit-key on the page, so its new version can be shown in its place. */
   key?: string;
+  /** A job's bullet: which job, so its bullets can be chosen from the Profile's full list. */
+  role?: { company: string; title: string; from: string };
   /** A skills line: its category and skills, tailored together. */
   skills?: { category: string; names: string[] };
   /** Puts the suggestion in the draft; for skills, `next` is the JSON list of names. */

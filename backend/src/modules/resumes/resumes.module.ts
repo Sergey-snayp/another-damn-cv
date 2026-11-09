@@ -12,6 +12,9 @@ import { ProfileDirectoryModule } from '../profiles/profile-directory.module';
 import { PROFILE_DIRECTORY, PROFILE_CAREER_API } from '../profiles/profiles.tokens';
 import type { ProfileCareerApi } from '../profiles/contracts';
 import { PublicAssessmentProfileReader } from './adapters/outbound/modules/assessment-profile.reader';
+import { PublicProfileRolesReader } from './adapters/outbound/modules/profile-roles.reader';
+import { ClaudeBulletChooser } from './adapters/outbound/ai/claude-bullet.chooser';
+import { ChooseRoleBullets } from './application/use-cases/choose-role-bullets';
 import type { ProfileDirectory } from './application/ports/resume-repository';
 import type { ResumeRepository } from './application/ports/resume-repository';
 import { createResumesApi } from './application/resumes-api';
@@ -171,6 +174,22 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           new ClaudeLineRewriter(runner),
           new ClaudeSkillTailor(runner),
           new ClaudeSummaryWriter(runner),
+        ),
+    },
+    {
+      provide: ChooseRoleBullets,
+      inject: [RESUMES_API, PROFILE_CAREER_API, JOBS_API, ClaudeProcessRunner],
+      useFactory: (
+        resumes: ResumesApi,
+        profiles: ProfileCareerApi,
+        jobs: JobsApi,
+        runner: ClaudeProcessRunner,
+      ) =>
+        new ChooseRoleBullets(
+          resumes,
+          new PublicTailoringJobReader(jobs),
+          new PublicProfileRolesReader(profiles),
+          new ClaudeBulletChooser(runner),
         ),
     },
     {

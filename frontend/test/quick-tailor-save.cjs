@@ -184,6 +184,9 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
   let assessmentUnavailable = historyMode;
   let assessedOnOpen = 0;
   let fail = failure, cvSaved = false;
+  // When set, the Profile has more achievements for Acme Labs (see tailor-role).
+  let profileChoice = false;
+  const roleRequests = [];
   let savedId = fullEditor ? 'copy-1' : null, createdDocuments = fullEditor ? 1 : 0;
   let resume = {
     snapshot: 1, contact: { firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com' },
@@ -273,6 +276,23 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         const body = JSON.parse(request.postData() || '{}');
         await pause(150);
         return reply({ groups: body.groups.map(group => ({ category: group.category, skills: [...new Set([...group.skills, 'Kubernetes'])], added: ['Kubernetes'], dropped: [] })), cannotDo: [] });
+      }
+      if (pathname.endsWith('/tailor-role')) {
+        const body = JSON.parse(request.postData() || '{}');
+        roleRequests.push(body);
+        await pause(200);
+        if (!profileChoice) return reply({ matched: false, profileRole: null, chosen: [], alternates: [] });
+        return reply({
+          matched: true,
+          profileRole: { title: 'Backend Engineer', company: 'Acme Labs' },
+          chosen: [
+            { id: 'p4', text: 'Cut checkout latency by 30% with Redis caching.', original: 'Cut checkout latency by 30% with Redis caching.', source: 'profile', cvIndex: null, starred: true },
+            { id: 'c1', text: 'Built Node.js payment APIs.', original: body.role.bullets[0], source: 'cv', cvIndex: 0, starred: false },
+          ],
+          alternates: [
+            { id: 'p5', text: 'Mentored two engineers on code review.', original: 'Mentored two engineers on code review.', source: 'profile', cvIndex: null, starred: false },
+          ],
+        });
       }
       if (pathname.endsWith('/tailor-line')) {
         const body = JSON.parse(request.postData() || '{}');
@@ -533,6 +553,36 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.click(undo);
         assert.ok(moves <= lineCount, `the menu moves at most once per line as it arrives (${moves} moves, ${lineCount} lines), never while text types in`);
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close')?.click());
+      }
+
+      // With more achievements for the job in the Profile: the bullets are chosen from them.
+      {
+        assert.equal(roleRequests.length, 1, 'the job above asked the Profile first');
+        assert.deepEqual(roleRequests[0].role, { company: 'Acme Labs', title: 'Backend Engineer', from: '2020', bullets: roleRequests[0].role.bullets });
+        profileChoice = true;
+        const bulletLines = () => aiRequests.filter(body => body.kind === 'bullet').length;
+        const linesBefore = bulletLines();
+        await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
+        await page.waitForSelector('.qt-unit .qt-generate');
+        await page.click('.qt-unit .qt-generate');
+        await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
+        await pause(1500); // The lines type themselves in.
+        assert.equal(bulletLines(), linesBefore, 'no bullet is tailored line by line');
+        assert.equal(roleRequests.length, 2);
+        const slots = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
+        assert.match(slots[0], /Built Node\.js payment APIs\./, 'a CV bullet chosen stays in its own place');
+        assert.doesNotMatch(slots[0], /From your Profile/);
+        assert.match(slots[1], /Cut checkout latency by 30% with Redis caching\./);
+        assert.match(slots[1], /From your Profile/);
+        await page.screenshot({ path: '/private/tmp/job-agent-qt-profile-choice.png' });
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Swap').click());
+        await pause(1500);
+        assert.match(await page.$$eval('.qt-unit .qt-slot', rows => rows[1].textContent), /Mentored two engineers on code review\./, 'Swap brings the next best');
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all')).click());
+        const roleBullets = await page.$$eval('.qt-zoom [data-section="experience"] article:first-of-type li .pro-text', rows => rows.map(row => row.textContent));
+        assert.deepEqual(roleBullets.slice(0, 2), ['Built Node.js payment APIs.', 'Mentored two engineers on code review.']);
+        await page.click(undo);
+        profileChoice = false;
       }
 
       // The second job's "Tech stack:" bullet is its tech stack line, tailored as a list.

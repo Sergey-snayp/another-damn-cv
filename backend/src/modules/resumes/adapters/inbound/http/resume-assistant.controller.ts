@@ -19,6 +19,8 @@ import { TailoringErrorFilter } from './tailoring-error.filter';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
 import { ResumeAssistant, type JobChoice } from '../../../application/use-cases/resume-assistant';
 import { DescribeTechnology } from '../../../application/use-cases/describe-technology';
+import { ChooseRoleBullets } from '../../../application/use-cases/choose-role-bullets';
+import type { CvRole } from '../../../domain/role-bullets';
 import type { AiSettings, ChatMessage, SkillGroupInput } from '../../../domain/resume-assistant';
 
 const jobSchema = z.union([
@@ -61,6 +63,22 @@ const tailorLineSchema = z
   })
   .strict();
 
+/** A whole job on the CV, for choosing its bullets from the Profile. */
+const tailorRoleSchema = z
+  .object({
+    role: z
+      .object({
+        company: z.string().trim().max(300),
+        title: z.string().trim().max(300),
+        from: z.string().max(80).default(''),
+        bullets: z.array(z.string().max(5_000)).max(60),
+      })
+      .strict(),
+    instruction: z.string().trim().max(500).optional(),
+    job: jobSchema,
+  })
+  .strict();
+
 const skillName = z.string().trim().min(1).max(80);
 const tailorSkillsSchema = z
   .object({
@@ -98,7 +116,20 @@ export class ResumeAssistantController {
   constructor(
     @Inject(ResumeAssistant) private readonly assistant: ResumeAssistant,
     @Inject(DescribeTechnology) private readonly technologies: DescribeTechnology,
+    @Inject(ChooseRoleBullets) private readonly roleBullets: ChooseRoleBullets,
   ) {}
+
+  /** A job's bullets chosen for the posting from the Profile's full list for that job. */
+  @Post(':id/tailor-role')
+  @HttpCode(200)
+  tailorRole(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(tailorRoleSchema))
+    body: { role: CvRole; instruction?: string; job: JobChoice },
+  ) {
+    return this.roleBullets.execute(userId, id, body);
+  }
 
   /** What a skill on the CV is: one sentence, written once by the AI and then saved. */
   @Get(':id/technology')
