@@ -34,6 +34,10 @@ export interface CareerExperience {
   techStack: string;
   /** What you wrote about this job in your own words, kept as written. */
   notes?: CareerNote[];
+  /** Your strongest achievements, by their text: shown first. */
+  starred?: string[];
+  /** Achievements deleted on the Profile page, restorable for 30 days. */
+  removed?: CareerNote[];
 }
 export interface CareerNote {
   text: string;

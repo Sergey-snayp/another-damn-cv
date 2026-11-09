@@ -9,7 +9,7 @@ import { SavedAnswers } from "../profile/SavedAnswers";
 import { DefaultAnswers } from "../profile/DefaultAnswers";
 import { usePrimaryResume } from "../profile/usePrimaryResume";
 import { ImportProfileDialog } from "../profile/ImportProfileDialog";
-import { careerApi, type CareerState } from "../profile/careerApi";
+import { careerApi, type CareerExperience, type CareerState } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
 import { DescribeJob } from "../profile/DescribeJob";
 import "../profile/profile.css";
@@ -140,6 +140,19 @@ export function Profile() {
         { done: LINKS.some((link) => profile[link.key]?.trim()), label: "A link (LinkedIn, GitHub…)", go: () => setActive("personal") },
       ].filter((item) => !item.done)
     : [];
+  /** One job's achievements changed on the page: saved on the latest Profile, so other edits are kept. */
+  async function saveRole(index: number, patch: (current: CareerExperience) => Partial<CareerExperience>) {
+    const latest = await careerApi.read();
+    const roles = latest.data.experiences?.value ?? [];
+    const shown = careerState?.data.experiences?.value[index];
+    const current = roles[index];
+    if (!current || !shown || current.company !== shown.company || current.title !== shown.title)
+      throw new Error("Your Profile changed in another window. Reload the page and try again.");
+    const state = await careerApi.save(latest.revision, {
+      experiences: roles.map((role, i) => (i === index ? { ...role, ...patch(role) } : role)),
+    });
+    setCareerState(state);
+  }
   const update = (key: ContactKey, value: string) => {
     if (!draft) return;
     setDraft({ ...draft, [key]: value });
@@ -256,6 +269,7 @@ export function Profile() {
               importDisabled={dirty || saving || !careerState}
               onEditCareer={(section, entry) => setEditingCareer({ section, entry })}
               onDescribe={setDescribing}
+              onSaveRole={saveRole}
             />
           </div>
           <aside className="profile-side">

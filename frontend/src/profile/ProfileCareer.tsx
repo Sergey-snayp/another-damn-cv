@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { usePrimaryResume } from "./usePrimaryResume";
-import type { CareerData, CareerSection } from "./careerApi";
+import type { CareerData, CareerExperience, CareerSection } from "./careerApi";
+import { AchievementList, type RolePatch } from "./AchievementList";
 import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
 
 type Career = ReturnType<typeof usePrimaryResume>;
@@ -35,11 +36,14 @@ export function ProfileCareer({
   importDisabled,
   onEditCareer,
   onDescribe,
+  onSaveRole,
 }: {
   imported: CareerData;
   importDisabled: boolean;
   /** Opens "Describe in your own words" for one job. */
   onDescribe(entry: number): void;
+  /** Saves one job's achievements (stars, edits, additions, deletions) on the latest Profile. */
+  onSaveRole(entry: number, patch: (current: CareerExperience) => Partial<RolePatch>): Promise<void>;
   /** With `entry`, only that job or education entry is edited, or a new one added. */
   onEditCareer(section: CareerSectionKey, entry?: CareerEntry): void;
 }) {
@@ -98,11 +102,7 @@ export function ProfileCareer({
                 {edit("experiences", `Edit ${role.title} at ${role.company} in Profile`, index)}
               </div>
               {role.description && <p className="profile-body profile-preserve-lines">{role.description}</p>}
-              {role.bullets.length > 0 && (
-                <ul className="profile-bullets">
-                  {role.bullets.map((bullet, i) => <li key={i}>{bullet}</li>)}
-                </ul>
-              )}
+              <AchievementList role={role} disabled={importDisabled} onSave={(patch) => onSaveRole(index, patch)} />
               {role.techStack?.trim() && (
                 <p className="profile-stack"><strong>Tech stack:</strong> {role.techStack}</p>
               )}

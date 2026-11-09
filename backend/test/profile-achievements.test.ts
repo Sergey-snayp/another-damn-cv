@@ -169,3 +169,41 @@ test('notes are saved with a job, and a CV import keeps them on the same job', (
     /Write a few words/,
   );
 });
+
+test('stars and deleted achievements are saved with a job and survive a CV re-import', () => {
+  const role: CareerExperience = {
+    company: 'Ciklum',
+    title: 'Engineer',
+    client: '',
+    location: '',
+    from: '2024',
+    to: '',
+    current: true,
+    description: '',
+    bullets: ['Kept line.', 'Gone line.'],
+    starred: ['Kept line.', 'Gone line.'],
+    removed: [{ text: 'Deleted by hand.', at: '2026-11-08' }],
+  };
+  const saved = careerUpdateSchema.parse({ expectedRevision: 1, sections: { experiences: [role] } });
+  assert.deepEqual(saved.sections.experiences?.[0]?.starred, ['Kept line.', 'Gone line.']);
+  const after = mergeCareer(
+    {
+      revision: 1,
+      data: { experiences: { value: [role], source: { kind: 'profile' as const }, importedAt: 'x' } },
+    },
+    {
+      expectedRevision: 1,
+      contact: {},
+      expectedContact: {},
+      sections: {
+        experiences: [
+          { ...role, bullets: ['Kept line.', 'New from CV.'], starred: undefined, removed: undefined },
+        ],
+      },
+      source: { kind: 'file', name: 'cv.pdf' },
+    },
+    'y',
+  ).data.experiences?.value[0];
+  assert.deepEqual(after?.starred, ['Kept line.'], 'a star stays on an achievement the job still has');
+  assert.deepEqual(after?.removed, role.removed, 'deleted achievements stay restorable');
+});

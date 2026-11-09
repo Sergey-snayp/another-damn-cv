@@ -204,7 +204,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     state = { revision: state.revision + 1, data: { ...state.data, experiences: { value: [{ title: 'Engineer', company: 'Old Co', client: '', location: '', from: '2019', to: '2020', current: false, description: '', bullets: ['Shipped things.', 'Tech stack: Kafka, Go'] }], source, importedAt } } };
     await visit();
     assert.equal(await page.$eval('.profile-stack', element => element.textContent), 'Tech stack: Kafka, Go');
-    assert.deepEqual(await page.$$eval('.profile-bullets li', rows => rows.map(row => row.textContent)), ['Shipped things.']);
+    assert.deepEqual(await page.$$eval('.ach-text', rows => rows.map(row => row.textContent)), ['Shipped things.']);
     await button('Edit Engineer at Old Co in Profile').click();
     await page.waitForSelector('.profile-career-editor .career-edit-entry');
     assert.equal(await page.$eval('.profile-career-editor ::-p-aria([name="Tech stack (optional)"][role="textbox"])', field => field.value), 'Kafka, Go');

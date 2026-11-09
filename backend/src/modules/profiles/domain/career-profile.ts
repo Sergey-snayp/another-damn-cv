@@ -31,6 +31,10 @@ export interface CareerExperience {
   techStack?: string;
   /** What the person wrote about this job in their own words, kept as written. */
   notes?: CareerNote[];
+  /** The strongest achievements, by their text: shown first, preferred when tailoring. */
+  starred?: string[];
+  /** Achievements deleted from the Profile page, restorable for 30 days. */
+  removed?: CareerNote[];
 }
 export interface CareerNote {
   text: string;
@@ -104,13 +108,24 @@ export function mergeCareer(state: CareerState, input: CareerImport, importedAt:
   return { revision: state.revision + 1, data };
 }
 
-/** A CV import replaces the jobs; the notes written about a job stay with the same job. */
+/**
+ * A CV import replaces the jobs; what was written and chosen on the Profile page
+ * about a job (notes, stars of achievements it still has, deleted ones) stays with the same job.
+ */
 function keepNotes(before: CareerExperience[], after: CareerExperience[]): CareerExperience[] {
   const key = (role: CareerExperience) => `${role.company}\u0000${role.title}`.trim().toLowerCase();
-  const notes = new Map(before.filter((role) => role.notes?.length).map((role) => [key(role), role.notes!]));
-  return after.map((role) =>
-    role.notes?.length || !notes.has(key(role)) ? role : { ...role, notes: notes.get(key(role)) },
-  );
+  const earlier = new Map(before.map((role) => [key(role), role]));
+  return after.map((role) => {
+    const old = earlier.get(key(role));
+    if (!old) return role;
+    const starred = (old.starred ?? []).filter((text) => role.bullets.includes(text));
+    return {
+      ...role,
+      ...(!role.notes?.length && old.notes?.length && { notes: old.notes }),
+      ...(starred.length && { starred }),
+      ...(old.removed?.length && { removed: old.removed }),
+    };
+  });
 }
 export const conflict = () =>
   new CareerImportError(
