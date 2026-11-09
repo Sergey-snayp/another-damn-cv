@@ -32,7 +32,9 @@ ABSOLUTE RULES. Breaking any of these makes the output unusable:
 - Do not mix work between clients or employers. Evidence was matched to this role.
 
 How to choose:
-- Exactly the requested count in "chosen", best first.
+- The requested count in "chosen", best first. When a range is given, choose as many as the
+  posting gives reason for: each bullet must show something different the posting asks for.
+  Two strong bullets beat four with weak ones; never pad with lines the posting does not need.
 - Prefer achievements that match the posting's requirements and responsibilities, then
   concrete results with numbers, then starred ones (the candidate's strongest).
 - Cover different requirements rather than repeating one.
@@ -62,9 +64,11 @@ export class ClaudeBulletChooser implements BulletChooser {
           }</achievement>`,
       )
       .join('\n');
-    const prompt = `<posting>\n${input.job}\n</posting>\n\n<achievements>\n${items}\n</achievements>\n\nChoose ${input.count}.${
-      input.instruction ? `\n\n<request>\n${input.instruction}\n</request>` : ''
-    }`;
+    const prompt = `<posting>\n${input.job}\n</posting>\n\n<achievements>\n${items}\n</achievements>\n\n${
+      input.min !== undefined && input.min < input.count
+        ? `Choose between ${input.min} and ${input.count}.`
+        : `Choose ${input.count}.`
+    }${input.instruction ? `\n\n<request>\n${input.instruction}\n</request>` : ''}`;
     const raw = await this.llm.complete(prompt, SYSTEM, {
       effort: 'medium',
       timeoutMs: 150_000,

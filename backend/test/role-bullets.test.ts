@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  bulletRange,
   checkChoice,
   matchProfileRole,
   rolePool,
@@ -157,6 +158,13 @@ test("choosing a job's bullets: from the Profile when it has more, otherwise eac
   assert.match(asked[0].items.find((item) => item.id === 'c2')!.hint, /security/);
   assert.equal(result.chosen.length, 2);
   assert.equal(result.chosen[0].source, 'profile');
+  await use([profile]).execute('u', 'cv', { role: cv, job: { jobId: 'j' }, position: 0 });
+  assert.equal(
+    asked.at(-1)!.count,
+    Math.min(6, asked.at(-1)!.items.length),
+    'a whole job: the posting decides',
+  );
+  assert.equal((asked.at(-1) as { min?: number }).min, 2);
 });
 
 test('client and start date select SymphonyAI rather than another Ciklum role with the same title', () => {
@@ -335,4 +343,28 @@ test('single-bullet generation uses the matching client facts and the account’
   assert.ok(seen.some((item) => item.text.includes('AsyncStorage')));
   assert.ok(!seen.some((item) => item.text.includes('reconciliation')));
   assert.ok(!seen.some((item) => item.text.includes('card tokenization')));
+});
+
+test('a whole job gets as many bullets as the posting needs: more for recent jobs, fewer for old ones', () => {
+  assert.deepEqual(bulletRange(0, 12), { min: 2, max: 6 }, 'the latest job: up to 6');
+  assert.deepEqual(bulletRange(3, 12), { min: 2, max: 4 });
+  assert.deepEqual(bulletRange(6, 12), { min: 2, max: 3 }, 'an old job: up to 3');
+  assert.deepEqual(bulletRange(0, 3), { min: 2, max: 3 }, 'never more than there is');
+  assert.deepEqual(bulletRange(0, 1), { min: 1, max: 1 });
+  const pool = ['a', 'b', 'c', 'd', 'e'].map((text, index) => ({
+    id: `p${index + 1}`,
+    text: `Built the ${text} service for payments.`,
+    source: 'profile' as const,
+    cvIndex: null,
+    starred: false,
+  }));
+  const few = checkChoice({ chosen: [{ id: 'p2', text: pool[1].text }], alternates: [] }, pool, 6, 2);
+  assert.equal(few.chosen.length, 2, 'filled up to the least');
+  const many = checkChoice(
+    { chosen: pool.map((item) => ({ id: item.id, text: item.text })), alternates: [] },
+    pool,
+    4,
+    2,
+  );
+  assert.equal(many.chosen.length, 4, 'never past the most');
 });

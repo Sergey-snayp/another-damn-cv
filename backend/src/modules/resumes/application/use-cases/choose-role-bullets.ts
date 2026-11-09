@@ -1,6 +1,7 @@
 import type { ResumesApi } from '../../contracts';
 import { practiceHints } from '../../domain/job-practices';
 import {
+  bulletRange,
   checkChoice,
   matchProfileRole,
   rolePool,
@@ -30,7 +31,8 @@ export class ChooseRoleBullets {
   async execute(
     userId: string,
     id: string,
-    input: { role: CvRole; instruction?: string; job: JobChoice },
+    /** `position`: the job's place on the CV, sent when the whole job is tailored. */
+    input: { role: CvRole; instruction?: string; job: JobChoice; position?: number },
   ): Promise<RoleBulletChoice> {
     await this.resumes.assertOwned(userId, id);
     const job = await this.job(userId, input.job);
@@ -47,7 +49,12 @@ export class ChooseRoleBullets {
     });
     const pool = rolePool(input.role, profileRole, matchingCvs);
     if (!pool.some((item) => item.source === 'profile' || item.cvIndex === null)) return NONE;
-    const count = Math.min(pool.length, input.role.bullets.filter((bullet) => bullet.trim()).length || 5);
+    const shown = input.role.bullets.filter((bullet) => bullet.trim()).length;
+    // A whole job: the posting decides how many. One bullet: one bullet.
+    const { min, max: count } =
+      input.position !== undefined && shown > 1
+        ? bulletRange(input.position, pool.length)
+        : { min: Math.min(pool.length, shown || 5), max: Math.min(pool.length, shown || 5) };
     const answer = await this.chooser.choose({
       job: `${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 30_000)}`,
       items: pool.map((item) => ({
@@ -57,12 +64,13 @@ export class ChooseRoleBullets {
           .join('; '),
       })),
       count,
+      ...(min < count ? { min } : {}),
       instruction: input.instruction,
     });
     return {
       matched: true,
       profileRole: profileRole ? { title: profileRole.title, company: profileRole.company } : null,
-      ...checkChoice(answer, pool, count),
+      ...checkChoice(answer, pool, count, min),
     };
   }
 

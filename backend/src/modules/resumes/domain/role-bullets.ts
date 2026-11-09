@@ -3,8 +3,9 @@
  * keeps about that job in their Profile and saved CVs.
  *
  * The AI chooses and rewords; this file decides what may be shown. A reworded
- * line keeps only the numbers its own achievement has, and the CV keeps the
- * same number of bullets for the job, so its layout does not change.
+ * line keeps only the numbers its own achievement has. One bullet keeps one
+ * bullet; a whole job gets as many as the posting gives reason for, within
+ * bulletRange.
  */
 import { withoutAddedPurpose, withoutDashPunctuation } from './cv-writing-guide';
 import { unsupportedClaims } from './tailoring/claims';
@@ -163,6 +164,17 @@ export function rolePool(cv: CvRole, profile: ProfileRole | null, otherCvs: CvRo
   return items;
 }
 
+/**
+ * How many bullets a whole job may get, by its place on the CV (0 = the latest
+ * job): recent jobs up to 6, the two before up to 4, older ones up to 3, and at
+ * least 2 when there is that much to say.
+ */
+export function bulletRange(position: number, available: number): { min: number; max: number } {
+  const most = position < 2 ? 6 : position < 4 ? 4 : 3;
+  const min = Math.min(2, available);
+  return { min, max: Math.max(min, Math.min(most, available)) };
+}
+
 /** Numbers as values ("20k" is 20,000); digits inside names (Route53, EC2) are not numbers. */
 function numbersIn(text: string): Set<number> {
   const values = new Set<number>();
@@ -192,12 +204,13 @@ const keepsNumbers = (line: string, source: string) => {
 /**
  * The AI's choice, checked: real ids, each once; a reworded line that brings a
  * number its achievement lacks falls back to the achievement as written; and
- * exactly `count` bullets, filled with the next best (starred first) when short.
+ * at most `count` bullets, filled with the next best (starred first) up to `min`.
  */
 export function checkChoice(
   answer: ChooserAnswer,
   pool: PoolItem[],
   count: number,
+  min = count,
 ): Pick<RoleBulletChoice, 'chosen' | 'alternates'> {
   const byId = new Map(pool.map((item) => [item.id, item]));
   const used = new Set<string>();
@@ -232,7 +245,7 @@ export function checkChoice(
         Number(b.starred) - Number(a.starred) ||
         Number(a.source === 'profile') - Number(b.source === 'profile'),
     );
-  while (chosen.length < count && rest.length) {
+  while (chosen.length < min && rest.length) {
     const item = rest.shift()!;
     used.add(item.id);
     chosen.push({ ...item, text: withoutDashPunctuation(item.text), original: item.text });

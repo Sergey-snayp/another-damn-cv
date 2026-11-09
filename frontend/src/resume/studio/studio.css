@@ -692,6 +692,7 @@
 /* A note on how the line reads for a recruiter who is not technical. */
 .qt-slot-note.qt-hint, .qt-note.qt-hint { color: var(--color-text); font-weight: 500; }
 .qt-slot-note.qt-hint::before, .qt-note.qt-hint::before { content: "For recruiters: "; font-weight: 700; }
+.qt-slot-note.qt-cut, .qt-note.qt-cut { color: var(--color-text); font-weight: 500; }
 /* A job keyword the CV names only in its skills list. */
 .ra-kw.have.only { border-style: dashed; opacity: .85; }
 /* A bullet taken from the Profile's full list for the job, not from the CV. */

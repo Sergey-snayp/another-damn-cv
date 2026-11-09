@@ -19,11 +19,13 @@ export interface RewriteTarget {
   /** The line's data-edit-key on the page, so its new version can be shown in its place. */
   key?: string;
   /** A job's bullet: which job, so its bullets can be chosen from the Profile's full list. */
-  role?: { company: string; title: string; from: string; client?: string; description?: string; techStack?: string };
+  role?: { company: string; title: string; from: string; client?: string; description?: string; techStack?: string; position?: number };
   /** A skills line: its category and skills, tailored together. */
   skills?: { category: string; names: string[] };
   /** Puts the suggestion in the draft; for skills, `next` is the JSON list of names. */
   apply(next: string, draft: RenderedResume): void;
+  /** A job's bullet: adds a new bullet after the job's last one (a job may gain bullets for a posting). */
+  append?(next: string, draft: RenderedResume): void;
 }
 
 export interface ResumeDocumentProps {

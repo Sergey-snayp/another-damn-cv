@@ -62,7 +62,14 @@ interface Suggestion {
   fromSavedCv?: boolean;
   /** Alternatives belong to this generation batch and cannot cross role boundaries. */
   choiceGroup?: string;
+  /** A bullet the job gains for this posting: shown after this line of the page. */
+  insertAfter?: string;
 }
+
+/** A job's bullet the posting does not need: "Use" takes it off. */
+const isRemoval = (item: Suggestion) => item.target.kind === 'bullet' && item.after === '' && Boolean(item.before.trim());
+/** A bullet the job gains: nothing there before. */
+const isAddition = (item: Suggestion) => item.insertAfter !== undefined;
 
 /** An achievement chosen for a job from the Profile and the CV (see tailor-role). */
 interface ChosenBullet {
@@ -664,10 +671,14 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     const choiceGroup = items.map(item => item.key).join('|');
     for (const item of items) updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, chosenId: undefined, fromProfile: undefined, fromSavedCv: undefined, original: undefined });
     try {
+      // The whole job: the posting decides how many bullets it gets.
+      const { position, ...roleFields } = role;
+      const whole = items.length > 1 && position !== undefined;
       const result = await post<{ matched: boolean; chosen: ChosenBullet[]; alternates: ChosenBullet[] }>('tailor-role', {
-        role: { ...role, bullets: items.map((item) => item.target.text) },
+        role: { ...roleFields, bullets: items.map((item) => item.target.text) },
         ...(request.trim() ? { instruction: request.trim().slice(0, 500) } : {}),
         job: { jobId },
+        ...(whole ? { position } : {}),
       });
       if (!result.matched || !result.chosen.length) return false;
       const slots: (ChosenBullet | undefined)[] = items.map(() => undefined);
@@ -675,12 +686,25 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         if (chosen.cvIndex !== null && chosen.cvIndex < slots.length && !slots[chosen.cvIndex]) slots[chosen.cvIndex] = chosen;
       const rest = result.chosen.filter((chosen) => !slots.includes(chosen));
       for (let i = 0; i < slots.length; i++) if (!slots[i]) slots[i] = rest.shift();
+      const picked = (chosen: ChosenBullet) => ({ busy: false, after: chosen.text, value: chosen.text, chosenId: chosen.id, choiceGroup,
+        fromProfile: chosen.source === 'profile', fromSavedCv: chosen.source === 'saved-cv', original: chosen.original });
+      // More than the CV shows: new bullets after the job's last one, each added on its own.
+      const last = items[items.length - 1]!;
+      const added: Suggestion[] = whole && last.target.append ? rest.map((chosen, index) => ({
+        key: `${last.key}:add:${crypto.randomUUID()}:${index}`,
+        target: { ...last.target, text: '', label: `${role.company || 'Job'} · new bullet`, key: undefined, apply: last.target.append! },
+        before: '',
+        insertAfter: last.target.key,
+        ...picked(chosen),
+      })) : [];
       setTailoring((current) => (current && current.run === run
-        ? { ...current, alternates: { ...current.alternates, [choiceGroup]: result.alternates } } : current));
+        ? { ...current, items: [...current.items.filter((item) => item.decided || !item.key.startsWith(`${last.key}:add:`)), ...added],
+            alternates: { ...current.alternates, [choiceGroup]: result.alternates } } : current));
       items.forEach((item, i) => {
         const chosen = slots[i];
-        updateItem(run, item.key, chosen
-          ? { busy: false, after: chosen.text, value: chosen.text, chosenId: chosen.id, choiceGroup, fromProfile: chosen.source === 'profile', fromSavedCv: chosen.source === 'saved-cv', original: chosen.original }
+        // Fewer than the CV shows: the bullets left over are offered for removal.
+        updateItem(run, item.key, chosen ? picked(chosen)
+          : whole ? { busy: false, after: '', value: '', choiceGroup }
           : { busy: false, after: item.before, value: item.before });
       });
       return true;
@@ -713,8 +737,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   async function generate(current: Tailoring | null = tailoring) {
     if (!current || current.items.some((item) => item.busy)) return;
     const { run, request } = current;
-    const open = current.items.filter((item) => !item.decided);
-    setTailoring({ ...current, stage: 'generated', notes: undefined });
+    // New bullets not yet added are chosen again with their job.
+    const open = current.items.filter((item) => !item.decided && !isAddition(item));
+    setTailoring({ ...current, stage: 'generated', notes: undefined, items: current.items.filter((item) => item.decided || !isAddition(item)) });
     const skills = open.filter((item) => item.target.kind === 'skills');
     const lines = open.filter((item) => item.target.kind !== 'skills');
     // Keep each employer/client's evidence separate, including when tailoring the whole section.
@@ -792,15 +817,27 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const [slots, setSlots] = useState<{ run: number; at: Record<string, HTMLElement> } | null>(null);
   const keyOnPage = (key?: string) => Boolean(key && behind?.querySelector(`[data-edit-key="${CSS.escape(key)}"]`));
   const inJob = Boolean(tailoring && tailoring.items.length > 1 && behind?.matches('article')
-    && tailoring.items.every((item) => keyOnPage(item.target.key)));
+    && tailoring.items.every((item) => keyOnPage(item.target.key ?? item.insertAfter)));
   const run = tailoring?.run;
+  const lineCount = tailoring?.items.length;
   useLayoutEffect(() => {
     const host = jobRef.current;
     if (!host || !behind || !tailoring || windowedNow || !inJob) return;
     const copy = copyOfRegion(behind, scale, true);
     const at: Record<string, HTMLElement> = {};
+    const lastAdded: Record<string, HTMLElement> = {};
     for (const item of tailoring.items) {
-      const line = copy.querySelector<HTMLElement>(`[data-edit-key="${CSS.escape(item.target.key!)}"]`);
+      let line = item.target.key ? copy.querySelector<HTMLElement>(`[data-edit-key="${CSS.escape(item.target.key)}"]`) : null;
+      if (item.insertAfter !== undefined) {
+        // A new bullet: a copy of the job's last line, placed after it (and after earlier new ones).
+        const after = lastAdded[item.insertAfter] ?? copy.querySelector<HTMLElement>(`[data-edit-key="${CSS.escape(item.insertAfter)}"]`);
+        if (!after) continue;
+        line = after.cloneNode(true) as HTMLElement;
+        line.removeAttribute('data-edit-key');
+        line.classList.add('qt-new-line');
+        after.after(line);
+        lastAdded[item.insertAfter] = line;
+      }
       if (!line) continue;
       const slot = document.createElement('span');
       slot.className = 'qt-slot qt-change';
@@ -811,7 +848,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     setSlots({ run: tailoring.run, at });
     // Built once per run; the lines' changes are drawn into it as they arrive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [behind, windowedNow, inJob, scale, run]);
+  }, [behind, windowedNow, inJob, scale, run, lineCount]);
 
   // While the AI works: a running timer in the card; the window onto the CV pulses.
   // The CV's own words, where an acronym may already be spelled out.
@@ -855,13 +892,13 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return (
       <div className="ra-row qt-actions">
         {(item.after !== undefined || waits) && (
-          <button className="primary" disabled={same || saving || waits} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : many ? 'Use' : 'Use this'}</button>
+          <button className="primary" disabled={same || saving || waits} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : many ? 'Use' : 'Use this'}</button>
         )}
         {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
-        {item.chosenId && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
+        {(item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
           <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
         )}
-        <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Try again</button>
+        {!isAddition(item) && <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Try again</button>}
         {!many && <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>}
       </div>
     );
@@ -991,6 +1028,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
                             {back ? <DiffLine key={item.after} before={item.before.trim()} after={item.after!} /> : withBold(item.before.trim())}
+                            {back && isRemoval(item) && <span className="qt-slot-note qt-cut">Not needed for this job: Remove takes it off, Swap puts another achievement here.</span>}
+                            {back && isAddition(item) && <span className="qt-slot-note qt-from">New bullet for this job</span>}
                             {back && (item.fromProfile || item.fromSavedCv) && <span className="qt-slot-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</span>}
                             {back && READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after!, cvText).map((note, index) => (
                               <span key={`r${index}`} className="qt-slot-note qt-hint">{note}</span>
@@ -1018,6 +1057,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {many && itemActions(item)}
                         {many && !item.busy && item.after !== undefined && (
                           <>
+                            {isRemoval(item) && <p className="qt-note qt-cut">Not needed for this job: Remove takes it off, Swap puts another achievement here.</p>}
                             {item.fromProfile || item.fromSavedCv ? <p className="qt-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</p> : null}
                             {READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after, cvText).map((note, index) => (
                               <p key={`r${index}`} className="qt-note qt-hint">{note}</p>

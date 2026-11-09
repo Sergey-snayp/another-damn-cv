@@ -22,6 +22,28 @@ function dateForSave(value: string): string {
 }
 
 
+/** The job as it is in the draft now: by its lineage, so earlier changes cannot move it. */
+const roleIn = (draft: RenderedResume, index: number, lineageId?: string) =>
+  (lineageId ? draft.experiences.find((role) => role.lineageId === lineageId) : undefined) ?? draft.experiences[index];
+
+/** One bullet set or, when left empty, taken off; found by its lineage, since others may have gone. */
+function setBullet(draft: RenderedResume, index: number, roleId: string | undefined, bulletId: string | undefined, at: number, next: string) {
+  const role = roleIn(draft, index, roleId);
+  if (!role) return;
+  const found = bulletId ? role.achievements.findIndex((item) => item.lineageId === bulletId) : at;
+  if (found < 0 || !role.achievements[found]) return;
+  if (next.trim()) role.achievements[found]!.bullet = next;
+  else role.achievements.splice(found, 1);
+}
+
+/** A new bullet after the job's last one. */
+function appendBullet(draft: RenderedResume, index: number, roleId: string | undefined, next: string) {
+  const role = roleIn(draft, index, roleId);
+  if (!role || !next.trim()) return;
+  role.lineageId ??= crypto.randomUUID();
+  role.achievements.push({ lineageId: crypto.randomUUID(), experienceLineageId: role.lineageId, bullet: next });
+}
+
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 
@@ -280,8 +302,9 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
       apply: (next, d) => { d.experiences[i]!.blurb = next; } });
     role.achievements.forEach((bullet, j) => {
       if (bullet.bullet.trim()) targets.push({ text: bullet.bullet, context, kind: 'bullet', label: `${role.company || 'Job'} · bullet ${j + 1}`, key: bullet.lineageId,
-        role: { company: role.company, title: role.title, from: role.from, client: role.client ?? '', description: role.blurb ?? '', techStack: role.techStack ?? '' },
-        apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; } });
+        role: { company: role.company, title: role.title, from: role.from, client: role.client ?? '', description: role.blurb ?? '', techStack: role.techStack ?? '', position: i },
+        apply: (next, d) => setBullet(d, i, role.lineageId, bullet.lineageId, j, next),
+        append: (next, d) => appendBullet(d, i, role.lineageId, next) });
     });
     if ((role.techStack ?? '').trim()) targets.push({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack', label: `${role.company || 'Job'} · Tech stack`, key: `tech-stack:${role.lineageId ?? i}`,
       apply: (next, d) => { d.experiences[i]!.techStack = next; } });
@@ -460,7 +483,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                           context: `${role.title} at ${role.company}`,
                           kind: 'bullet',
                           role: { company: role.company, title: role.title, from: role.from, client: role.client ?? '', description: role.blurb ?? '', techStack: role.techStack ?? '' },
-                          apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; },
+                          apply: (next, d) => setBullet(d, i, role.lineageId, bullet.lineageId, j, next),
                         }, event)} />}
                 </li>
               ))}

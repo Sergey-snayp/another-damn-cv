@@ -13,7 +13,9 @@ export interface BulletChooser {
   choose(input: {
     job: string;
     items: (PoolItem & { hint: string })[];
+    /** At most this many; with `min` below it, the posting decides how many. */
     count: number;
+    min?: number;
     instruction?: string;
   }): Promise<ChooserAnswer>;
 }

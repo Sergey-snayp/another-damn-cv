@@ -79,6 +79,7 @@ const tailorRoleSchema = z
       .strict(),
     instruction: z.string().trim().max(500).optional(),
     job: jobSchema,
+    position: z.number().int().min(0).max(100).optional(),
   })
   .strict();
 
@@ -129,7 +130,7 @@ export class ResumeAssistantController {
     @CurrentUser() userId: string,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(tailorRoleSchema))
-    body: { role: CvRole; instruction?: string; job: JobChoice },
+    body: { role: CvRole; instruction?: string; job: JobChoice; position?: number },
   ) {
     return this.roleBullets.execute(userId, id, body);
   }

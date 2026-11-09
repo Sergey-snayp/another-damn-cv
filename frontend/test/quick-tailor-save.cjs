@@ -186,6 +186,8 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
   let fail = failure, cvSaved = false;
   // When set, the Profile has more achievements for Acme Labs (see tailor-role).
   let profileChoice = false;
+  // How many bullets the posting gives Acme Labs when the whole job is tailored.
+  let roleCount = 2;
   const roleRequests = [];
   let savedId = fullEditor ? 'copy-1' : null, createdDocuments = fullEditor ? 1 : 0;
   let resume = {
@@ -297,7 +299,8 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
           chosen: [
             { id: 'p4', text: 'Cut checkout latency by 30% with Redis caching.', original: 'Cut checkout latency by 30% with Redis caching.', source: 'profile', cvIndex: null, starred: true },
             { id: 'c1', text: 'Built Node.js payment APIs.', original: body.role.bullets[0], source: 'cv', cvIndex: 0, starred: false },
-          ],
+            { id: 'p6', text: 'Ran the payments on-call rotation for 2 years.', original: 'Ran the payments on-call rotation for 2 years.', source: 'profile', cvIndex: null, starred: false },
+          ].slice(roleCount === 1 ? 1 : 0, roleCount === 1 ? 2 : roleCount),
           alternates: [
             { id: 'p5', text: 'Mentored two engineers on code review.', original: 'Mentored two engineers on code review.', source: 'profile', cvIndex: null, starred: false },
           ],
@@ -599,6 +602,43 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         const roleBullets = await page.$$eval('.qt-zoom [data-section="experience"] article:first-of-type li .pro-text', rows => rows.map(row => row.textContent));
         assert.deepEqual(roleBullets.slice(0, 2), ['Built Node.js payment APIs.', 'Mentored two engineers on code review.']);
         await page.click(undo);
+
+        // The posting decides how many: a job may gain a bullet, or lose one.
+        const first = '.qt-zoom [data-section="experience"] article:first-of-type';
+        const listed = () => page.$$eval(`${first} li .pro-text`, rows => rows.map(row => row.textContent));
+        const bulletsBefore = await listed();
+        roleCount = 3;
+        await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
+        await page.waitForSelector('.qt-unit .qt-generate');
+        await page.click('.qt-unit .qt-generate');
+        await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 3);
+        assert.equal(roleRequests.at(-1).position, 0, 'the whole job says where it is on the CV');
+        await pause(1500);
+        const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
+        assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet for this job/);
+        assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[2].querySelectorAll('button')].some(button => button.textContent === 'Add')));
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all')).click());
+        assert.deepEqual(await listed(), ['Built Node.js payment APIs.', 'Cut checkout latency by 30% with Redis caching.', 'Ran the payments on-call rotation for 2 years.'], 'the new bullet goes after the job\'s last one');
+        await page.click(undo);
+        assert.deepEqual(await listed(), bulletsBefore);
+
+        roleCount = 1;
+        await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
+        await page.waitForSelector('.qt-unit .qt-generate');
+        await page.click('.qt-unit .qt-generate');
+        await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
+        await pause(1500);
+        const fewer = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
+        assert.match(fewer[1], /Not needed for this job/);
+        assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].some(button => button.textContent === 'Swap')), 'Swap keeps a bullet in its place');
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Remove').click());
+        assert.deepEqual(await listed(), [bulletsBefore[0]], 'Remove takes the bullet off, the others stay');
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[0].querySelectorAll('button')].find(button => button.textContent === 'Use').click());
+        assert.deepEqual(await listed(), ['Built Node.js payment APIs.'], 'the line before it is still found after the removal');
+        await page.click(undo);
+        await page.click(undo);
+        assert.deepEqual(await listed(), bulletsBefore);
+        roleCount = 2;
         profileChoice = false;
       }
 
