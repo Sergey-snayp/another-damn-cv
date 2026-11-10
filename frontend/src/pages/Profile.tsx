@@ -4,10 +4,9 @@ import { api, type ContactFields } from "../api";
 import { SECTIONS, type ContactKey } from "../fields";
 import { onExtensionDetected, pushProfile } from "../extensionBridge";
 import { DashboardIcon as Icon, type DashboardIconName } from "../jobs/DashboardIcon";
-import { ProfileCareer, ResumeCard } from "../profile/ProfileCareer";
+import { ProfileCareer } from "../profile/ProfileCareer";
 import { SavedAnswers } from "../profile/SavedAnswers";
 import { DefaultAnswers } from "../profile/DefaultAnswers";
-import { usePrimaryResume } from "../profile/usePrimaryResume";
 import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerExperience, type CareerState } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
@@ -49,7 +48,6 @@ function webUrl(value?: string): string | null {
 
 export function Profile() {
   const { user } = useAuth();
-  const career = usePrimaryResume();
   const [profile, setProfile] = useState<ContactFields | null>(null);
   const [draft, setDraft] = useState<ContactFields | null>(null);
   const [active, setActive] = useState<ProfileTab>("career");
@@ -284,7 +282,7 @@ export function Profile() {
       {error && active === "career" && <p className="profile-error" role="alert">{error}</p>}
 
       {active === "career" ? (
-        <div className="profile-layout">
+        <div className={`profile-layout${missing.length ? "" : " is-single"}`}>
           <div className="profile-main" role="region" aria-label="Career">
             <ProfileCareer
               imported={careerState?.data ?? {}}
@@ -299,15 +297,9 @@ export function Profile() {
               onSaveRole={saveRole}
             />
           </div>
+          {missing.length > 0 && (
           <aside className="profile-side">
-            <ResumeCard
-              career={career}
-              importDisabled={dirty || saving || !careerState}
-              onImportCv={(resumeId) => {
-                if (!dirty && !saving) setImporting({ resumeId });
-              }}
-            />
-            {missing.length > 0 && (
+            {(
               <section className="profile-panel profile-side-card" aria-labelledby="profile-missing-heading">
                 <h2 id="profile-missing-heading">Finish your profile</h2>
                 <p className="profile-muted">Autofill and job matching use these.</p>
@@ -324,6 +316,7 @@ export function Profile() {
               </section>
             )}
           </aside>
+          )}
         </div>
       ) : active === "answers" ? (
         <div className="profile-main">

@@ -27,6 +27,7 @@
 
 /* Career: sections on the left, the resume and what is missing on the right. */
 .profile-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; gap: 18px; }
+.profile-layout.is-single { grid-template-columns: minmax(0, 1fr); }
 .profile-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .profile-side { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .profile-source-line { margin: 0; font-size: 12px; color: var(--color-muted); }
@@ -103,17 +104,9 @@
 .profile-side-card { padding: 18px; }
 .profile-side-card h2 { font-size: 14px; margin-bottom: 10px; }
 .profile-side-card > p { margin-top: -4px; font-size: 12px; }
-.profile-resume { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text); text-decoration: none; }
-.profile-resume:hover { background: var(--color-background); }
-.profile-resume > span { min-width: 0; }
-.profile-resume strong { display: block; font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.profile-resume small { display: block; margin-top: 2px; font-size: 12px; color: var(--color-muted); }
-.profile-cv-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
-.profile-cv-list li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
-.profile-cv-list a { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--color-text); }
 .profile-checklist { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .profile-text-button { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 2px 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.profile-checklist .profile-text-button, .profile-cv-list .profile-text-button { margin-top: 0; }
+.profile-checklist .profile-text-button { margin-top: 0; }
 .profile-text-button:disabled { opacity: .45; cursor: default; }
 
 /* Buttons and small marks, shared with the Profile dialogs. */
