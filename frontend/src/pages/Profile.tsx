@@ -287,7 +287,7 @@ export function Profile() {
       {error && active === "career" && <p className="profile-error" role="alert">{error}</p>}
 
       {active === "career" ? (
-        <div className="profile-layout has-panel">
+        <div className={`profile-layout${activeBullet ? " has-panel" : missing.length ? "" : " is-single"}`}>
           <div className="profile-main" role="region" aria-label="Career">
             <BulletFocusProvider value={setActiveBullet}>
               <ProfileCareer
@@ -307,8 +307,9 @@ export function Profile() {
               />
             </BulletFocusProvider>
           </div>
+          {(activeBullet || missing.length > 0) && (
           <aside className="profile-side">
-            {/* Only while a bullet is being edited or added; the column keeps its place either way. */}
+            {/* Only while a bullet is being edited or added; otherwise the page is one centered column. */}
             {activeBullet && <BulletPanel active={activeBullet} />}
             {!activeBullet && missing.length > 0 && (
               <section className="profile-panel profile-side-card" aria-labelledby="profile-missing-heading">
@@ -327,6 +328,7 @@ export function Profile() {
               </section>
             )}
           </aside>
+          )}
         </div>
       ) : active === "answers" ? (
         <div className="profile-main">
