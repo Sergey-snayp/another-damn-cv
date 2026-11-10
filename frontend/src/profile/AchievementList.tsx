@@ -185,6 +185,10 @@ export function AchievementList({
             const star = starred.has(text);
             return (
               <li key={`${index}:${text}`} className={`ach-row${star ? " is-starred" : ""}`}>
+                <svg className="ach-mark" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                  <rect x="1.5" y="1.5" width="17" height="17" rx="4" />
+                  <path d="m6 10.2 2.7 2.7L14.2 7.3" />
+                </svg>
                 {editing?.index === index ? (
                   <div className="ach-body">
                     <textarea

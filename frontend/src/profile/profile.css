@@ -67,8 +67,10 @@
 .ach-tags button { padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); color: var(--color-text); font: inherit; font-size: 12px; cursor: pointer; }
 .ach-tags button.is-on { border-color: var(--color-text); background: var(--color-accent-soft); font-weight: 600; }
 .ach-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.ach-list { gap: 0; }
-.ach-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px; margin: 0 -8px; padding: 0 2px 0 8px; border-radius: 8px; }
+.ach-list { gap: 10px; }
+.ach-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 12px; margin: 0 -8px; padding: 4px 2px 4px 8px; border-radius: 8px; }
+/* Each bullet: a green check box, like a finished item. */
+.ach-mark { width: 22px; height: 22px; margin-top: 2px; fill: none; stroke: #1e4d45; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .ach-tools { display: flex; }
 .ach-row:hover, .ach-row:focus-within { background: var(--color-background); }
 .ach-star, .ach-remove { display: grid; place-items: center; width: 24px; height: 28px; padding: 0; border: 0; background: none; color: var(--color-muted); font-size: 15px; cursor: pointer; }
@@ -79,10 +81,10 @@
 .ach-remove { opacity: 0; font-size: 17px; }
 .ach-row:hover .ach-remove, .ach-remove:focus-visible { opacity: 1; }
 .ach-remove:hover { color: var(--color-error); }
-.ach-text { padding: 1px 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 15px; line-height: 1.6; text-align: left; cursor: text; overflow-wrap: anywhere; }
+.ach-text { padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 16px; line-height: 1.6; text-align: left; cursor: text; overflow-wrap: anywhere; }
 .ach-text:disabled { cursor: default; }
 .ach-row.is-starred .ach-text { font-weight: 500; }
-.ach-edit { width: 100%; margin: 0 0 0 -8px; padding: 1px 7px; border: 1px solid var(--color-text); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 15px; line-height: 1.55; resize: none; field-sizing: content; }
+.ach-edit { width: 100%; margin: -2px 0 0 -8px; padding: 1px 7px; border: 1px solid var(--color-text); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 16px; line-height: 1.55; resize: none; field-sizing: content; }
 .ach-more { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .ach-more .profile-text-button { margin-top: 6px; font-size: 13px; }
 .ach-muted { color: var(--color-muted); }
