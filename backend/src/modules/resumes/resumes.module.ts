@@ -174,7 +174,7 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           new ClaudeResumeChat(runner),
           new ClaudeLineRewriter(runner),
           new ClaudeSkillTailor(runner),
-          new ClaudeSummaryWriter(runner),
+          new ClaudeSummaryWriter(runner, config.summaryFixModel),
         ),
     },
     {

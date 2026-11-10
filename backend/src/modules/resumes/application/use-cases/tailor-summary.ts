@@ -1,6 +1,8 @@
 import {
+  keepsOtherSentences,
   repairSummary,
   runSummaryChecks,
+  sentencesToFix,
   wordsOf,
   type CheckResult,
   type ExperienceRecord,
@@ -34,8 +36,20 @@ export interface SummaryInput {
 /** Writes a summary from the instructions; throws when it cannot return valid JSON. */
 export interface SummaryWriter {
   write(input: SummaryInput): Promise<SummaryDraft>;
-  /** The previous answer back, with the checks it failed, for a corrected one. */
-  fix(input: SummaryInput & { previous: SummaryDraft; failed: CheckResult[] }): Promise<SummaryDraft>;
+  /**
+   * The previous answer back, with the checks it failed, for a corrected summary.
+   * `change`: the sentences to rewrite (0-based), the rest copied as they are;
+   * null when any may change. `quick`: a fast, smaller model does the fix.
+   * The mapping and gaps of the previous answer are kept.
+   */
+  fix(input: SummaryFixInput): Promise<SummaryDraft>;
+}
+
+export interface SummaryFixInput extends SummaryInput {
+  previous: SummaryDraft;
+  failed: CheckResult[];
+  change: number[] | null;
+  quick: boolean;
 }
 
 export interface CheckedSummary extends SummaryDraft {
@@ -49,6 +63,8 @@ export const MAX_SUMMARY_ATTEMPTS = 3;
 
 /**
  * Write, check in code, and send failures back for a fix, at most 3 times.
+ * Fixes go to the quick model first; the last try goes to the main one. A fix
+ * that rewrites sentences it was told to keep is thrown away.
  * Returns the version that failed the fewest checks, with its failures listed.
  */
 export async function writeCheckedSummary(
@@ -70,12 +86,22 @@ export async function writeCheckedSummary(
   let attempts = 1;
   while (current.failed.length && attempts < MAX_SUMMARY_ATTEMPTS) {
     attempts++;
+    const quick = attempts < MAX_SUMMARY_ATTEMPTS;
+    const change = sentencesToFix(current.draft.summary, current.failed, record);
+    let next: typeof current;
     try {
-      current = checked(await writer.fix({ ...input, previous: current.draft, failed: current.failed }));
+      next = checked(
+        await writer.fix({ ...input, previous: current.draft, failed: current.failed, change, quick }),
+      );
     } catch {
-      // A fix that never came back as valid JSON ends the loop; the best so far stands.
+      // A quick fix that never came back as valid JSON leaves the last try to the main model;
+      // after that the best so far stands.
+      if (quick) continue;
       break;
     }
+    // Sentences that passed were to be copied: a fix that rewrote them may have added claims.
+    if (change && !keepsOtherSentences(current.draft.summary, next.draft.summary, change)) continue;
+    current = next;
     if (current.failed.length <= best.failed.length) best = current;
   }
   return { ...best.draft, failedChecks: best.failed, attempts };

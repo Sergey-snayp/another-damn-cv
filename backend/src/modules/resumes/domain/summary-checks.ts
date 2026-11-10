@@ -372,6 +372,43 @@ export function runSummaryChecks(summary: string, record: ExperienceRecord): Che
   ];
 }
 
+/**
+ * The sentences a fix has to change (0-based), so the rest can be kept word
+ * for word: those failing a check that reads one sentence at a time. null when
+ * any sentence may change: the word count or the number of sentences is off,
+ * or a failure cannot be placed in one sentence.
+ */
+export function sentencesToFix(
+  summary: string,
+  failed: CheckResult[],
+  record: ExperienceRecord,
+): number[] | null {
+  const sentences = sentencesOf(summary);
+  const ids = new Set(failed.map((check) => check.id));
+  if (ids.has('word-count') || sentences.length < 3 || sentences.length > 4) return null;
+  const fails = (sentence: string, index: number) =>
+    wordsOf(sentence).length > 35 ||
+    (index === 0 && !checkOpening(sentence).ok) ||
+    [
+      checkNoEmDash(sentence),
+      checkUsSpelling(sentence),
+      checkNoCodebaseCounts(sentence),
+      checkBoldedInRecord(sentence, record),
+      checkNumbersInRecord(sentence, record),
+      checkOneEmployerPerClause(sentence, record),
+      checkNoToolListEnding(sentence, record),
+    ].some((check) => !check.ok);
+  const indexes = sentences.flatMap((sentence, index) => (fails(sentence, index) ? [index] : []));
+  return indexes.length ? indexes : null;
+}
+
+/** Whether every sentence outside `changed` is still in the fixed summary, word for word. */
+export function keepsOtherSentences(before: string, after: string, changed: number[]): boolean {
+  const same = (sentence: string) => plain(sentence).replace(/\s+/g, ' ').trim();
+  const now = new Set(sentencesOf(after).map(same));
+  return sentencesOf(before).every((sentence, index) => changed.includes(index) || now.has(same(sentence)));
+}
+
 // ── the record ───────────────────────────────────────────────────────────────
 
 const STACK_LINE = /^\s*(?:tech(?:nology)? stack|stack|technologies|tools)\s*:\s*/i;

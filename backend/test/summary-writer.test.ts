@@ -7,7 +7,11 @@ import {
   type SummaryDraft,
   type SummaryWriter,
 } from '../src/modules/resumes/application/use-cases/tailor-summary';
-import type { ExperienceRecord } from '../src/modules/resumes/domain/summary-checks';
+import {
+  keepsOtherSentences,
+  sentencesToFix,
+  type ExperienceRecord,
+} from '../src/modules/resumes/domain/summary-checks';
 
 const record: ExperienceRecord = {
   text: 'Professional experience since 2019 (about 7 years).\n<role employer="Acme">\n- Built 16 integrations on NestJS.\n</role>',
@@ -77,14 +81,72 @@ test('after 3 attempts the best version comes back with its failed checks listed
   assert.ok(!result.failedChecks.some((check) => check.id === 'us-spelling' || check.id === 'em-dash'));
 });
 
-test('a fix that never comes back as valid JSON ends the loop with the best so far', async () => {
+test('a fix that never comes back as valid JSON leaves the last try to the main model, then the best so far stands', async () => {
+  const quick: boolean[] = [];
   const writer: SummaryWriter = {
     write: () => Promise.resolve(draft(BAD)),
-    fix: () => Promise.reject(new Error('invalid JSON')),
+    fix: (input) => {
+      quick.push(input.quick);
+      return Promise.reject(new Error('invalid JSON'));
+    },
   };
   const result = await writeCheckedSummary(writer, { job: 'Job', experience: record.text }, record);
   assert.equal(result.summary, BAD_REPAIRED);
-  assert.equal(result.attempts, 2);
+  assert.equal(result.attempts, 3);
+  assert.deepEqual(quick, [true, false]);
+});
+
+/** 4 sentences that pass, the 2nd made too long: only it has to change. */
+const LONG_SECOND = GOOD.replace(sentence(30), sentence(40));
+
+test('the quick model fixes first and the main model takes the last try', async () => {
+  const calls: Array<{ quick: boolean; change: number[] | null }> = [];
+  const answers = [LONG_SECOND, GOOD];
+  const writer: SummaryWriter = {
+    write: () => Promise.resolve(draft(LONG_SECOND)),
+    fix: ({ quick, change }) => {
+      calls.push({ quick, change });
+      return Promise.resolve(draft(answers.shift()!));
+    },
+  };
+  const result = await writeCheckedSummary(writer, { job: 'Job', experience: record.text }, record);
+  assert.deepEqual(calls, [
+    { quick: true, change: [1] },
+    { quick: false, change: [1] },
+  ]);
+  assert.equal(result.summary, GOOD);
+  assert.equal(result.attempts, 3);
+});
+
+test('a fix that rewrites a sentence it was told to keep is thrown away', async () => {
+  // Sentence 2 shortened, but sentence 1 rewritten too, with a claim the draft never made.
+  const rewrote = GOOD.replace('building integrations', 'leading teams building integrations');
+  const answers = [rewrote, GOOD];
+  const writer: SummaryWriter = {
+    write: () => Promise.resolve(draft(LONG_SECOND)),
+    fix: () => Promise.resolve(draft(answers.shift()!)),
+  };
+  const result = await writeCheckedSummary(writer, { job: 'Job', experience: record.text }, record);
+  assert.equal(result.summary, GOOD, 'the main model’s fix, which kept sentence 1, stands');
+  assert.doesNotMatch(result.summary, /leading teams/);
+});
+
+test('which sentences a fix may change', () => {
+  assert.deepEqual(sentencesToFix(LONG_SECOND, [{ id: 'sentences', name: 'S', ok: false }], record), [1]);
+  const unknownNumber = GOOD.replace('Shipped', 'Shipped 42');
+  assert.deepEqual(
+    sentencesToFix(unknownNumber, [{ id: 'numbers-in-record', name: 'N', ok: false }], record),
+    [1],
+  );
+  // A word count that is off can be put right in any sentence.
+  assert.equal(sentencesToFix(GOOD, [{ id: 'word-count', name: 'W', ok: false }], record), null);
+  assert.equal(sentencesToFix(BAD_REPAIRED, [{ id: 'sentences', name: 'S', ok: false }], record), null);
+  assert.ok(keepsOtherSentences(LONG_SECOND, GOOD, [1]));
+  assert.ok(!keepsOtherSentences(LONG_SECOND, GOOD.replace('7 years', '8 years'), [1]));
+  assert.ok(
+    keepsOtherSentences(GOOD, GOOD.replace('**NestJS**', 'NestJS'), [3]),
+    'bold marks alone do not count',
+  );
 });
 
 const answer = (summary: string) =>
@@ -142,10 +204,48 @@ test('invalid JSON is retried once with what was wrong; twice invalid is an erro
     experience: 'E',
     previous: draft(BAD),
     failed: [{ id: 'em-dash', name: 'No em dashes', ok: false, detail: '1 em dash' }],
+    change: null,
+    quick: false,
   });
   assert.equal(retried.summary, GOOD);
-  assert.match(prompts[2], /<previous_answer>[\s\S]*optimised things[\s\S]*<\/previous_answer>/);
+  assert.match(
+    prompts[2],
+    /<previous_summary>\n1\. Senior backend engineer[\s\S]*optimised things[\s\S]*<\/previous_summary>/,
+  );
   assert.match(prompts[2], /- No em dashes: 1 em dash/);
+});
+
+test('a quick fix runs on the small model at low effort, returns only the summary, and keeps the mapping', async () => {
+  const calls: Array<{ prompt: string; options: unknown }> = [];
+  const writer = new ClaudeSummaryWriter(
+    {
+      complete: (prompt, _system, options) => {
+        calls.push({ prompt, options });
+        return Promise.resolve(JSON.stringify({ summary: GOOD }));
+      },
+    },
+    'claude-haiku-5-5',
+  );
+  const previous: SummaryDraft = {
+    ...draft(LONG_SECOND),
+    mapping: [{ item: 'NestJS', type: 'required', evidence: 'NestJS clause', employer: 'Acme' }],
+    gaps: ['Go'],
+    decidingGap: 'Go',
+  };
+  const fixed = await writer.fix({
+    job: 'J',
+    experience: 'E',
+    previous,
+    failed: [
+      { id: 'sentences', name: 'Sentence count and length', ok: false, detail: 'sentence 2 has 40 words' },
+    ],
+    change: [1],
+    quick: true,
+  });
+  assert.deepEqual(calls[0].options, { timeoutMs: 60_000, effort: 'low', model: 'claude-haiku-5-5' });
+  assert.match(calls[0].prompt, /Rewrite only sentence 2\. Copy every other sentence exactly/);
+  assert.match(calls[0].prompt, /\{"summary": "<the corrected summary>"\}/);
+  assert.deepEqual(fixed, { ...previous, summary: GOOD });
 });
 
 test('mechanical slips are repaired in code, without another round with the model', async () => {
