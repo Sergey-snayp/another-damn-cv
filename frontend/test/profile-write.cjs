@@ -67,13 +67,14 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     const card = await page.$eval(first, element => element.textContent);
     assert.doesNotMatch(card, /Add a note|1 note|old notes/, 'no notes on the job');
 
-    // The panel beside the Profile checks the bullet being written, as it is written.
-    assert.match(await page.$eval('.bullet-panel', element => element.textContent), /^Bullet check/);
+    // The panel beside the Profile shows only while a bullet is written, and checks it as it is written.
+    assert.equal(await page.$('.bullet-panel'), null, 'no panel while nothing is being edited');
+    await page.click(`${first} .ach-add-open`);
+    await page.waitForSelector('.bullet-panel');
     assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Work experience › Bullets.*action verb \+ what you built/s);
     await page.evaluate(() => [...document.querySelectorAll('.bp-tabs button')].find(tab => tab.textContent === 'Prompts').click());
     assert.match(await page.$eval('.bullet-panel [role="tabpanel"]', element => element.textContent), /Every “yes” is a bullet.*Did you build a system, service or feature from scratch\?.*Did you lead, mentor or train anyone\?/s);
     await page.evaluate(() => [...document.querySelectorAll('.bp-tabs button')].find(tab => tab.textContent === 'Suggestions').click());
-    await page.click(`${first} .ach-add-open`);
     await page.waitForSelector('[aria-label="New bullet"]');
     assert.equal(await page.$eval(`${first} .ach-write`, element => element.disabled), true);
     await page.type('[aria-label="New bullet"]', 'Built REST APIs.');
@@ -121,7 +122,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(saved[0].notes, oldNotes, 'nothing is added to notes; old ones are left as stored');
     assert.deepEqual(saved[1], state.data.experiences.value[1], 'the other job is untouched');
     assert.match(await page.$eval('.profile-success', element => element.textContent), /Added 2 bullets to Ciklum/);
-    assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Bullet check/, 'nothing being written: the panel is back to its guide');
+    assert.equal(await page.$('.bullet-panel'), null, 'nothing being written: the panel is gone');
     assert.deepEqual(errors, []);
     console.log('PASS Write bullets: bullet check panel, rough words to reviewed bullets, answers, Back, tools, description, no notes kept');
   } finally {

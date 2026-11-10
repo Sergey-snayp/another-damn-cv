@@ -308,8 +308,9 @@ export function Profile() {
             </BulletFocusProvider>
           </div>
           <aside className="profile-side">
-            <BulletPanel active={activeBullet} />
-            {missing.length > 0 && (
+            {/* Only while a bullet is being edited or added; the column keeps its place either way. */}
+            {activeBullet && <BulletPanel active={activeBullet} />}
+            {!activeBullet && missing.length > 0 && (
               <section className="profile-panel profile-side-card" aria-labelledby="profile-missing-heading">
                 <h2 id="profile-missing-heading">Finish your profile</h2>
                 <p className="profile-muted">Autofill and job matching use these.</p>
