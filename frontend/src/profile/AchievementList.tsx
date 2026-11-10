@@ -241,7 +241,7 @@ export function AchievementList({
                     if (next) move(text, next.text);
                   }}
                 >
-                  <Icon name="grip" size={14} />
+                  <Icon name="grip" size={12} />
                 </button>
                 <svg className="ach-mark" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
                   <rect x="1.5" y="1.5" width="17" height="17" rx="4" />
@@ -307,7 +307,7 @@ export function AchievementList({
                       disabled={disabled || busy}
                       onClick={() => toggleStar(text)}
                     >
-                      <Icon name="star" size={18} filled={star} />
+                      <Icon name="star" size={15} filled={star} />
                     </button>
                     <button
                       type="button"
@@ -317,7 +317,7 @@ export function AchievementList({
                       disabled={disabled || busy}
                       onClick={() => setEditing({ index, text })}
                     >
-                      <Icon name="edit" size={18} />
+                      <Icon name="edit" size={15} />
                     </button>
                     <button
                       type="button"
@@ -327,7 +327,7 @@ export function AchievementList({
                       disabled={disabled || busy}
                       onClick={() => copy(text)}
                     >
-                      <Icon name="copy" size={18} />
+                      <Icon name="copy" size={15} />
                     </button>
                     <button
                       type="button"
@@ -337,7 +337,7 @@ export function AchievementList({
                       disabled={disabled || busy}
                       onClick={() => remove(text)}
                     >
-                      <Icon name="trash" size={18} />
+                      <Icon name="trash" size={15} />
                     </button>
                   </span>
                 )}
@@ -370,7 +370,7 @@ export function AchievementList({
               setAddOpen(true);
             }}
           >
-            <Icon name="plus" size={18} />
+            <Icon name="plus" size={15} />
             Add Bullet
           </button>
         )}

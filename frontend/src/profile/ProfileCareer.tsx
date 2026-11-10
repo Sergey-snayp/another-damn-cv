@@ -99,7 +99,7 @@ export function ProfileCareer({
         {experiences.length ? (
           experiences.map((role, index) => (
             <article className="profile-entry" key={index}>
-              <span className="profile-entry-icon" aria-hidden="true"><Icon name="briefcase" size={24} /></span>
+              <span className="profile-entry-icon" aria-hidden="true"><Icon name="briefcase" size={19} /></span>
               <div className="profile-entry-main">
                 <div className="profile-entry-heading">
                   <div className="profile-entry-title">
@@ -138,7 +138,7 @@ export function ProfileCareer({
         {educations.length ? (
           educations.map((row, index) => (
             <article className="profile-entry" key={index}>
-              <span className="profile-entry-icon is-education" aria-hidden="true"><Icon name="education" size={24} /></span>
+              <span className="profile-entry-icon is-education" aria-hidden="true"><Icon name="education" size={19} /></span>
               <div className="profile-entry-main">
                 <div className="profile-entry-heading">
                   <div className="profile-entry-title">

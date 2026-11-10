@@ -42,48 +42,48 @@
 .profile-preserve-lines { white-space: pre-wrap; }
 
 /* A job or a school: an icon tile, the title with the employer under it, its facts as pills, then its text. */
-.profile-entry { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 18px; }
-.profile-entry + .profile-entry { margin-top: 26px; padding-top: 26px; border-top: 1px solid var(--color-border); }
-.profile-entry-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 13px; background: linear-gradient(135deg, #5d9ff5, #9ddbf6); color: #fff; }
+.profile-entry { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; }
+.profile-entry + .profile-entry { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--color-border); }
+.profile-entry-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #5d9ff5, #9ddbf6); color: #fff; }
 .profile-entry-icon.is-education { background: linear-gradient(135deg, #8f86f4, #c7b6fa); }
 .profile-entry-main { min-width: 0; }
 .profile-entry-heading { display: flex; align-items: flex-start; gap: 12px; }
 .profile-entry-title { flex: 1; min-width: 0; }
-.profile-panel .profile-entry-title h3 { font-size: 17px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-.profile-panel .profile-entry-title p { margin: 3px 0 0; font-size: 16px; font-weight: 600; color: var(--color-muted); line-height: 1.35; }
+.profile-panel .profile-entry-title h3 { font-size: 15px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.profile-panel .profile-entry-title p { margin: 1px 0 0; font-size: 14px; font-weight: 600; color: var(--color-muted); line-height: 1.35; }
 .profile-entry-tools { display: flex; flex: none; gap: 6px; }
-.profile-entry-tools .profile-edit-button { width: 34px; height: 34px; border-color: var(--color-border); background: var(--color-surface); }
+.profile-entry-tools .profile-edit-button { width: 30px; height: 30px; border-color: var(--color-border); background: var(--color-surface); }
 .profile-entry-tools .profile-edit-button:hover, .profile-entry-tools .profile-edit-button:focus-visible { background: var(--color-background); }
-.profile-pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
-.profile-pills li { padding: 5px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); color: var(--color-text); font-size: 13px; line-height: 1.5; }
-.profile-entry-main > .profile-body { margin-top: 16px; font-size: 15px; }
+.profile-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.profile-pills li { padding: 2px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); color: var(--color-text); font-size: 13px; line-height: 1.5; }
+.profile-entry-main > .profile-body { margin-top: 10px; font-size: 14px; }
 .profile-entry-dates { flex: none; padding-top: 2px; font-size: 13px; color: var(--color-muted); white-space: nowrap; }
 .profile-bullets { margin: 10px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.55; }
 .profile-bullets li + li { margin-top: 5px; }
-.profile-panel .profile-stack { margin: 12px 0 0; color: var(--color-text); font-size: 15px; line-height: 1.6; }
+.profile-panel .profile-stack { margin: 10px 0 0; color: var(--color-text); font-size: 13.5px; line-height: 1.55; }
 /* A job's achievements: starred first, edited in place, deleted ones restorable. */
 .ach { margin-top: 14px; }
 .ach-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .ach-tags button { padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); color: var(--color-text); font: inherit; font-size: 12px; cursor: pointer; }
 .ach-tags button.is-on { border-color: var(--color-text); background: var(--color-accent-soft); font-weight: 600; }
-.ach-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ach-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 /* A bullet: drag handle, check box, text; on hover a grey row and a dark toolbar above it. */
-.ach-row { position: relative; display: grid; grid-template-columns: 14px 22px minmax(0, 1fr) auto; align-items: start; gap: 0 10px; margin: 0 -10px; padding: 9px 10px 9px 4px; border-radius: 8px; }
+.ach-row { position: relative; display: grid; grid-template-columns: 12px 17px minmax(0, 1fr) auto; align-items: start; gap: 0 8px; margin: 0 -10px; padding: 5px 10px 5px 4px; border-radius: 8px; }
 .ach-row:hover, .ach-row:focus-within { background: var(--color-background); }
-.ach-mark { width: 22px; height: 22px; margin-top: 2px; fill: none; stroke: #1e4d45; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.ach-grip { display: grid; place-items: center; width: 14px; height: 26px; padding: 0; border: 0; background: none; color: var(--color-muted); cursor: grab; opacity: 0; }
+.ach-mark { width: 17px; height: 17px; margin-top: 2px; fill: none; stroke: #1e4d45; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ach-grip { display: grid; place-items: center; width: 12px; height: 21px; padding: 0; border: 0; background: none; color: var(--color-muted); cursor: grab; opacity: 0; }
 .ach-row:hover .ach-grip, .ach-grip:focus-visible { opacity: 1; }
 .ach-grip:disabled { cursor: default; }
-.ach-starred { margin-top: 3px; color: #c9a400; font-size: 14px; }
-.ach-tools { position: absolute; z-index: 2; top: -20px; right: 10px; display: flex; gap: 2px; padding: 4px; border-radius: 9px; background: #1e4d45; box-shadow: 0 6px 16px rgba(0, 0, 0, .18); opacity: 0; pointer-events: none; transition: opacity .12s; }
+.ach-starred { margin-top: 1px; color: #c9a400; font-size: 12px; }
+.ach-tools { position: absolute; z-index: 2; top: -16px; right: 10px; display: flex; gap: 1px; padding: 3px; border-radius: 8px; background: #1e4d45; box-shadow: 0 6px 16px rgba(0, 0, 0, .18); opacity: 0; pointer-events: none; transition: opacity .12s; }
 .ach-row:hover .ach-tools, .ach-row:focus-within .ach-tools { opacity: 1; pointer-events: auto; }
-.ach-tool { display: grid; place-items: center; width: 36px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: none; color: #fff; cursor: pointer; }
+.ach-tool { display: grid; place-items: center; width: 30px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; color: #fff; cursor: pointer; }
 .ach-tool:hover, .ach-tool:focus-visible { background: rgba(255, 255, 255, .16); outline: none; }
 .ach-tool.is-on { color: #f5c542; }
 .ach-tool:disabled { opacity: .5; cursor: default; }
 .ach-row.is-dragging { opacity: .45; }
 .ach-row.is-drop { box-shadow: inset 0 2px 0 #1e4d45; }
-.ach-text { padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 16px; line-height: 1.6; text-align: left; cursor: text; overflow-wrap: anywhere; }
+.ach-text { padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 14px; line-height: 1.55; text-align: left; cursor: text; overflow-wrap: anywhere; }
 .ach-text:disabled { cursor: default; }
 .ach-row.is-starred .ach-text { font-weight: 500; }
 .ach-more { display: flex; flex-wrap: wrap; gap: 4px 16px; }
@@ -93,11 +93,11 @@
 .ach-removed li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .ach-removed .profile-text-button { margin: 0; flex: none; }
 /* "+ Add Bullet": an outlined button, in the Profile and the job editor. */
-.add-bullet-button { display: inline-flex; align-items: center; gap: 10px; width: fit-content; padding: 8px 18px 8px 14px; border: 1px solid #1e4d45; border-radius: 7px; background: var(--color-surface); color: #1e4d45; font: inherit; font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer; }
+.add-bullet-button { display: inline-flex; align-items: center; gap: 7px; width: fit-content; padding: 5px 13px 5px 10px; border: 1px solid #1e4d45; border-radius: 7px; background: var(--color-surface); color: #1e4d45; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.3; cursor: pointer; }
 .add-bullet-button:hover { background: #eef5f3; }
 .add-bullet-button:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
 .add-bullet-button:disabled { opacity: .45; cursor: default; }
-.ach-more .add-bullet-button { margin-top: 10px; }
+.ach-more .add-bullet-button { margin-top: 8px; }
 .ach-add { display: grid; gap: 6px; margin-top: 10px; }
 .ach-add-actions { display: flex; align-items: center; gap: 14px; }
 .ach-add-actions .profile-text-button { margin: 0; }
@@ -198,44 +198,44 @@
 .profile-panel .ach-guide .ach-guide-example { padding-left: 10px; border-left: 3px solid var(--color-accent-border); color: var(--color-text); font-style: italic; }
 
 /* The bullet check panel beside the Profile. */
-.bullet-panel { display: flex; flex-direction: column; gap: 18px; }
+.bullet-panel { display: flex; flex-direction: column; gap: 14px; }
 .bp-head { display: flex; flex-direction: column; gap: 2px; }
-.profile-panel .bp-grade { margin: 0; font-size: 28px; line-height: 1.2; font-weight: 700; color: #1e4d45; }
+.profile-panel .bp-grade { margin: 0; font-size: 21px; line-height: 1.2; font-weight: 700; color: #1e4d45; }
 .profile-panel .bp-grade.is-fair { color: #8a6a00; }
 .profile-panel .bp-grade.is-weak { color: var(--color-error); }
 .profile-panel .bp-job { margin: 0; font-size: 12px; }
 .bp-segments { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.bp-segments span { height: 12px; border-radius: 6px; background: var(--color-border); }
+.bp-segments span { height: 8px; border-radius: 4px; background: var(--color-border); }
 .bp-segments span.is-on { background: #1e4d45; }
-.bp-gauges { display: grid; gap: 18px; padding: 16px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
-.bp-gauge { display: grid; grid-template-columns: 1fr 150px; align-items: end; gap: 12px; font-size: 15px; }
-.bp-gauge-bar { position: relative; height: 8px; margin-top: 22px; border-radius: 99px; background: var(--color-border); }
-.bp-gauge-ticks span { position: absolute; top: -22px; transform: translateX(-50%); font-size: 12px; color: var(--color-muted); }
+.bp-gauges { display: grid; gap: 12px; padding: 12px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+.bp-gauge { display: grid; grid-template-columns: 1fr 130px; align-items: end; gap: 10px; font-size: 13px; }
+.bp-gauge-bar { position: relative; height: 6px; margin-top: 18px; border-radius: 99px; background: var(--color-border); }
+.bp-gauge-ticks span { position: absolute; top: -18px; transform: translateX(-50%); font-size: 11px; color: var(--color-muted); }
 .bp-gauge-band { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: #1e4d45; opacity: .9; }
-.bp-gauge-mark { position: absolute; top: -5px; width: 3px; height: 18px; margin-left: -1.5px; border-radius: 2px; background: var(--color-text); }
+.bp-gauge-mark { position: absolute; top: -4px; width: 3px; height: 14px; margin-left: -1.5px; border-radius: 2px; background: var(--color-text); }
 .bp-gauge-mark.is-off { background: var(--color-error); }
-.bp-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; margin: 0; padding: 0 0 16px; list-style: none; border-bottom: 1px solid var(--color-border); font-size: 15px; }
-.bp-checks li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.bp-dot { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; }
+.bp-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 22px; margin: 0; padding: 0 0 12px; list-style: none; border-bottom: 1px solid var(--color-border); font-size: 15px; }
+.bp-checks li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.bp-dot { display: grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 10px; font-weight: 700; }
 .bp-dot.is-ok { background: #1e4d45; }
 .bp-dot.is-missing { background: #8b2a3c; }
-.profile-panel .bp-empty { margin: 0; font-size: 14px; }
-.bp-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--color-border); }
-.bp-tabs button { position: relative; padding: 8px 0; border: 0; background: none; color: #1e4d45; font: inherit; font-size: 15px; cursor: pointer; }
+.profile-panel .bp-empty { margin: 0; font-size: 13px; }
+.bp-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--color-border); }
+.bp-tabs button { position: relative; padding: 6px 0; border: 0; background: none; color: #1e4d45; font: inherit; font-size: 13px; cursor: pointer; }
 .bp-tabs button.is-on { font-weight: 700; }
 .bp-tabs button.is-on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; border-radius: 2px; background: #1e4d45; }
-.bp-body { font-size: 14px; line-height: 1.6; color: var(--color-text); }
-.profile-panel .bp-body h3 { margin: 4px 0 6px; font-size: 18px; font-weight: 500; color: var(--color-text); }
-.profile-panel .bp-body p { margin: 0 0 8px; font-size: 14px; color: var(--color-text); }
+.bp-body { font-size: 13px; line-height: 1.55; color: var(--color-text); }
+.profile-panel .bp-body h3 { margin: 2px 0 6px; font-size: 15px; font-weight: 500; color: var(--color-text); }
+.profile-panel .bp-body p { margin: 0 0 8px; font-size: 13px; color: var(--color-text); }
 .bp-body ul { margin: 0 0 10px; padding-left: 20px; }
-.bp-body li + li { margin-top: 4px; }
+.bp-body li + li { margin-top: 3px; }
 .bp-fixes { padding: 10px 12px 10px 28px !important; border-radius: 9px; background: #fbf1f3; }
 .bp-examples li { font-style: italic; }
 .profile-panel .bp-note { font-size: 12px; color: var(--color-muted); }
 
 /* Career with the bullet panel: sections on the left, the panel on the right. */
-.content:has(.profile-layout.has-panel) { max-width: 1440px; }
-.profile-layout.has-panel { grid-template-columns: minmax(0, 1fr) 420px; }
+.content:has(.profile-layout.has-panel) { max-width: 1320px; }
+.profile-layout.has-panel { grid-template-columns: minmax(0, 1fr) 350px; }
 @media (max-width: 1100px) {
   .profile-layout.has-panel { grid-template-columns: minmax(0, 1fr); }
   .profile-layout.has-panel .bullet-panel { display: none; }
@@ -243,14 +243,21 @@
 @media (min-width: 1101px) { .ach-meter-narrow { display: none; } }
 
 /* Writing a bullet: a white card with the text and its count, then Cancel and Save. */
-.ach-editor { display: grid; gap: 8px; padding: 12px 14px 10px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
+.ach-editor { display: grid; gap: 6px; padding: 9px 12px 8px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
 .ach-editor:focus-within { border-color: #1e4d45; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
-.ach-editor textarea { width: 100%; min-height: 3.2em; margin: 0; padding: 0; border: 0; outline: none; background: none; color: var(--color-text); font: inherit; font-size: 16px; line-height: 1.6; resize: none; field-sizing: content; max-height: 40vh; }
-.ach-count { font-size: 13px; color: var(--color-muted); }
+.ach-editor textarea { width: 100%; min-height: 3.2em; margin: 0; padding: 0; border: 0; outline: none; background: none; color: var(--color-text); font: inherit; font-size: 14px; line-height: 1.6; resize: none; field-sizing: content; max-height: 40vh; }
+.ach-count { font-size: 12px; color: var(--color-muted); }
 .ach-count b { margin-right: 8px; color: var(--color-text); font-weight: 600; }
-.ach-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 18px; margin-top: 10px; }
-.ach-editor-actions .profile-text-button { margin: 0; color: #1e4d45; font-size: 15px; text-decoration: none; }
-.ach-save { padding: 9px 22px; border: 0; border-radius: 7px; background: #1e4d45; color: #fff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.ach-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 8px; }
+.ach-editor-actions .profile-text-button { margin: 0; color: #1e4d45; font-size: 13px; text-decoration: none; }
+.ach-save { padding: 6px 16px; border: 0; border-radius: 7px; background: #1e4d45; color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .ach-save:hover { background: #163a34; }
 .ach-save:disabled { opacity: .5; cursor: default; }
-.ach-row:has(.ach-editor) { grid-template-columns: 14px 22px minmax(0, 1fr); background: var(--color-background); padding: 12px 10px 12px 4px; }
+.ach-row:has(.ach-editor) { grid-template-columns: 12px 17px minmax(0, 1fr); background: var(--color-background); padding: 8px 10px 8px 4px; }
+/* The panel stays in view: pinned under the app bar, never taller than the window;
+   only its tab text scrolls inside it when the window is short. */
+.profile-layout.has-panel .profile-side { top: 72px; max-height: calc(100vh - 88px); }
+.profile-layout.has-panel .profile-side > * { flex: none; }
+.profile-layout.has-panel .profile-side > .bullet-panel { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+.bullet-panel > * { flex: none; }
+.bullet-panel > .bp-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
