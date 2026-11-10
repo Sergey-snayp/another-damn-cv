@@ -21,6 +21,7 @@ export function resumeFromProfile(current: RenderedResume, profile: ContactField
     github: profile.github,
     website: profile.website || profile.portfolio,
   };
+  if (career.summary) next.summaries = { ...next.summaries, default: career.summary.value };
   if (career.experiences) {
     next.experiences = career.experiences.value.map((role, position) => {
       const lineageId = newId();

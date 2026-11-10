@@ -12,7 +12,8 @@ const Count = ({ text }: { text: string }) => (
   </span>
 );
 
-const SHOWN = 5;
+/** A list this long gets topic filters above it. */
+const FILTER_FROM = 8;
 export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed">;
 
 /** "- Built X" / "• Built X" / "1. Built X" → "Built X". */
@@ -36,7 +37,6 @@ export function AchievementList({
   /** Saves the job's achievements; rejects with a message when it cannot. */
   onSave(patch: (current: CareerExperience) => Partial<RolePatch>): Promise<void>;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
   const [adding, setAdding] = useState("");
@@ -61,8 +61,9 @@ export function AchievementList({
     .map((text, index) => ({ text, index }))
     .sort((a, b) => Number(starred.has(b.text)) - Number(starred.has(a.text)));
   const filtered = filter ? ordered.filter((item) => tagsOf(item.text).includes(filter)) : ordered;
-  const visible = expanded ? filtered : ordered.slice(0, SHOWN);
-  const tags = role.bullets.length > SHOWN ? tagCounts(role.bullets) : [];
+  // Every bullet shows: a long list is never collapsed.
+  const visible = filtered;
+  const tags = role.bullets.length >= FILTER_FROM ? tagCounts(role.bullets) : [];
   const pasted = adding.split("\n").map(clean).filter((line) => line.length > 1).length;
 
   async function run(patch: (current: CareerExperience) => Partial<RolePatch>) {
@@ -177,7 +178,7 @@ export function AchievementList({
 
   return (
     <div className="ach">
-      {expanded && tags.length > 0 && (
+      {tags.length > 0 && (
         <div className="ach-tags" role="group" aria-label="Show achievements about">
           <button type="button" className={filter ? "" : "is-on"} aria-pressed={!filter} onClick={() => setFilter(null)}>
             All {role.bullets.length}
@@ -348,19 +349,6 @@ export function AchievementList({
       )}
 
       <div className="ach-more">
-        {role.bullets.length > SHOWN && (
-          <button
-            type="button"
-            className="profile-text-button"
-            aria-expanded={expanded}
-            onClick={() => {
-              setExpanded(!expanded);
-              setFilter(null);
-            }}
-          >
-            {expanded ? "Show fewer" : `Show all ${role.bullets.length}`}
-          </button>
-        )}
         {!addOpen && (
           <button
             type="button"

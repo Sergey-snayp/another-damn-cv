@@ -10,8 +10,7 @@ export class PublicAssessmentProfileReader implements AssessmentProfileReader {
     return {
       revision: state.revision,
       career: {
-        // The Profile keeps no summary any more; an older saved one is not used.
-        summary: '',
+        summary: state.data.summary?.value ?? '',
         experiences: state.data.experiences?.value ?? [],
         educations: state.data.educations?.value ?? [],
         skills: state.data.skills?.value ?? [],

@@ -149,13 +149,21 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await button('Cancel').click();
     await closed();
     await page.evaluate(() => scrollTo(0, 0)); // The app's sticky header must not cover the button.
-    assert.equal(await page.$('#profile-summary-heading'), null, 'the Profile has no summary: each CV writes its own for the job');
-    await button('Edit profile skills').click();
-    await input('Skills — one per line').fill('Unsaved skill');
+    // The summary is edited in place; the panel beside it checks it as a summary.
+    await button('Edit profile summary').click();
+    await input('Professional summary', '.profile-main').fill('Unsaved temporary summary.');
+    await page.waitForFunction(() => /Summary check|Needs work|Fair|Good|Excellent/.test(document.querySelector('.bullet-panel')?.textContent ?? ''));
+    assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Years of experience.*No “I” or “my”.*Professional summary.*years of experience/s);
     await button('Cancel').click();
-    await button('Discard').click();
-    await closed();
-    assert.deepEqual(state.data.skills.value, original.data.skills.value, 'Cancel discards edits');
+    assert.equal(await page.$('[aria-label="Professional summary"]'), null);
+    assert.equal(state.data.summary.value, original.data.summary.value, 'Cancel discards edits');
+    await button('Edit profile summary').click();
+    await input('Professional summary', '.profile-main').fill('Backend engineer with 7 years of experience in payments.');
+    await page.evaluate(() => [...document.querySelectorAll('.ach-save')].find(button => button.textContent === 'Save').click());
+    await page.waitForFunction(() => !document.querySelector('[aria-label="Professional summary"]'));
+    assert.equal(state.data.summary.value, 'Backend engineer with 7 years of experience in payments.');
+    assert.match(await page.$eval('#profile-summary-heading', element => element.closest('section').textContent), /7 years of experience/);
+    assert.equal(await page.$('.bullet-panel'), null, 'the panel closes with the editor');
     state = { revision: state.revision + 1, data: { ...state.data, summary: { value: 'Updated in another session.', source: { kind: 'profile' }, importedAt } } };
     await button('Edit profile skills').click();
     await input('Skills — one per line').fill('Node.js\nTypeScript\nNode.js\n');

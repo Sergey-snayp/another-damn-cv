@@ -304,6 +304,10 @@ export function Profile() {
                   setCollecting(true);
                 }}
                 onSaveRole={saveRole}
+              onSaveSummary={async (text) => {
+                const latest = await careerApi.read();
+                setCareerState(await careerApi.save(latest.revision, { summary: text }));
+              }}
               />
             </BulletFocusProvider>
           </div>

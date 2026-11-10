@@ -1,6 +1,7 @@
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { CareerData, CareerExperience } from "./careerApi";
 import { AchievementList, type RolePatch } from "./AchievementList";
+import { SummaryEditor } from "./SummaryEditor";
 import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -15,10 +16,7 @@ export function careerDate(value: string): string {
 const dateRange = (from: string, to: string, current = false) =>
   [careerDate(from), current ? "Present" : careerDate(to)].filter(Boolean).join(" – ");
 
-/**
- * The career overview: experience, education and skills, each edited in place.
- * No summary: each CV's summary is written for its job posting.
- */
+/** The career overview: summary, experience, education and skills, each edited in place. */
 export function ProfileCareer({
   imported,
   importDisabled,
@@ -27,11 +25,14 @@ export function ProfileCareer({
   onCollect,
   onDelete,
   onSaveRole,
+  onSaveSummary,
 }: {
   imported: CareerData;
   importDisabled: boolean;
   /** "✦ Write it for me": bullets written from what was typed in a job's bullet box. */
   onWrite(entry: number, text: string): void;
+  /** Saves the professional summary on the latest Profile. */
+  onSaveSummary(text: string): Promise<void>;
   /** Opens "Collect from my CVs". */
   onCollect?(): void;
   /** Deletes one job or education entry, after asking. */
@@ -44,6 +45,13 @@ export function ProfileCareer({
   const experiences = imported.experiences?.value ?? [];
   const educations = imported.educations?.value ?? [];
   const skills = imported.skills?.value ?? [];
+  const summary = imported.summary?.value ?? "";
+  // Every technology and skill on the Profile: what a summary's "Keywords" looks for.
+  const keywords = [
+    ...new Set(
+      [...experiences.flatMap((role) => (role.techStack ?? "").split(/[,|;\n]/)), ...skills].map((item) => item.trim()).filter(Boolean),
+    ),
+  ];
   const add = (section: CareerSectionKey, label: string) => (
     <button className="profile-add-button" aria-label={label} onClick={() => onEditCareer(section, "new")} disabled={importDisabled}>
       <Icon name="plus" size={15} />
@@ -77,6 +85,7 @@ export function ProfileCareer({
   };
   return (
     <>
+      <SummaryEditor summary={summary} keywords={keywords} disabled={importDisabled} onSave={onSaveSummary} />
 
       <section className="profile-panel" aria-labelledby="profile-work-heading">
         <div className="profile-panel-heading">

@@ -102,6 +102,121 @@ const EXAMPLES = [
  * recruiter's checker would, with what to fix and how a strong bullet reads.
  */
 export function BulletPanel({ active }: { active: ActiveBullet | null }) {
+  if (active?.kind === "summary") return <SummaryPanel active={active} />;
+  return <BulletChecks active={active} />;
+}
+
+const SUMMARY_WORDS = { min: 60, max: 120 } as const;
+const YEARS = /\b\d+\+?\s*(?:years?|yrs)\b/i;
+const FIRST_PERSON = /\b(?:I|me|my|mine|I'm|I've|I'd)\b/;
+
+function summaryChecks(active: ActiveBullet): Check[] {
+  const text = active.text.trim();
+  const words = text.split(/\s+/).length;
+  const first = text.split(/(?<=[.!?])\s+/)[0] ?? "";
+  const used = active.keywords.filter((keyword) => checkBullet(text, [keyword]).keywords?.used.length);
+  const withoutYears = text.replace(new RegExp(YEARS, "gi"), "");
+  return [
+    {
+      key: "length",
+      label: "Length",
+      ok: words >= SUMMARY_WORDS.min && words <= SUMMARY_WORDS.max,
+      fix: words < SUMMARY_WORDS.min ? "Add your strongest result or the industries you know." : "Cut it to 3 or 4 sentences: keep what this kind of job asks for.",
+    },
+    { key: "years", label: "Years of experience", ok: YEARS.test(text), fix: "Say how many years: “Backend engineer with 7 years of experience…”." },
+    { key: "keywords", label: "Keywords", ok: used.length >= 3, fix: "Name your core stack and skills, the words recruiters search for." },
+    { key: "metric", label: "Accomplishments", ok: checkBullet(withoutYears).metric, fix: "Add 1 or 2 results with a number: scale, % faster, $ saved, people led." },
+    { key: "voice", label: "No “I” or “my”", ok: !FIRST_PERSON.test(text), fix: "Drop “I” and “my”: “Built…”, “Backend engineer with…”." },
+    { key: "hook", label: "Strong opening", ok: Boolean(first) && first.split(/\s+/).length <= 30, fix: "Make the first sentence short: title, years and core stack. Most recruiters read only its first 10 to 15 words." },
+  ];
+}
+
+/** The professional summary, checked: length, years, keywords, results, voice and opening. */
+function SummaryPanel({ active }: { active: ActiveBullet }) {
+  const text = active.text.trim();
+  const checks = text ? summaryChecks(active) : [];
+  const passed = checks.filter((item) => item.ok).length;
+  const score = checks.length ? Math.round((passed / checks.length) * 5) : 0;
+  const words = text ? text.split(/\s+/).length : 0;
+  const missing = checks.filter((item) => !item.ok);
+  return (
+    <section className="profile-panel bullet-panel" aria-label="Summary check">
+      <header className="bp-head">
+        {text ? (
+          <h2 className={`bp-grade is-${score >= 4 ? "good" : score >= 2 ? "fair" : "weak"}`}>
+            <span aria-hidden="true">{score >= 4 ? "✅" : score >= 2 ? "🟡" : "⚠️"}</span> {GRADES[score]}
+          </h2>
+        ) : (
+          <h2 className="bp-grade">Summary check</h2>
+        )}
+        <p className="bp-job">{active.job}</p>
+      </header>
+      <div className="bp-segments">
+        {[0, 1, 2, 3, 4].map((at) => (
+          <span key={at} className={at < score ? "is-on" : ""} />
+        ))}
+      </div>
+      {text && (
+        <>
+          <div className="bp-gauges">
+            <Gauge label="Characters" value={text.length} min={400} max={800} scale={1000} />
+            <Gauge label="Words" value={words} min={SUMMARY_WORDS.min} max={SUMMARY_WORDS.max} scale={160} />
+          </div>
+          <ul className="bp-checks">
+            {checks.map((item) => (
+              <li key={item.key}>
+                {item.label}
+                <span className={`bp-dot ${item.ok ? "is-ok" : "is-missing"}`} aria-label={item.ok ? "met" : "missing"}>
+                  {item.ok ? "✓" : "✕"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="bp-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" className="is-on">
+          Suggestions
+        </button>
+      </div>
+      <div className="bp-body" role="tabpanel">
+        {missing.length > 0 && (
+          <ul className="bp-fixes">
+            {missing.map((item) => (
+              <li key={item.key}>
+                <b>{item.label}:</b> {item.fix}
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3>Professional summary</h3>
+        <p>
+          A short teaser that makes the reader want the rest of your CV: who you are, what you do best, and proof. Quick tailoring
+          rewrites it for each job, so keep this one as your strongest general version.
+        </p>
+        <ul>
+          <li>Know who reads it: the people hiring for the jobs you want next.</li>
+          <li>
+            Include:
+            <ul>
+              <li>your title and years of experience;</li>
+              <li>notable industries, companies or products;</li>
+              <li>core skills and keywords;</li>
+              <li>1 or 2 accomplishments with numbers.</li>
+            </ul>
+          </li>
+          <li>Make the first sentence the hook: most recruiters read only its first 10 to 15 words.</li>
+          <li>
+            3 or 4 sentences, {SUMMARY_WORDS.min} to {SUMMARY_WORDS.max} words, without “I” or “my”.
+          </li>
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** A job's bullet, checked. */
+function BulletChecks({ active }: { active: ActiveBullet | null }) {
   const [tab, setTab] = useState<"suggestions" | "examples" | "prompts">("suggestions");
   const text = active?.text.trim() ?? "";
   const checks = active && text ? checksOf(active) : [];

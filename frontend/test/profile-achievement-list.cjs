@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(__dirname, '../../backend')] }));
 
-// A job's long achievement list on Profile: best five, all with tag filters, stars,
+// A job's long achievement list on Profile: all shown, tag filters, stars,
 // edit in place, delete and restore, paste several. Synthetic API data only.
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 (async () => {
@@ -60,13 +60,11 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('.ach-text');
     const waitSaves = async n => { for (let i = 0; i < 50 && saves.length < n; i++) await pause(100); assert.equal(saves.length, n); await pause(150); };
 
-    // The best five, starred first; all on demand, with tags to filter.
+    // Every bullet shows, starred first; a long list has topic filters.
     let shown = await texts();
-    assert.equal(shown.length, 5);
+    assert.equal(shown.length, 8, 'a long list is not collapsed');
     assert.equal(shown[0], 'Ran payment APIs handling ~20,000 transactions a day.', 'a starred achievement comes first');
-    assert.equal(await page.$('.ach-tags'), null, 'no filters until the full list is open');
-    await button('Show all 8').click();
-    assert.equal((await texts()).length, 8);
+    assert.equal(await page.$('.ach-more .profile-text-button'), null, 'no Show all / Show fewer');
     const chips = await page.$$eval('.ach-tags button', items => items.map(item => item.textContent));
     assert.equal(chips[0], 'All 8');
     assert.ok(chips.includes('Payments 2'), chips.join(' | '));
@@ -75,7 +73,6 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.evaluate(() => [...document.querySelectorAll('.ach-tags button')].find(item => item.textContent.startsWith('All')).click());
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     await pause(300);
-    assert.equal(await page.$eval('.ach-more .profile-text-button', item => item.textContent), 'Show fewer');
     await page.screenshot({ path: '/private/tmp/job-agent-achievement-list.png' });
 
     // Star: saved, and it moves up.
@@ -155,7 +152,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('[aria-label="New bullet"]');
     assert.equal(await page.$eval('[aria-label="New bullet"]', box => box.value), 'C line.');
     assert.deepEqual(errors, []);
-    console.log('PASS achievement list: best five, show all, tag filters, stars, edit in place, delete for good, paste several, split a long one, move, copy');
+    console.log('PASS achievement list: all shown, tag filters, stars, edit in place, delete for good, paste several, split a long one, move, copy');
   } finally {
     await browser.close();
   }
