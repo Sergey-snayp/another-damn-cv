@@ -107,7 +107,16 @@ test('the runner preserves CLI arguments, isolated cwd, environment allowlist, s
   ]);
   assert.deepEqual(launched.options.stdio, ['pipe', 'pipe', 'pipe']);
   assert.deepEqual(readdirSync(launched.options.cwd), []);
-  const allowed = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', '__CF_USER_TEXT_ENCODING'];
+  const allowed = [
+    'PATH',
+    'HOME',
+    'USER',
+    'LOGNAME',
+    'SHELL',
+    'TMPDIR',
+    '__CF_USER_TEXT_ENCODING',
+    'CLAUDE_CODE_OAUTH_TOKEN',
+  ];
   assert.deepEqual(
     Object.keys(launched.options.env).sort(),
     allowed.filter((key) => process.env[key] !== undefined).sort(),

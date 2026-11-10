@@ -1,0 +1,19 @@
+# Only the source goes into the image: never secrets, dumps or local data.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+.git
+backups
+old
+docs
+data
+out
+test.js
+**/.DS_Store
+frontend/test
+backend/test
+extension/test

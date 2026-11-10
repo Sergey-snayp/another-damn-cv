@@ -24,7 +24,22 @@ export const config = {
   port: Number(optional('PORT', '3001')),
   databaseUrl: required('DATABASE_URL'),
   sessionSecret: required('SESSION_SECRET'),
-  frontendUrl: optional('FRONTEND_URL', 'http://localhost:5173'),
+  /** The web app's address. On Render it is the service's own (RENDER_EXTERNAL_URL). */
+  frontendUrl: optional('FRONTEND_URL', optional('RENDER_EXTERNAL_URL', 'http://localhost:5173')),
+  /**
+   * Where the server's own Chrome opens a CV to print it. On a deployed server
+   * the app is served by this process, so the print page is on localhost.
+   */
+  printUrl: optional('PRINT_URL', optional('FRONTEND_URL', 'http://localhost:5173')),
+  /** The built web app (frontend/dist) to serve from this process; empty in development. */
+  staticDir: optional('STATIC_DIR', ''),
+  /** Who may sign in, comma separated; empty lets anyone in. */
+  allowedEmails: optional('ALLOWED_EMAILS', '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
+  /** Chrome in a container runs without its sandbox (the container is the sandbox). */
+  chromeNoSandbox: optional('CHROME_NO_SANDBOX', '') === '1',
   /** "off" stops the server from printing CV PDFs (integration tests use a stand-in). */
   pdfRendering: optional('PDF_RENDERING', 'on'),
   /** Chrome the server prints CV PDFs with (puppeteer-core brings none of its own). */

@@ -10,7 +10,11 @@ export class PuppeteerPdfRenderer implements PdfRenderer {
   private browser: Promise<Browser> | null = null;
   private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly chromePath: string) {}
+  constructor(
+    private readonly chromePath: string,
+    /** In a container Chrome cannot start its own sandbox; the container is one. */
+    private readonly noSandbox = false,
+  ) {}
 
   render(url: string): Promise<Buffer> {
     const run = this.queue.then(() => this.print(url));
@@ -41,7 +45,11 @@ export class PuppeteerPdfRenderer implements PdfRenderer {
       .launch({
         executablePath: this.chromePath,
         headless: true,
-        args: ['--no-first-run', '--disable-extensions'],
+        args: [
+          '--no-first-run',
+          '--disable-extensions',
+          ...(this.noSandbox ? ['--no-sandbox', '--disable-dev-shm-usage'] : []),
+        ],
       })
       .then((browser) => {
         browser.on('disconnected', () => {

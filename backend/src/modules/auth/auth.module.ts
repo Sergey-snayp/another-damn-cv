@@ -26,7 +26,11 @@ import { AUTH_API, AUTH_SETTINGS } from './auth.tokens';
       useFactory: (prisma: PrismaService) => {
         const accounts = new PrismaAccountRepository(prisma);
         return new AuthApplication(
-          new SignInWithGoogle(new GoogleIdentityVerifier(config.google.clientId), accounts),
+          new SignInWithGoogle(
+            new GoogleIdentityVerifier(config.google.clientId),
+            accounts,
+            config.allowedEmails,
+          ),
           accounts,
           new SyncTokens(accounts, new RandomSyncTokenGenerator()),
           new EmbedSessions(new PrismaEmbedSessionStore(prisma), new RandomSyncTokenGenerator()),

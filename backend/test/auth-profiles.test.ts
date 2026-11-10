@@ -146,6 +146,25 @@ test('sign-in rejects missing/unverified email before creating an account', asyn
   }
 });
 
+test('with a list of allowed emails, only those people sign in (any letter case)', async () => {
+  const accounts = new Accounts();
+  const as = (email: string) => ({ verify: () => Promise.resolve({ subject: email, email, name: 'A' }) });
+  const allowed = ['Owner@Example.com'];
+  await assert.rejects(
+    new SignInWithGoogle(as('friend@example.com'), accounts, allowed).execute('credential'),
+    (error: unknown) =>
+      error instanceof AuthenticationError &&
+      /invite-only for now\. Ask its owner to add friend@example\.com/.test(error.message),
+  );
+  assert.equal(accounts.users.size, 0, 'no account is made for someone not on the list');
+  const owner = await new SignInWithGoogle(as('owner@example.COM'), accounts, allowed).execute('credential');
+  assert.equal(owner.email, 'owner@example.COM');
+  assert.ok(
+    await new SignInWithGoogle(as('anyone@example.com'), accounts).execute('credential'),
+    'no list: anyone',
+  );
+});
+
 test('verification failure reaches the caller without account mutation', async () => {
   const accounts = new Accounts();
   const signIn = new SignInWithGoogle(

@@ -99,7 +99,7 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
               render: () => Promise.reject(new Error('PDF rendering is off on this server.')),
               renderHtml: () => Promise.reject(new Error('PDF rendering is off on this server.')),
             }
-          : new PuppeteerPdfRenderer(config.chromePath),
+          : new PuppeteerPdfRenderer(config.chromePath, config.chromeNoSandbox),
     },
     {
       provide: ResumePdfs,
@@ -111,7 +111,7 @@ import type { PdfRenderer } from './application/ports/resume-pdf';
           renderer,
           new HmacPrintTokens(config.sessionSecret),
           (id, token) =>
-            `${config.frontendUrl}/print/resumes/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`,
+            `${config.printUrl}/print/resumes/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`,
         ),
     },
     {

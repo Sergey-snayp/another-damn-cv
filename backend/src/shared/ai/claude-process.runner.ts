@@ -211,9 +211,21 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
     return new ServiceUnavailableException(`Cannot run "${config.claudeBin}". Set CLAUDE_BIN in .env.`);
   }
 
-  /** USER is required on macOS or the CLI cannot reach the Keychain. */
+  /**
+   * USER is required on macOS or the CLI cannot reach the Keychain. On a server
+   * the CLI signs in with CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`).
+   */
   private childEnv(): NodeJS.ProcessEnv {
-    const keep = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', '__CF_USER_TEXT_ENCODING'];
+    const keep = [
+      'PATH',
+      'HOME',
+      'USER',
+      'LOGNAME',
+      'SHELL',
+      'TMPDIR',
+      '__CF_USER_TEXT_ENCODING',
+      'CLAUDE_CODE_OAUTH_TOKEN',
+    ];
     return Object.fromEntries(
       keep.map((key) => [key, process.env[key]]).filter(([, v]) => v !== undefined),
     ) as NodeJS.ProcessEnv;
