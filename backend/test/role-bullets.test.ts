@@ -161,10 +161,10 @@ test("choosing a job's bullets: from the Profile when it has more, otherwise eac
   await use([profile]).execute('u', 'cv', { role: cv, job: { jobId: 'j' }, position: 0 });
   assert.equal(
     asked.at(-1)!.count,
-    Math.min(6, asked.at(-1)!.items.length),
+    Math.min(5, asked.at(-1)!.items.length),
     'a whole job: the posting decides',
   );
-  assert.equal((asked.at(-1) as { min?: number }).min, 2);
+  assert.equal((asked.at(-1) as { min?: number }).min, Math.min(3, asked.at(-1)!.items.length));
 });
 
 test('client and start date select SymphonyAI rather than another Ciklum role with the same title', () => {
@@ -346,10 +346,14 @@ test('single-bullet generation uses the matching client facts and the account’
 });
 
 test('a whole job gets as many bullets as the posting needs: more for recent jobs, fewer for old ones', () => {
-  assert.deepEqual(bulletRange(0, 12), { min: 2, max: 6 }, 'the latest job: up to 6');
-  assert.deepEqual(bulletRange(3, 12), { min: 2, max: 4 });
-  assert.deepEqual(bulletRange(6, 12), { min: 2, max: 3 }, 'an old job: up to 3');
-  assert.deepEqual(bulletRange(0, 3), { min: 2, max: 3 }, 'never more than there is');
+  assert.deepEqual(bulletRange(0, 12), { min: 3, max: 5 }, 'the latest jobs: 3 to 5');
+  assert.deepEqual(bulletRange(3, 12), { min: 1, max: 3 });
+  assert.deepEqual(
+    bulletRange(6, 12),
+    { min: 0, max: 2 },
+    'an old job: none when the posting does not need it',
+  );
+  assert.deepEqual(bulletRange(0, 2), { min: 2, max: 2 }, 'never more than there is');
   assert.deepEqual(bulletRange(0, 1), { min: 1, max: 1 });
   const pool = ['a', 'b', 'c', 'd', 'e'].map((text, index) => ({
     id: `p${index + 1}`,

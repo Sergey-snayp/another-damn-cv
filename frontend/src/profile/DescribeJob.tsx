@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ACHIEVEMENT_WORDS, careerApi, wordsIn, type AchievementProposal, type CareerExperience, type CareerState } from "./careerApi";
 import { recruiterFlags } from "../resume/readability";
+import { BulletMeter } from "../resume/BulletMeter";
+import { QUESTIONS } from "../resume/bulletCheck";
 import "./profile-import.css";
 import "./profile-career-editor.css";
 
@@ -83,6 +85,10 @@ export function DescribeJob({
   const [description, setDescription] = useState({ text: "", keep: false });
   const [dropped, setDropped] = useState(0);
   const [uncovered, setUncovered] = useState<string[]>([]);
+  // The job's technologies: the "Keywords" a Profile line is checked for.
+  const technologies = [...(role?.techStack ?? "").split(/[,|;\n]/), ...tools.map((tool) => tool.name)]
+    .map((tool) => tool.trim())
+    .filter(Boolean);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
@@ -200,6 +206,16 @@ export function DescribeJob({
       ...lines.map((text) => ({ text, keep: true, asks: [], answers: [], answered: [], duplicateOf: null })),
       ...list.slice(at + 1),
     ]);
+
+  /** A ✕ on Metric or Time: its question joins the line's, ready to answer. */
+  const ask = (at: number, kind: keyof typeof QUESTIONS) =>
+    setItems((list) =>
+      list.map((item, i) =>
+        i !== at || item.asks.includes(QUESTIONS[kind])
+          ? item
+          : { ...item, asks: [...item.asks, QUESTIONS[kind]], answers: [...item.answers, ""] },
+      ),
+    );
 
   /** "Split": a line longer than a CV holds, as 2 to 4 that each fit. */
   async function split(at: number) {
@@ -346,6 +362,9 @@ export function DescribeJob({
                       disabled={!item.keep}
                       onChange={(event) => update(at, { text: event.target.value })}
                     />
+                    {item.keep && (
+                      <BulletMeter text={item.text} keywords={technologies} onAsk={(kind) => ask(at, kind)} />
+                    )}
                     {item.duplicateOf && <p className="describe-note">Already in this job: “{item.duplicateOf}”</p>}
                     {item.asks.length > 0 && item.keep && (
                       <div className="describe-asks">

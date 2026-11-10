@@ -301,6 +301,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
             { id: 'c1', text: 'Built Node.js payment APIs.', original: body.role.bullets[0], source: 'cv', cvIndex: 0, starred: false },
             { id: 'p6', text: 'Ran the payments on-call rotation for 2 years.', original: 'Ran the payments on-call rotation for 2 years.', source: 'profile', cvIndex: null, starred: false },
           ].slice(roleCount === 1 ? 1 : 0, roleCount === 1 ? 2 : roleCount),
+          // (roleCount 0: the posting does not need this job's bullets.)
           alternates: [
             { id: 'p5', text: 'Mentored two engineers on code review.', original: 'Mentored two engineers on code review.', source: 'profile', cvIndex: null, starred: false },
           ],
@@ -616,6 +617,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await pause(1500);
         const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
         assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet for this job/);
+        assert.match(more[2], /8 words.*short.*Action verb.*Metric.*Time.*Keywords/, 'each bullet shows its check');
         assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[2].querySelectorAll('button')].some(button => button.textContent === 'Add')));
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all')).click());
         assert.deepEqual(await listed(), ['Built Node.js payment APIs.', 'Cut checkout latency by 30% with Redis caching.', 'Ran the payments on-call rotation for 2 years.'], 'the new bullet goes after the job\'s last one');
@@ -638,6 +640,14 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.click(undo);
         await page.click(undo);
         assert.deepEqual(await listed(), bulletsBefore);
+        // None needed: every bullet of the job is offered for removal.
+        roleCount = 0;
+        await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
+        await page.waitForSelector('.qt-unit .qt-generate');
+        await page.click('.qt-unit .qt-generate');
+        await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
+        assert.deepEqual(await page.$$eval('.qt-unit .qt-slot .qt-actions .primary', buttons => buttons.map(button => button.textContent)), ['Remove', 'Remove']);
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close').click());
         roleCount = 2;
         profileChoice = false;
       }

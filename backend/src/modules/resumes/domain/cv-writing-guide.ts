@@ -92,7 +92,10 @@ export const BULLET_RULES = `HOW TO WRITE A BULLET (the standard every bullet is
   - that it lasted ("still in production", "now used to onboard new engineers").
 - Leave out any of these the facts do not give. Never invent a reason, a before, an
   outcome, a count or a role, and never claim more than the facts say.
-- At most 40 words (about two lines on a CV), one or two sentences. End with a period.
+- 20 to 40 words (about two lines on a CV), one or two sentences. End with a period.
+  Shorter only when the facts hold no more.
+- Give the time frame when the facts have one: daily, in 3 months, over 2 years, still in
+  production.
   Facts that do not fit belong in another bullet about the same work, never squeezed in.
 - ${DASH_PUNCTUATION_RULE}
 - Technologies by their real names; the CV marks them in bold itself.

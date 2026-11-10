@@ -44,9 +44,11 @@ How an achievement reads:
 - Ownership lives in the verb: "Built from scratch", "Designed and built", "Owned", "Led a
   3-person team". Never as an aside ("as its sole author,").
 - Numbers and scale exactly as the facts give them ("~15,000-20,000 transactions a day").
-- A lasting fact ("still in production") is a short closing clause, only when the facts say it.
+- A time frame when the facts give one (daily, in 3 months, over 2 years), and a lasting fact
+  ("still in production") as a short closing clause, only when the facts say it.
 - No filler and no benefit the facts do not state.
-- At most 40 words, one or two sentences, ending with a period.
+- 20 to 40 words, one or two sentences, ending with a period. Shorter only when the facts
+  hold no more: a thin line is a reason to ask a question, not to pad it.
 - ${DASH_PUNCTUATION_RULE}`;
 
 const SYSTEM = `You turn a person's own notes about one job into achievements for their career profile.

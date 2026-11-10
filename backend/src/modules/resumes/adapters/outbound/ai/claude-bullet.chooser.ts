@@ -35,6 +35,7 @@ How to choose:
 - The requested count in "chosen", best first. When a range is given, choose as many as the
   posting gives reason for: each bullet must show something different the posting asks for.
   Two strong bullets beat four with weak ones; never pad with lines the posting does not need.
+  When the range starts at 0, an older job the posting does not need may get none.
 - Prefer achievements that match the posting's requirements and responsibilities, then
   concrete results with numbers, then starred ones (the candidate's strongest).
 - Cover different requirements rather than repeating one.

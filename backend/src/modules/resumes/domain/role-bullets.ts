@@ -166,12 +166,12 @@ export function rolePool(cv: CvRole, profile: ProfileRole | null, otherCvs: CvRo
 
 /**
  * How many bullets a whole job may get, by its place on the CV (0 = the latest
- * job): recent jobs up to 6, the two before up to 4, older ones up to 3, and at
- * least 2 when there is that much to say.
+ * job): the two latest 3 to 5, the two before 1 to 3, older ones 0 to 2 (none
+ * when the posting does not need them). Never more than there is.
  */
 export function bulletRange(position: number, available: number): { min: number; max: number } {
-  const most = position < 2 ? 6 : position < 4 ? 4 : 3;
-  const min = Math.min(2, available);
+  const [least, most] = position < 2 ? [3, 5] : position < 4 ? [1, 3] : [0, 2];
+  const min = Math.min(least, available);
   return { min, max: Math.max(min, Math.min(most, available)) };
 }
 

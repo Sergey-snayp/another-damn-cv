@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { ACHIEVEMENT_WORDS, careerApi, wordsIn, type CareerExperience } from "./careerApi";
 import { tagCounts, tagsOf } from "./achievementTags";
+import { BulletMeter } from "../resume/BulletMeter";
 
 const SHOWN = 5;
 export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed">;
@@ -32,6 +33,7 @@ export function AchievementList({
   const [error, setError] = useState("");
 
   const starred = new Set(role.starred ?? []);
+  const technologies = (role.techStack ?? "").split(/[,|;\n]/).map((tool) => tool.trim()).filter(Boolean);
   // Starred first, each group in its own order.
   const ordered = role.bullets
     .map((text, index) => ({ text, index }))
@@ -154,17 +156,20 @@ export function AchievementList({
             return (
               <li key={`${index}:${text}`} className={`ach-row${star ? " is-starred" : ""}`}>
                 {editing?.index === index ? (
-                  <textarea
-                    className="ach-edit"
-                    aria-label="Edit achievement"
-                    autoFocus
-                    rows={1}
-                    maxLength={4000}
-                    value={editing.text}
-                    onChange={(event) => setEditing({ index, text: event.target.value })}
-                    onKeyDown={editKeys}
-                    onBlur={() => void finishEdit()}
-                  />
+                  <div className="ach-body">
+                    <textarea
+                      className="ach-edit"
+                      aria-label="Edit achievement"
+                      autoFocus
+                      rows={1}
+                      maxLength={4000}
+                      value={editing.text}
+                      onChange={(event) => setEditing({ index, text: event.target.value })}
+                      onKeyDown={editKeys}
+                      onBlur={() => void finishEdit()}
+                    />
+                    <BulletMeter text={editing.text} keywords={technologies} compact />
+                  </div>
                 ) : (
                   <div className="ach-body">
                     <button

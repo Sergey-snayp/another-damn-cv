@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { BulletMeter } from '../resume/BulletMeter';
 import { withTechStacks } from '../resume/techStack';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { jobName, jobsApi, type JobDetail } from '../jobsApi';
@@ -680,7 +681,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         job: { jobId },
         ...(whole ? { position } : {}),
       });
-      if (!result.matched || !result.chosen.length) return false;
+      // An older job the posting does not need may get none: each of its bullets is offered for removal.
+      if (!result.matched || (!result.chosen.length && !whole)) return false;
       const slots: (ChosenBullet | undefined)[] = items.map(() => undefined);
       for (const chosen of result.chosen)
         if (chosen.cvIndex !== null && chosen.cvIndex < slots.length && !slots[chosen.cvIndex]) slots[chosen.cvIndex] = chosen;
@@ -878,6 +880,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const matched = score?.keywords?.matched ?? [];
   const skillsOnly = new Set(score?.keywords?.skillsOnly ?? []);
   const missing = score?.keywords?.missing ?? [];
+  // The posting's keywords: what a bullet's "Keywords" check looks for.
+  const jobKeywords = [...matched, ...missing];
   const skills = new Set(draft.skills.map((skill) => skill.name.toLowerCase()));
   const waiting = tailoring?.items.filter((item) => item.busy).length ?? 0;
   const ready = tailoring?.items.filter(isReady) ?? [];
@@ -1028,6 +1032,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
                             {back ? <DiffLine key={item.after} before={item.before.trim()} after={item.after!} /> : withBold(item.before.trim())}
+                            {back && item.target.kind === 'bullet' && item.after!.trim() && (
+                              <BulletMeter text={item.after!} keywords={jobKeywords} compact />
+                            )}
                             {back && isRemoval(item) && <span className="qt-slot-note qt-cut">Not needed for this job: Remove takes it off, Swap puts another achievement here.</span>}
                             {back && isAddition(item) && <span className="qt-slot-note qt-from">New bullet for this job</span>}
                             {back && (item.fromProfile || item.fromSavedCv) && <span className="qt-slot-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</span>}
@@ -1053,6 +1060,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {/* Back: the change, red out and green in. Still waiting: the line as it is. */}
                         {back ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={item.before.trim()} after={item.after!} /></div>
                           : <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>}
+                        {back && item.target.kind === 'bullet' && item.after!.trim() && (
+                          <BulletMeter text={item.after!} keywords={jobKeywords} compact />
+                        )}
                         {item.error && !item.busy && <p className="ra-error">{item.error}</p>}
                         {many && itemActions(item)}
                         {many && !item.busy && item.after !== undefined && (

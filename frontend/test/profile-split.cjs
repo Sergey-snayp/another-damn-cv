@@ -52,6 +52,11 @@ const LONG = `Built the TLS certificate service from scratch as its principal au
     await button('✦ Turn into bullets').click();
     await page.waitForSelector('.describe-long');
     assert.match(await page.$eval('.describe-long', element => element.textContent), /\d+ words: a CV line holds about 40/);
+    // The bullet check: length, verb, metric, time, keywords; a missing metric opens its question.
+    const meter = await page.$$eval('.describe-item', rows => rows.map(row => row.querySelector('.bm')?.textContent ?? ''));
+    assert.match(meter[1], /6 words.*short.*Action verb.*Metric.*\+ add.*Time.*\+ add/);
+    await page.evaluate(() => [...document.querySelectorAll('.describe-item')[1].querySelectorAll('.bm-check.is-ask')].find(button => button.textContent.includes('Metric')).click());
+    assert.match(await page.$$eval('.describe-item', rows => rows[1].querySelector('.describe-asks').textContent), /About how many or how much\?/);
     assert.match(await page.$eval('.describe-uncovered', element => element.textContent), /Not in any achievement yet: Redis, Kafka\. Your notes don't say what they did here/);
     assert.doesNotMatch(await page.$eval('.describe-review', element => element.textContent), /technical terms in one line/, 'the Profile keeps full technical detail');
 
