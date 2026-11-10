@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, type ContactFields } from "../api";
 import { resumeApi, type ResumeSummary } from "../resumeApi";
+import { RichEditor } from "../text/RichEditor";
 import { importCv } from "../resume/fromImport";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import {
@@ -472,13 +473,12 @@ export function ImportProfileDialog({
                         <span className="profile-import-sr-only">
                           Summary from CV
                         </span>
-                        <textarea
-                          rows={5}
-                          maxLength={10000}
+                        <RichEditor
+                          className="import-rich"
+                          label="Summary from CV"
+                          multiline
                           value={draft.sections.summary}
-                          onChange={(event) =>
-                            section("summary", event.target.value)
-                          }
+                          onChange={(next) => section("summary", next)}
                         />
                       </label>
                     ) : key === "skills" ? (
@@ -598,23 +598,7 @@ export function ImportProfileDialog({
                           </label>
                           <label>
                             Achievements, one per line
-                            <textarea
-                              rows={5}
-                              value={role.bullets.join("\n")}
-                              onChange={(event) =>
-                                section(
-                                  "experiences",
-                                  draft.sections.experiences.map((r, i) =>
-                                    i === index
-                                      ? {
-                                          ...r,
-                                          bullets:
-                                            event.target.value.split("\n"),
-                                        }
-                                      : r,
-                                  ),
-                                )
-                              }
+                            <div
                               onBlur={() =>
                                 section(
                                   "experiences",
@@ -630,7 +614,22 @@ export function ImportProfileDialog({
                                   ),
                                 )
                               }
-                            />
+                            >
+                              <RichEditor
+                                className="import-rich"
+                                label={`Achievements for ${role.title || role.company || "this job"}, one per line`}
+                                multiline
+                                value={role.bullets.join("\n")}
+                                onChange={(next) =>
+                                  section(
+                                    "experiences",
+                                    draft.sections.experiences.map((r, i) =>
+                                      i === index ? { ...r, bullets: next.split("\n") } : r,
+                                    ),
+                                  )
+                                }
+                              />
+                            </div>
                           </label>
                           <label>
                             Tech stack (optional)

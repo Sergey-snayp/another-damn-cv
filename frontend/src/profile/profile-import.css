@@ -30,3 +30,6 @@
 .profile-import-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .profile-import-banner p { margin: 0; }
 @media (max-width: 550px) { .profile-import-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); border-radius: 14px; } .profile-import-header, .profile-import-body { padding: 18px; } .profile-import-source, .profile-import-section { padding: 15px; } .profile-import-grid { grid-template-columns: minmax(0, 1fr); } .profile-import-footer { padding: 15px; } }
+/* Imported summary and achievements: rich boxes, so formatting read from the CV shows as it will print. */
+.profile-import-dialog .import-rich { min-height: 5em; max-height: 40vh; overflow-y: auto; margin: 7px 0 12px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 13px; font-weight: 400; line-height: 1.6; }
+.profile-import-dialog .import-rich:focus { border-color: var(--color-text); }

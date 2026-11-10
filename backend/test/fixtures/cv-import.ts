@@ -2,7 +2,7 @@
 export const IMPORT_PROMPT_BASELINE = {
   textLength: 25012,
   systemSha256: 'ed50b900b0c7058fda84551e68aa8ea09ed16010ed416918d52e8a78a22f522a',
-  promptSha256: '206cf58757541628e4b377391792b37bafd6de00d9b27db27e8f1677a86da625',
+  promptSha256: '8c0f0cd6eca31246e013821218e8256b4e6a2e34fff73e3afbd261248079511a',
 };
 
 export const READABLE_PDF_TEXT = `Role 0: Built TypeScript services and preserved candidate claims.

@@ -81,7 +81,7 @@ async function cv(user: string, bullets: string[], client = 'SymphonyAI') {
   return id;
 }
 
-test('SymphonyAI bullets use Profile notes, tech stack and other owned CVs, without writes or another client’s facts', async () => {
+test('SymphonyAI bullets use the Profile description, tech stack and other owned CVs, without writes or another client’s facts', async () => {
   const owner = await createUser('Role evidence owner'),
     other = await createUser('Role evidence other');
   const selected = await cv(owner.user.id, ['Developed application features.']);
@@ -108,7 +108,7 @@ test('SymphonyAI bullets use Profile notes, tech stack and other owned CVs, with
           {
             ...role('SymphonyAI'),
             techStack: 'React Native | Expo SDK | Expo Router',
-            notes: [{ text: 'Built React Native screens with Expo Router.', at: '2026-11-09' }],
+            description: 'Built React Native screens with Expo Router.',
           },
         ],
       },

@@ -71,6 +71,12 @@ The text was read out of a file. PDFs often lose the letter pairs printed as one
 "certifcate" is "certificate", "fxes" is "fixes". Put those letters back. That is the only
 change allowed: it restores what the CV says, it does not reword it.
 
+The text may carry the CV's formatting as marks: **bold**, *italic*, ++underline++, a link
+as [text](https://address), and "- " at the start of a list line. In "summary", "description",
+"bullets" and an other section's "text" and "bullets", keep every mark exactly where it is
+(a bullet's own "- " list marker is not part of it). Everywhere else write the words alone,
+and a link field ("linkedin", "github", "portfolio", "website", "link") holds the address.
+
 For "bullets", "description" and "summary", keep the text exactly as the CV phrases it.
 Do not merge, summarise or improve anything: these are the candidate's own claims, and a
 reworded claim is no longer something they said.

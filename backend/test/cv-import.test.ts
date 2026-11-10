@@ -43,7 +43,8 @@ test('ImportCv returns a proposal and reports missing fields without a persisten
     notFound: ['phone', 'location', 'linkedin'],
   });
   assert.deepEqual(calls, ['resume.txt:3', 'Clean CV text']);
-  assert.equal(result.proposed, proposed);
+  // A cleaned copy (marks only in text fields), never more than the AI read.
+  assert.notEqual(result.proposed, proposed);
 });
 
 test('transcription accepts prose/fences, escaped quotes and nested objects without tightening validation', () => {
