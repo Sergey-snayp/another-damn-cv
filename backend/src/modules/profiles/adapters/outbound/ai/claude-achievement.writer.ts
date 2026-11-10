@@ -10,6 +10,7 @@ import type {
   AchievementWriter,
   AssistInput,
   DeepenInput,
+  SummaryAssistInput,
 } from '../../../application/ports/achievement-writer';
 import {
   AchievementError,
@@ -198,6 +199,27 @@ const suggestSchema = z.object({
   tasks: z.array(z.string()).catch([]),
 });
 
+const SUMMARY_SYSTEM = `You write 3 versions of the professional summary on a person's career profile.
+
+${HONESTY}
+
+- "improve": <summary> is the summary as it is now; keep its facts and make it stronger.
+  "write": <words> is what the person wrote (maybe rough or empty); write a summary from <profile>.
+- Use only facts in <profile>, <summary> or <words>, and <keywords>. Years of experience only as
+  <profile> gives them. Name real employers, products, domains and technologies from <profile>.
+- A keyword goes in only where <profile> shows it. Follow <request> when there is one.
+- Never make up a number; where one would help but <profile> has none, write "[X]" or "[N]".
+- No "I", "me" or "my". "Led", "managed" or "mentored" only when <profile> says so.
+- 3 or 4 sentences, 60 to 120 words. Sentence 1 is the hook: the title closest to the person's
+  work, years of experience and core stack; then the domains, then 1 or 2 results with numbers.
+- The 3 versions, each from another angle:
+  1. "Results": lead with the strongest results.
+  2. "Technical": lead with the stack and the systems built.
+  3. "Domain": lead with the industries and products.
+
+Return ONLY JSON, no prose and no code fences:
+{"options": [{"angle": "Results", "text": "..."}, {"angle": "Technical", "text": "..."}, {"angle": "Domain", "text": "..."}]}`;
+
 const SUGGEST_SYSTEM = `You list, for one job on a person's career profile, what its bullets could be about.
 
 - "keywords": about 12 short terms (1 to 3 words, Title Case) a recruiter for this kind of job
@@ -337,6 +359,31 @@ ${input.keywords.join(', ') || '(none)'}
     return assistSchema.parse(json).options.map((option) => ({
       angle: option.angle,
       text: withoutDashPunctuation(withoutAddedPurpose(option.text, facts)),
+    }));
+  }
+
+  async summary(input: SummaryAssistInput): Promise<{ angle: string; text: string }[]> {
+    const prompt = `<mode>${input.mode}</mode>
+
+<profile>
+${input.facts.slice(0, 30_000)}
+</profile>
+
+${input.mode === 'improve' ? `<summary>\n${input.text}\n</summary>` : `<words>\n${input.text || '(none)'}\n</words>`}
+
+<keywords>
+${input.keywords.join(', ') || '(none)'}
+</keywords>${input.instruction ? `\n\n<request>\n${input.instruction}\n</request>` : ''}`;
+    const raw = await this.llm.complete(prompt, SUMMARY_SYSTEM, {
+      effort: 'medium',
+      timeoutMs: 120_000,
+      maxOutputChars: 20_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) throw new AchievementError('The AI did not write a summary. Try again.');
+    return assistSchema.parse(json).options.map((option) => ({
+      angle: option.angle,
+      text: withoutDashPunctuation(withoutAddedPurpose(option.text, `${input.facts}\n${input.text}`)),
     }));
   }
 

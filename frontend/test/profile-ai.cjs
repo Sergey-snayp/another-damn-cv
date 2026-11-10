@@ -11,7 +11,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     const page = await browser.newPage();
     page.setDefaultTimeout(10000);
     await page.setViewport({ width: 1500, height: 1000 });
-    const errors = [], saves = [], asks = [];
+    const errors = [], saves = [], asks = [], summaries = [], summaryAsks = [];
     let suggestionCalls = 0;
     const source = { kind: 'profile' }, importedAt = '2026-11-08T12:00:00Z';
     let state = { revision: 1, data: { experiences: { value: [
@@ -30,6 +30,13 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
           suggestionCalls++;
           return reply({ keywords: ['Payment Processing', 'AWS Lambda', 'Production Support', 'Tokenization'], tasks: ['Card payment processing', 'Live production support'] });
         }
+        if (pathname === '/api/profile/career/summary/assist') {
+          summaryAsks.push(JSON.parse(request.postData()));
+          return reply({ options: [
+            { angle: 'Results', text: 'Senior software engineer with 7+ years building card payment platforms in Node.js on AWS Lambda.', keywords: [], placeholders: [] },
+            { angle: 'Technical', text: 'Backend engineer with 7+ years in Node.js and AWS Lambda, cutting card tokenization latency by [X]%.', keywords: [], placeholders: ['[X]'] },
+          ] });
+        }
         if (pathname === '/api/profile/career/achievements/assist') {
           const input = JSON.parse(request.postData());
           asks.push(input);
@@ -44,8 +51,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
         if (pathname === '/api/profile/career') {
           if (request.method() === 'GET') return reply(state);
           const input = JSON.parse(request.postData());
-          saves.push(input.sections.experiences[0]);
-          state = { revision: state.revision + 1, data: { experiences: { value: input.sections.experiences, source, importedAt } } };
+          if (input.sections.experiences) saves.push(input.sections.experiences[0]);
+          if (input.sections.summary !== undefined) summaries.push(input.sections.summary);
+          state = { revision: state.revision + 1, data: { ...state.data, ...Object.fromEntries(Object.entries(input.sections).map(([key, value]) => [key, { value, source, importedAt }])) } };
           return reply(state);
         }
         return reply([]);
@@ -158,8 +166,30 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.click('.ach-add-actions .ach-save');
     for (let i = 0; i < 40 && saves.length < 2; i++) await pause(100);
     assert.deepEqual(saves.at(-1).bullets, ['Cut card tokenization latency by 30% with REST APIs.', 'Built card tokenization REST APIs.']);
+
+    // The summary, the same way: its length, Write with AI from the whole Profile, Use Summary, Save.
+    await page.click('[aria-label="Edit profile summary"]');
+    await page.waitForSelector('[aria-label="Professional summary"]');
+    assert.equal(await page.$eval('#profile-summary-heading', heading => heading.textContent), 'Edit Professional Summary');
+    assert.match(await page.$eval('.summary-length', element => element.textContent), /Length 0 \/ 400 - 800/);
+    await clickText('.summary-tools button', 'Write with AI');
+    await page.waitForSelector('.ai-option');
+    assert.deepEqual(await page.$$eval('.ai-tabs button', tabs => tabs.map(tab => tab.textContent)), ['Automatic', 'Keywords', 'Custom Prompt'], 'no Coach Me for a summary');
+    assert.equal(summaryAsks[0].mode, 'write');
+    await clickText('.ai-tabs button', 'Keywords');
+    await page.waitForSelector('.ai-chip');
+    assert.ok(await page.evaluate(() => [...document.querySelectorAll('.ai-chip')].some(chip => chip.textContent === 'AWS Lambda')), 'the Profile\'s technologies as keywords');
+    await clickText('.ai-tabs button', 'Automatic');
+    await page.waitForSelector('.ai-option');
+    await button('Use Summary').click();
+    await page.waitForFunction(() => !document.querySelector('.ai-box'));
+    assert.match(await page.$eval('.summary-length', element => element.textContent), /Length 9\d \/ 400 - 800/);
+    assert.ok(await page.$eval('.summary-length', element => element.classList.contains('is-off')), 'short of the target');
+    await page.evaluate(() => [...document.querySelectorAll('.summary-edit .ach-save')].find(save => save.textContent === 'Save').click());
+    for (let i = 0; i < 40 && !summaries.length; i++) await pause(100);
+    assert.deepEqual(summaries, ['Senior software engineer with 7+ years building card payment platforms in Node.js on AWS Lambda.']);
     assert.deepEqual(errors, []);
-    console.log('PASS AI bullets: wand, Automatic, Keywords (3, own, underlined, Back, Regenerate), Coach Me, Custom Prompt, placeholders block Save, Write with AI');
+    console.log('PASS AI bullets: wand, Automatic, Keywords (3, own, underlined, Back, Regenerate), Coach Me, Custom Prompt, placeholders block Save, Write with AI; the summary too');
   } finally {
     await browser.close();
   }

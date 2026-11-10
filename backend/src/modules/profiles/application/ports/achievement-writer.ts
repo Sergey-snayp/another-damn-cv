@@ -12,6 +12,16 @@ export interface AssistInput {
   coach?: { task: string; impacts: string[]; amount: string; period: string };
 }
 
+export interface SummaryAssistInput {
+  mode: 'improve' | 'write';
+  /** The summary as written now (improve), or rough words (write, maybe empty). */
+  text: string;
+  /** Everything the Profile says, years of experience included. */
+  facts: string;
+  keywords: string[];
+  instruction: string;
+}
+
 /** Per job: words worth working into its bullets, and the tasks such a job has, for the person to pick. */
 export interface AssistSuggestions {
   keywords: string[];
@@ -39,6 +49,8 @@ export interface AchievementWriter {
   }): Promise<{ achievements: { text: string; replaces: string }[]; unplaced: string[] }>;
   /** 3 versions of one bullet (improve) or 3 drafts of a new one (write), each from another angle. */
   assist(input: AssistInput): Promise<{ angle: string; text: string }[]>;
+  /** 3 versions of the professional summary (improve the one written, or write one), from the Profile. */
+  summary(input: SummaryAssistInput): Promise<{ angle: string; text: string }[]>;
   /** Keywords and tasks for one job, from its description, bullets and tech stack. */
   suggest(source: AchievementSource): Promise<AssistSuggestions>;
   /** One achievement too long for a CV line, as 2 to 4 shorter ones that each stand alone. */

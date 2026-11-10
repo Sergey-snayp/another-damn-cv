@@ -23,6 +23,7 @@ import { DraftAchievements } from '../../../application/use-cases/draft-achievem
 import { DeepenAchievement } from '../../../application/use-cases/deepen-achievement';
 import { SplitAchievement } from '../../../application/use-cases/split-achievement';
 import { AssistAchievement, SuggestForJob } from '../../../application/use-cases/assist-achievement';
+import { AssistSummary } from '../../../application/use-cases/assist-summary';
 import type { AssistInput } from '../../../application/ports/achievement-writer';
 import { CollectFromCvs } from '../../../application/use-cases/collect-from-cvs';
 import type { DeepenInput } from '../../../application/ports/achievement-writer';
@@ -35,6 +36,7 @@ import {
   splitAchievementSchema,
   assistAchievementSchema,
   assistSuggestionsSchema,
+  summaryAssistSchema,
 } from '../../career.schemas';
 @Catch(AchievementError)
 class AchievementErrorFilter implements ExceptionFilter {
@@ -67,7 +69,16 @@ export class ProfileCareerController {
     @Inject(SplitAchievement) private readonly splitter: SplitAchievement,
     @Inject(AssistAchievement) private readonly assistant: AssistAchievement,
     @Inject(SuggestForJob) private readonly suggestions: SuggestForJob,
+    @Inject(AssistSummary) private readonly summaryAssistant: AssistSummary,
   ) {}
+  /** "Write with AI" / "Improve with AI" for the summary: 3 versions from the whole Profile. Nothing is saved. */
+  @Post('summary/assist') @HttpCode(200) assistSummary(
+    @CurrentUser() userId: string,
+    @Body(new ZodValidationPipe(summaryAssistSchema))
+    input: { mode: 'improve' | 'write'; text: string; keywords: string[]; instruction: string },
+  ) {
+    return this.summaryAssistant.execute(userId, input);
+  }
   /** Keywords and tasks to pick from in "Write with AI", for one job. Nothing is saved. */
   @Post('achievements/suggestions') @HttpCode(200) suggestForJob(
     @Body(new ZodValidationPipe(assistSuggestionsSchema)) source: AchievementSource,

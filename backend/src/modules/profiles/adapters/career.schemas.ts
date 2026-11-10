@@ -144,6 +144,16 @@ export const assistAchievementSchema = z
   })
   .strict();
 
+/** "Write with AI" / "Improve with AI" for the professional summary. */
+export const summaryAssistSchema = z
+  .object({
+    mode: z.enum(['improve', 'write']),
+    text: z.string().trim().max(10000).default(''),
+    keywords: z.array(z.string().trim().min(1).max(60)).max(3).default([]),
+    instruction: z.string().trim().max(500).default(''),
+  })
+  .strict();
+
 /** Keywords and tasks to pick from for one job's bullets. */
 export const assistSuggestionsSchema = achievementDraftSchema.extend({
   notes: z.string().max(60000).default(''),

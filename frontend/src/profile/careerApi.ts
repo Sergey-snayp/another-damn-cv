@@ -191,6 +191,9 @@ export const careerApi = {
     coach?: { task: string; impacts: string[]; amount: string; period: string };
   }) =>
     request<{ options: AssistOption[] }>("/achievements/assist", { method: "POST", body: JSON.stringify(input) }),
+  /** "Write with AI" / "Improve with AI" for the summary: 3 versions from the whole Profile. Nothing is saved. */
+  assistSummary: (input: { mode: "improve" | "write"; text: string; keywords: string[]; instruction: string }) =>
+    request<{ options: AssistOption[] }>("/summary/assist", { method: "POST", body: JSON.stringify(input) }),
   /** Keywords and tasks to pick from, for one job. */
   assistSuggestions: (source: { title: string; company: string; client: string; description: string; bullets: string[]; techStack: string; notes: string }) =>
     request<{ keywords: string[]; tasks: string[] }>("/achievements/suggestions", { method: "POST", body: JSON.stringify(source) }),

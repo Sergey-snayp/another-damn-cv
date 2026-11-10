@@ -14,6 +14,8 @@ import {
 import { DeepenAchievement } from '../src/modules/profiles/application/use-cases/deepen-achievement';
 import { SplitAchievement } from '../src/modules/profiles/application/use-cases/split-achievement';
 import { AssistAchievement } from '../src/modules/profiles/application/use-cases/assist-achievement';
+import { AssistSummary } from '../src/modules/profiles/application/use-cases/assist-summary';
+import { profileFacts, yearsOfExperience } from '../src/modules/profiles/domain/profile-facts';
 import { DraftAchievements } from '../src/modules/profiles/application/use-cases/draft-achievements';
 import {
   ClaudeAchievementWriter,
@@ -603,4 +605,66 @@ test('AI bullets: placeholders instead of made-up numbers, no unclaimed leading,
     },
   });
   assert.equal(coached.options.length, 1, 'numbers the person gave in Coach Me may be used');
+});
+
+test('summary with AI: written from the whole Profile, years from the dates, checked like bullets', async () => {
+  const roles = [
+    {
+      title: 'Senior Software Engineer',
+      company: 'Ciklum',
+      client: 'Verifone',
+      location: '',
+      from: '2019-08',
+      to: '',
+      current: true,
+      description: 'Card payments platform.',
+      techStack: 'Node.js, AWS Lambda',
+      bullets: ['Built REST APIs handling ~20,000 transactions a day.', 'Unticked line.'],
+      excluded: ['Unticked line.'],
+    },
+  ];
+  assert.equal(yearsOfExperience(roles, new Date('2026-11-10')), 7);
+  const facts = profileFacts(roles, ['TypeScript'], new Date('2026-11-10'));
+  assert.match(facts, /Years of experience: 7 \(7\+ years\)/);
+  assert.doesNotMatch(facts, /Unticked line/, 'a bullet left out of CVs is not a summary fact');
+  const seen: { facts: string }[] = [];
+  const assistant = (options: { angle: string; text: string }[]) =>
+    new AssistSummary(
+      {
+        read: () =>
+          Promise.resolve({
+            revision: 1,
+            data: {
+              experiences: { value: roles, source: { kind: 'profile' }, importedAt: '' },
+              skills: { value: ['TypeScript'], source: { kind: 'profile' }, importedAt: '' },
+            },
+          }),
+      } as never,
+      {
+        summary: (input) => {
+          seen.push(input);
+          return Promise.resolve(options);
+        },
+      },
+    );
+  const result = await assistant([
+    {
+      angle: 'Results',
+      text: 'Senior software engineer with 7+ years in payments, building Node.js REST APIs on AWS Lambda that handle ~20,000 transactions a day for Verifone.',
+    },
+    {
+      angle: 'Technical',
+      text: 'I am a senior engineer with 7+ years building Node.js and TypeScript services for card payments at Ciklum.',
+    },
+    {
+      angle: 'Domain',
+      text: 'Senior software engineer with 10 years in fintech, scaling Kafka pipelines to 1M events a day for Verifone payments.',
+    },
+  ]).execute('owner', { mode: 'write', text: '', keywords: [], instruction: '' });
+  assert.deepEqual(
+    result.options.map((option) => option.angle),
+    ['Results'],
+    '"I" and numbers or names the Profile lacks are dropped',
+  );
+  assert.match(seen[0].facts, /Built REST APIs handling/);
 });

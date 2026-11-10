@@ -56,14 +56,26 @@ export function AiBox({
   mode,
   text,
   autoStart = false,
+  subject = "bullet",
+  run,
+  keywordChoices,
+  tabs = ["automatic", "keywords", "coach", "custom"],
   onUse,
   onClose,
 }: {
-  role: CareerExperience;
-  /** "improve": the bullet in the editor; "write": a new bullet, from what is typed (maybe nothing). */
+  /** The job a bullet belongs to; not needed with `run` (the summary). */
+  role?: CareerExperience;
+  /** "improve": the text in the editor; "write": new, from what is typed (maybe nothing). */
   mode: "improve" | "write";
   text: string;
   autoStart?: boolean;
+  /** What is written: a job's "bullet", or the "summary". */
+  subject?: "bullet" | "summary";
+  /** Writes the versions; a job's bullet uses the bullet writer by default. */
+  run?(request: { keywords: string[]; instruction: string }): Promise<AssistOption[]>;
+  /** The keywords to choose from, when they do not come from the job. */
+  keywordChoices?: string[];
+  tabs?: Tab[];
   onUse(text: string): void;
   onClose(): void;
 }) {
@@ -95,6 +107,10 @@ export function AiBox({
   const started = useRef(false);
 
   useEffect(() => {
+    if (keywordChoices || !role) {
+      setLists({ keywords: (keywordChoices ?? []).slice(0, 12), tasks: [] });
+      return;
+    }
     const key = [role.company, role.title, role.client, role.from].join("|");
     if (!suggestions.has(key)) suggestions.set(key, careerApi.assistSuggestions(sourceOf(role)).catch(() => ({ keywords: [], tasks: [] })));
     let alive = true;
@@ -110,7 +126,9 @@ export function AiBox({
     setWorking(true);
     setError("");
     try {
-      const result = await careerApi.assistAchievement({ source: sourceOf(role), mode, text, keywords: request.keywords, instruction: request.instruction, coach: request.coach });
+      const result = run
+        ? { options: await run({ keywords: request.keywords, instruction: request.instruction }) }
+        : await careerApi.assistAchievement({ source: sourceOf(role!), mode, text, keywords: request.keywords, instruction: request.instruction, coach: request.coach });
       setByTab((all) => ({ ...all, [request.tab]: { options: result.options, request, selected: 0 } }));
       setShowing((all) => ({ ...all, [request.tab]: true }));
     } catch (reason) {
@@ -144,12 +162,20 @@ export function AiBox({
       return (
         <div className="ai-pane">
           <p className="ai-question">
-            {mode === "improve" ? "3 stronger versions of this bullet, from your own facts." : text.trim() ? "3 bullets from what you wrote and this job." : "3 bullets from this job's details. Type a few words above to steer them."}
+            {subject === "summary"
+              ? mode === "improve"
+                ? "3 stronger versions of your summary, from your Profile."
+                : "3 summaries written from your Profile: your jobs, results and skills."
+              : mode === "improve"
+                ? "3 stronger versions of this bullet, from your own facts."
+                : text.trim()
+                  ? "3 bullets from what you wrote and this job."
+                  : "3 bullets from this job's details. Type a few words above to steer them."}
           </p>
           <div className="ai-actions">
             <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
             <button type="button" className="ai-generate" disabled={working} onClick={() => void generate({ tab, keywords: [], instruction: "" })}>
-              {working ? "Writing…" : mode === "improve" ? "Improve" : "Generate Bullets"} <AiBadge />
+              {working ? "Writing…" : mode === "improve" ? "Improve" : subject === "summary" ? "Generate Summary" : "Generate Bullets"} <AiBadge />
             </button>
           </div>
         </div>
@@ -157,7 +183,7 @@ export function AiBox({
     if (tab === "keywords")
       return (
         <div className="ai-pane">
-          <p className="ai-question">Select up to 3 keywords to include in your bullet:</p>
+          <p className="ai-question">Select up to 3 keywords to include in your {subject}:</p>
           <div className="ai-choices">
             {!lists && <p className="ai-muted">Finding keywords for this job…</p>}
             <div className="ai-chips">
@@ -188,7 +214,7 @@ export function AiBox({
           <div className="ai-actions">
             <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
             <button type="button" className="ai-generate" disabled={working || !picked.length} onClick={() => void generate({ tab, keywords: picked, instruction: "" })}>
-              {working ? "Writing…" : "Generate Bullets"} <AiBadge />
+              {working ? "Writing…" : subject === "summary" ? "Generate Summary" : "Generate Bullets"} <AiBadge />
             </button>
           </div>
         </div>
@@ -310,7 +336,7 @@ export function AiBox({
           <button type="button" className="ai-cancel" onClick={() => showResults(false)}>Back</button>
         )}
         <button type="button" className="ai-go" disabled={!options[selected]} onClick={() => options[selected] && onUse(options[selected]!.text)}>
-          Use Bullet
+          {subject === "summary" ? "Use Summary" : "Use Bullet"}
         </button>
       </div>
     </div>
@@ -320,7 +346,7 @@ export function AiBox({
     <section className="ai-box" aria-label={mode === "improve" ? "Improve with AI" : "Write with AI"}>
       <header className="ai-head">
         <div className="ai-tabs" role="tablist">
-          {TABS.map((item) => (
+          {TABS.filter((item) => tabs.includes(item.key)).map((item) => (
             <button
               key={item.key}
               type="button"
