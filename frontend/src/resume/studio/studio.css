@@ -739,4 +739,3 @@
 .qt-typing { position: relative; display: block; }
 .qt-typing-room { visibility: hidden; }
 .qt-typing-live { position: absolute; inset: 0; }
-.qt-working-done .qt-elapsed { display: none; }

@@ -1209,7 +1209,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                       lines are back, so the menu never moves. */}
                   {many && composing && <p className="qt-working-status qt-screen-room" aria-hidden="true"><span>&nbsp;</span></p>}
                   {waiting === 0 && many && !composing && (
-                    <p className="qt-working-status qt-working-done" role="status"><span>{tailoring.items.length} lines ready. Use each one, or all at once.</span></p>
+                    <p className="qt-working-status qt-screen-room" aria-hidden="true"><span>&nbsp;</span></p>
                   )}
                   {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
                   {solo && !solo.busy && solo.after !== undefined && (
