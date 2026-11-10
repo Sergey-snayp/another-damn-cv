@@ -13,4 +13,6 @@ export interface DeepenInput {
 export interface AchievementWriter {
   draft(source: AchievementSource): Promise<AchievementDraft>;
   deepen(input: DeepenInput): Promise<{ text: string; asks: string[] }>;
+  /** One achievement too long for a CV line, as 2 to 4 shorter ones that each stand alone. */
+  split(input: { source: AchievementSource; text: string }): Promise<string[]>;
 }

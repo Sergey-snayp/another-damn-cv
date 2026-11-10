@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
-import type { CareerExperience } from "./careerApi";
+import { ACHIEVEMENT_WORDS, careerApi, wordsIn, type CareerExperience } from "./careerApi";
 import { tagCounts, tagsOf } from "./achievementTags";
 
 const SHOWN = 5;
@@ -28,6 +28,7 @@ export function AchievementList({
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
   const [adding, setAdding] = useState("");
   const [busy, setBusy] = useState(false);
+  const [splitting, setSplitting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const starred = new Set(role.starred ?? []);
@@ -67,6 +68,30 @@ export function AchievementList({
       starred: (current.starred ?? []).filter((item) => item !== text),
       removed: [],
     }));
+
+  /** "Split": a line longer than a CV holds becomes 2 to 4 in its place; a star stays on the first. */
+  async function split(text: string) {
+    setSplitting(text);
+    setError("");
+    try {
+      const { parts } = await careerApi.splitAchievement({
+        source: { title: role.title, company: role.company, client: role.client, description: role.description, bullets: role.bullets, techStack: role.techStack ?? "", notes: "" },
+        text,
+      });
+      if (parts.length < 2) {
+        setError("This achievement couldn't be split without losing a fact. Edit it to shorten it.");
+        return;
+      }
+      await run((current) => ({
+        bullets: current.bullets.flatMap((item) => (item === text ? parts : [item])),
+        starred: (current.starred ?? []).map((item) => (item === text ? parts[0]! : item)),
+      }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not split. Try again.");
+    } finally {
+      setSplitting(null);
+    }
+  }
 
   async function finishEdit() {
     if (!editing) return;
@@ -141,15 +166,25 @@ export function AchievementList({
                     onBlur={() => void finishEdit()}
                   />
                 ) : (
-                  <button
-                    type="button"
-                    className="ach-text"
-                    title="Click to edit"
-                    disabled={disabled || busy}
-                    onClick={() => setEditing({ index, text })}
-                  >
-                    {text}
-                  </button>
+                  <div className="ach-body">
+                    <button
+                      type="button"
+                      className="ach-text"
+                      title="Click to edit"
+                      disabled={disabled || busy}
+                      onClick={() => setEditing({ index, text })}
+                    >
+                      {text}
+                    </button>
+                    {wordsIn(text) > ACHIEVEMENT_WORDS && (
+                      <span className="ach-long">
+                        {wordsIn(text)} words: a CV line holds about {ACHIEVEMENT_WORDS}.
+                        <button type="button" className="profile-text-button" disabled={disabled || busy || splitting !== null} onClick={() => void split(text)}>
+                          {splitting === text ? "Splitting…" : "✦ Split"}
+                        </button>
+                      </span>
+                    )}
+                  </div>
                 )}
                 <span className="ach-tools">
                   <button

@@ -184,3 +184,7 @@
   .profile-field-grid label.is-half { grid-column: 1; }
   .profile-savebar { margin: 18px -18px 0; padding: 12px 18px; }
 }
+/* An achievement longer than a CV line holds: its length, and Split. */
+.ach-body { min-width: 0; }
+.ach-long { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 6px; color: var(--color-muted); font-size: 12px; }
+.ach-long .profile-text-button { margin: 0; font-size: 12px; }

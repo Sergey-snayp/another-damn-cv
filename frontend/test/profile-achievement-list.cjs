@@ -36,6 +36,11 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
         if (pathname === '/api/auth/me') return reply({ id: 'owner', name: 'Sam Lee', email: 'sam@example.com' });
         if (pathname === '/api/profile') return reply({ firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com', phone: '1', location: 'Vancouver', linkedin: 'x', workArrangements: '' });
         if (pathname === '/api/resumes' || pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
+        if (pathname === '/api/profile/career/achievements/split') {
+          const input = JSON.parse(request.postData());
+          assert.equal(input.source.company, 'Ciklum');
+          return reply({ parts: ['Built the TLS certificate service from scratch, still in production.', 'Led a 3-person team on the TLS certificate service.'] });
+        }
         if (pathname === '/api/profile/career') {
           if (request.method() === 'GET') return reply(state);
           const input = JSON.parse(request.postData());
@@ -119,8 +124,21 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(saves[3].bullets.slice(-2), ['Led the migration to Node.js 20.', 'Added rate limiting to the public API.']);
     assert.equal(saves[3].bullets.filter(item => item === 'Stored token state in DynamoDB.').length, 1, 'a repeat is not added twice');
     assert.equal(await page.$eval('[aria-label="Add an achievement"]', box => box.value), '');
+
+    // Longer than a CV line holds: its length shows, and Split puts the parts in its place.
+    const long = `Built the TLS certificate service from scratch, still in production, ${'and covered every renewal path with tests '.repeat(6)}and led a 3-person team.`;
+    state = { revision: state.revision + 1, data: { experiences: { value: [{ ...state.data.experiences.value[0], bullets: ['First line.', long, 'Last line.'], starred: [long] }], source, importedAt } } };
+    await page.goto(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`);
+    await page.waitForSelector('.ach-long');
+    assert.match(await page.$eval('.ach-long', element => element.textContent), /\d+ words: a CV line holds about 40/);
+    const before = saves.length;
+    await page.evaluate(() => [...document.querySelectorAll('.ach-long button')].find(button => button.textContent.includes('Split')).click());
+    await waitSaves(before + 1);
+    assert.deepEqual(saves.at(-1).bullets, ['First line.', 'Built the TLS certificate service from scratch, still in production.', 'Led a 3-person team on the TLS certificate service.', 'Last line.']);
+    assert.deepEqual(saves.at(-1).starred, ['Built the TLS certificate service from scratch, still in production.'], 'the star stays on the first part');
+    assert.equal(await page.$('.ach-long'), null);
     assert.deepEqual(errors, []);
-    console.log('PASS achievement list: best five, show all, tag filters, stars, edit in place, delete for good, paste several');
+    console.log('PASS achievement list: best five, show all, tag filters, stars, edit in place, delete for good, paste several, split a long one');
   } finally {
     await browser.close();
   }

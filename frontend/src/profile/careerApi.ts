@@ -43,6 +43,10 @@ export interface CareerNote {
   text: string;
   at: string;
 }
+/** The standard size of an achievement: about two lines on a CV. Longer ones are split. */
+export const ACHIEVEMENT_WORDS = 40;
+export const wordsIn = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+
 /** "Collect from all my CVs": what one job gains from your saved CVs. */
 export interface CollectedJob {
   /** The Profile job, by its place in the list; null for a job the Profile does not have yet. */
@@ -165,12 +169,21 @@ export const careerApi = {
       body: JSON.stringify(source),
     }),
   /** "Rewrite with my answers": one achievement filled out with the answers to its questions. */
+  /** One achievement too long for a CV line, as 2 to 4 that fit. Nothing is saved. */
+  splitAchievement: (input: {
+    source: { title: string; company: string; client: string; description: string; bullets: string[]; techStack: string; notes: string };
+    text: string;
+  }) =>
+    request<{ parts: string[] }>("/achievements/split", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   deepenAchievement: (input: {
     source: { title: string; company: string; client: string; description: string; bullets: string[]; techStack: string; notes: string };
     text: string;
     answers: { question: string; answer: string }[];
   }) =>
-    request<{ text: string; asks: string[]; changed: boolean }>("/achievements/deepen", {
+    request<{ text: string; more: string[]; asks: string[]; changed: boolean }>("/achievements/deepen", {
       method: "POST",
       body: JSON.stringify(input),
     }),

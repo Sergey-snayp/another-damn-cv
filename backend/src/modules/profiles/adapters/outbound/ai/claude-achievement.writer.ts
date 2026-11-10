@@ -25,8 +25,11 @@ ${HONESTY}
 
 How to split the notes:
 - One achievement per piece of work (a system, a feature, a fix, a migration, an audit, a
-  team they led), told fully with everything the notes say about it. Do not split one piece
-  of work into thin one-fact lines, and do not merge two pieces of work.
+  team they led), at most 40 words each. Do not merge two pieces of work.
+- When the notes say more about one piece of work than 40 words hold, write several
+  achievements about it, each about one part: how it was built; a decision and its reason;
+  how it was tested; the team they led; what it changed. Each names the work, so it stands
+  on its own. Never thin one-fact lines.
 - Do not repeat a line from <current_bullets>; write only what is new or fuller.
 
 ${BULLET_RULES}
@@ -64,6 +67,22 @@ ${BULLET_RULES}
 Return ONLY JSON, no prose and no code fences:
 {"text": "...", "asks": ["any question still worth asking, at most 1"]}`;
 
+const SPLIT_SYSTEM = `You split one achievement on a person's career profile that is too long for a CV line.
+
+${HONESTY}
+
+- Write 2 to 4 achievements, each at most 40 words, one or two sentences.
+- Each is about one part of the work: how it was built; a decision and its reason; how it was
+  tested; the team they led; what it changed or whether it lasted.
+- Each names the work it is about ("the TLS certificate service"), so it reads on its own.
+- Together they keep every fact of the original: every number, name and reason. Use only
+  its words and facts; add nothing.
+
+${BULLET_RULES}
+
+Return ONLY JSON, no prose and no code fences:
+{"parts": ["...", "..."]}`;
+
 const answerSchema = z.object({
   achievements: z
     .array(
@@ -78,6 +97,7 @@ const answerSchema = z.object({
   description: z.string().catch(''),
 });
 const deepenSchema = z.object({ text: z.string().catch(''), asks: z.array(z.string()).catch([]) });
+const splitSchema = z.object({ parts: z.array(z.string()).catch([]) });
 
 export function achievementPrompt(source: AchievementSource): string {
   return `<job>
@@ -130,6 +150,27 @@ export class ClaudeAchievementWriter implements AchievementWriter {
       techStack: answer.techStack,
       description: withoutDashPunctuation(answer.description),
     };
+  }
+
+  async split(input: { source: AchievementSource; text: string }): Promise<string[]> {
+    const prompt = `<job>
+Title: ${input.source.title}
+Company: ${input.source.company}${input.source.client ? `\nClient: ${input.source.client}` : ''}
+</job>
+
+<achievement>
+${input.text}
+</achievement>`;
+    const raw = await this.llm.complete(prompt, SPLIT_SYSTEM, {
+      effort: 'medium',
+      timeoutMs: 120_000,
+      maxOutputChars: 20_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) throw new AchievementError('The AI did not split the line. Try again.');
+    return splitSchema
+      .parse(json)
+      .parts.map((part) => withoutDashPunctuation(withoutAddedPurpose(part, input.text)));
   }
 
   async deepen(input: DeepenInput): Promise<{ text: string; asks: string[] }> {

@@ -1,16 +1,20 @@
 import type { AchievementWriter, DeepenInput } from '../ports/achievement-writer';
-import { supported, unknownNames } from '../../domain/achievements';
+import { supported, tooLong, unknownNames } from '../../domain/achievements';
+import { SplitAchievement } from './split-achievement';
 
 /**
  * "Rewrite with my answers" on one proposed achievement: the line filled out
  * with the person's answers to its follow-up questions. A rewrite that brings a
  * number or a name the person never wrote is not shown: the line stays as it was.
+ * Grown past the standard size, it comes back split: `text` and `more`.
  */
 export class DeepenAchievement {
   constructor(private readonly writer: AchievementWriter) {}
-  async execute(input: DeepenInput): Promise<{ text: string; asks: string[]; changed: boolean }> {
+  async execute(
+    input: DeepenInput,
+  ): Promise<{ text: string; more: string[]; asks: string[]; changed: boolean }> {
     const answers = input.answers.filter((item) => item.answer.trim());
-    if (!answers.length) return { text: input.text, asks: [], changed: false };
+    if (!answers.length) return { text: input.text, more: [], asks: [], changed: false };
     // Only the line and the answers may add to it: other work from the notes stays out.
     const facts = [
       input.source.title,
@@ -45,7 +49,15 @@ export class DeepenAchievement {
     }
     // Never shorter than it was: a rewrite that lost part of the line is not used.
     const text = checked.whole || checked.text.length >= input.text.length ? checked.text : '';
-    if (text.length < 8 || text.length > 700) return { text: input.text, asks: [], changed: false };
-    return { text, asks: result.asks.slice(0, 1), changed: text !== input.text };
+    if (text.length < 8 || text.length > 700) return { text: input.text, more: [], asks: [], changed: false };
+    const { parts } = tooLong(text)
+      ? await new SplitAchievement(this.writer).execute({ source: input.source, text })
+      : { parts: [text] };
+    return {
+      text: parts[0],
+      more: parts.slice(1),
+      asks: result.asks.slice(0, 1),
+      changed: text !== input.text,
+    };
   }
 }

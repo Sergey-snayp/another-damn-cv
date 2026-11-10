@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  ACHIEVEMENT_WORDS,
+  wordCount,
   checkProposal,
   numbersIn,
   unknownNames,
   type AchievementSource,
 } from '../src/modules/profiles/domain/achievements';
 import { DeepenAchievement } from '../src/modules/profiles/application/use-cases/deepen-achievement';
+import { SplitAchievement } from '../src/modules/profiles/application/use-cases/split-achievement';
 import { DraftAchievements } from '../src/modules/profiles/application/use-cases/draft-achievements';
 import {
   ClaudeAchievementWriter,
@@ -295,6 +298,7 @@ test('rewrite with my answers: fuller when the answers give facts, unchanged whe
   const writer = (text: string) => ({
     draft: () => Promise.reject(new Error('not used')),
     deepen: () => Promise.resolve({ text, asks: ['Is it still in use?', 'Extra?'] }),
+    split: () => Promise.reject(new Error('not used')),
   });
   const fuller = await new DeepenAchievement(
     writer('Set up Slack alerts for production — the team learned about outages before customers told them.'),
@@ -307,7 +311,7 @@ test('rewrite with my answers: fuller when the answers give facts, unchanged whe
   ).execute(input);
   assert.deepEqual(
     invented,
-    { text: input.text, asks: [], changed: false },
+    { text: input.text, more: [], asks: [], changed: false },
     'PagerDuty and 50% are not in anything the person wrote',
   );
   const merged = await new DeepenAchievement(
@@ -325,4 +329,74 @@ test('rewrite with my answers: fuller when the answers give facts, unchanged whe
     answers: [{ question: 'Q', answer: '  ' }],
   });
   assert.equal(nothing.changed, false);
+});
+
+test('an achievement has a standard size: a longer one is split into parts that each fit, with only its facts', async () => {
+  const long =
+    'Built a TLS certificate service from scratch as its principal author (144 of 188 commits), still in production. ' +
+    'Used ACME issuance on Step Functions with Route53 DNS challenges and a daily sweep over a DynamoDB expiry index, so renewals run as a range query instead of a table scan. ' +
+    'Covered it with a Jest suite that blocks release on failure, and led a 3-person team.';
+  assert.ok(wordCount(long) > ACHIEVEMENT_WORDS);
+  const parts = [
+    'Built a TLS certificate service from scratch as its principal author (144 of 188 commits), still in production.',
+    'Designed renewals for the TLS certificate service as a daily sweep over a DynamoDB expiry index, so they run as a range query instead of a table scan.',
+    'Covered the TLS certificate service with a Jest suite that blocks release on failure, and led a 3-person team.',
+  ];
+  const splitter = (answer: string[]) => ({ split: () => Promise.resolve(answer) });
+  const job = { ...source, title: 'Senior Software Engineer', company: 'Ciklum' };
+  assert.deepEqual(
+    (await new SplitAchievement(splitter(parts)).execute({ source: job, text: long })).parts,
+    parts,
+  );
+  const short = 'Set up Slack alerts for production.';
+  assert.deepEqual(
+    (await new SplitAchievement(splitter(parts)).execute({ source: job, text: short })).parts,
+    [short],
+    'a line that fits is left alone',
+  );
+  const invented = [parts[0], 'Cut renewal time by 90% with Terraform.'];
+  assert.deepEqual(
+    (await new SplitAchievement(splitter(invented)).execute({ source: job, text: long })).parts,
+    [long],
+    'a part with a number or a name the line does not have: the line stays as it was',
+  );
+  assert.deepEqual(
+    (
+      await new SplitAchievement({ split: () => Promise.reject(new Error('down')) }).execute({
+        source: job,
+        text: long,
+      })
+    ).parts,
+    [long],
+  );
+
+  // "Turn into bullets": a line over the size comes back as parts, its questions on the first.
+  const notes = { ...job, notes: long, bullets: [] };
+  const proposal = await new DraftAchievements({
+    draft: () =>
+      Promise.resolve({
+        achievements: [{ text: long, asks: ['Is it still in use?'] }],
+        techStack: [],
+        description: '',
+      }),
+    deepen: () => Promise.reject(new Error('not used')),
+    split: () => Promise.resolve(parts),
+  }).execute(notes);
+  assert.deepEqual(
+    proposal.achievements.map((item) => item.text),
+    parts,
+  );
+  assert.deepEqual(
+    proposal.achievements.map((item) => item.asks),
+    [['Is it still in use?'], [], []],
+  );
+
+  // "Rewrite with my answers" that grows past the size: the rest comes back as more lines.
+  const deepened = await new DeepenAchievement({
+    draft: () => Promise.reject(new Error('not used')),
+    deepen: () => Promise.resolve({ text: long, asks: [] }),
+    split: () => Promise.resolve(parts),
+  }).execute({ source: notes, text: parts[0], answers: [{ question: 'More?', answer: long }] });
+  assert.equal(deepened.text, parts[0]);
+  assert.deepEqual(deepened.more, parts.slice(1));
 });

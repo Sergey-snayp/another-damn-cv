@@ -45,6 +45,10 @@ export interface AchievementProposal {
 export class AchievementError extends Error {}
 
 export const MAX_ACHIEVEMENTS = 40;
+/** The standard size of an achievement: about two lines on a CV. Longer work is split. */
+export const ACHIEVEMENT_WORDS = 40;
+export const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+export const tooLong = (text: string) => wordCount(text) > ACHIEVEMENT_WORDS;
 const STOP = new Set(
   'a an and the of for to in on at by with from into over under via our my their its as was were is are be been this that these those it'.split(
     ' ',

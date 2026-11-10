@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { careerApi, type AchievementProposal, type CareerExperience, type CareerState } from "./careerApi";
+import { ACHIEVEMENT_WORDS, careerApi, wordsIn, type AchievementProposal, type CareerExperience, type CareerState } from "./careerApi";
 import { recruiterFlags } from "../resume/readability";
 import "./profile-import.css";
 import "./profile-career-editor.css";
@@ -192,6 +192,34 @@ export function DescribeJob({
   const update = (at: number, patch: Partial<ReviewItem>) =>
     setItems((list) => list.map((item, i) => (i === at ? { ...item, ...patch } : item)));
 
+  const insertAfter = (at: number, lines: string[]) =>
+    setItems((list) => [
+      ...list.slice(0, at + 1),
+      ...lines.map((text) => ({ text, keep: true, asks: [], answers: [], answered: [], duplicateOf: null })),
+      ...list.slice(at + 1),
+    ]);
+
+  /** "Split": a line longer than a CV holds, as 2 to 4 that each fit. */
+  async function split(at: number) {
+    const item = items[at];
+    if (!role || !item) return;
+    update(at, { deepening: true, note: undefined });
+    try {
+      const { parts } = await careerApi.splitAchievement({
+        source: { title: role.title, company: role.company, client: role.client, description: role.description, bullets: role.bullets, techStack: role.techStack ?? "", notes: source },
+        text: item.text,
+      });
+      if (parts.length < 2) {
+        update(at, { deepening: false, note: "This line couldn't be split without losing a fact. Shorten it yourself, or keep it." });
+        return;
+      }
+      update(at, { text: parts[0]!, deepening: false });
+      insertAfter(at, parts.slice(1));
+    } catch (reason) {
+      update(at, { deepening: false, note: reason instanceof Error ? reason.message : "Could not split this line. Try again." });
+    }
+  }
+
   /** "Rewrite with my answers": the line filled out with what the person told us. */
   async function deepen(at: number) {
     const item = items[at];
@@ -208,6 +236,8 @@ export function DescribeJob({
       update(at, result.changed
         ? { text: result.text, asks: result.asks, answers: result.asks.map(() => ""), answered: [...item.answered, ...answers], deepening: false }
         : { deepening: false, answered: [...item.answered, ...answers], note: "Your answers didn't add anything this line can use. Edit it yourself, or keep it." });
+      // Grown past the standard size: the rest comes back as lines of their own, right after it.
+      if (result.changed && result.more?.length) insertAfter(at, result.more);
     } catch (reason) {
       update(at, { deepening: false, note: reason instanceof Error ? reason.message : "Could not rewrite this line. Try again." });
     }
@@ -345,6 +375,14 @@ export function DescribeJob({
                           {item.deepening ? "Rewriting…" : "✦ Rewrite with my answers"}
                         </button>
                       </div>
+                    )}
+                    {item.keep && wordsIn(item.text) > ACHIEVEMENT_WORDS && (
+                      <p className="describe-note describe-long">
+                        {wordsIn(item.text)} words: a CV line holds about {ACHIEVEMENT_WORDS}.{" "}
+                        <button type="button" className="profile-text-button" disabled={item.deepening} onClick={() => void split(at)}>
+                          {item.deepening ? "Splitting…" : "✦ Split into shorter achievements"}
+                        </button>
+                      </p>
                     )}
                     {item.note && <p className="describe-note">{item.note}</p>}
                     {item.keep && recruiterFlags(item.text, `${role.bullets.join("\n")}\n${source}`).map((note, index) => (

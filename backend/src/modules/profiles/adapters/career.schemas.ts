@@ -124,6 +124,10 @@ export const achievementDraftSchema = z
   .strict();
 
 /** "Rewrite with my answers": one proposed achievement, its job, and the answers to its questions. */
+export const splitAchievementSchema = z
+  .object({ source: achievementDraftSchema, text: z.string().trim().min(1).max(4000) })
+  .strict();
+
 export const deepenAchievementSchema = z
   .object({
     source: achievementDraftSchema,
