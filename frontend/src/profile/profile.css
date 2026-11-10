@@ -208,7 +208,7 @@
 .bp-segments span { height: 8px; border-radius: 4px; background: var(--color-border); }
 .bp-segments span.is-on { background: #1e4d45; }
 .bp-gauges { display: grid; gap: 12px; padding: 12px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
-.bp-gauge { display: grid; grid-template-columns: 1fr 130px; align-items: end; gap: 10px; font-size: 13px; }
+.bp-gauge { display: grid; grid-template-columns: 1fr 180px; align-items: end; gap: 10px; font-size: 13px; }
 .bp-gauge-bar { position: relative; height: 6px; margin-top: 18px; border-radius: 99px; background: var(--color-border); }
 .bp-gauge-ticks span { position: absolute; top: -18px; transform: translateX(-50%); font-size: 11px; color: var(--color-muted); }
 .bp-gauge-band { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: #1e4d45; opacity: .9; }
@@ -233,8 +233,8 @@
 .profile-panel .bp-note { font-size: 12px; color: var(--color-muted); }
 
 /* Career with the bullet panel: sections on the left, the panel on the right. */
-.content:has(.profile-layout.has-panel) { max-width: 1320px; }
-.profile-layout.has-panel { grid-template-columns: minmax(0, 1fr) 350px; }
+.content:has(.profile-layout.has-panel) { max-width: 1480px; }
+.profile-layout.has-panel { grid-template-columns: minmax(0, 1fr) 460px; }
 @media (max-width: 1100px) {
   .profile-layout.has-panel { grid-template-columns: minmax(0, 1fr); }
   .profile-layout.has-panel .bullet-panel { display: none; }
