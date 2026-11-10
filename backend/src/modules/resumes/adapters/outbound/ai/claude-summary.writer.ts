@@ -36,17 +36,21 @@ type Parsed = { ok: true; draft: SummaryDraft } | { ok: false; problem: string }
  * posting and the experience record in tags, a JSON answer checked against
  * its schema (one retry when it is not valid). A fix returns only the
  * corrected summary, and a quick fix runs on the smaller, faster model.
+ * The draft is written at low effort: at medium, Sonnet 5 thought for about
+ * 3,300 tokens and took 38 seconds; Sonnet 5.5 at low takes about 12 and
+ * passed the checks as often.
  */
 export class ClaudeSummaryWriter implements SummaryWriter {
   constructor(
     private readonly llm: Pick<ClaudeProcessRunner, 'complete'>,
-    private readonly quickModel?: string,
+    private readonly models: { draft?: string; quick?: string } = {},
   ) {}
 
   write(input: SummaryInput): Promise<SummaryDraft> {
     return this.ask(inputs(input), parse, 'Return only the JSON object described under Output.', {
       timeoutMs: 150_000,
-      effort: 'medium',
+      effort: 'low',
+      model: this.models.draft,
     });
   }
 
@@ -81,9 +85,9 @@ ${shape}`;
       prompt,
       parseFix,
       shape,
-      input.quick && this.quickModel
-        ? { timeoutMs: 60_000, effort: 'low', model: this.quickModel }
-        : { timeoutMs: 150_000, effort: 'medium' },
+      input.quick && this.models.quick
+        ? { timeoutMs: 60_000, effort: 'low', model: this.models.quick }
+        : { timeoutMs: 150_000, effort: 'medium', model: this.models.draft },
     );
   }
 

@@ -224,7 +224,7 @@ test('a quick fix runs on the small model at low effort, returns only the summar
         return Promise.resolve(JSON.stringify({ summary: GOOD }));
       },
     },
-    'claude-haiku-5-5',
+    { quick: 'claude-haiku-5-5' },
   );
   const previous: SummaryDraft = {
     ...draft(LONG_SECOND),

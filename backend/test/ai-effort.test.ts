@@ -38,7 +38,8 @@ test('what the person reads and sends is written at medium effort; quick checks 
     await effortOf((llm) =>
       new ClaudeSummaryWriter(llm as never).write({ job: 'Node.js', experience: 'Built APIs.' }),
     ),
-    ['medium'],
+    // The summary's draft is the exception: at medium it took 38 seconds, and its checks catch slips.
+    ['low'],
   );
   assert.deepEqual(
     await effortOf((llm) =>

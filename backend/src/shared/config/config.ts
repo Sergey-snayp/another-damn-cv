@@ -52,6 +52,8 @@ export const config = {
   claudeBin: optional('CLAUDE_BIN', 'claude'),
   llmModel: optional('LLM_MODEL', 'claude-sonnet-5'),
   interviewModel: optional('INTERVIEW_MODEL', optional('LLM_MODEL', 'claude-sonnet-5')),
+  /** The model that writes the CV summary in Quick tailoring (and takes a fix's last try). */
+  summaryModel: optional('SUMMARY_MODEL', 'claude-sonnet-5-5'),
   /** The small, fast model that fixes a summary's failed checks before the main model's last try. */
   summaryFixModel: optional('SUMMARY_FIX_MODEL', 'claude-haiku-5-5'),
 };
