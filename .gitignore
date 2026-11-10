@@ -6,6 +6,8 @@ build/
 # Secrets and local config
 .env
 .env.local
+# Neon connection strings for the deployed app (neon env pull --file backend/.env.neon)
+.env.neon
 *.pem
 
 # Generated and machine-local data
@@ -20,3 +22,4 @@ profile/*.bak.yaml
 
 # Database dumps: full copies of personal data
 backups/
+.neon
