@@ -1,6 +1,8 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { BulletMeter } from '../resume/BulletMeter';
+import { MarkedLine } from '../text/Marked';
+import { boldOnly } from '../text/marks';
 import { withTechStacks } from '../resume/techStack';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { jobName, jobsApi, type JobDetail } from '../jobsApi';
@@ -165,7 +167,8 @@ function WorkingStatus({ seconds, summary, skills, progress }: {
 }
 
 /** "**Kafka**" in bold, as it will print. */
-const withBold = (text: string) => text.split(/\*\*(.+?)\*\*/g).map((part, index) => (index % 2 ? <b key={index}>{part}</b> : part));
+/** A line as the CV shows it: bold, italic, underline and links. */
+const withBold = (text: string) => <MarkedLine text={text} />;
 
 /**
  * The new version as a change of the old: what was taken out in red and crossed out, what
@@ -1031,7 +1034,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         const back = item.after !== undefined && !item.busy;
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
-                            {back ? <DiffLine key={item.after} before={item.before.trim()} after={item.after!} /> : withBold(item.before.trim())}
+                            {back ? <DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /> : withBold(item.before.trim())}
                             {back && item.target.kind === 'bullet' && item.after!.trim() && (
                               <BulletMeter text={item.after!} keywords={jobKeywords} compact />
                             )}
@@ -1058,7 +1061,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                       <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}${LISTED.has(item.target.kind) ? ' is-listed' : ''}`}>
                         {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
                         {/* Back: the change, red out and green in. Still waiting: the line as it is. */}
-                        {back ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={item.before.trim()} after={item.after!} /></div>
+                        {back ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /></div>
                           : <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>}
                         {back && item.target.kind === 'bullet' && item.after!.trim() && (
                           <BulletMeter text={item.after!} keywords={jobKeywords} compact />

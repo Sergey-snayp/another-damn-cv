@@ -7,6 +7,8 @@ import { sectionOrder, themeVars, type BuiltInSection } from '../theme';
 import type { ResumeDocumentProps, RewriteTarget } from '../ResumeDocument';
 import { useSkillCard } from '../SkillInfo';
 import { MONTHS, monthYear, range } from '../dates';
+import { htmlToMarks, spanHtml, spansOf } from '../../text/marks';
+import { SpanView } from '../../text/Marked';
 
 
 /** Keep dates typed as "Sep 2020" usable by the editor and education autofill. */
@@ -70,47 +72,51 @@ interface Piece {
   text: string;
   /** "label": a leading "Label:"; "mark": written as **bold**; "auto": one of the CV's terms. */
   kind: 'plain' | 'label' | 'mark' | 'auto';
+  italic?: boolean;
+  underline?: boolean;
+  href?: string;
 }
 
-/** A line's pieces: its "Label:", "**marked**" words and, unless it lists a stack, the CV's terms in bold. */
+/**
+ * A line's pieces: its "Label:", its marks (**bold**, *italic*, ++underline++,
+ * [links](https://…)) and, unless it lists a stack, the CV's terms in bold.
+ */
 function pieces(text: string, bold: RegExp | null): Piece[] {
   const label = text.match(/^(\s*[A-Z][\p{L} &/-]{1,28}:)(\s.*)?$/u);
   const out: Piece[] = label ? [{ text: label[1]!, kind: 'label' }] : [];
   const body = label ? label[2] ?? '' : text;
   const isList = Boolean(label && /stack|skills|tools|technolog/i.test(label[1]!));
-  body.split(/\*\*(.+?)\*\*/g).forEach((part, index) => {
-    if (index % 2 === 1) { out.push({ text: part, kind: 'mark' }); return; }
-    if (!bold || isList) { if (part) out.push({ text: part, kind: 'plain' }); return; }
-    part.split(bold).forEach((piece, j) => { if (piece) out.push({ text: piece, kind: j % 2 === 1 ? 'auto' : 'plain' }); });
-  });
+  for (const span of spansOf(body)) {
+    const style = { italic: span.italic, underline: span.underline, href: span.href };
+    if (span.bold) { out.push({ text: span.text, kind: 'mark', ...style }); continue; }
+    if (!bold || isList) { if (span.text) out.push({ text: span.text, kind: 'plain', ...style }); continue; }
+    span.text.split(bold).forEach((piece, j) => { if (piece) out.push({ text: piece, kind: j % 2 === 1 ? 'auto' : 'plain', ...style }); });
+  }
   return out;
 }
 
+const spanOf = (piece: Piece) => ({ text: piece.text, bold: piece.kind !== 'plain', italic: piece.italic, underline: piece.underline, href: piece.href });
+
 function rich(text: string, bold: RegExp | null): ReactNode {
-  return pieces(text, bold).map((piece, index) => (piece.kind === 'plain' ? piece.text : <b key={index}>{piece.text}</b>));
+  return pieces(text, bold).map((piece, index) => <SpanView key={index} span={spanOf(piece)} />);
 }
 
-const escapeHtml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-/** The same pieces as HTML for an editable line; "**marked**" words keep a marker so they stay marked. */
+/**
+ * The same pieces as HTML for an editable line. Bold the CV adds by itself (its
+ * terms, a "Label:") is marked data-auto, so it is not saved as **bold**.
+ */
 function richHtml(text: string, bold: RegExp | null): string {
   return pieces(text, bold)
-    .map((piece) => piece.kind === 'plain' ? escapeHtml(piece.text)
-      : `<b${piece.kind === 'mark' ? ' data-mark=""' : ''}>${escapeHtml(piece.text)}</b>`)
+    .map((piece) => {
+      const html = spanHtml({ ...spanOf(piece), bold: piece.kind === 'mark' });
+      return piece.kind === 'auto' || piece.kind === 'label' ? `<b data-auto="">${html}</b>` : html;
+    })
     .join('');
 }
 
-/** The text of an edited line, with "**" put back around words that were marked bold. */
+/** The text of an edited line, with its marks: one line. */
 function textOf(node: Node): string {
-  let out = '';
-  node.childNodes.forEach((child) => {
-    if (child.nodeType === Node.TEXT_NODE) out += child.textContent ?? '';
-    else if (child instanceof HTMLElement) {
-      const inner = textOf(child);
-      out += child.matches('b[data-mark]') && inner.trim() ? `**${inner}**` : child.tagName === 'BR' ? ' ' : inner;
-    }
-  });
-  return out.replace(/\u00a0/g, ' ');
+  return htmlToMarks(node).replace(/\s*\n\s*/g, ' ');
 }
 
 /**

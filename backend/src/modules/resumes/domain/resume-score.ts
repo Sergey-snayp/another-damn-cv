@@ -1,5 +1,6 @@
 import { findKeywords, keywordIn, scoreCv, type KeywordMatch } from './job-keywords';
 import type { RenderedResume } from './resume';
+import { withoutMarks } from './text-marks';
 
 /** The editor's sections an issue points at, so its card can show a badge. */
 export type IssueSection =
@@ -54,6 +55,7 @@ export function resumeText(resume: RenderedResume): string {
     ...(resume.customSections ?? []).flatMap((section) => [section.title, section.text, ...section.bullets]),
   ]
     .filter(Boolean)
+    .map((text) => withoutMarks(String(text)))
     .join('\n');
 }
 
@@ -72,6 +74,7 @@ function workText(resume: RenderedResume): string {
     ...(resume.customSections ?? []).flatMap((section) => [section.text, ...section.bullets]),
   ]
     .filter(Boolean)
+    .map((text) => withoutMarks(String(text)))
     .join('\n');
 }
 

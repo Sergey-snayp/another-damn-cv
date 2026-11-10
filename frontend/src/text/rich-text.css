@@ -1,0 +1,16 @@
+/* A rich text box: shows bold, italic, underline, links and lists as it will print. */
+.rich-editor { min-height: 1.6em; outline: none; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.rich-editor:empty::before { content: attr(data-placeholder); color: var(--color-muted); pointer-events: none; }
+.rich-editor ul, .marked-list { margin: 4px 0; padding-left: 20px; }
+.rich-editor a, .marked-list a, .marked-line a, .marked-link { color: #1e4d45; text-decoration: underline; }
+.marked-line { display: block; }
+.marked-line:empty::after { content: "\00a0"; }
+
+/* The format toolbar: dark, over the selection. */
+.format-toolbar { position: fixed; z-index: 1000; display: flex; gap: 2px; padding: 5px; border-radius: 10px; background: #1e4d45; box-shadow: 0 8px 22px rgba(0, 0, 0, .22); transform: translateX(-50%); }
+.format-tool { display: grid; place-items: center; width: 34px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: none; color: #fff; font: 600 16px/1 Georgia, "Times New Roman", serif; cursor: pointer; }
+.format-tool b { font-family: inherit; }
+.format-tool .format-italic { font-weight: 400; }
+.format-tool u { font-weight: 400; }
+.format-tool svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.format-tool:hover { background: rgba(255, 255, 255, .16); }

@@ -370,3 +370,25 @@ test('a whole job gets as many bullets as the posting needs: more for recent job
   );
   assert.equal(many.chosen.length, 4, 'never past the most');
 });
+
+test('CV marks are read as their words in checks', () => {
+  const pool = [
+    {
+      id: 'c1',
+      text: 'Built **REST** APIs for [Acme](https://acme.dev/2024).',
+      source: 'cv' as const,
+      cvIndex: 0,
+      starred: false,
+    },
+  ];
+  const result = checkChoice(
+    { chosen: [{ id: 'c1', text: 'Built REST APIs for Acme.' }], alternates: [] },
+    pool,
+    1,
+  );
+  assert.equal(
+    result.chosen[0].text,
+    'Built REST APIs for Acme.',
+    'the reworded line without marks keeps its numbers and names',
+  );
+});

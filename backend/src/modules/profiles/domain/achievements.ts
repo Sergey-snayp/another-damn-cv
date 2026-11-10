@@ -5,6 +5,7 @@
  * hold numbers the person wrote, a tool is offered only when the notes name it,
  * and a line that repeats one the job already has is marked, not added twice.
  */
+import { withoutMarks } from './text-marks';
 
 /** What the AI writes from: the job as saved, and everything the person wrote about it. */
 export interface AchievementSource {
@@ -90,6 +91,7 @@ function overlap(a: string, b: string): number {
  * Digits inside a name (Route53, EC2, S3) are not numbers.
  */
 export function numbersIn(text: string): Set<number> {
+  text = withoutMarks(text);
   const values = new Set<number>();
   for (const match of text.matchAll(/(?<![A-Za-z\d.])(\d[\d,]*(?:\.\d+)?)\s*([kKmMbB])?(?![a-zA-Z\d])/g)) {
     const value = Number(match[1].replace(/,/g, ''));
@@ -125,7 +127,7 @@ export function unknownNames(line: string, facts: string): string[] {
   // "Let's Encrypt" is the "lets encrypt" the person wrote: apostrophes do not make a new name.
   const bare = (text: string) => text.toLowerCase().replace(/['’]/g, '');
   const known = bare(facts);
-  const tokens = line.replace(/\*\*/g, '').trim().split(/\s+/);
+  const tokens = withoutMarks(line).trim().split(/\s+/);
   const names = tokens
     .map((token, index) => ({
       word: token.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9.+#]+$/g, '').replace(/\.$/, ''),

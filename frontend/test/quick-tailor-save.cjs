@@ -368,6 +368,31 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
     await page.goto(`${appUrl}${fullEditor ? '/documents/copy-1' : '/popup/jobs/job-1/quick-tailor?from=source'}`);
     const summary = '[data-section="summary"] [contenteditable="true"]';
     await page.waitForSelector(summary);
+    if (!fullEditor && !historyMode && !failure) {
+      // The format toolbar on a CV line: select a word, Italic, and it prints in italic; Undo takes it back.
+      await page.evaluate(selector => {
+        const box = document.querySelector(selector);
+        const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const at = node.textContent.indexOf('Backend');
+          if (at < 0) continue;
+          box.focus();
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + 'Backend'.length);
+          getSelection().removeAllRanges();
+          getSelection().addRange(range);
+          return;
+        }
+      }, summary);
+      await page.waitForSelector('.format-toolbar [aria-label="Italic"]');
+      assert.equal(await page.$('.format-toolbar [aria-label="Bulleted list"]'), null, 'a CV line has no list');
+      await page.$eval('.format-toolbar [aria-label="Italic"]', button => button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })));
+      await page.$eval(summary, element => element.blur());
+      await page.waitForFunction(selector => /<i>Backend<\/i>/.test(document.querySelector(selector).innerHTML), {}, summary);
+      await page.click('.qt-history button[aria-label="Undo"]');
+      await page.waitForFunction(selector => !/<i>/.test(document.querySelector(selector).innerHTML), {}, summary);
+    }
     if (!fullEditor) {
       assert.ok(events.includes('preview') && !events.includes('copy'), 'opening reads a draft instead of creating a copy');
       assert.equal(createdDocuments, 0, 'opening Quick Tailor creates no document');

@@ -5,6 +5,7 @@
  * offered as new ones. The person chooses what to keep.
  */
 import type { CareerExperience } from './career-profile';
+import { withoutMarks } from './text-marks';
 
 /** One job as a saved CV shows it. */
 export interface CvJob {
@@ -64,9 +65,8 @@ const STOP = new Set(
 );
 const words = (text: string) =>
   new Set(
-    text
+    withoutMarks(text)
       .toLowerCase()
-      .replace(/\*\*/g, '')
       .replace(/[^a-z0-9+#./\s-]/g, ' ')
       .split(/\s+/)
       .filter((word) => word.length > 2 && !STOP.has(word)),

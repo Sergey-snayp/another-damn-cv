@@ -11,6 +11,7 @@ import { ResumeEditor } from './pages/ResumeEditor';
 import { ResumeHistory } from './pages/ResumeHistory';
 import { TailorReview } from './pages/TailorReview';
 import { QuickTailor, QuickTailorStart } from './pages/QuickTailor';
+import { FormatToolbar } from './text/FormatToolbar';
 import { CoverLetters } from './pages/CoverLetters';
 import { CoverLetterEditor } from './pages/CoverLetterEditor';
 import { InterviewPrep } from './pages/InterviewPrep';
@@ -47,6 +48,7 @@ function Gate() {
 
   return (
     <BrowserRouter>
+      <FormatToolbar />
       <Routes>
         {/* The extension's Quick Tailor opens these in a popup window over the job page: no app bar. */}
         <Route path="popup/jobs/:id/quick-tailor" element={<div className="popup-frame"><QuickTailorStart popup /></div>} />

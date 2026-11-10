@@ -9,6 +9,7 @@
  */
 import { withoutAddedPurpose, withoutDashPunctuation } from './cv-writing-guide';
 import { unsupportedClaims } from './tailoring/claims';
+import { withoutMarks } from './text-marks';
 
 export interface CvRole {
   company: string;
@@ -64,7 +65,7 @@ const plain = (text: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
-const evidenceKey = (text: string) => text.replace(/\*\*/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+const evidenceKey = (text: string) => withoutMarks(text).trim().replace(/\s+/g, ' ').toLowerCase();
 
 /** Match employer/client first, then dates; use title only when it identifies one role. */
 export function matchProfileRole(roles: ProfileRole[], cv: CvRole): ProfileRole | null {
@@ -99,9 +100,8 @@ const STOP = new Set(
 );
 const words = (text: string) =>
   new Set(
-    text
+    withoutMarks(text)
       .toLowerCase()
-      .replace(/\*\*/g, '')
       .replace(/[^a-z0-9+#./\s-]/g, ' ')
       .split(/\s+/)
       .filter((word) => word.length > 2 && !STOP.has(word)),
@@ -175,6 +175,7 @@ export function bulletRange(position: number, available: number): { min: number;
 
 /** Numbers as values ("20k" is 20,000); digits inside names (Route53, EC2) are not numbers. */
 function numbersIn(text: string): Set<number> {
+  text = withoutMarks(text);
   const values = new Set<number>();
   for (const match of text.matchAll(/(?<![A-Za-z\d.])(\d[\d,]*(?:\.\d+)?)\s*([kKmMbB])?(?![a-zA-Z\d])/g)) {
     const scale = { k: 1e3, m: 1e6, b: 1e9 }[match[2]?.toLowerCase() as 'k' | 'm' | 'b'] ?? 1;
@@ -188,8 +189,7 @@ function numbersIn(text: string): Set<number> {
 }
 /** "X." reworded as "X for reliability.": the posting's words tacked on, not a better line. */
 const bare = (text: string) =>
-  text
-    .replace(/\*\*/g, '')
+  withoutMarks(text)
     .replace(/[.\s]+$/, '')
     .toLowerCase();
 const tackedOn = (line: string, source: string) =>

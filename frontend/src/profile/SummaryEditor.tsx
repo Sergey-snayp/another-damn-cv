@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import { useSetActiveBullet } from "./bulletFocus";
+import { RichEditor } from "../text/RichEditor";
+import { Marked } from "../text/Marked";
+import { withoutMarks } from "../text/marks";
 
 /**
  * The Profile's professional summary, edited in place: a card with its word
@@ -24,7 +27,7 @@ export function SummaryEditor({
   const [error, setError] = useState("");
   const setActive = useSetActiveBullet();
   useEffect(() => {
-    setActive(editing === null ? null : { kind: "summary", text: editing, keywords, job: "Professional summary" });
+    setActive(editing === null ? null : { kind: "summary", text: withoutMarks(editing), keywords, job: "Professional summary" });
     // The text decides it; the keywords are read as they are.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
@@ -45,7 +48,8 @@ export function SummaryEditor({
     }
   }
 
-  const words = editing?.trim() ? editing.trim().split(/\s+/).length : 0;
+  const plainText = withoutMarks(editing ?? "").trim();
+  const words = plainText ? plainText.split(/\s+/).length : 0;
   return (
     <section className="profile-panel" aria-labelledby="profile-summary-heading">
       <div className="profile-panel-heading">
@@ -59,14 +63,13 @@ export function SummaryEditor({
       {editing !== null ? (
         <>
           <div className="ach-editor">
-            <textarea
-              aria-label="Professional summary"
+            <RichEditor
+              label="Professional summary"
+              multiline
               autoFocus
-              rows={4}
-              maxLength={10000}
               placeholder="Your title, years of experience, core stack and your strongest result, in 3 or 4 sentences."
               value={editing}
-              onChange={(event) => setEditing(event.target.value)}
+              onChange={setEditing}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
@@ -76,7 +79,7 @@ export function SummaryEditor({
               }}
             />
             <span className="ach-count">
-              C: <b>{editing.trim().length}</b> W: <b>{words}</b>
+              C: <b>{plainText.length}</b> W: <b>{words}</b>
             </span>
           </div>
           <div className="ach-editor-actions">
@@ -90,7 +93,9 @@ export function SummaryEditor({
           {error && <p className="profile-error" role="alert">{error}</p>}
         </>
       ) : summary ? (
-        <p className="profile-body profile-preserve-lines">{summary}</p>
+        <div className="profile-body">
+          <Marked text={summary} />
+        </div>
       ) : (
         <p className="profile-empty-line">Your title, years of experience, core stack and strongest result, in 3 or 4 sentences.</p>
       )}

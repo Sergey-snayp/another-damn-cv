@@ -479,3 +479,9 @@ test('tool names: an apostrophe is not a new name, and new tools take the casing
   assert.equal(casedAs('dns-01', lines), 'DNS-01');
   assert.equal(casedAs('Kafka', lines), 'Kafka', 'not in any line: as given');
 });
+
+test('formatting marks are not facts: a link address or a mark is never a name or a number', () => {
+  const line = 'Built **REST** [APIs](https://acme.dev/v2/2024) for *card* ++payments++.';
+  assert.deepEqual(unknownNames(line, 'built rest apis for card payments'), []);
+  assert.deepEqual([...numbersIn(line)], []);
+});

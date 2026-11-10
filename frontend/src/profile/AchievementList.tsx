@@ -4,13 +4,19 @@ import { tagCounts, tagsOf } from "./achievementTags";
 import { BulletMeter } from "../resume/BulletMeter";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import { useSetActiveBullet } from "./bulletFocus";
+import { RichEditor } from "../text/RichEditor";
+import { MarkedLine } from "../text/Marked";
+import { withoutMarks } from "../text/marks";
 
 /** "C: 167  W: 27" under a bullet being written. */
-const Count = ({ text }: { text: string }) => (
-  <span className="ach-count">
-    C: <b>{text.trim().length}</b> W: <b>{text.trim() ? text.trim().split(/\s+/).length : 0}</b>
-  </span>
-);
+const Count = ({ text }: { text: string }) => {
+  const words = withoutMarks(text).trim();
+  return (
+    <span className="ach-count">
+      C: <b>{words.length}</b> W: <b>{words ? words.split(/\s+/).length : 0}</b>
+    </span>
+  );
+};
 
 /** A list this long gets topic filters above it. */
 const FILTER_FROM = 8;
@@ -52,7 +58,7 @@ export function AchievementList({
   const setActive = useSetActiveBullet();
   const activeText = editing ? editing.text : addOpen ? clean(adding.split("\n")[0] ?? "") : null;
   useEffect(() => {
-    setActive(activeText === null ? null : { text: activeText, keywords: technologies, job: [role.title, role.company].filter(Boolean).join(" · ") });
+    setActive(activeText === null ? null : { text: withoutMarks(activeText), keywords: technologies, job: [role.title, role.company].filter(Boolean).join(" · ") });
     // The text and whether a box is open decide it; the job's fields are read as they are.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeText]);
@@ -165,7 +171,7 @@ export function AchievementList({
     setAddOpen(false);
   };
 
-  const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const editKeys = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void finishEdit();
@@ -251,14 +257,12 @@ export function AchievementList({
                 {editing?.index === index ? (
                   <div className="ach-body">
                     <div className="ach-editor">
-                      <textarea
+                      <RichEditor
                         className="ach-edit"
-                        aria-label="Edit achievement"
+                        label="Edit achievement"
                         autoFocus
-                        rows={2}
-                        maxLength={4000}
                         value={editing.text}
-                        onChange={(event) => setEditing({ index, text: event.target.value })}
+                        onChange={(next) => setEditing({ index, text: next })}
                         onKeyDown={editKeys}
                       />
                       <Count text={editing.text} />
@@ -284,7 +288,7 @@ export function AchievementList({
                       disabled={disabled || busy}
                       onClick={() => setEditing({ index, text })}
                     >
-                      {text}
+                      <MarkedLine text={text} linkAsText />
                     </button>
                     {wordsIn(text) > ACHIEVEMENT_WORDS && (
                       <span className="ach-long">
@@ -366,15 +370,13 @@ export function AchievementList({
       {addOpen && (
         <div className="ach-add">
           <div className="ach-editor">
-          <textarea
-            aria-label="New bullet"
+          <RichEditor
+            label="New bullet"
+            multiline
             autoFocus
-            rows={2}
-            maxLength={20000}
             placeholder="Write the bullet, or a few rough words and let AI write it. Paste several lines to add several."
-            disabled={disabled || busy}
             value={adding}
-            onChange={(event) => setAdding(event.target.value)}
+            onChange={setAdding}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();

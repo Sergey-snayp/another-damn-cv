@@ -83,6 +83,8 @@ export interface TailoringApi {
   copyForJob(userId: string, jobId: string, sourceResumeId?: string): Promise<{ resumeId: string }>;
 }
 
+/** Formatting marks in text (**bold**, *italic*, ++underline++, [links](…)): the words alone. */
+export { withoutMarks } from './domain/text-marks';
 /** How CV lines are written for recruiters and search filters, for any module that writes them. */
 export {
   BULLET_RULES,

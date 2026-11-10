@@ -111,11 +111,12 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     // Paste several lines: several achievements, cleaned, no repeats.
     await button('Add Bullet').click();
     await page.waitForSelector('[aria-label="New bullet"]');
+    // A paste of several lines: plain text, one bullet per line.
+    await page.focus('[aria-label="New bullet"]');
     await page.evaluate(() => {
-      const box = document.querySelector('[aria-label="New bullet"]');
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-      setter.call(box, '- Led the migration to Node.js 20.\n• Added rate limiting to the public API.\nStored token state in DynamoDB.\n');
-      box.dispatchEvent(new Event('input', { bubbles: true }));
+      const data = new DataTransfer();
+      data.setData('text/plain', '- Led the migration to Node.js 20.\n• Added rate limiting to the public API.\nStored token state in DynamoDB.\n');
+      document.querySelector('[aria-label="New bullet"]').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
     });
     await button('Add 3').click();
     await waitSaves(4);
@@ -150,7 +151,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(saves.at(-1).bullets, ['B line.', 'A line.', 'C line.']);
     await page.evaluate(() => document.querySelector('[aria-label="Copy: C line."]').click());
     await page.waitForSelector('[aria-label="New bullet"]');
-    assert.equal(await page.$eval('[aria-label="New bullet"]', box => box.value), 'C line.');
+    assert.equal(await page.$eval('[aria-label="New bullet"]', box => box.textContent), 'C line.');
     assert.deepEqual(errors, []);
     console.log('PASS achievement list: all shown, tag filters, stars, edit in place, delete for good, paste several, split a long one, move, copy');
   } finally {

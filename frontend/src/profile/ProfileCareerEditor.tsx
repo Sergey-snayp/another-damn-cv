@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { careerApi, type CareerSections, type CareerState } from "./careerApi";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
+import { RichEditor } from "../text/RichEditor";
 import "./profile-import.css";
 import "./profile-career-editor.css";
 
@@ -359,17 +360,17 @@ export function ProfileCareerEditor({
                   </label>
                 </div>
 
-                <label>
-                  Role description
-                  <textarea
-                    className="career-grow"
-                    rows={2}
-                    maxLength={12000}
+                <div className="career-rich-field">
+                  <span>Role description</span>
+                  <RichEditor
+                    className="career-rich"
+                    label="Role description"
+                    multiline
                     placeholder="What the role or project was: the product, the team, the scale."
                     value={role.description}
-                    onChange={(event) => updateRole({ description: event.target.value })}
+                    onChange={(description) => updateRole({ description })}
                   />
-                </label>
+                </div>
 
                 <fieldset className="career-bullets">
                   <legend>Achievements and responsibilities</legend>

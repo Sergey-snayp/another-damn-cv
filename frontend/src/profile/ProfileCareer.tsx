@@ -2,6 +2,7 @@ import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { CareerData, CareerExperience } from "./careerApi";
 import { AchievementList, type RolePatch } from "./AchievementList";
 import { SummaryEditor } from "./SummaryEditor";
+import { Marked } from "../text/Marked";
 import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -121,7 +122,11 @@ export function ProfileCareer({
                   </div>
                 </div>
                 {pills([role.client && `for ${role.client}`, role.location, dateRange(role.from, role.to, role.current)])}
-                {role.description && <p className="profile-body profile-preserve-lines">{role.description}</p>}
+                {role.description && (
+                  <div className="profile-body">
+                    <Marked text={role.description} />
+                  </div>
+                )}
                 <AchievementList
                   role={role}
                   disabled={importDisabled}

@@ -1,6 +1,7 @@
 import type { RenderedResume } from './resume';
 import { withoutDashPunctuation } from './cv-writing-guide';
 import { experienceSpan } from './cv-writing-guide';
+import { withoutMarks } from './text-marks';
 
 /**
  * The checks a written summary must pass before it is shown (the "Checks to
@@ -35,7 +36,7 @@ const holdsNumber = (text: string, number: string) =>
   new RegExp(`(?<![\\d.,])${escapeTerm(number)}(?![\\d]|[.,]\\d)`).test(text);
 
 /** The summary without its bold markers. */
-export const plain = (summary: string) => summary.replace(/\*\*/g, '');
+export const plain = (summary: string) => withoutMarks(summary);
 
 export const wordsOf = (text: string) =>
   plain(text)

@@ -6,6 +6,7 @@
  * why every line is still reviewed by a person.
  */
 import type { RenderedExperience, RenderedResume } from './resume';
+import { withoutMarks } from '../text-marks';
 
 /**
  * Numbers and technologies in `text` that `source` does not contain.
@@ -19,6 +20,9 @@ export function unsupportedClaims(
   source: string,
   jobTerms: ReadonlySet<string> = new Set(),
 ): string[] {
+  // Words alone: a link address or a mark is not a claim.
+  text = withoutMarks(text);
+  source = withoutMarks(source);
   const known = vocabulary(source);
   const knownNumbers = new Set(numbersIn(source));
   const problems = new Set<string>();

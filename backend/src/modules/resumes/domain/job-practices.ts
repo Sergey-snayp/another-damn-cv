@@ -1,3 +1,4 @@
+import { withoutMarks } from './text-marks';
 /**
  * The posting's words for work a CV line already shows.
  *
@@ -143,7 +144,7 @@ export interface PracticeHint {
 
 /** "Observability" → "observability"; "CI/CD", "TDD", "LLMs" keep their capitals. */
 const asWritten = (text: string) => (/[A-Z].*[A-Z]/.test(text) ? text : text.toLowerCase());
-const unmarked = (text: string) => text.replace(/\*\*/g, '');
+const unmarked = (text: string) => withoutMarks(text);
 
 /**
  * Practices the posting asks for that the line shows evidence of and does not

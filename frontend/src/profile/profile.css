@@ -244,7 +244,7 @@
 /* Writing a bullet: a white card with the text and its count, then Cancel and Save. */
 .ach-editor { display: grid; gap: 6px; padding: 9px 12px 8px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
 .ach-editor:focus-within { border-color: #1e4d45; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
-.ach-editor textarea { width: 100%; min-height: 3.2em; margin: 0; padding: 0; border: 0; outline: none; background: none; color: var(--color-text); font: inherit; font-size: 14px; line-height: 1.6; resize: none; field-sizing: content; max-height: 40vh; }
+.ach-editor textarea, .ach-editor .rich-editor { width: 100%; min-height: 3.2em; margin: 0; padding: 0; border: 0; outline: none; background: none; color: var(--color-text); font: inherit; font-size: 14px; line-height: 1.6; resize: none; field-sizing: content; max-height: 40vh; }
 .ach-count { font-size: 12px; color: var(--color-muted); }
 .ach-count b { margin-right: 8px; color: var(--color-text); font-weight: 600; }
 .ach-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 8px; }
