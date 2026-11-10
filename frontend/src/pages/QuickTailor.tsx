@@ -328,7 +328,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const [saveError, setSaveError] = useState<string | null>(null);
   /** Close was pressed with unsaved changes: the header asks before anything is lost. */
   const [closing, setClosing] = useState(false);
-  /** The window this runs in: a popup window, or CV Autofill's window inside a job page. */
+  /** The window this runs in: a popup window, or Another Damn CV's window inside a job page. */
   const closeWindow = () => { if (embedded) closeEmbed(); else window.close(); };
   const [tailoring, setTailoring] = useState<Tailoring | null>(null);
   const [cardTop, setCardTop] = useState(0);

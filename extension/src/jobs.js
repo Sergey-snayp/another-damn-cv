@@ -180,7 +180,7 @@ export async function markApplied(url, answers = []) {
   } catch { return false; /* signed out or offline: the job stays as it is */ }
 }
 
-/** Records on a saved job the CV Autofill uploaded and the answers on the form. Never saves a job. */
+/** Records on a saved job the CV the extension uploaded and the answers on the form. Never saves a job. */
 export async function recordApplication(jobId, { resumeId, answers }) {
   const { auth } = await chrome.storage.local.get('auth');
   if (!auth?.syncToken) throw new NotSignedInError();

@@ -6,7 +6,7 @@
   // chrome.* APIs, and calling them throws "Extension context invalidated".
   const alive = () => Boolean(chrome.runtime?.id);
   const store = values => { if (!alive()) return; try { void chrome.storage.local.set(values).catch(() => {}); } catch { /* reloaded */ } };
-  const STALE = 'CV Autofill was updated. Reload this page to use it.';
+  const STALE = 'Another Damn CV was updated. Reload this page to use it.';
   const host = document.createElement('div');
   host.id = 'adcv-autofill-launcher';
   const shadow = host.attachShadow({ mode: 'open' });
@@ -66,7 +66,7 @@
     }).then(theme => { sheet.replaceSync(theme + css); host.hidden = false; }).catch(() => removeHost());
   }
   host.hidden = true;
-  shadow.innerHTML = `<div class="launcher" role="group" aria-label="CV Autofill launcher">
+  shadow.innerHTML = `<div class="launcher" role="group" aria-label="Another Damn CV launcher">
     <button class="open" title="Open Autofill" aria-label="Open Autofill"><img alt="D!" src="${chrome.runtime.getURL('assets/brand/d-stamp-logo.png')}"></button>
     <button class="grip" title="Drag to move · Arrow keys move up or down" aria-label="Move Autofill button"><span class="dots" aria-hidden="true">${'<i></i>'.repeat(6)}</span></button>
     <button class="dismiss" title="Hide options" aria-label="Hide Autofill button" aria-haspopup="menu" aria-expanded="false">×</button>

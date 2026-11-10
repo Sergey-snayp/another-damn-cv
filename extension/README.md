@@ -1,4 +1,4 @@
-# CV Autofill
+# Another Damn CV
 
 A Chrome extension that recognises job application forms on any site and fills
 them from your profile, with a CV from the app. It also sends job postings to the app.

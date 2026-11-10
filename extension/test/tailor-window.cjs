@@ -145,7 +145,7 @@ async function main() {
     await signIn(false);
     await open();
     const signedOut = await appFrame();
-    await signedOut.waitForFunction(() => /Sign in to CV Autofill first/.test(document.body.textContent), { timeout: 10000 });
+    await signedOut.waitForFunction(() => /Sign in to the Another Damn CV extension first/.test(document.body.textContent), { timeout: 10000 });
     await page.screenshot({ path: '/private/tmp/tailor-window-signed-out.png' });
     await (await signedOut.evaluateHandle(() => [...document.querySelectorAll('button')].find(button => button.textContent === 'Close'))).click();
     await page.waitForFunction(() => !document.getElementById('adcv-tailor')?.isConnected, { timeout: 3000 });

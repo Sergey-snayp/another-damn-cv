@@ -14,7 +14,7 @@ const app = (
 
 if (!embedded) root.render(app);
 else {
-  // In a job page, CV Autofill signs this frame in first; until then nothing calls the API.
+  // In a job page, Another Damn CV signs this frame in first; until then nothing calls the API.
   root.render(<div className="studio-message"><p className="muted">Opening Quick tailoring…</p></div>);
   startEmbed().then(
     () => {

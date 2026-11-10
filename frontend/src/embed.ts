@@ -1,5 +1,5 @@
 /**
- * Quick tailoring inside a job page, opened there by CV Autofill.
+ * Quick tailoring inside a job page, opened there by Another Damn CV.
  *
  * In a job site's page this app is a third-party frame: the browser does not
  * send its session cookie. The extension's page around it hands over a one-time
@@ -13,7 +13,7 @@
 const params = new URLSearchParams(window.location.search);
 const parentOrigin = window.location.ancestorOrigins?.[0] ?? '';
 
-/** Running inside CV Autofill's window on a job page. */
+/** Running inside Another Damn CV's window on a job page. */
 export const embedded = params.get('embed') === '1' && window.parent !== window && parentOrigin.startsWith('chrome-extension://');
 
 const originalFetch = window.fetch.bind(window);
@@ -46,7 +46,7 @@ export function startEmbed(): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
       window.removeEventListener('message', onMessage);
-      reject(new Error('CV Autofill did not answer. Close this and open Quick tailoring again.'));
+      reject(new Error('The Another Damn CV extension did not answer. Close this and open Quick tailoring again.'));
     }, 20_000);
     async function onMessage(event: MessageEvent) {
       if (event.source !== window.parent || event.origin !== parentOrigin) return;
@@ -67,7 +67,7 @@ export function startEmbed(): Promise<void> {
           body: JSON.stringify({ ticket: data.ticket }),
         });
         const body = (await response.json().catch(() => null)) as { token?: string; message?: string } | null;
-        if (!response.ok || !body?.token) throw new Error(body?.message ?? 'Quick tailoring could not sign in. Open it again from CV Autofill.');
+        if (!response.ok || !body?.token) throw new Error(body?.message ?? 'Quick tailoring could not sign in. Open it again from Another Damn CV.');
         token = body.token;
         installFetch();
         resolve();

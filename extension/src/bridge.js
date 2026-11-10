@@ -16,7 +16,7 @@ const PING = 'CV_PLATFORM_PING';
 const READY = 'CV_PLATFORM_EXTENSION_READY';
 const PROFILE = 'CV_PLATFORM_PROFILE';
 const ACK = 'CV_PLATFORM_PROFILE_ACK';
-// A CV changed in the app, or the app says which CV Autofill should use (as
+// A CV changed in the app, or the app says which CV the extension should use (as
 // Simplify's site does after tailoring). Only ids cross over: the panel then
 // fetches everything from the server itself.
 const RESUMES_CHANGED = 'CV_PLATFORM_RESUMES_CHANGED';

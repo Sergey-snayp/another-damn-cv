@@ -1,4 +1,4 @@
-# Chrome Web Store listing: CV Autofill
+# Chrome Web Store listing: Another Damn CV
 
 What to paste into each tab of the [Developer Dashboard](https://chrome.google.com/webstore/devconsole)
 for item `dpahdkbangngocepcejjekglbjdgnhpi`. Keep this in step with the extension: a new
@@ -6,7 +6,7 @@ permission needs a new justification here and on the Privacy tab.
 
 ## Package
 
-Upload `extension/dist/cv-autofill-<version>.zip`, built with:
+Upload `extension/dist/another-damn-cv-<version>.zip`, built with:
 
 ```bash
 cd extension
@@ -22,7 +22,7 @@ under Authorized redirect URIs, or signing in from the extension fails.
 **Description**
 
 ```
-CV Autofill fills job application forms for you, using your profile and CVs from Another Damn CV (anotherdamn.cv).
+The Another Damn CV extension fills job application forms for you, using your profile and CVs from your Another Damn CV account (anotherdamn.cv).
 
 • Fills applications on company career sites and applicant tracking systems (Greenhouse, Lever, Ashby, Workday and more), including multi-step forms and forms embedded in other pages.
 • Attaches the CV you choose and answers common questions from your saved answers.

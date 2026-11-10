@@ -225,7 +225,7 @@
         iframe.contentWindow?.postMessage({ type: 'adcv-panel-visible', visible: isOpen }, '*');
       });
       iframe.src = chrome.runtime.getURL('src/sidepanel.html');
-      iframe.title = 'CV Autofill';
+      iframe.title = 'Another Damn CV';
       iframe.allow = 'clipboard-write';
       frameBox.append(iframe);
     }

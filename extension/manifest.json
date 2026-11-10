@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "CV Autofill",
-  "version": "0.52.0",
+  "name": "Another Damn CV",
+  "version": "0.53.0",
   "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -25,7 +25,7 @@
     "https://*/*"
   ],
   "action": {
-    "default_title": "CV Autofill",
+    "default_title": "Another Damn CV",
     "default_icon": "assets/brand/d-stamp-logo.png"
   },
   "background": {

@@ -93,7 +93,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (!(await injectPanel(tab.id))) {
     await setTabOpen(tab.id, false);
     await chrome.action.setBadgeText({ tabId: tab.id, text: '!' });
-    await chrome.action.setTitle({ tabId: tab.id, title: 'CV Autofill cannot open on this page.' });
+    await chrome.action.setTitle({ tabId: tab.id, title: 'Another Damn CV cannot open on this page.' });
   }
 });
 

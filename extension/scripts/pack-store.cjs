@@ -9,7 +9,7 @@
  * --client-id  the Google OAuth client the live server checks sign-ins against
  *
  * Writes dist/store/ (the unpacked build, to try with "Load unpacked") and
- * dist/cv-autofill-<version>.zip (to upload). The source files are not changed.
+ * dist/another-damn-cv-<version>.zip (to upload). The source files are not changed.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -80,7 +80,7 @@ const leftovers = fs
   .filter((file) => fs.statSync(file).isFile() && /localhost|127\.0\.0\.1/.test(fs.readFileSync(file, 'latin1')));
 if (leftovers.length) fail(`still mentions localhost:\n${leftovers.join('\n')}`);
 
-const zip = path.join(root, 'dist', `cv-autofill-${manifest.version}.zip`);
+const zip = path.join(root, 'dist', `another-damn-cv-${manifest.version}.zip`);
 fs.rmSync(zip, { force: true });
 execFileSync('zip', ['-qr', '-X', zip, '.'], { cwd: out });
 console.log(`Built ${path.relative(root, zip)} for ${origin} (version ${manifest.version}).`);

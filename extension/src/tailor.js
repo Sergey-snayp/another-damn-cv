@@ -28,9 +28,9 @@ function problem(text) {
 
 async function ticket() {
   const { auth } = await chrome.storage.local.get('auth');
-  if (!auth?.syncToken) throw new Error('Sign in to CV Autofill first, then open Quick tailoring again.');
+  if (!auth?.syncToken) throw new Error('Sign in to the Another Damn CV extension first, then open Quick tailoring again.');
   const response = await fetch(`${API_URL}/api/auth/embed-ticket`, { method: 'POST', headers: { Authorization: `Bearer ${auth.syncToken}` } });
-  if (response.status === 401) throw new Error('CV Autofill was signed out. Sign in again, then open Quick tailoring.');
+  if (response.status === 401) throw new Error('The Another Damn CV extension was signed out. Sign in again, then open Quick tailoring.');
   if (!response.ok) throw new Error(`Quick tailoring could not open (${response.status}).`);
   return (await response.json()).ticket;
 }
