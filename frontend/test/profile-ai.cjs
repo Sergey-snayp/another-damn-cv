@@ -70,7 +70,10 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.equal((await options()).length, 3);
     assert.match(await page.$eval('.ai-option', row => row.innerHTML), /<mark class="ai-placeholder">\[X\]<\/mark>/);
     assert.match(await page.$eval('.ai-pane', element => element.textContent), /Replace \[X\] with your own numbers/);
-    // Use it: the placeholder must be filled before Save.
+    assert.equal(await page.$('[aria-label="Edit achievement"]'), null, 'the wand opens the box under the bullet as it is');
+    assert.ok(await page.$('.ach-row-ai .ai-box'));
+    assert.ok(await page.evaluate(() => [...document.querySelectorAll('.ai-actions button')].some(button => button.textContent === 'Cancel')), 'after Automatic: Cancel');
+    // Use it: into the editor, and the placeholder must be filled before Save.
     await button('Use Bullet').click();
     await page.waitForFunction(() => !document.querySelector('.ai-box'));
     assert.match(await page.$eval('[aria-label="Edit achievement"]', box => box.textContent), /by \[X\]% with REST APIs/);

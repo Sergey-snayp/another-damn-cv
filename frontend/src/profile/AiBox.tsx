@@ -297,7 +297,11 @@ export function AiBox({
           {working ? "Writing…" : "Regenerate"} <AiBadge />
         </button>
         <span className="ai-spacer" />
-        <button type="button" className="ai-cancel" onClick={() => setStage("input")}>Back</button>
+        {last?.tab === "automatic" ? (
+          <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
+        ) : (
+          <button type="button" className="ai-cancel" onClick={() => setStage("input")}>Back</button>
+        )}
         <button type="button" className="ai-go" disabled={!options[selected]} onClick={() => options[selected] && onUse(options[selected]!.text)}>
           Use Bullet
         </button>

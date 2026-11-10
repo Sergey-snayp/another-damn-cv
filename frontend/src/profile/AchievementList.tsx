@@ -56,7 +56,8 @@ export function AchievementList({
   /** "+ Add bullet" opens the box; it closes after adding, on Cancel or Escape. */
   const [addOpen, setAddOpen] = useState(false);
   /** Write with AI / Improve with AI, open under the bullet being edited or added. */
-  const [ai, setAi] = useState<null | { for: "edit" | "add"; autoStart: boolean }>(null);
+  /** "row": opened by a bullet's wand, under the bullet as it is; "edit" / "add": under its editor. */
+  const [ai, setAi] = useState<null | { for: "edit" | "add" | "row"; autoStart: boolean; index?: number }>(null);
   const [busy, setBusy] = useState(false);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -356,8 +357,8 @@ export function AchievementList({
                       title="Improve with AI"
                       disabled={disabled || busy}
                       onClick={() => {
-                        setEditing({ index, text });
-                        setAi({ for: "edit", autoStart: true });
+                        setEditing(null);
+                        setAi({ for: "row", index, autoStart: true });
                       }}
                     >
                       <Icon name="wand" size={15} />
@@ -393,6 +394,22 @@ export function AchievementList({
                       <Icon name="trash" size={15} />
                     </button>
                   </span>
+                )}
+                {ai?.for === "row" && ai.index === index && editing?.index !== index && (
+                  <div className="ach-row-ai">
+                    <AiBox
+                      role={role}
+                      mode="improve"
+                      text={text}
+                      autoStart
+                      onUse={(next) => {
+                        // Into the editor: fill any [X], then Save.
+                        setEditing({ index, text: next });
+                        setAi(null);
+                      }}
+                      onClose={() => setAi(null)}
+                    />
+                  </div>
                 )}
               </li>
             );
