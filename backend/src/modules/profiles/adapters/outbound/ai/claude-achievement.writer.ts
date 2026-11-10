@@ -6,7 +6,11 @@ import {
   withoutAddedPurpose,
   withoutDashPunctuation,
 } from '../../../../resumes/contracts';
-import type { AchievementWriter, DeepenInput } from '../../../application/ports/achievement-writer';
+import type {
+  AchievementWriter,
+  AssistInput,
+  DeepenInput,
+} from '../../../application/ports/achievement-writer';
 import {
   AchievementError,
   type AchievementDraft,
@@ -144,6 +148,26 @@ ${PROFILE_STANDARD}
 Return ONLY JSON, no prose and no code fences:
 {"parts": ["...", "..."]}`;
 
+const ASSIST_SYSTEM = `You write 3 versions of one bullet for the work experience on a person's career profile.
+
+${HONESTY}
+
+- "improve": <bullet> is the bullet as it is now. Keep everything it says (every number, tool
+  and fact); make it read better. "write": <words> is what the person wrote about the work,
+  maybe rough or empty; write a new bullet from it and <job>.
+- Use only facts in <bullet> or <words>, <job> and <keywords>. A keyword goes in only where the
+  work used it; otherwise leave it out. Never add a number, a time frame or an outcome.
+- Follow <request> when there is one, within these rules.
+- The 3 versions, each from another angle:
+  1. "Result first": open with what the work changed or what it powers.
+  2. "Technical": name the technologies where they worked and how it was built.
+  3. "Concise": the tightest version, under 30 words.
+
+${PROFILE_STANDARD}
+
+Return ONLY JSON, no prose and no code fences:
+{"options": [{"angle": "Result first", "text": "..."}, {"angle": "Technical", "text": "..."}, {"angle": "Concise", "text": "..."}]}`;
+
 const answerSchema = z.object({
   achievements: z
     .array(
@@ -164,6 +188,9 @@ const coverSchema = z.object({
 });
 const deepenSchema = z.object({ text: z.string().catch(''), asks: z.array(z.string()).catch([]) });
 const splitSchema = z.object({ parts: z.array(z.string()).catch([]) });
+const assistSchema = z.object({
+  options: z.array(z.object({ angle: z.string().catch(''), text: z.string().catch('') })).catch([]),
+});
 
 export function achievementPrompt(source: AchievementSource): string {
   return `<job>
@@ -249,6 +276,34 @@ ${input.missing.join(', ')}
       })),
       unplaced: answer.unplaced,
     };
+  }
+
+  async assist(input: AssistInput): Promise<{ angle: string; text: string }[]> {
+    const prompt = `<mode>${input.mode}</mode>
+
+<job>
+Title: ${input.source.title}
+Company: ${input.source.company}${input.source.client ? `\nClient: ${input.source.client}` : ''}
+Description: ${input.source.description || '(none)'}
+</job>
+
+${input.mode === 'improve' ? `<bullet>\n${input.text}\n</bullet>` : `<words>\n${input.text || '(none: write from the job)'}\n</words>`}
+
+<keywords>
+${input.keywords.join(', ') || '(none)'}
+</keywords>${input.instruction ? `\n\n<request>\n${input.instruction}\n</request>` : ''}`;
+    const raw = await this.llm.complete(prompt, ASSIST_SYSTEM, {
+      effort: 'medium',
+      timeoutMs: 120_000,
+      maxOutputChars: 20_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) throw new AchievementError('The AI did not write a bullet. Try again.');
+    const facts = [input.source.description, input.text, ...input.keywords].join('\n');
+    return assistSchema.parse(json).options.map((option) => ({
+      angle: option.angle,
+      text: withoutDashPunctuation(withoutAddedPurpose(option.text, facts)),
+    }));
   }
 
   async split(input: { source: AchievementSource; text: string }): Promise<string[]> {

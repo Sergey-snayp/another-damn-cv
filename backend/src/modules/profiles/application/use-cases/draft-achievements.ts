@@ -19,7 +19,7 @@ import { SplitAchievement } from './split-achievement';
  */
 export class DraftAchievements {
   private readonly splitter: SplitAchievement;
-  constructor(private readonly writer: AchievementWriter) {
+  constructor(private readonly writer: Pick<AchievementWriter, 'draft' | 'cover' | 'split'>) {
     this.splitter = new SplitAchievement(writer);
   }
 

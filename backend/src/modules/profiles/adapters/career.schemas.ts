@@ -123,6 +123,17 @@ export const achievementDraftSchema = z
   })
   .strict();
 
+/** "Improve with AI" / "Write with AI": one bullet (or rough words, or nothing), its job, keywords, a request. */
+export const assistAchievementSchema = z
+  .object({
+    source: achievementDraftSchema.extend({ notes: z.string().max(60000).default('') }),
+    mode: z.enum(['improve', 'write']),
+    text: z.string().trim().max(4000).default(''),
+    keywords: z.array(z.string().trim().min(1).max(60)).max(3).default([]),
+    instruction: z.string().trim().max(500).default(''),
+  })
+  .strict();
+
 /** "Rewrite with my answers": one proposed achievement, its job, and the answers to its questions. */
 export const splitAchievementSchema = z
   .object({ source: achievementDraftSchema, text: z.string().trim().min(1).max(4000) })

@@ -13,6 +13,7 @@ import {
 } from '../src/modules/profiles/domain/achievements';
 import { DeepenAchievement } from '../src/modules/profiles/application/use-cases/deepen-achievement';
 import { SplitAchievement } from '../src/modules/profiles/application/use-cases/split-achievement';
+import { AssistAchievement } from '../src/modules/profiles/application/use-cases/assist-achievement';
 import { DraftAchievements } from '../src/modules/profiles/application/use-cases/draft-achievements';
 import {
   ClaudeAchievementWriter,
@@ -382,7 +383,6 @@ test('an achievement has a standard size: a longer one is split into parts that 
         techStack: [],
         description: '',
       }),
-    deepen: () => Promise.reject(new Error('not used')),
     split: () => Promise.resolve(parts),
     cover: () => Promise.resolve({ achievements: [], unplaced: [] }),
   }).execute(notes);
@@ -445,7 +445,6 @@ test('every technology of a job ends up in some achievement, or is named as not 
         unplaced: ['Redis'],
       });
     },
-    deepen: () => Promise.reject(new Error('not used')),
     split: () => Promise.reject(new Error('not used')),
   }).execute(job);
   assert.deepEqual(
@@ -484,4 +483,63 @@ test('formatting marks are not facts: a link address or a mark is never a name o
   const line = 'Built **REST** [APIs](https://acme.dev/v2/2024) for *card* ++payments++.';
   assert.deepEqual(unknownNames(line, 'built rest apis for card payments'), []);
   assert.deepEqual([...numbersIn(line)], []);
+});
+
+test('Improve with AI and Write with AI: 3 versions, each checked against the facts', async () => {
+  const source: AchievementSource = {
+    title: 'Senior Software Engineer',
+    company: 'Ciklum',
+    client: 'Verifone',
+    description: 'Card payments platform.',
+    bullets: [],
+    techStack: 'Node.js, Kafka',
+    notes: '',
+  };
+  const bullet = 'Built REST APIs for card tokenization handling ~20,000 transactions a day.';
+  const seen: unknown[] = [];
+  const assistant = (options: { angle: string; text: string }[]) =>
+    new AssistAchievement({
+      assist: (input) => {
+        seen.push(input);
+        return Promise.resolve(options);
+      },
+    });
+  const result = await assistant([
+    {
+      angle: 'Result first',
+      text: 'Processed ~20,000 card transactions a day through REST APIs for card tokenization.',
+    },
+    {
+      angle: 'Technical',
+      text: 'Built Node.js REST APIs for card tokenization, handling ~20,000 transactions a day.',
+    },
+    { angle: 'Concise', text: 'Cut fraud by 40% with Kafka and Redis.' },
+    { angle: 'Same', text: bullet },
+  ]).execute({ source, mode: 'improve', text: `**${bullet}**`, keywords: ['Node.js'], instruction: '' });
+  assert.deepEqual(
+    result.options.map((option) => option.angle),
+    ['Result first', 'Technical'],
+    'a version with a number or a name nobody wrote is dropped, and so is the bullet unchanged',
+  );
+  assert.equal((seen[0] as { text: string }).text, bullet, 'the AI reads the words, without marks');
+  await assert.rejects(
+    assistant([{ angle: 'Concise', text: 'Cut fraud by 40% with Redis.' }]).execute({
+      source,
+      mode: 'improve',
+      text: bullet,
+      keywords: [],
+      instruction: '',
+    }),
+    /without adding facts/,
+  );
+  const written = await assistant([
+    { angle: 'Concise', text: 'Built card payment services in Node.js for Verifone.' },
+  ]).execute({
+    source,
+    mode: 'write',
+    text: 'card payment services',
+    keywords: ['Node.js'],
+    instruction: '',
+  });
+  assert.equal(written.options.length, 1, 'a keyword the person chose is a fact it may use');
 });

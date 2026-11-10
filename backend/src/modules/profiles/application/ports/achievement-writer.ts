@@ -1,5 +1,15 @@
 import type { AchievementDraft, AchievementSource } from '../../domain/achievements';
 
+export interface AssistInput {
+  source: AchievementSource;
+  /** "improve": rewrite `text`; "write": a new bullet from `text` (rough words, maybe empty). */
+  mode: 'improve' | 'write';
+  text: string;
+  /** Up to 3 words to work in where the facts support them. */
+  keywords: string[];
+  instruction: string;
+}
+
 export interface DeepenInput {
   source: AchievementSource;
   /** The achievement as it reads now. */
@@ -19,6 +29,8 @@ export interface AchievementWriter {
     missing: string[];
     written: string[];
   }): Promise<{ achievements: { text: string; replaces: string }[]; unplaced: string[] }>;
+  /** 3 versions of one bullet (improve) or 3 drafts of a new one (write), each from another angle. */
+  assist(input: AssistInput): Promise<{ angle: string; text: string }[]>;
   /** One achievement too long for a CV line, as 2 to 4 shorter ones that each stand alone. */
   split(input: { source: AchievementSource; text: string }): Promise<string[]>;
 }
