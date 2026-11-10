@@ -1,21 +1,23 @@
-# Render Blueprint: the app (one Docker service: API, web app, Chromium, Claude CLI)
-# and its Postgres. New > Blueprint in the Render dashboard, pick this repo.
+# Render Blueprint: the app as one Docker service (API, web app, Chromium, Claude CLI).
+# New > Blueprint in the Render dashboard, pick this repo.
 # Values marked "sync: false" are typed in once in the dashboard: they are secrets
 # or personal, and never go into the repo.
+#
+# The database is a free Neon Postgres (neon.tech), which does not expire the way
+# Render's free one does after 30 days. Paste its direct connection string (with
+# connection pooling off) as DATABASE_URL, ending in ?sslmode=require.
 services:
   - type: web
     name: another-damn-cv
     runtime: docker
     dockerfilePath: ./Dockerfile
-    # 512 MB. Chrome printing a PDF and the Claude CLI each add a few hundred MB
-    # while they run; move up to "standard" if the logs show it running out of memory.
-    plan: starter
+    # Free: 512 MB and a tenth of a CPU, asleep after 15 idle minutes (about a minute
+    # to wake). Move to "starter" or "standard" when it needs to be faster.
+    plan: free
     healthCheckPath: /
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: another-damn-cv-db
-          property: connectionString
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: GOOGLE_CLIENT_ID
@@ -26,10 +28,3 @@ services:
         sync: false
       - key: LLM_MODEL
         value: claude-sonnet-5
-
-databases:
-  - name: another-damn-cv-db
-    databaseName: cv_platform
-    user: cv
-    plan: basic-256mb
-    postgresMajorVersion: "17"
