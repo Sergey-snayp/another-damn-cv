@@ -185,7 +185,7 @@ test('client and start date select SymphonyAI rather than another Ciklum role wi
   );
 });
 
-test('Profile notes and technology stacks, plus saved CV bullets, enter the same role pool without dropping distinctive technologies', () => {
+test('Profile descriptions and technology stacks, plus saved CV bullets, enter the same role pool without dropping distinctive technologies', () => {
   const old = 'Built cross-platform application features for customer workflows.';
   const fresh = 'Built cross-platform application features for customer workflows using React Native.';
   const pool = rolePool(
@@ -193,9 +193,8 @@ test('Profile notes and technology stacks, plus saved CV bullets, enter the same
     {
       ...profile,
       bullets: [fresh],
-      description: 'Client-facing mobile applications.',
+      description: 'Client-facing mobile applications. Built React Native screens with Expo Router.',
       techStack: 'React Native | Expo SDK',
-      notes: ['Built React Native screens with Expo Router.'],
     },
     [{ ...cv, bullets: ['Implemented AsyncStorage persistence.'] }],
   );
@@ -215,11 +214,11 @@ test('Profile notes and technology stacks, plus saved CV bullets, enter the same
   );
 });
 
-test('context supports a generated bullet but cannot add technologies or leak an entire raw note', () => {
+test('context supports a generated bullet but cannot add technologies or leak a whole description', () => {
   const pool = rolePool(cv, {
     ...profile,
     bullets: [],
-    notes: ['Built React Native screens with Expo Router.'],
+    description: 'Built React Native screens with Expo Router.',
   });
   const note = pool.find((item) => item.kind === 'context')!;
   const valid = checkChoice(
@@ -243,11 +242,11 @@ test('context supports a generated bullet but cannot add technologies or leak an
   const missing = checkChoice({ chosen: [], alternates: [] }, pool, 10);
   assert.ok(
     missing.chosen.every((item) => item.kind !== 'context'),
-    'fallback never pastes raw notes into a CV',
+    'fallback never pastes raw context into a CV',
   );
 });
 
-test('the Profile reader includes active role descriptions, tools and notes but not deleted achievements', async () => {
+test('the Profile reader includes active role descriptions and tools, not old notes or deleted achievements', async () => {
   const reader = new PublicProfileRolesReader({
     read: (userId) => {
       assert.equal(userId, 'owner');
@@ -281,8 +280,7 @@ test('the Profile reader includes active role descriptions, tools and notes but 
   const [role] = await reader.roles('owner');
   assert.equal(role.client, 'SymphonyAI');
   assert.equal(role.techStack, 'React Native');
-  assert.deepEqual(role.notes, ['Built mobile screens with React Native.']);
-  assert.doesNotMatch(JSON.stringify(role), /Deleted achievement/);
+  assert.doesNotMatch(JSON.stringify(role), /Deleted achievement|Built mobile screens/);
 });
 
 test('single-bullet generation uses the matching client facts and the account’s saved CVs, leaving other clients out', async () => {
@@ -306,7 +304,7 @@ test('single-bullet generation uses the matching client facts and the account’
             from: '2023-11',
             bullets: [],
             techStack: 'React Native | Expo',
-            notes: ['Built React Native screens with Expo Router.'],
+            description: 'Built React Native screens with Expo Router.',
           },
         ]),
     },

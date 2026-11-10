@@ -10,7 +10,7 @@ import { DefaultAnswers } from "../profile/DefaultAnswers";
 import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerExperience, type CareerState } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
-import { DescribeJob } from "../profile/DescribeJob";
+import { WriteBullets } from "../profile/WriteBullets";
 import { CollectFromCvs } from "../profile/CollectFromCvs";
 import { EmploymentInformation } from '../profile/EmploymentInformation';
 import "../profile/profile.css";
@@ -64,7 +64,8 @@ export function Profile() {
   // A whole section, or (from a job's or school's own edit button) just that entry.
   const [editingCareer, setEditingCareer] = useState<{ section: CareerSectionKey; entry?: CareerEntry } | null>(null);
   // "Add a note" open for one job.
-  const [describing, setDescribing] = useState<number | null>(null);
+  // "✦ Write it for me" open for one job, with the words typed in its bullet box.
+  const [writing, setWriting] = useState<{ index: number; text: string } | null>(null);
   const [collecting, setCollecting] = useState(false);
 
   useEffect(() => {
@@ -288,7 +289,10 @@ export function Profile() {
               imported={careerState?.data ?? {}}
               importDisabled={dirty || saving || !careerState}
               onEditCareer={(section, entry) => setEditingCareer({ section, entry })}
-              onDescribe={setDescribing}
+              onWrite={(index, text) => {
+                setNotice("");
+                setWriting({ index, text });
+              }}
               onDelete={(section, entry) => void deleteEntry(section, entry)}
               onCollect={() => {
                 setNotice("");
@@ -414,20 +418,17 @@ export function Profile() {
           }}
         />
       )}
-      {describing !== null && careerState && (
-        <DescribeJob
+      {writing && careerState && (
+        <WriteBullets
           career={careerState}
-          index={describing}
-          onClose={() => setDescribing(null)}
+          index={writing.index}
+          initialText={writing.text}
+          onClose={() => setWriting(null)}
           onSaved={(state, added) => {
-            const role = state.data.experiences?.value[describing];
+            const role = state.data.experiences?.value[writing.index];
             setCareerState(state);
-            setDescribing(null);
-            setNotice(
-              added
-                ? `Added ${added} ${added === 1 ? "achievement" : "achievements"} to ${role?.company || "this job"}.`
-                : "Notes saved.",
-            );
+            setWriting(null);
+            setNotice(`Added ${added} ${added === 1 ? "bullet" : "bullets"} to ${role?.company || "this job"}.`);
           }}
         />
       )}

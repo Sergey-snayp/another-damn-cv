@@ -68,19 +68,6 @@
 .describe-ideas { display: flex; flex-wrap: wrap; gap: 6px; }
 .describe-ideas button { padding: 5px 11px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); color: var(--color-text); font: inherit; font-size: 12px; cursor: pointer; }
 .describe-ideas button:hover:not(:disabled) { border-color: var(--color-text); }
-.describe-earlier { border-top: 1px solid var(--color-border); padding-top: 10px; }
-.describe-earlier > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--color-muted); }
-.describe-earlier .profile-import-check { margin: 10px 0 6px; font-weight: 500; }
-.describe-earlier blockquote { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--color-border); background: var(--color-background); border-radius: 0 8px 8px 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.describe-earlier blockquote small { display: block; margin-bottom: 3px; color: var(--color-muted); }
-.describe-note-toolbar, .describe-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.describe-earlier .describe-note-heading small { margin: 0; }
-.describe-earlier .describe-saved-note { transition: background .12s, border-color .12s; }
-.describe-saved-note:has(.describe-remove-note:hover), .describe-saved-note:has(.describe-remove-note:focus-visible), .describe-saved-note.is-removed { border-left-color: var(--color-danger, #b42318); background: color-mix(in srgb, var(--color-danger, #b42318) 7%, var(--color-background)); }
-.describe-note-text { display: block; margin-top: 5px; }
-.describe-saved-note.is-removed .describe-note-text { text-decoration: line-through; color: var(--color-muted); }
-.describe-remove-note, .describe-remove-all { flex: none; font-size: 12px; }
-.profile-import-dialog .describe-removal-status { margin: 8px 0 0; color: var(--color-muted); font-size: 12px; }
 .describe-working { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--color-text); }
 .describe-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 2px var(--color-text); animation: describe-pulse 1s ease-in-out infinite; }
 @keyframes describe-pulse { 50% { transform: scale(.55); } }

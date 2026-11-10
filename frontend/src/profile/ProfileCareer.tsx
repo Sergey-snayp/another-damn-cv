@@ -23,15 +23,15 @@ export function ProfileCareer({
   imported,
   importDisabled,
   onEditCareer,
-  onDescribe,
+  onWrite,
   onCollect,
   onDelete,
   onSaveRole,
 }: {
   imported: CareerData;
   importDisabled: boolean;
-  /** Opens "Add a note" for one job: what you did, in your own words. */
-  onDescribe(entry: number): void;
+  /** "✦ Write it for me": bullets written from what was typed in a job's bullet box. */
+  onWrite(entry: number, text: string): void;
   /** Opens "Collect from my CVs". */
   onCollect?(): void;
   /** Deletes one job or education entry, after asking. */
@@ -113,28 +113,15 @@ export function ProfileCareer({
                 </div>
                 {pills([role.client && `for ${role.client}`, role.location, dateRange(role.from, role.to, role.current)])}
                 {role.description && <p className="profile-body profile-preserve-lines">{role.description}</p>}
-                <AchievementList role={role} disabled={importDisabled} onSave={(patch) => onSaveRole(index, patch)} />
+                <AchievementList
+                  role={role}
+                  disabled={importDisabled}
+                  onSave={(patch) => onSaveRole(index, patch)}
+                  onWrite={(text) => onWrite(index, text)}
+                />
                 {role.techStack?.trim() && (
                   <p className="profile-stack">Technologies: {role.techStack}</p>
                 )}
-                <div className="profile-entry-more">
-                  <button
-                    type="button"
-                    className="profile-describe-button"
-                    disabled={importDisabled}
-                    aria-label={`Add a note to ${role.title} at ${role.company}`}
-                    onClick={() => onDescribe(index)}
-                  >
-                    <Icon name="plus" size={14} />
-                    Add a note
-                  </button>
-                  {role.notes?.length ? (
-                    <span className="profile-muted">
-                      {role.notes.length === 1 ? "1 note" : `${role.notes.length} notes`} · last{" "}
-                      {new Date(role.notes[role.notes.length - 1]!.at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                    </span>
-                  ) : null}
-                </div>
               </div>
             </article>
           ))

@@ -1,7 +1,10 @@
 import type { ProfileCareerApi } from '../../../../profiles/contracts';
 import type { ProfileRolesReader } from '../../../application/ports/role-bullets';
 
-/** The Profile's jobs with all their achievements and stars, through the profiles contract. */
+/**
+ * The Profile's jobs with all their achievements and stars, through the profiles
+ * contract. Bullets are the Profile's record; older saved notes are not used.
+ */
 export class PublicProfileRolesReader implements ProfileRolesReader {
   constructor(private readonly profiles: ProfileCareerApi) {}
   async roles(userId: string) {
@@ -13,7 +16,6 @@ export class PublicProfileRolesReader implements ProfileRolesReader {
       client: role.client,
       description: role.description,
       techStack: role.techStack,
-      notes: (role.notes ?? []).map((note) => note.text),
       bullets: role.bullets,
       starred: role.starred ?? [],
     }));

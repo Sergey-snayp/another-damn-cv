@@ -46,10 +46,9 @@ const LONG = `Built the TLS certificate service from scratch as its principal au
     const lines = () => page.$$eval('.describe-item textarea', boxes => boxes.map(box => box.value));
     await page.goto(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`);
     await page.waitForSelector('.profile-entry');
-    await button('Add a note to Senior Software Engineer at Ciklum').click();
-    await page.waitForSelector('#describe-notes');
-    await page.type('#describe-notes', 'tls service, alerts');
-    await button('✦ Turn into bullets').click();
+    await page.click('.ach-add-open');
+    await page.type('[aria-label="New bullet"]', 'tls service, alerts');
+    await page.click('.ach-write');
     await page.waitForSelector('.describe-long');
     assert.match(await page.$eval('.describe-long', element => element.textContent), /\d+ words: a CV line holds about 40/);
     // The bullet check: length, verb, metric, time, keywords; a missing metric opens its question.
@@ -57,7 +56,7 @@ const LONG = `Built the TLS certificate service from scratch as its principal au
     assert.match(meter[1], /6 words.*short.*Action verb.*Metric.*\+ add.*Time.*\+ add/);
     await page.evaluate(() => [...document.querySelectorAll('.describe-item')[1].querySelectorAll('.bm-check.is-ask')].find(button => button.textContent.includes('Metric')).click());
     assert.match(await page.$$eval('.describe-item', rows => rows[1].querySelector('.describe-asks').textContent), /About how many or how much\?/);
-    assert.match(await page.$eval('.describe-uncovered', element => element.textContent), /Not in any achievement yet: Redis, Kafka\. Your notes don't say what they did here/);
+    assert.match(await page.$eval('.describe-uncovered', element => element.textContent), /Not in any bullet yet: Redis, Kafka\. Nothing here says what they did/);
     assert.doesNotMatch(await page.$eval('.describe-review', element => element.textContent), /technical terms in one line/, 'the Profile keeps full technical detail');
 
     await page.evaluate(() => document.querySelector('.describe-long button').click());
@@ -77,7 +76,7 @@ const LONG = `Built the TLS certificate service from scratch as its principal au
       'Moved on-call paging for production alerts into Slack.',
     ], 'what did not fit comes right after it');
 
-    await button('Save 5 to Profile').click();
+    await button('Add 5 to Profile').click();
     await page.waitForFunction(() => !document.querySelector('.describe-job'));
     assert.equal(saves.at(-1).sections.experiences[0].bullets.length, 5);
     assert.deepEqual(errors, []);

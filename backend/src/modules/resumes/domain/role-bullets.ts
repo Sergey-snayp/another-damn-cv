@@ -23,7 +23,6 @@ export interface CvRole {
 }
 export interface ProfileRole extends CvRole {
   starred?: string[];
-  notes?: string[];
 }
 /** One supported achievement or context item from the selected CV, Profile or another saved CV. */
 export interface PoolItem {
@@ -33,7 +32,7 @@ export interface PoolItem {
   /** The CV bullet it is, for a CV item. */
   cvIndex: number | null;
   starred: boolean;
-  /** Context may become a supported bullet; raw notes are never copied into the CV. */
+  /** Context (a description, a tech stack) may become a supported bullet; it is never copied into the CV whole. */
   kind?: 'bullet' | 'context';
 }
 export interface ChosenBullet extends PoolItem {
@@ -143,18 +142,17 @@ export function rolePool(cv: CvRole, profile: ProfileRole | null, otherCvs: CvRo
       starred: starred.includes(text),
     });
   });
-  const context = (role: CvRole, prefix: string, source: PoolItem['source'], notes: string[] = []) => {
+  const context = (role: CvRole, prefix: string, source: PoolItem['source']) => {
     for (const [index, text] of [
       role.description,
       role.techStack ? `Tools used in this role: ${role.techStack}` : '',
-      ...notes,
     ].entries()) {
       if (text?.trim())
         add({ id: `${prefix}f${index + 1}`, text, source, cvIndex: null, starred: false, kind: 'context' });
     }
   };
   context(cv, 'c', 'cv');
-  if (profile) context(profile, 'p', 'profile', profile.notes);
+  if (profile) context(profile, 'p', 'profile');
   otherCvs.forEach((role, index) => {
     role.bullets.forEach((text, bullet) =>
       add({ id: `r${index + 1}b${bullet + 1}`, text, source: 'saved-cv', cvIndex: null, starred: false }),

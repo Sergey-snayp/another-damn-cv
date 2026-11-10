@@ -6,7 +6,7 @@ import { QUESTIONS } from "../resume/bulletCheck";
 import "./profile-import.css";
 import "./profile-career-editor.css";
 
-/** Questions that help you remember; each adds itself to the notes. */
+/** Questions that help you remember; each adds itself to what you write. */
 const IDEAS = [
   "What did you build?",
   "What changed because of it?",
@@ -22,31 +22,12 @@ interface ReviewItem {
   /** Follow-up questions that would make the line fuller, with the person's answers so far. */
   asks: string[];
   answers: string[];
-  /** Questions answered and used, kept with the notes on Save. */
+  /** Questions answered and used for this line. */
   answered: { question: string; answer: string }[];
   deepening?: boolean;
   note?: string;
   duplicateOf: string | null;
 }
-
-const draftKey = (role: CareerExperience) => `profile-notes-draft:${role.company}|${role.title}`.toLowerCase();
-const readDraft = (role: CareerExperience) => {
-  try {
-    return localStorage.getItem(draftKey(role)) ?? "";
-  } catch {
-    return "";
-  }
-};
-const writeDraft = (role: CareerExperience, text: string) => {
-  try {
-    if (text.trim()) localStorage.setItem(draftKey(role), text);
-    else localStorage.removeItem(draftKey(role));
-  } catch {
-    /* Only a convenience: the notes are saved with the job on Save. */
-  }
-};
-const noteDate = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 /** "Node.js, TypeScript" + ["Route53"] → "Node.js, TypeScript, Route53", in the list's own separator. */
 function withTools(stack: string, tools: string[]): string {
@@ -56,28 +37,29 @@ function withTools(stack: string, tools: string[]): string {
 }
 
 /**
- * Add a note: notes about one job, kept as written, turned into
- * achievements you keep, edit or drop. Nothing changes in Profile until Save.
+ * "✦ Write it for me": what you wrote about one job, in your own words, turned
+ * into bullets you keep, edit or drop. Only the bullets are kept: nothing
+ * changes in Profile until Save, and the words you wrote are not stored.
  */
-export function DescribeJob({
+export function WriteBullets({
   career,
   index,
+  initialText = "",
   onClose,
   onSaved,
 }: {
   career: CareerState;
   index: number;
+  /** What was typed in the job's "+ Add Bullet" box: written into bullets right away. */
+  initialText?: string;
   onClose(): void;
   onSaved(state: CareerState, added: number): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const notesBox = useRef<HTMLTextAreaElement>(null);
   const role = career.data.experiences?.value[index];
-  const savedNotes = role?.notes ?? [];
-  const [removedNotes, setRemovedNotes] = useState<number[]>([]);
-  const earlier = savedNotes.filter((_note, at) => !removedNotes.includes(at));
-  const [text, setText] = useState(() => (role ? readDraft(role) : ""));
-  const [useEarlier, setUseEarlier] = useState(true);
+  const [text, setText] = useState(initialText);
+  const started = useRef(false);
   const [stage, setStage] = useState<"write" | "working" | "review">("write");
   const [seconds, setSeconds] = useState(0);
   const [items, setItems] = useState<ReviewItem[]>([]);
@@ -96,11 +78,15 @@ export function DescribeJob({
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
+    // Opened with words from the bullet box: straight to writing, once.
+    if (initialText.trim() && !started.current) {
+      started.current = true;
+      void generate();
+    }
     return () => element?.close();
+    // Once, on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => {
-    if (role) writeDraft(role, text);
-  }, [role, text]);
   useEffect(() => {
     if (stage !== "working") return;
     setSeconds(0);
@@ -110,12 +96,12 @@ export function DescribeJob({
 
   if (!role) return null;
   const kept = items.filter((item) => item.keep && item.text.trim());
-  const source = [useEarlier ? earlier.map((note) => note.text).join("\n\n") : "", text].filter((part) => part.trim()).join("\n\n");
+  const source = text.trim();
 
-  // Closing keeps what you typed (it is saved in this browser); a review not saved yet is asked about.
+  // A review not saved yet is asked about first.
   const requestClose = () => {
     if (saving || stage === "working") return;
-    if ((stage === "review" && kept.length) || removedNotes.length) setConfirmClose(true);
+    if (stage === "review" && kept.length) setConfirmClose(true);
     else onClose();
   };
 
@@ -150,13 +136,13 @@ export function DescribeJob({
       setUncovered(proposal.uncovered ?? []);
       setStage("review");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not write achievements. Try again.");
+      setError(reason instanceof Error ? reason.message : "Could not write bullets. Try again.");
       setStage("write");
     }
   }
 
-  /** Saves the notes (and, after a review, the kept achievements) to this job, on the latest Profile. */
-  async function save(withAchievements: boolean) {
+  /** Adds the kept bullets (and chosen tools and description) to this job, on the latest Profile. */
+  async function save() {
     if (!role || saving) return;
     setSaving(true);
     setError("");
@@ -166,28 +152,14 @@ export function DescribeJob({
       const current = roles[index];
       if (!current || current.company !== role.company || current.title !== role.title || current.client !== role.client || current.from !== role.from)
         throw new Error("This job changed in another window. Close this and open it again.");
-      const added = withAchievements ? kept.map((item) => item.text.trim()) : [];
-      const answered = withAchievements ? items.flatMap((item) => item.answered) : [];
-      const written = [text.trim(), ...answered.map((pair) => `${pair.question} ${pair.answer}`)].filter(Boolean).join("\n");
-      // Remove only the notes reviewed here, keeping any notes added in another window.
-      const removals = removedNotes.map(at => savedNotes[at]!);
-      const retainedNotes = (current.notes ?? []).filter(note => {
-        const at = removals.findIndex(removed => removed.at === note.at && removed.text === note.text);
-        if (at < 0) return true;
-        removals.splice(at, 1);
-        return false;
-      });
+      const added = kept.map((item) => item.text.trim()).filter((line) => !current.bullets.includes(line));
       const next: CareerExperience = {
         ...current,
-        // The notes, and the answers given in the review: facts the next generation can use too.
-        notes: written ? [...retainedNotes, { text: written, at: new Date().toISOString() }] : retainedNotes,
         bullets: [...current.bullets, ...added],
-        techStack: withAchievements ? withTools(current.techStack ?? "", tools.filter((tool) => tool.keep).map((tool) => tool.name)) : current.techStack,
-        description:
-          withAchievements && description.keep && !current.description.trim() ? description.text : current.description,
+        techStack: withTools(current.techStack ?? "", tools.filter((tool) => tool.keep).map((tool) => tool.name)),
+        description: description.keep && !current.description.trim() ? description.text : current.description,
       };
       const state = await careerApi.save(latest.revision, { experiences: roles.map((item, i) => (i === index ? next : item)) });
-      writeDraft(role, "");
       onSaved(state, added.length);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save to your Profile. Try again.");
@@ -274,13 +246,13 @@ export function DescribeJob({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (stage === "review") void save(true);
+          if (stage === "review") void save();
           else void generate();
         }}
       >
         <header className="profile-import-header career-editor-header">
           <div>
-            <h2 id="describe-title">{stage === "review" ? `Review ${items.length} achievements` : "Add a note"}</h2>
+            <h2 id="describe-title">{stage === "review" ? `Review ${items.length} ${items.length === 1 ? "bullet" : "bullets"}` : "Write bullets"}</h2>
             <p className="career-editor-subtitle">
               {[role.title, role.company].filter(Boolean).join(" · ")}
             </p>
@@ -293,7 +265,7 @@ export function DescribeJob({
         <div className="profile-import-body">
           {stage !== "review" ? (
             <div className="describe-write">
-              <label htmlFor="describe-notes">Tell it like you'd tell a friend. Messy is fine.</label>
+              <label htmlFor="describe-notes">What did you do? Tell it like you'd tell a friend. Messy is fine.</label>
               <textarea
                 id="describe-notes"
                 ref={notesBox}
@@ -313,43 +285,15 @@ export function DescribeJob({
                   </button>
                 ))}
               </div>
-              {savedNotes.length > 0 && (
-                <details className="describe-earlier">
-                  <summary>
-                    Earlier notes ({earlier.length}){earlier.length ? ` · last ${noteDate(earlier[earlier.length - 1]!.at)}` : ""}
-                  </summary>
-                  <div className="describe-note-toolbar">
-                    <label className="profile-import-check">
-                      <input type="checkbox" checked={useEarlier} disabled={saving || stage === "working" || !earlier.length} onChange={(event) => setUseEarlier(event.target.checked)} />
-                      Use them too
-                    </label>
-                    {earlier.length > 1 && <button type="button" className="profile-text-button describe-remove-all" disabled={saving || stage === "working"} onClick={() => setRemovedNotes(savedNotes.map((_note, at) => at))}>Remove all notes</button>}
-                  </div>
-                  {savedNotes.map((note, i) => (
-                    <blockquote key={i} className={`describe-saved-note${removedNotes.includes(i) ? " is-removed" : ""}`}>
-                      <div className="describe-note-heading">
-                        <small>{noteDate(note.at)}</small>
-                        <button type="button" className="profile-text-button describe-remove-note" disabled={saving || stage === "working"}
-                          aria-label={`${removedNotes.includes(i) ? "Undo removal of" : "Remove"} saved note ${i + 1}`}
-                          onClick={() => setRemovedNotes(list => list.includes(i) ? list.filter(at => at !== i) : [...list, i])}>
-                          {removedNotes.includes(i) ? "Undo" : "Remove"}
-                        </button>
-                      </div>
-                      <span className="describe-note-text">{note.text}</span>
-                    </blockquote>
-                  ))}
-                  {removedNotes.length > 0 && <p className="describe-removal-status" role="status">{removedNotes.length === 1 ? "1 note will" : `${removedNotes.length} notes will`} be removed when you save.</p>}
-                </details>
-              )}
               {stage === "working" && (
                 <p className="describe-working" role="status">
-                  <span className="describe-dot" aria-hidden="true" /> Writing achievements from your notes… {seconds}s
+                  <span className="describe-dot" aria-hidden="true" /> Writing bullets… {seconds}s
                 </p>
               )}
             </div>
           ) : (
             <div className="describe-review">
-              {items.length === 0 && <p>No new achievements came from these notes. Add more detail and try again.</p>}
+              {items.length === 0 && <p>No new bullets came from this. Add more detail and try again.</p>}
               <ol>
                 {items.map((item, at) => (
                   <li key={at} className={`describe-item${item.keep ? "" : " is-dropped"}${item.duplicateOf ? " is-duplicate" : ""}${item.asks.length && item.keep ? " has-ask" : ""}`}>
@@ -401,7 +345,7 @@ export function DescribeJob({
                       <p className="describe-note describe-long">
                         {wordsIn(item.text)} words: a CV line holds about {ACHIEVEMENT_WORDS}.{" "}
                         <button type="button" className="profile-text-button" disabled={item.deepening} onClick={() => void split(at)}>
-                          {item.deepening ? "Splitting…" : "✦ Split into shorter achievements"}
+                          {item.deepening ? "Splitting…" : "✦ Split into shorter bullets"}
                         </button>
                       </p>
                     )}
@@ -421,13 +365,13 @@ export function DescribeJob({
               </ol>
               {uncovered.length > 0 && (
                 <p className="describe-note describe-uncovered">
-                  Not in any achievement yet: <strong>{uncovered.join(", ")}</strong>. Your notes don't say what{" "}
-                  {uncovered.length === 1 ? "it" : "they"} did here. Add a line about {uncovered.length === 1 ? "it" : "each"} in
-                  your notes, then turn them into bullets again.
+                  Not in any bullet yet: <strong>{uncovered.join(", ")}</strong>. Nothing here says what{" "}
+                  {uncovered.length === 1 ? "it" : "they"} did. Go back, add a line about {uncovered.length === 1 ? "it" : "each"}, and
+                  write the bullets again.
                 </p>
               )}
               {dropped > 0 && (
-                <p className="describe-note">{dropped} more left out: they used numbers your notes don't have.</p>
+                <p className="describe-note">{dropped} more left out: they used numbers or names you didn't write.</p>
               )}
               {tools.length > 0 && (
                 <fieldset className="describe-tools">
@@ -483,25 +427,19 @@ export function DescribeJob({
           ) : stage === "review" ? (
             <>
               <button type="button" className="career-back" disabled={saving} onClick={() => setStage("write")}>
-                ← Back to notes
+                ← Back to what I wrote
               </button>
-              <button type="submit" className="profile-button" disabled={saving}>
-                {saving ? "Saving…" : kept.length ? `Save ${kept.length} to Profile` : "Save notes only"}
+              <button type="submit" className="profile-button" disabled={saving || !kept.length}>
+                {saving ? "Saving…" : `Add ${kept.length} to Profile`}
               </button>
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className="profile-button is-secondary"
-                disabled={saving || stage === "working" || (!text.trim() && !removedNotes.length)}
-                title="Save changes to this job's notes without adding achievements."
-                onClick={() => void save(false)}
-              >
-                {saving ? "Saving…" : removedNotes.length ? "Save changes" : "Save notes only"}
+              <button type="button" className="profile-button is-secondary" disabled={stage === "working"} onClick={onClose}>
+                Cancel
               </button>
-              <button type="submit" className="profile-button" disabled={saving || stage === "working" || !source.trim()}>
-                {stage === "working" ? "Writing…" : "✦ Turn into bullets"}
+              <button type="submit" className="profile-button" disabled={saving || stage === "working" || !source}>
+                {stage === "working" ? "Writing…" : "✦ Write bullets"}
               </button>
             </>
           )}

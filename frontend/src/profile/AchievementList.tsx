@@ -7,6 +7,23 @@ import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 const SHOWN = 5;
 export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed">;
 
+/** The bullet guide opens by itself the first time, then stays closed until asked for. */
+const GUIDE_SEEN = "profile-bullet-guide-seen";
+const guideSeen = () => {
+  try {
+    return localStorage.getItem(GUIDE_SEEN) === "1";
+  } catch {
+    return true;
+  }
+};
+const markGuideSeen = () => {
+  try {
+    localStorage.setItem(GUIDE_SEEN, "1");
+  } catch {
+    /* Only decides whether the guide opens by itself. */
+  }
+};
+
 /** "- Built X" / "• Built X" / "1. Built X" → "Built X". */
 const clean = (line: string) => line.replace(/^\s*(?:[-•*·–]|\d+[.)])\s+/, "").replace(/\s+/g, " ").trim();
 
@@ -19,9 +36,12 @@ export function AchievementList({
   role,
   disabled,
   onSave,
+  onWrite,
 }: {
   role: CareerExperience;
   disabled: boolean;
+  /** "✦ Write it for me": rough words about this job, written into bullets to review. */
+  onWrite?(text: string): void;
   /** Saves the job's achievements; rejects with a message when it cannot. */
   onSave(patch: (current: CareerExperience) => Partial<RolePatch>): Promise<void>;
 }) {
@@ -31,6 +51,7 @@ export function AchievementList({
   const [adding, setAdding] = useState("");
   /** "+ Add bullet" opens the box; it closes after adding, on Cancel or Escape. */
   const [addOpen, setAddOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -117,13 +138,13 @@ export function AchievementList({
     if (!lines.length) return;
     const fresh = lines.filter((line) => !role.bullets.includes(line));
     if (await run((current) => ({ bullets: [...current.bullets, ...fresh.filter((line) => !current.bullets.includes(line))] }))) {
-      setAdding("");
-      setAddOpen(false);
+      closeAdd();
     }
   }
   const closeAdd = () => {
     setAdding("");
     setAddOpen(false);
+    setGuideOpen(false);
   };
 
   const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -244,7 +265,18 @@ export function AchievementList({
           </button>
         )}
         {!addOpen && (
-          <button type="button" className="add-bullet-button ach-add-open" disabled={disabled || busy} onClick={() => setAddOpen(true)}>
+          <button
+            type="button"
+            className="add-bullet-button ach-add-open"
+            disabled={disabled || busy}
+            onClick={() => {
+              setAddOpen(true);
+              if (!guideSeen()) {
+                setGuideOpen(true);
+                markGuideSeen();
+              }
+            }}
+          >
             <Icon name="plus" size={18} />
             Add Bullet
           </button>
@@ -257,7 +289,7 @@ export function AchievementList({
             autoFocus
             rows={2}
             maxLength={20000}
-            placeholder="What you did, with what, and what it changed. Paste several lines to add several."
+            placeholder="Write the bullet, or a few rough words and let AI write it. Paste several lines to add several."
             disabled={disabled || busy}
             value={adding}
             onChange={(event) => setAdding(event.target.value)}
@@ -277,10 +309,38 @@ export function AchievementList({
             <button type="button" className="profile-add-button" disabled={disabled || busy || !adding.trim()} onClick={() => void add()}>
               {pasted > 1 ? `Add ${pasted}` : "Add"}
             </button>
+            {onWrite && (
+              <button
+                type="button"
+                className="profile-add-button ach-write"
+                disabled={disabled || busy || !adding.trim()}
+                title="Turn rough words into finished bullets to review"
+                onClick={() => {
+                  onWrite(adding.trim());
+                  closeAdd();
+                }}
+              >
+                ✦ Write it for me
+              </button>
+            )}
             <button type="button" className="profile-text-button" disabled={busy} onClick={closeAdd}>
               Cancel
             </button>
           </div>
+          <details className="ach-guide" open={guideOpen} onToggle={(event) => setGuideOpen(event.currentTarget.open)}>
+            <summary>How to write a strong bullet</summary>
+            <ol>
+              <li>Start with a past-tense action verb: Built, Led, Designed, Cut.</li>
+              <li>Say what you built and name the technologies where they worked.</li>
+              <li>Add a number (users, requests, %, people) and a time frame (daily, in 3 months, still in production).</li>
+              <li>Keep it to 20 to 40 words: about two lines on a CV.</li>
+            </ol>
+            <p className="ach-guide-example">
+              e.g. Built a TLS certificate service from scratch on AWS Step Functions and Route53, renewing certificates
+              for 40 merchant domains automatically; still in production.
+            </p>
+            <p>Only rough words? Type them and press ✦ Write it for me.</p>
+          </details>
         </div>
       )}
       {error && <p className="profile-error" role="alert">{error}</p>}
