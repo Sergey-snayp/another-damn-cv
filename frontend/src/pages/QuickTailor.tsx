@@ -667,6 +667,17 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return response.json() as Promise<T>;
   }
 
+  /** The other bullets (and description) of a bullet's job, as the draft has them now. */
+  function neighboursOf(target: RewriteTarget): string[] {
+    const role = draftRef.current?.experiences.find((entry) =>
+      entry.company === target.role?.company && entry.title === target.role?.title && entry.from === target.role?.from);
+    if (!role) return [];
+    return [role.blurb ?? '', ...role.achievements.map((item) => item.bullet)]
+      .map((line) => line.trim())
+      .filter((line) => line && line !== target.text.trim())
+      .slice(0, 40);
+  }
+
   async function tailorLine(run: number, item: Suggestion, request: string) {
     const { target } = item;
     updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, report: undefined });
@@ -687,6 +698,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         ...(request.trim() ? { instruction: request.trim().slice(0, 500) } : {}),
         // A tech stack is sent with the job's own lines, the only place a tool may come from.
         ...(target.context ? { context: target.context.slice(0, target.kind === 'techStack' ? 8_000 : 1_000) } : {}),
+        // A bullet's neighbours: the job's other lines, which the rewrite must not repeat.
+        ...(target.kind === 'bullet' && target.role ? { others: neighboursOf(target) } : {}),
         job: { jobId },
       });
       updateItem(run, item.key, { busy: false, after: result.suggestion, value: result.suggestion, cannotDo: result.cannotDo });

@@ -115,6 +115,32 @@ function overlap(a: string, b: string): number {
   return shared / (left.size + right.size - shared);
 }
 
+/** The verb a line opens with ("Built", "Led"), lower-cased; "" for none. */
+export const openingVerb = (text: string) =>
+  (withoutMarks(text).trim().split(/\s+/)[0] ?? '').toLowerCase().replace(/[^a-z-]/g, '');
+
+/** A line's words for comparing two lines: no marks, no case, no ending punctuation. */
+const meaningful = (text: string) =>
+  new Set(
+    withoutMarks(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9+#.\s-]/g, ' ')
+      .split(/\s+/)
+      .map((word) => word.replace(/^[.-]+|[.-]+$/g, ''))
+      .filter((word) => word.length > 2 && !STOP.has(word)),
+  );
+/** A line that says what another one already says: most of its words are the same. */
+export const repeatsAny = (line: string, others: string[], threshold = 0.6) => {
+  const left = meaningful(line);
+  return others.some((other) => {
+    const right = meaningful(other);
+    if (!left.size || !right.size) return false;
+    let shared = 0;
+    for (const word of left) if (right.has(word)) shared++;
+    return shared / (left.size + right.size - shared) >= threshold;
+  });
+};
+
 /** Pool matching-role facts without discarding similar bullets that contain different technologies. */
 export function rolePool(cv: CvRole, profile: ProfileRole | null, otherCvs: CvRole[] = []): PoolItem[] {
   const starred = profile?.starred ?? [];
@@ -212,7 +238,12 @@ export function checkChoice(
 ): Pick<RoleBulletChoice, 'chosen' | 'alternates'> {
   const byId = new Map(pool.map((item) => [item.id, item]));
   const used = new Set<string>();
-  const take = (list: { id: string; text: string }[], limit: number): ChosenBullet[] => {
+  // Lines that never repeat one another: two bullets of one job never say the same thing.
+  const take = (
+    list: { id: string; text: string }[],
+    limit: number,
+    beside: ChosenBullet[] = [],
+  ): ChosenBullet[] => {
     const out: ChosenBullet[] = [];
     for (const { id, text } of list) {
       const item = byId.get(id);
@@ -231,7 +262,17 @@ export function checkChoice(
         used.delete(id);
         continue;
       }
-      out.push({ ...item, text: fine ? reworded : withoutDashPunctuation(item.text), original: item.text });
+      const line = fine ? reworded : withoutDashPunctuation(item.text);
+      if (
+        repeatsAny(
+          line,
+          [...beside, ...out].map((kept) => kept.text),
+        )
+      ) {
+        used.delete(id);
+        continue;
+      }
+      out.push({ ...item, text: line, original: item.text });
     }
     return out;
   };
@@ -245,13 +286,27 @@ export function checkChoice(
     );
   while (chosen.length < min && rest.length) {
     const item = rest.shift()!;
+    if (
+      repeatsAny(
+        item.text,
+        chosen.map((kept) => kept.text),
+      )
+    )
+      continue;
     used.add(item.id);
     chosen.push({ ...item, text: withoutDashPunctuation(item.text), original: item.text });
   }
-  const alternates = take(answer.alternates, 4);
+  const alternates = take(answer.alternates, 4, chosen);
   for (const item of rest) {
     if (alternates.length === 4) break;
-    if (used.has(item.id)) continue;
+    if (
+      used.has(item.id) ||
+      repeatsAny(
+        item.text,
+        [...chosen, ...alternates].map((kept) => kept.text),
+      )
+    )
+      continue;
     used.add(item.id);
     alternates.push({ ...item, text: withoutDashPunctuation(item.text), original: item.text });
   }

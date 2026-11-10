@@ -14,6 +14,7 @@ import {
 import { DeepenAchievement } from '../src/modules/profiles/application/use-cases/deepen-achievement';
 import { SplitAchievement } from '../src/modules/profiles/application/use-cases/split-achievement';
 import { AssistAchievement } from '../src/modules/profiles/application/use-cases/assist-achievement';
+import type { AssistInput } from '../src/modules/profiles/application/ports/achievement-writer';
 import { AssistSummary } from '../src/modules/profiles/application/use-cases/assist-summary';
 import { profileFacts, yearsOfExperience } from '../src/modules/profiles/domain/profile-facts';
 import { DraftAchievements } from '../src/modules/profiles/application/use-cases/draft-achievements';
@@ -667,4 +668,33 @@ test('summary with AI: written from the whole Profile, years from the dates, che
     '"I" and numbers or names the Profile lacks are dropped',
   );
   assert.match(seen[0].facts, /Built REST APIs handling/);
+});
+
+test('AI bullets never repeat the job’s other bullets; a fresh opening verb comes first', async () => {
+  const source: AchievementSource = {
+    title: 'Senior Software Engineer',
+    company: 'Ciklum',
+    client: '',
+    description: 'Card payments platform on AWS Lambda.',
+    bullets: ['Built REST APIs for card tokenization on AWS Lambda.', 'Built alerting for payment failures.'],
+    techStack: '',
+    notes: '',
+  };
+  let prompt: AssistInput | null = null;
+  const result = await new AssistAchievement({
+    assist: (input) => {
+      prompt = input;
+      return Promise.resolve([
+        { angle: 'Result first', text: 'Built card tokenization REST APIs on AWS Lambda for payments.' },
+        { angle: 'Technical', text: 'Built payment webhooks on AWS Lambda for the card platform.' },
+        { angle: 'Concise', text: 'Designed card payment webhooks with retries on AWS Lambda.' },
+      ]);
+    },
+  }).execute({ source, mode: 'write', text: 'payment webhooks', keywords: [], instruction: '' });
+  assert.deepEqual(
+    result.options.map((option) => option.angle),
+    ['Concise', 'Technical'],
+    'a repeat of another bullet is dropped; "Designed" (no other bullet opens with it) comes before "Built"',
+  );
+  assert.deepEqual(prompt!.source.bullets, source.bullets, 'the writer sees the other bullets');
 });

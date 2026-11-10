@@ -39,6 +39,8 @@ How to choose:
 - Prefer achievements that match the posting's requirements and responsibilities, then
   concrete results with numbers, then starred ones (the candidate's strongest).
 - Cover different requirements rather than repeating one.
+- Never repeat yourself across the chosen bullets: each says something the others do not,
+  starts with a different action verb, and reuses none of their phrases.
 - Give priority to the posting's core technologies when this role's evidence names them,
   including evidence present only in the Profile's description or technology stack.
 - Then up to 4 next-best in "alternates", reworded the same way.

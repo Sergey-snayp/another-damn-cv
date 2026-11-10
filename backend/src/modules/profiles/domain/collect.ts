@@ -69,6 +69,7 @@ const words = (text: string) =>
       .toLowerCase()
       .replace(/[^a-z0-9+#./\s-]/g, ' ')
       .split(/\s+/)
+      .map((word) => word.replace(/^[.-]+|[.-]+$/g, ''))
       .filter((word) => word.length > 2 && !STOP.has(word)),
   );
 /** Two lines say the same thing: most of their words are shared. */
@@ -86,6 +87,14 @@ const tools = (stack: string) =>
     .split(/[,|;\n]/)
     .map((tool) => tool.trim())
     .filter(Boolean);
+
+/** A line that says what one of the others already says. */
+export const repeats = (line: string, others: string[]) =>
+  others.some((other) => sameAchievement(line, other));
+
+/** The verb a line opens with ("Built", "Led"), lower-cased; "" for none. */
+export const openingVerb = (text: string) =>
+  (withoutMarks(text).trim().split(/\s+/)[0] ?? '').toLowerCase().replace(/[^a-z-]/g, '');
 
 export function collectFromCvs(roles: CareerExperience[], jobs: CvJob[]): CollectedJob[] {
   const found = new Map<string, CollectedJob>();

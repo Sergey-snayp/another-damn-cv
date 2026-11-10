@@ -8,6 +8,7 @@ import {
   wordCount,
 } from '../../domain/achievements';
 import { withoutMarks } from '../../domain/text-marks';
+import { openingVerb, repeats } from '../../domain/collect';
 
 export interface AssistOption {
   /** "Result first", "Technical", "Concise". */
@@ -82,6 +83,9 @@ export class AssistAchievement {
   ): { kept: AssistOption[]; names: string[] } {
     const options: AssistOption[] = [];
     const names = new Set<string>();
+    const others = input.source.bullets
+      .map((bullet) => withoutMarks(bullet).trim())
+      .filter((bullet) => bullet && bullet !== text);
     for (const option of raw) {
       const line = option.text.replace(/\s+/g, ' ').trim();
       if (line.length < 8 || wordCount(line) > ACHIEVEMENT_WORDS + 5) continue;
@@ -92,6 +96,8 @@ export class AssistAchievement {
       }
       if (LEADING.test(line) && !LEADING.test(facts)) continue;
       if (options.some((kept) => kept.text === line) || line === text) continue;
+      // Never a repeat of the job's other bullets, or of another version.
+      if (repeats(line, [...others, ...options.map((kept) => kept.text)])) continue;
       options.push({
         angle: option.angle.trim().slice(0, 40) || 'Option',
         text: line,
@@ -99,8 +105,14 @@ export class AssistAchievement {
         placeholders: [...new Set(line.match(PLACEHOLDER) ?? [])],
       });
     }
-    // The versions that work in the most of the chosen keywords come first.
-    options.sort((a, b) => b.keywords.length - a.keywords.length);
+    // The versions that work in the most of the chosen keywords come first; then those that open
+    // with a verb no other bullet of the job opens with.
+    const verbs = new Set(others.map(openingVerb));
+    options.sort(
+      (a, b) =>
+        b.keywords.length - a.keywords.length ||
+        Number(verbs.has(openingVerb(a.text))) - Number(verbs.has(openingVerb(b.text))),
+    );
     return { kept: options, names: [...names] };
   }
 }

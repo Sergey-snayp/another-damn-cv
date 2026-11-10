@@ -59,6 +59,8 @@ const tailorLineSchema = z
     instruction: z.string().trim().max(500).optional(),
     // For a tech stack: the job's own lines, the only place a tool may come from.
     context: z.string().max(8_000).optional(),
+    /** A bullet's neighbours: the job's other lines, which the rewrite must not repeat. */
+    others: z.array(z.string().max(5_000)).max(40).optional(),
     job: jobSchema,
   })
   .strict();
@@ -175,6 +177,7 @@ export class ResumeAssistantController {
       text: string;
       kind: 'bullet' | 'blurb' | 'headline' | 'techStack';
       context?: string;
+      others?: string[];
       instruction?: string;
       job: JobChoice;
     },

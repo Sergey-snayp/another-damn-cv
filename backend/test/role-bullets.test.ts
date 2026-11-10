@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   bulletRange,
   checkChoice,
+  openingVerb,
+  repeatsAny,
   matchProfileRole,
   rolePool,
   type ProfileRole,
@@ -359,9 +361,16 @@ test('a whole job gets as many bullets as the posting needs: more for recent job
   );
   assert.deepEqual(bulletRange(0, 2), { min: 2, max: 2 }, 'never more than there is');
   assert.deepEqual(bulletRange(0, 1), { min: 1, max: 1 });
-  const pool = ['a', 'b', 'c', 'd', 'e'].map((text, index) => ({
+  const lines = [
+    'Built the card tokenization service.',
+    'Automated TLS certificate renewals with Step Functions.',
+    'Cut checkout latency by caching fraud checks in Redis.',
+    'Mentored two engineers through code review.',
+    'Migrated nightly batch jobs to Kafka consumers.',
+  ];
+  const pool = lines.map((text, index) => ({
     id: `p${index + 1}`,
-    text: `Built the ${text} service for payments.`,
+    text,
     source: 'profile' as const,
     cvIndex: null,
     starred: false,
@@ -397,4 +406,51 @@ test('CV marks are read as their words in checks', () => {
     'Built REST APIs for Acme.',
     'the reworded line without marks keeps its numbers and names',
   );
+});
+
+test('a job’s chosen bullets never repeat one another, nor do its Swap alternatives', () => {
+  const pool = [
+    {
+      id: 'p1',
+      text: 'Built REST APIs for card tokenization in Node.js.',
+      source: 'profile' as const,
+      cvIndex: null,
+      starred: false,
+    },
+    {
+      id: 'p2',
+      text: 'Built Node.js REST APIs for card tokenization.',
+      source: 'profile' as const,
+      cvIndex: null,
+      starred: false,
+    },
+    {
+      id: 'p3',
+      text: 'Automated TLS certificate renewals with Step Functions.',
+      source: 'profile' as const,
+      cvIndex: null,
+      starred: false,
+    },
+  ];
+  const result = checkChoice(
+    {
+      chosen: [
+        { id: 'p1', text: pool[0].text },
+        { id: 'p2', text: pool[1].text },
+        { id: 'p3', text: pool[2].text },
+      ],
+      alternates: [{ id: 'p2', text: pool[1].text }],
+    },
+    pool,
+    3,
+    2,
+  );
+  assert.deepEqual(
+    result.chosen.map((item) => item.id),
+    ['p1', 'p3'],
+    'the same work said twice is chosen once',
+  );
+  assert.deepEqual(result.alternates, [], 'and is not offered as a swap either');
+  assert.equal(openingVerb('**Built** the service.'), 'built');
+  assert.ok(repeatsAny('Built REST APIs for card tokenization.', ['Built card tokenization REST APIs.']));
 });

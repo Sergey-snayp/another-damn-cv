@@ -365,6 +365,24 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
     prompts.at(-1)!,
     /The posting's words for work this line already shows[^\n]*\n- "observability": the line's CloudWatch, alarms, dashboards/,
   );
+
+  // A bullet's neighbours: the AI sees them, and a rewrite that repeats one is not offered.
+  answer = JSON.stringify({ suggestion: 'Built Node.js payment APIs for card tokenization.', cannotDo: [] });
+  const repeated = await call(`/resumes/${resumeId}/tailor-line`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: {
+      text: 'Responsible for Node.js APIs.',
+      kind: 'bullet',
+      others: ['Built Node.js APIs for card tokenization payments.', 'Mentored two engineers.'],
+      job: { jobId: job.id },
+    },
+  });
+  assert.equal(repeated.status, 200);
+  const kept = (await repeated.json()) as { suggestion: string; cannotDo: string[] };
+  assert.equal(kept.suggestion, 'Responsible for Node.js APIs.');
+  assert.match(kept.cannotDo.join(' '), /repeated another bullet/);
+  assert.match(prompts.at(-1)!, /<other_lines>[\s\S]*Do not repeat[\s\S]*- Mentored two engineers\./);
 });
 
 test('a CV can be deleted by its owner: its versions and PDF go, a job applied with it stays', async () => {

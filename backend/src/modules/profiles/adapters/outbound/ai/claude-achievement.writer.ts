@@ -70,6 +70,8 @@ How to split the notes:
   how it was tested; the team they led; what it changed. Each names the work, so it stands
   on its own. Never thin one-fact lines.
 - Do not repeat a line from <current_bullets>; write only what is new or fuller.
+- Never repeat yourself: each achievement opens with a different past-tense verb (and not one
+  <current_bullets> already open with, where another fits), and no two reuse the same phrases.
 - Every technology named in <notes>, in the job's description or in <current_bullets> is in
   at least one achievement (new or current), in context of what it did. A technology only in
   the job's tech stack goes in where the notes say what it did; otherwise it may only be
@@ -164,6 +166,8 @@ ${HONESTY}
   share, "[N]" for a count, "[N] months" for a time. At most 2 placeholders per version.
 - "Led", "managed" or "mentored" only when the facts say so.
 - Follow <request> when there is one, within these rules.
+- <other_bullets> are this job's other bullets. Never repeat yourself: no version restates
+  work they already describe, opens with a verb they open with, or reuses their phrases.
 - The 3 versions, each from another angle:
   1. "Result first": open with what the work changed or what it powers.
   2. "Technical": name the technologies where they worked and how it was built.
@@ -333,6 +337,15 @@ Description: ${input.source.description || '(none)'}
 </job>
 
 ${input.mode === 'improve' ? `<bullet>\n${input.text}\n</bullet>` : `<words>\n${input.text || '(none: write from the job)'}\n</words>`}
+
+<other_bullets>
+${
+  input.source.bullets
+    .filter((bullet) => bullet.trim() && bullet.trim() !== input.text.trim())
+    .map((bullet) => `- ${bullet}`)
+    .join('\n') || '(none)'
+}
+</other_bullets>
 
 <keywords>
 ${input.keywords.join(', ') || '(none)'}

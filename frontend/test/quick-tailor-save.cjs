@@ -315,6 +315,11 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       if (pathname.endsWith('/tailor-line')) {
         const body = JSON.parse(request.postData() || '{}');
         aiRequests.push(body);
+        // A bullet is sent with its job's other lines, so the rewrite does not repeat them.
+        if (body.kind === 'bullet' && /Acme Labs|Other Co/.test(body.context || '')) {
+          assert.ok(Array.isArray(body.others), 'a bullet comes with its neighbours');
+          assert.ok(!body.others.includes(body.text), 'but never with itself');
+        }
         // Bullets of a job arrive one by one and are long, as the real AI's are.
         if (body.kind === 'techStack') {
           await pause(150);

@@ -1,6 +1,7 @@
 import type { ResumesApi } from '../../contracts';
 import { practiceHintText, practiceHints } from '../../domain/job-practices';
 import type { TailoringJobReader } from '../ports/tailoring';
+import { repeatsAny } from '../../domain/role-bullets';
 import { ResumeError } from '../errors';
 import { scoreResume, type ResumeScore } from '../../domain/resume-score';
 import {
@@ -186,6 +187,8 @@ export class ResumeAssistant {
       text: string;
       kind: 'bullet' | 'blurb' | 'headline' | 'techStack';
       context?: string;
+      /** The job's other lines: the rewrite must not repeat them. */
+      others?: string[];
       instruction?: string;
       job: JobChoice;
     },
@@ -208,7 +211,13 @@ export class ResumeAssistant {
       const checked = checkedStack(result.suggestion, input.text, own);
       return { ...result, suggestion: checked.list, cannotDo: [...result.cannotDo, ...checked.notes] };
     }
-    const context = [input.context?.slice(0, 1_000), jobText, await this.promptSettings(id)]
+    const others = (input.others ?? [])
+      .map((line) => line.trim())
+      .filter((line) => line && line !== input.text.trim());
+    const neighbours = others.length
+      ? `<other_lines>\nThe job's other lines on this CV. Do not repeat what they say, their phrases or their opening verb.\n${others.map((line) => `- ${line}`).join('\n')}\n</other_lines>`
+      : '';
+    const context = [input.context?.slice(0, 1_000), neighbours, jobText, await this.promptSettings(id)]
       .filter(Boolean)
       .join('\n\n');
     // The posting's words for practices this line already shows ("observability" for CloudWatch alarms).
@@ -223,10 +232,18 @@ export class ResumeAssistant {
       context,
     });
     // A benefit the line and its job do not state ("…to reduce risk") is cut.
-    return {
-      ...result,
-      suggestion: withoutAddedPurpose(result.suggestion, `${input.text}\n${input.context ?? ''}`),
-    };
+    const suggestion = withoutAddedPurpose(result.suggestion, `${input.text}\n${input.context ?? ''}`);
+    // A rewrite that says what another line of the job already says is not offered.
+    if (repeatsAny(suggestion, others) && !repeatsAny(input.text, others))
+      return {
+        ...result,
+        suggestion: input.text,
+        cannotDo: [
+          ...result.cannotDo,
+          'The rewrite repeated another bullet of this job, so the line is kept as it is.',
+        ],
+      };
+    return { ...result, suggestion };
   }
 
   async score(
