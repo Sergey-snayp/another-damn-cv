@@ -8,7 +8,7 @@ import { RichEditor } from "../text/RichEditor";
 import { MarkedLine } from "../text/Marked";
 import { withoutMarks } from "../text/marks";
 import { useConfirm } from "../components/ConfirmDialog";
-import { AiBox } from "./AiBox";
+import { AiBadge, AiBox } from "./AiBox";
 
 /** A number left for the person to fill: "[X]%", "[N] months". */
 const PLACEHOLDER = /\[[A-Z]\]/;
@@ -33,7 +33,7 @@ export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed"
 const clean = (line: string) => line.replace(/^\s*(?:[-•*·–]|\d+[.)])\s+/, "").replace(/\s+/g, " ").trim();
 
 /**
- * One job's achievements on the Profile page: the best five (starred first),
+ * One job's achievements on the Profile page, in their own order,
  * all of them on demand with tag filters, edited in place, added one or many
  * at a time, and deleted for good.
  */
@@ -61,7 +61,6 @@ export function AchievementList({
   const [splitting, setSplitting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const starred = new Set(role.starred ?? []);
   const technologies = (role.techStack ?? "").split(/[,|;\n]/).map((tool) => tool.trim()).filter(Boolean);
   // What is being written here goes to the bullet check panel beside the Profile.
   const setActive = useSetActiveBullet();
@@ -71,10 +70,8 @@ export function AchievementList({
     // The text and whether a box is open decide it; the job's fields are read as they are.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeText]);
-  // Starred first, each group in its own order.
-  const ordered = role.bullets
-    .map((text, index) => ({ text, index }))
-    .sort((a, b) => Number(starred.has(b.text)) - Number(starred.has(a.text)));
+  // In the order they were written (and dragged).
+  const ordered = role.bullets.map((text, index) => ({ text, index }));
   const filtered = filter ? ordered.filter((item) => tagsOf(item.text).includes(filter)) : ordered;
   // Every bullet shows: a long list is never collapsed.
   const visible = filtered;
@@ -95,11 +92,6 @@ export function AchievementList({
     }
   }
 
-  const toggleStar = (text: string) =>
-    void run((current) => {
-      const list = current.starred ?? [];
-      return { starred: list.includes(text) ? list.filter((item) => item !== text) : [...list, text] };
-    });
 
   /** Drag (or Alt ↑↓ on the handle): the bullet moves to the other one's place. */
   const move = (from: string, to: string) =>
@@ -235,11 +227,10 @@ export function AchievementList({
       {visible.length > 0 && (
         <ul className="ach-list">
           {visible.map(({ text, index }) => {
-            const star = starred.has(text);
             return (
               <li
                 key={`${index}:${text}`}
-                className={`ach-row${star ? " is-starred" : ""}${dragging === text ? " is-dragging" : ""}${dropOn === text && dragging !== text ? " is-drop" : ""}`}
+                className={`ach-row${dragging === text ? " is-dragging" : ""}${dropOn === text && dragging !== text ? " is-drop" : ""}`}
                 draggable={dragging === text}
                 onDragStart={(event) => {
                   event.dataTransfer.effectAllowed = "move";
@@ -303,7 +294,7 @@ export function AchievementList({
                     <div className="ach-editor-actions">
                       {ai?.for !== "edit" && (
                         <button type="button" className="ai-write ach-ai-button" disabled={busy} onClick={() => setAi({ for: "edit", autoStart: true })}>
-                          <Icon name="wand" size={15} /> Improve with AI
+                          Improve with AI <AiBadge />
                         </button>
                       )}
                       <span className="ach-actions-gap" />
@@ -356,7 +347,6 @@ export function AchievementList({
                     )}
                   </div>
                 )}
-                {star && <span className="ach-starred" title="Starred: shown first" aria-hidden="true">★</span>}
                 {editing?.index !== index && (
                   <span className="ach-tools" role="toolbar" aria-label="Bullet actions">
                     <button
@@ -371,17 +361,6 @@ export function AchievementList({
                       }}
                     >
                       <Icon name="wand" size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`ach-tool${star ? " is-on" : ""}`}
-                      aria-label={star ? `Unstar: ${text}` : `Star: ${text}`}
-                      aria-pressed={star}
-                      title={star ? "Starred: shown first" : "Star: show first"}
-                      disabled={disabled || busy}
-                      onClick={() => toggleStar(text)}
-                    >
-                      <Icon name="star" size={15} filled={star} />
                     </button>
                     <button
                       type="button"
@@ -480,7 +459,7 @@ export function AchievementList({
                   } else setAi({ for: "add", autoStart: true });
                 }}
               >
-                <Icon name="wand" size={15} /> Write with AI
+                Write with AI <AiBadge />
               </button>
             )}
             <span className="ach-actions-gap" />

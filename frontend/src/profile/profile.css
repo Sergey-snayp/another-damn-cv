@@ -74,18 +74,15 @@
 .ach-grip { display: grid; place-items: center; width: 12px; height: 21px; padding: 0; border: 0; background: none; color: var(--color-muted); cursor: grab; opacity: 0; }
 .ach-row:hover .ach-grip, .ach-grip:focus-visible { opacity: 1; }
 .ach-grip:disabled { cursor: default; }
-.ach-starred { margin-top: 1px; color: #c9a400; font-size: 12px; }
 .ach-tools { position: absolute; z-index: 2; top: -16px; right: 10px; display: flex; gap: 1px; padding: 3px; border-radius: 8px; background: #1e4d45; box-shadow: 0 6px 16px rgba(0, 0, 0, .18); opacity: 0; pointer-events: none; transition: opacity .12s; }
 .ach-row:hover .ach-tools, .ach-row:focus-within .ach-tools { opacity: 1; pointer-events: auto; }
 .ach-tool { display: grid; place-items: center; width: 30px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; color: #fff; cursor: pointer; }
 .ach-tool:hover, .ach-tool:focus-visible { background: rgba(255, 255, 255, .16); outline: none; }
-.ach-tool.is-on { color: #f5c542; }
 .ach-tool:disabled { opacity: .5; cursor: default; }
 .ach-row.is-dragging { opacity: .45; }
 .ach-row.is-drop { box-shadow: inset 0 2px 0 #1e4d45; }
 .ach-text { padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 14px; line-height: 1.55; text-align: left; cursor: text; overflow-wrap: anywhere; }
 .ach-text:disabled { cursor: default; }
-.ach-row.is-starred .ach-text { font-weight: 500; }
 .ach-more { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .ach-more .profile-text-button { margin-top: 6px; font-size: 13px; }
 .ach-muted { color: var(--color-muted); }
@@ -268,7 +265,8 @@
 .bullet-panel > * { flex: none; }
 .bullet-panel > .bp-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 /* Write with AI / Improve with AI in a bullet's card: yellow, on the left; Cancel and Save on the right. */
-.ach-ai-button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; }
+.ach-ai-button { font-size: 14px; padding: 5px 6px 5px 14px; }
+.ach-ai-button .ai-badge { min-width: 26px; height: 22px; }
 .ach-actions-gap { flex: 1; }
 .ach-add-actions { justify-content: flex-start; }
 .ach-add-actions .ach-save, .ach-editor-actions .ach-save { flex: none; }

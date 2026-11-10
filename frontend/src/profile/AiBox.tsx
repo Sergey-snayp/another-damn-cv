@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { careerApi, type AssistOption, type CareerExperience } from "./careerApi";
+import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import "./ai-box.css";
+
+/** The wand badge on AI buttons, as Teal shows its credits (here: no limit, so just the wand). */
+export const AiBadge = () => (
+  <span className="ai-badge" aria-hidden="true">
+    <Icon name="wand" size={14} />
+  </span>
+);
 
 type Tab = "automatic" | "keywords" | "coach" | "custom";
 type Request = { tab: Tab; keywords: string[]; instruction: string; coach?: { task: string; impacts: string[]; amount: string; period: string } };
@@ -133,8 +141,8 @@ export function AiBox({
           </p>
           <div className="ai-actions">
             <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
-            <button type="button" className="ai-go" disabled={working} onClick={() => void generate({ tab, keywords: [], instruction: "" })}>
-              {working ? "Writing…" : mode === "improve" ? "Improve" : "Generate Bullets"}
+            <button type="button" className="ai-generate" disabled={working} onClick={() => void generate({ tab, keywords: [], instruction: "" })}>
+              {working ? "Writing…" : mode === "improve" ? "Improve" : "Generate Bullets"} <AiBadge />
             </button>
           </div>
         </div>
@@ -172,8 +180,8 @@ export function AiBox({
           </div>
           <div className="ai-actions">
             <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
-            <button type="button" className="ai-go" disabled={working || !picked.length} onClick={() => void generate({ tab, keywords: picked, instruction: "" })}>
-              {working ? "Writing…" : "Generate Bullets"}
+            <button type="button" className="ai-generate" disabled={working || !picked.length} onClick={() => void generate({ tab, keywords: picked, instruction: "" })}>
+              {working ? "Writing…" : "Generate Bullets"} <AiBadge />
             </button>
           </div>
         </div>
@@ -207,7 +215,7 @@ export function AiBox({
           </div>
           <div className="ai-actions">
             <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
-            <button type="button" className="ai-go" disabled={!task} onClick={() => setCoachStep(2)}>Continue</button>
+            <button type="button" className="ai-continue" disabled={!task} onClick={() => setCoachStep(2)}>Continue</button>
           </div>
         </div>
       ) : (
@@ -235,15 +243,19 @@ export function AiBox({
           </div>
           <div className="ai-actions">
             <button type="button" className="ai-cancel" onClick={() => setCoachStep(1)}>Back</button>
-            <button type="button" className="ai-go" disabled={working} onClick={() => void generate({ tab, keywords: [], instruction: "", coach: { task, impacts, amount: amount.trim(), period: period.trim() } })}>
-              {working ? "Writing…" : "Generate Bullets"}
+            <button type="button" className="ai-generate" disabled={working} onClick={() => void generate({ tab, keywords: [], instruction: "", coach: { task, impacts, amount: amount.trim(), period: period.trim() } })}>
+              {working ? "Writing…" : "Generate Bullets"} <AiBadge />
             </button>
           </div>
         </div>
       );
     return (
       <div className="ai-pane">
-        <p className="ai-question">Custom Prompt</p>
+        <p className="ai-question ai-prompt-title">
+          Custom Prompt{" "}
+          <span className="ai-help" title="Tell the AI what to change: shorter, lead with the result, stress the security work. It still uses only your facts.">?</span>
+        </p>
+        <div className="ai-choices">
         <div className="ai-prompt">
           <input
             aria-label="Custom prompt"
@@ -258,9 +270,10 @@ export function AiBox({
               }
             }}
           />
-          <button type="button" className="ai-go" aria-label="Generate" disabled={working || !prompt.trim()} onClick={() => void generate({ tab, keywords: [], instruction: prompt.trim() })}>
-            {working ? "…" : "↑"}
+          <button type="button" className="ai-send" aria-label="Generate" disabled={working || !prompt.trim()} onClick={() => void generate({ tab, keywords: [], instruction: prompt.trim() })}>
+            <span aria-hidden="true">{working ? "…" : "↑"}</span> <AiBadge />
           </button>
+        </div>
         </div>
       </div>
     );
@@ -281,7 +294,7 @@ export function AiBox({
       ) : null}
       <div className="ai-actions">
         <button type="button" className="ai-regenerate" disabled={working || !last} onClick={() => last && void generate(last)}>
-          {working ? "Writing…" : "Regenerate"}
+          {working ? "Writing…" : "Regenerate"} <AiBadge />
         </button>
         <span className="ai-spacer" />
         <button type="button" className="ai-cancel" onClick={() => setStage("input")}>Back</button>

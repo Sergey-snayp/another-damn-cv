@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(__dirname, '../../backend')] }));
 
-// A job's long achievement list on Profile: all shown, tag filters, stars,
+// A job's long achievement list on Profile: all shown, tag filters,
 // edit in place, delete and restore, paste several. Synthetic API data only.
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 (async () => {
@@ -60,42 +60,36 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('.ach-text');
     const waitSaves = async n => { for (let i = 0; i < 50 && saves.length < n; i++) await pause(100); assert.equal(saves.length, n); await pause(150); };
 
-    // Every bullet shows, starred first; a long list has topic filters.
+    // Every bullet shows, in its own order (no stars); a long list has topic filters.
     let shown = await texts();
     assert.equal(shown.length, 8, 'a long list is not collapsed');
-    assert.equal(shown[0], 'Ran payment APIs handling ~20,000 transactions a day.', 'a starred achievement comes first');
+    assert.deepEqual(shown, bullets, 'in the order written, an old star changes nothing');
+    assert.equal(await page.$('[aria-label^="Star: "], [aria-label^="Unstar: "], .ach-starred'), null, 'no favorite button');
     assert.equal(await page.$('.ach-more .profile-text-button'), null, 'no Show all / Show fewer');
     const chips = await page.$$eval('.ach-tags button', items => items.map(item => item.textContent));
     assert.equal(chips[0], 'All 8');
     assert.ok(chips.includes('Payments 2'), chips.join(' | '));
     await page.evaluate(() => [...document.querySelectorAll('.ach-tags button')].find(item => item.textContent.startsWith('Payments')).click());
-    assert.deepEqual(await texts(), ['Ran payment APIs handling ~20,000 transactions a day.', 'Integrated Mastercard and Visa token networks for card payments.']);
+    assert.deepEqual(await texts(), ['Integrated Mastercard and Visa token networks for card payments.', 'Ran payment APIs handling ~20,000 transactions a day.']);
     await page.evaluate(() => [...document.querySelectorAll('.ach-tags button')].find(item => item.textContent.startsWith('All')).click());
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     await pause(300);
     await page.screenshot({ path: '/private/tmp/job-agent-achievement-list.png' });
 
-    // Star: saved, and it moves up.
-    await button('Star: Built a TLS certificate service with ACME and Route53.').click();
-    await waitSaves(1);
-    assert.deepEqual(saves[0].starred, ['Ran payment APIs handling ~20,000 transactions a day.', 'Built a TLS certificate service with ACME and Route53.']);
-    assert.deepEqual((await texts()).slice(0, 2), ['Built a TLS certificate service with ACME and Route53.', 'Ran payment APIs handling ~20,000 transactions a day.'], 'starred ones first, in their own order');
-
-    // Edit in place: Enter saves (and the star follows the new text); Escape cancels.
+    // Edit in place: Enter saves; Escape cancels.
     await page.evaluate(() => [...document.querySelectorAll('.ach-text')].find(item => item.textContent.startsWith('Built a TLS')).click());
     await page.waitForSelector('.ach-edit');
     await page.keyboard.press('Escape');
     assert.equal(await page.$('.ach-edit'), null);
-    assert.equal(saves.length, 1, 'Escape saves nothing');
+    assert.equal(saves.length, 0, 'Escape saves nothing');
     await page.evaluate(() => [...document.querySelectorAll('.ach-text')].find(item => item.textContent.startsWith('Built a TLS')).click());
     await page.waitForSelector('.ach-edit');
     await page.keyboard.press('End');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(', replacing manual renewals.');
     await page.keyboard.press('Enter');
-    await waitSaves(2);
-    assert.ok(saves[1].bullets.includes('Built a TLS certificate service with ACME and Route53, replacing manual renewals.'));
-    assert.ok(saves[1].starred.includes('Built a TLS certificate service with ACME and Route53, replacing manual renewals.'), 'the star follows the edit');
+    await waitSaves(1);
+    assert.ok(saves[0].bullets.includes('Built a TLS certificate service with ACME and Route53, replacing manual renewals.'));
 
     // Delete: removed for good, nothing kept to restore.
     await page.hover('.ach-row:nth-child(3)');
@@ -104,9 +98,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('.confirm-dialog');
     assert.match(await page.$eval('.confirm-dialog', element => element.textContent), /Are you sure you want to delete this bullet\?/);
     await button('Delete bullet').click();
-    await waitSaves(3);
-    assert.ok(!saves[2].bullets.includes(third));
-    assert.deepEqual(saves[2].removed, [], 'nothing is kept to restore');
+    await waitSaves(2);
+    assert.ok(!saves[1].bullets.includes(third));
+    assert.deepEqual(saves[1].removed, [], 'nothing is kept to restore');
     assert.ok(!(await texts()).includes(third));
     assert.equal(await page.$('.ach-removed'), null);
     assert.doesNotMatch(await page.$eval('.ach', element => element.textContent), /deleted|Restore/);
@@ -122,9 +116,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
       document.querySelector('[aria-label="New bullet"]').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
     });
     await button('Save 3').click();
-    await waitSaves(4);
-    assert.deepEqual(saves[3].bullets.slice(-2), ['Led the migration to Node.js 20.', 'Added rate limiting to the public API.']);
-    assert.equal(saves[3].bullets.filter(item => item === 'Stored token state in DynamoDB.').length, 1, 'a repeat is not added twice');
+    await waitSaves(3);
+    assert.deepEqual(saves[2].bullets.slice(-2), ['Led the migration to Node.js 20.', 'Added rate limiting to the public API.']);
+    assert.equal(saves[2].bullets.filter(item => item === 'Stored token state in DynamoDB.').length, 1, 'a repeat is not added twice');
     assert.equal(await page.$('[aria-label="New bullet"]'), null, 'the box closes after adding');
     assert.ok(await page.$('.ach-add-open'), '"+ Add Bullet" is back');
 
@@ -156,7 +150,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('[aria-label="New bullet"]');
     assert.equal(await page.$eval('[aria-label="New bullet"]', box => box.textContent), 'C line.');
     assert.deepEqual(errors, []);
-    console.log('PASS achievement list: all shown, tag filters, stars, edit in place, delete for good, paste several, split a long one, move, copy');
+    console.log('PASS achievement list: all shown, no stars, tag filters, edit in place, delete for good, paste several, split a long one, move, copy');
   } finally {
     await browser.close();
   }
