@@ -1,0 +1,148 @@
+/* Quick tailoring in the Profile's look: dark green actions, yellow AI buttons with a wand
+   badge, white rounded panels, light grey inner boxes, quiet secondary buttons.
+   Scoped to this page (.studio.qt), so the full editor keeps its own look. Layout and
+   behaviour are unchanged: only colour, type, borders and spacing. */
+.studio.qt {
+  --qt-green: #1e4d45;
+  --qt-green-hover: #163a34;
+  --qt-green-soft: #eef5f3;
+  --qt-line: #d9d9d6;
+  --qt-line-soft: #e3e3e1;
+  --qt-grey: #f8f8f7;
+  --qt-grey-strong: #f2f2f0;
+  --qt-ai: #e9b73c;
+  --qt-ai-hover: #e2ab27;
+  --qt-ai-badge: #f3dc8c;
+}
+
+/* ── Top bar: the name and status on the left; history, then quiet buttons, then Save. */
+.qt .studio-bar { gap: 14px; padding: 10px 24px; background: var(--color-surface); border-bottom: 1px solid var(--qt-line-soft); }
+.qt .studio-crumb { font-size: 14px; }
+.qt .studio-crumb b { font-weight: 700; }
+.qt .studio-crumb .qt-name { color: var(--color-muted); font-weight: 500; }
+.qt .studio-status { padding: 3px 10px; border-radius: 999px; background: var(--qt-grey-strong); color: var(--color-muted); font-size: 12px; font-weight: 500; }
+.qt .studio-status.bad { background: var(--color-error-soft); color: var(--color-error); }
+.qt .studio-actions { gap: 8px; }
+.qt .studio-actions .ghost, .qt .studio-actions a.ghost {
+  padding: 7px 14px; border: 1px solid var(--qt-line); border-radius: 8px; background: var(--color-surface);
+  color: var(--color-text); font-size: 13px; font-weight: 600; line-height: 1.2;
+}
+.qt .studio-actions .ghost:hover:not(:disabled), .qt .studio-actions a.ghost:hover { background: var(--qt-grey-strong); }
+.qt .studio-actions .ghost:disabled { color: #a3a39f; background: var(--color-surface); }
+.qt .studio-actions .primary {
+  padding: 7px 18px; border: 1px solid var(--qt-green); border-radius: 8px; background: var(--qt-green);
+  color: #fff; font-size: 13px; font-weight: 600; line-height: 1.2;
+}
+.qt .studio-actions .primary:hover:not(:disabled) { background: var(--qt-green-hover); }
+.qt .studio-actions .primary:disabled { border-color: #e6e6e4; background: #e6e6e4; color: #9a9a96; }
+.qt .qt-history { border-color: var(--qt-line); border-radius: 8px; background: var(--color-surface); }
+.qt .qt-history button { padding: 7px 11px; font-size: 13px; font-weight: 500; }
+.qt .qt-history button + button { border-left-color: var(--qt-line-soft); }
+.qt .qt-history button:hover:not(:disabled) { background: var(--qt-grey-strong); }
+
+/* ── The right column: Profile panels. */
+.qt .ra-card { padding: 20px 22px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
+.qt .ra-card h3 { margin: 0 0 12px; font-size: 16px; font-weight: 700; letter-spacing: -.1px; }
+.qt .qt-assessment-verdict { padding: 4px 11px; border-radius: 7px; font-weight: 600; }
+.qt .qt-assessment-verdict.apply { border-color: var(--qt-green); background: var(--qt-green-soft); color: var(--qt-green); }
+.qt .qt-assessment-score.apply .qt-assessment-meter i.on { background: var(--qt-green); }
+.qt .qt-assessment-meter i { width: 8px; height: 14px; border-radius: 3px; }
+.qt .qt-assessment-summary { font-size: 14px; }
+.qt .qt-assessment h4 { margin: 14px 0 6px; font-size: 13px; }
+.qt .qt-assessment ul { font-size: 13px; }
+.qt .qt-assessment-details summary { color: var(--color-text); }
+.qt .qt-assessment-start .primary, .qt .qt-assessment .primary {
+  border: 1px solid var(--qt-green); border-radius: 8px; background: var(--qt-green); color: #fff; font-weight: 600;
+}
+.qt .qt-assessment-start .primary:hover:not(:disabled), .qt .qt-assessment .primary:hover:not(:disabled) { background: var(--qt-green-hover); }
+.qt .qt-assessment .ghost { border: 1px solid var(--qt-line); border-radius: 8px; background: var(--color-surface); font-weight: 600; }
+/* The job's keywords: pills like the Profile's. */
+.qt .ra-kw { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+.qt .ra-kw.have { border-color: var(--qt-green); background: var(--qt-green-soft); color: var(--qt-green); }
+.qt .ra-kw.miss { border-color: var(--qt-line); background: var(--color-surface); color: var(--color-text); }
+
+/* ── The tailoring card: a white card, the window onto the CV in light grey (it pulses green
+   while the AI writes), and the menu below. */
+.qt .qt-card.qt-unit { border: 1px solid var(--qt-line); border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, .14), 0 2px 6px rgba(0, 0, 0, .06); }
+.qt .qt-screen { background: var(--qt-grey); box-shadow: inset 0 -1px 0 var(--qt-line-soft); }
+.qt .qt-screen.is-busy { animation: qt-theme-pulse 1.6s ease-in-out infinite; }
+@keyframes qt-theme-pulse {
+  0%, 100% { background: var(--qt-grey); }
+  50% { background: color-mix(in srgb, var(--qt-green) 10%, var(--color-surface)); }
+}
+.qt .qt-screen-label { color: var(--color-muted); }
+.qt .qt-dot { background: var(--qt-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-green) 22%, transparent); }
+.qt .qt-close { width: 28px; height: 28px; border: 1px solid var(--qt-line); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font-size: 17px; }
+.qt .qt-close:hover { background: var(--qt-grey-strong); }
+.qt .qt-menu { padding: 14px 16px 16px; }
+
+/* Buttons in the card and under each line: Use in dark green, the rest quiet and white. */
+.qt .qt-actions { align-items: center; flex-wrap: wrap; gap: 8px; }
+.qt .qt-actions .primary {
+  padding: 7px 16px; border: 1px solid var(--qt-green); border-radius: 7px; background: var(--qt-green);
+  color: #fff; font-size: 13px; font-weight: 600;
+}
+.qt .qt-actions .primary:hover:not(:disabled) { background: var(--qt-green-hover); }
+.qt .qt-actions .primary:disabled { border-color: #e6e6e4; background: #e6e6e4; color: #9a9a96; }
+.qt .qt-actions .ghost {
+  padding: 7px 13px; border: 1px solid var(--qt-line); border-radius: 7px; background: var(--color-surface);
+  color: var(--color-text); font-size: 13px; font-weight: 500;
+}
+.qt .qt-actions .ghost:hover:not(:disabled) { background: var(--qt-grey-strong); }
+.qt .qt-slot .qt-actions .primary, .qt .qt-slot .qt-actions .ghost { padding: 3px 10px; font-size: 11.5px; border-radius: 6px; }
+/* The yellow AI buttons, each with its wand badge, as on the Profile. */
+.qt .qt-ai-button {
+  display: inline-flex; align-items: center; gap: 9px; padding: 6px 7px 6px 15px; border: 0; border-radius: 7px;
+  background: var(--qt-ai); color: #1f1f1f; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.qt .qt-ai-button:hover:not(:disabled) { background: var(--qt-ai-hover); }
+.qt .qt-ai-button:disabled { background: #f0d690; color: #8d7a4c; cursor: default; }
+.qt .qt-ai-button .ai-badge { min-width: 28px; height: 24px; background: var(--qt-ai-badge); }
+.qt .qt-generate.is-working { animation: qt-button-pulse 1.6s ease-in-out infinite; }
+
+/* "What should change?": a box like the Profile's editor, its one-click requests as chips. */
+.qt .qt-request { gap: 6px; font-size: 13px; font-weight: 700; color: var(--color-text); }
+.qt .qt-request textarea { padding: 9px 11px; border: 1px solid var(--qt-line); border-radius: 8px; background: var(--color-surface); font-size: 14px; }
+.qt .qt-request textarea:focus { outline: none; border-color: var(--qt-green); box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
+.qt .qt-menu .chips button {
+  padding: 5px 11px; border: 1px solid var(--qt-line); border-radius: 6px; background: var(--color-surface);
+  color: var(--color-text); font-size: 12.5px; font-weight: 500;
+}
+.qt .qt-menu .chips button:hover { border-color: var(--qt-green); background: var(--qt-green-soft); }
+.qt .qt-working-status { color: var(--color-muted); }
+.qt .qt-note.qt-from, .qt .qt-slot-note.qt-from { border-color: var(--qt-green); background: var(--qt-green-soft); color: var(--qt-green); }
+.qt .qt-ai-button { flex: none; white-space: nowrap; }
+.qt .qt-actions .primary, .qt .qt-actions .ghost { flex: none; white-space: nowrap; }
+.qt .qt-report-deciding { background: #fbf3dc; border-color: #f0dca6; }
+
+/* One line, whatever the window: the CV's name gives way ("…") before any button does, and on
+   a narrower window Undo, Redo and Reset show only their icons (their names stay as labels). */
+.qt .studio-bar { flex-wrap: nowrap; }
+.qt .studio-crumb { flex: 1 1 auto; min-width: 0; }
+.qt .studio-crumb .qt-name { min-width: 0; max-width: none; color: var(--color-text); font-weight: 700; }
+.qt .studio-status { flex: none; }
+.qt .studio-actions { flex: none; flex-wrap: nowrap; }
+@media (max-width: 1320px) {
+  .qt .qt-history-label { display: none; }
+  .qt .qt-history button { padding: 7px 9px; }
+  .qt .studio-bar { padding: 10px 16px; gap: 10px; }
+  .qt .studio-actions .ghost, .qt .studio-actions a.ghost, .qt .studio-actions .primary { padding: 7px 11px; }
+}
+
+/* The right column a little wider, so the assessment and the job read comfortably. */
+.qt .qt-body { grid-template-columns: minmax(0, 1fr) clamp(380px, 32vw, 460px); }
+
+/* Zoom: a small control pinned to the top right of the CV, as it scrolls. */
+.qt .qt-zoom-bar {
+  position: sticky; top: 10px; z-index: 6; display: flex; align-items: center; gap: 2px; width: fit-content;
+  margin: 0 -68px -38px auto; padding: 3px; border: 1px solid var(--qt-line); border-radius: 9px;
+  background: var(--color-surface); box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
+}
+.qt .qt-zoom-bar button {
+  min-width: 30px; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: none;
+  color: var(--color-text); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.qt .qt-zoom-bar button:hover:not(:disabled) { background: var(--qt-grey-strong); }
+.qt .qt-zoom-bar button:disabled { color: #b5b5b1; cursor: default; }
+.qt .qt-zoom-bar .qt-zoom-value { min-width: 50px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.qt .qt-zoom-bar .qt-zoom-fit { font-size: 12.5px; color: var(--qt-green); }

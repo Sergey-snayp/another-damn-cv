@@ -91,8 +91,8 @@ async function main() {
     assert.match(app.url(), /\/popup\/jobs\/job-1\/quick-tailor\?from=source&embed=1$/);
     const outer = page.frames().find(frame => frame.url().startsWith('chrome-extension://'));
     const box = await (await outer.frameElement()).boundingBox();
-    assert.deepEqual([Math.round(box.width), Math.round(box.height)], [1180, 840], 'the size the popup window had');
-    assert.deepEqual([Math.round(box.x), Math.round(box.y)], [110, 30], 'centered over the page');
+    assert.deepEqual([Math.round(box.width), Math.round(box.height)], [1320, 840], 'wide: up to 1360px, 40px of the page on each side');
+    assert.deepEqual([Math.round(box.x), Math.round(box.y)], [40, 30], 'centered over the page');
     assert.equal(await outer.$eval('#wait', element => element.hidden), true, 'the waiting note goes once the app is drawn');
     const ticketCall = calls.find(call => call.path === '/api/auth/embed-ticket');
     assert.equal(ticketCall.auth, 'Bearer test-sync-token', 'the extension asks for the ticket with its sync token');

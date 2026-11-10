@@ -283,7 +283,7 @@
   tailorShadow.innerHTML = `<style>
     :host { all: initial; position: fixed !important; inset: 0 !important; z-index: 2147483647 !important;
       display: grid !important; place-items: center !important; background: rgba(20, 20, 14, .42) !important; }
-    .box { width: min(1180px, calc(100vw - 80px)); height: min(880px, calc(100vh - 60px));
+    .box { width: min(1360px, calc(100vw - 80px)); height: min(880px, calc(100vh - 60px));
       min-width: min(720px, 100vw); min-height: min(560px, 100vh); border-radius: 14px; overflow: hidden; background: #fff;
       box-shadow: 0 24px 64px rgba(0,0,0,.34), 0 0 0 1px rgba(0,0,0,.12); }
     iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: light; }

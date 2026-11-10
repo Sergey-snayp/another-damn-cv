@@ -1290,7 +1290,7 @@ async function openQuickTailorWindow(url) {
     } catch { /* closed since: open a new one */ }
   }
   const host = await chrome.windows.getCurrent();
-  const width = Math.min(1180, Math.max(720, (host.width ?? 1280) - 80));
+  const width = Math.min(1360, Math.max(720, (host.width ?? 1440) - 80));
   const height = Math.min(880, Math.max(560, (host.height ?? 900) - 60));
   const left = (host.left ?? 0) + Math.max(0, Math.round(((host.width ?? width) - width) / 2));
   const top = (host.top ?? 0) + Math.max(0, Math.round(((host.height ?? height) - height) / 2));

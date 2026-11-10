@@ -369,6 +369,20 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
     const summary = '[data-section="summary"] [contenteditable="true"]';
     await page.waitForSelector(summary);
     if (!fullEditor && !historyMode && !failure) {
+      // Zoom: in and out in 10% steps, the page grows with it, and Fit follows the window again.
+      const fitted = await page.$eval('.qt-zoom-value', button => button.textContent);
+      const width = () => page.$eval('.qt-canvas .qt-zoom', element => element.getBoundingClientRect().width);
+      const before = await width();
+      await page.click('[aria-label="Zoom in"]');
+      await page.click('[aria-label="Zoom in"]');
+      const zoomed = Number((await page.$eval('.qt-zoom-value', button => button.textContent)).replace('%', ''));
+      assert.ok(zoomed % 10 === 0 && zoomed > Number(fitted.replace('%', '')) + 10, `steps of 10% from ${fitted}: ${zoomed}`);
+      assert.ok(await width() > before * 1.15, 'the page grows');
+      await page.click('[aria-label="Zoom out"]');
+      assert.equal(Number((await page.$eval('.qt-zoom-value', button => button.textContent)).replace('%', '')), zoomed - 10);
+      await page.click('.qt-zoom-fit');
+      assert.equal(await page.$eval('.qt-zoom-value', button => button.textContent), fitted);
+      assert.equal(await page.$('.qt-zoom-fit'), null, 'at fit, no Fit button');
       // The format toolbar on a CV line: select a word, Italic, and it prints in italic; Undo takes it back.
       await page.evaluate(selector => {
         const box = document.querySelector(selector);

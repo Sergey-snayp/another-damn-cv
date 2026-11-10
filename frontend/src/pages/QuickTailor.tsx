@@ -22,6 +22,8 @@ import { useSkillCard } from '../resume/SkillInfo';
 import { notifyResumesChanged, useResumeInExtension } from '../extensionBridge';
 import '../resume/document.css';
 import '../resume/studio/studio.css';
+import './quick-tailor-theme.css';
+import { AiBadge } from '../profile/AiBox';
 
 const PAGE_WIDTH = 794;
 const newId = () => crypto.randomUUID();
@@ -257,6 +259,11 @@ function copyOfRegion(region: HTMLElement, scale: number, live = false): HTMLEle
   return sizer;
 }
 
+/** The CV's zoom: 50% to 200% in steps of 10%, or fit to the window (null). */
+const ZOOM_KEY = 'quick-tailoring-zoom';
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+
 /** The window's margin above and below the CV lines it shows. */
 const WINDOW_PAD = 4;
 
@@ -386,7 +393,27 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return () => observer.disconnect();
   }, [draft !== null]);
   // The canvas keeps 24px on the left and 84px on the right, where the lines' buttons sit.
-  const scale = canvasWidth ? Math.min(1, Math.max(0.5, (canvasWidth - 108) / PAGE_WIDTH)) : 1;
+  const fitScale = canvasWidth ? Math.min(1, Math.max(0.5, (canvasWidth - 108) / PAGE_WIDTH)) : 1;
+  // Zoom: "fit" follows the window; a chosen size (50% to 200%) stays, in this browser.
+  const [zoom, setZoomState] = useState<number | null>(() => {
+    try {
+      const saved = Number(localStorage.getItem(ZOOM_KEY));
+      return saved >= ZOOM_MIN && saved <= ZOOM_MAX ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const setZoom = (next: number | null) => {
+    const value = next === null ? null : Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next)) * 10) / 10;
+    setZoomState(value);
+    try {
+      if (value === null) localStorage.removeItem(ZOOM_KEY);
+      else localStorage.setItem(ZOOM_KEY, String(value));
+    } catch {
+      /* Only a convenience. */
+    }
+  };
+  const scale = zoom ?? fitScale;
 
   draftRef.current = draft;
   const pagedWatch = useMemo(() => [draft, theme], [draft, theme]);
@@ -917,18 +944,14 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       onBlurCapture={() => setPendingEdit(false)}>
       <header className="studio-bar">
         {popup ? (
-          <nav className="studio-crumb">
-            <b>Quick tailoring</b>
-            <span className="sep">·</span>
-            <span className="qt-name">{name}</span>
+          <nav className="studio-crumb" aria-label="Quick tailoring">
+            <b className="qt-name" title={name}>{name}</b>
           </nav>
         ) : (
           <nav className="studio-crumb">
             <Link to="/documents" onClick={(event) => { if (dirty && !confirm('Discard your unsaved changes?')) event.preventDefault(); }}>Documents</Link>
             <span className="sep">›</span>
-            <b className="qt-name">{name}</b>
-            <span className="sep">›</span>
-            <span>Quick tailoring</span>
+            <b className="qt-name" title={name}>{name}</b>
           </nav>
         )}
         <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined}>{status}</span>
@@ -936,15 +959,15 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
           <span className="qt-history" role="group" aria-label="Change history">
             <button type="button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" aria-keyshortcuts="Control+Z Meta+Z"
               disabled={saving || (!history.canUndo && !pendingEdit)} onClick={() => moveHistory(-1)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 4-5 5 5 5M4 9h9a7 7 0 0 1 7 7" /></svg>Undo
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 4-5 5 5 5M4 9h9a7 7 0 0 1 7 7" /></svg><span className="qt-history-label">Undo</span>
             </button>
             <button type="button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z or Ctrl Y)" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
               disabled={saving || pendingEdit || !history.canRedo} onClick={() => moveHistory(1)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5-5 5M20 9h-9a7 7 0 0 0-7 7" /></svg>Redo
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5-5 5M20 9h-9a7 7 0 0 0-7 7" /></svg><span className="qt-history-label">Redo</span>
             </button>
             <button type="button" aria-label="Reset changes" title="Reset all edits from this tailoring session"
               disabled={saving || (!history.canReset && !pendingEdit)} onClick={resetChanges}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7" /></svg>Reset
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7" /></svg><span className="qt-history-label">Reset</span>
             </button>
           </span>
           {!resumeId
@@ -993,6 +1016,16 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
               ))}
             </div>
           )}
+          <div className="qt-zoom-bar" role="group" aria-label="Zoom">
+            <button type="button" aria-label="Zoom out" title="Zoom out" disabled={scale <= ZOOM_MIN} onClick={() => setZoom((Math.ceil(scale * 10 - 1e-6) - 1) / 10)}>−</button>
+            <button type="button" className="qt-zoom-value" title="Fit to the window" aria-label={`Zoom ${Math.round(scale * 100)}%: fit to the window`} onClick={() => setZoom(null)}>
+              {Math.round(scale * 100)}%
+            </button>
+            <button type="button" aria-label="Zoom in" title="Zoom in" disabled={scale >= ZOOM_MAX} onClick={() => setZoom((Math.floor(scale * 10 + 1e-6) + 1) / 10)}>+</button>
+            {zoom !== null && (
+              <button type="button" className="qt-zoom-fit" onClick={() => setZoom(null)}>Fit</button>
+            )}
+          </div>
           <ScaledPage className="qt-zoom" scale={scale}>
             <PagedDocument watch={pagedWatch}>
               <ResumeDocument resumeId={contextId} resume={draft} theme={theme} readOnly={saving} onChange={change} onTailor={(target, anchor) => void tailor(target, anchor)}
@@ -1087,13 +1120,13 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                 <div className="qt-menu">
                   {composing ? (
                     <div className="ra-row qt-actions">
-                      <button className="primary qt-generate" disabled={saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">✦ Generate</button>
+                      <button className="qt-ai-button qt-generate" disabled={saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">Generate <AiBadge /></button>
                       <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>
                     </div>
                   ) : many ? (
                     <div className="ra-row qt-actions">
                       <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>Use all{ready.length ? ` ${ready.length}` : ''}</button>
-                      <button className="ghost" disabled={waiting > 0 || saving} onClick={() => void generate()}>✦ Generate again</button>
+                      <button className="qt-ai-button" disabled={waiting > 0 || saving} onClick={() => void generate()}>Generate again <AiBadge /></button>
                       <button className="ghost" onClick={() => setTailoring(null)}>Close</button>
                     </div>
                   ) : itemActions(solo!)}
