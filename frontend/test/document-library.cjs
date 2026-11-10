@@ -115,7 +115,8 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
         return Object.fromEntries(properties.map(property => [property, style[property]]));
       };
       return {
-        page: read('.content', ['maxWidth', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft']),
+        // Spacing only: the Profile is wider, to fit its bullet check panel.
+        page: read('.content', ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft']),
         heading: read(map.heading, ['fontSize', 'lineHeight']),
         panel: read(map.panel, ['borderRadius', 'borderColor', 'backgroundColor', 'boxShadow']),
         button: read(map.button, ['borderRadius', 'height', 'fontSize', 'backgroundColor']),

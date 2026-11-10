@@ -86,7 +86,6 @@
 .ach-text { padding: 0; border: 0; background: none; color: var(--color-text); font: inherit; font-size: 16px; line-height: 1.6; text-align: left; cursor: text; overflow-wrap: anywhere; }
 .ach-text:disabled { cursor: default; }
 .ach-row.is-starred .ach-text { font-weight: 500; }
-.ach-edit { width: 100%; margin: -2px 0 0 -8px; padding: 1px 7px; border: 1px solid var(--color-text); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 16px; line-height: 1.55; resize: none; field-sizing: content; }
 .ach-more { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .ach-more .profile-text-button { margin-top: 6px; font-size: 13px; }
 .ach-muted { color: var(--color-muted); }
@@ -100,8 +99,6 @@
 .add-bullet-button:disabled { opacity: .45; cursor: default; }
 .ach-more .add-bullet-button { margin-top: 10px; }
 .ach-add { display: grid; gap: 6px; margin-top: 10px; }
-.ach-add textarea { width: 100%; min-height: 3.2em; padding: 8px 11px; border: 1px solid var(--color-text); border-radius: 9px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 15px; line-height: 1.55; resize: none; field-sizing: content; max-height: 40vh; }
-.ach-add textarea:focus { outline: none; box-shadow: 0 0 0 3px var(--color-accent-soft); }
 .ach-add-actions { display: flex; align-items: center; gap: 14px; }
 .ach-add-actions .profile-text-button { margin: 0; }
 @media (hover: none) {
@@ -199,3 +196,61 @@
 .ach-guide ol { margin: 8px 0 6px; padding-left: 20px; color: var(--color-text); }
 .profile-panel .ach-guide p { margin: 6px 0 0; font-size: 13px; }
 .profile-panel .ach-guide .ach-guide-example { padding-left: 10px; border-left: 3px solid var(--color-accent-border); color: var(--color-text); font-style: italic; }
+
+/* The bullet check panel beside the Profile. */
+.bullet-panel { display: flex; flex-direction: column; gap: 18px; }
+.bp-head { display: flex; flex-direction: column; gap: 2px; }
+.profile-panel .bp-grade { margin: 0; font-size: 28px; line-height: 1.2; font-weight: 700; color: #1e4d45; }
+.profile-panel .bp-grade.is-fair { color: #8a6a00; }
+.profile-panel .bp-grade.is-weak { color: var(--color-error); }
+.profile-panel .bp-job { margin: 0; font-size: 12px; }
+.bp-segments { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.bp-segments span { height: 12px; border-radius: 6px; background: var(--color-border); }
+.bp-segments span.is-on { background: #1e4d45; }
+.bp-gauges { display: grid; gap: 18px; padding: 16px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+.bp-gauge { display: grid; grid-template-columns: 1fr 150px; align-items: end; gap: 12px; font-size: 15px; }
+.bp-gauge-bar { position: relative; height: 8px; margin-top: 22px; border-radius: 99px; background: var(--color-border); }
+.bp-gauge-ticks span { position: absolute; top: -22px; transform: translateX(-50%); font-size: 12px; color: var(--color-muted); }
+.bp-gauge-band { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: #1e4d45; opacity: .9; }
+.bp-gauge-mark { position: absolute; top: -5px; width: 3px; height: 18px; margin-left: -1.5px; border-radius: 2px; background: var(--color-text); }
+.bp-gauge-mark.is-off { background: var(--color-error); }
+.bp-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; margin: 0; padding: 0 0 16px; list-style: none; border-bottom: 1px solid var(--color-border); font-size: 15px; }
+.bp-checks li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bp-dot { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; }
+.bp-dot.is-ok { background: #1e4d45; }
+.bp-dot.is-missing { background: #8b2a3c; }
+.profile-panel .bp-empty { margin: 0; font-size: 14px; }
+.bp-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--color-border); }
+.bp-tabs button { position: relative; padding: 8px 0; border: 0; background: none; color: #1e4d45; font: inherit; font-size: 15px; cursor: pointer; }
+.bp-tabs button.is-on { font-weight: 700; }
+.bp-tabs button.is-on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; border-radius: 2px; background: #1e4d45; }
+.bp-body { font-size: 14px; line-height: 1.6; color: var(--color-text); }
+.profile-panel .bp-body h3 { margin: 4px 0 6px; font-size: 18px; font-weight: 500; color: var(--color-text); }
+.profile-panel .bp-body p { margin: 0 0 8px; font-size: 14px; color: var(--color-text); }
+.bp-body ul { margin: 0 0 10px; padding-left: 20px; }
+.bp-body li + li { margin-top: 4px; }
+.bp-fixes { padding: 10px 12px 10px 28px !important; border-radius: 9px; background: #fbf1f3; }
+.bp-examples li { font-style: italic; }
+.profile-panel .bp-note { font-size: 12px; color: var(--color-muted); }
+
+/* Career with the bullet panel: sections on the left, the panel on the right. */
+.content:has(.profile-layout.has-panel) { max-width: 1440px; }
+.profile-layout.has-panel { grid-template-columns: minmax(0, 1fr) 420px; }
+@media (max-width: 1100px) {
+  .profile-layout.has-panel { grid-template-columns: minmax(0, 1fr); }
+  .profile-layout.has-panel .bullet-panel { display: none; }
+}
+@media (min-width: 1101px) { .ach-meter-narrow { display: none; } }
+
+/* Writing a bullet: a white card with the text and its count, then Cancel and Save. */
+.ach-editor { display: grid; gap: 8px; padding: 12px 14px 10px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
+.ach-editor:focus-within { border-color: #1e4d45; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
+.ach-editor textarea { width: 100%; min-height: 3.2em; margin: 0; padding: 0; border: 0; outline: none; background: none; color: var(--color-text); font: inherit; font-size: 16px; line-height: 1.6; resize: none; field-sizing: content; max-height: 40vh; }
+.ach-count { font-size: 13px; color: var(--color-muted); }
+.ach-count b { margin-right: 8px; color: var(--color-text); font-weight: 600; }
+.ach-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 18px; margin-top: 10px; }
+.ach-editor-actions .profile-text-button { margin: 0; color: #1e4d45; font-size: 15px; text-decoration: none; }
+.ach-save { padding: 9px 22px; border: 0; border-radius: 7px; background: #1e4d45; color: #fff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.ach-save:hover { background: #163a34; }
+.ach-save:disabled { opacity: .5; cursor: default; }
+.ach-row:has(.ach-editor) { grid-template-columns: 14px 22px minmax(0, 1fr); background: var(--color-background); padding: 12px 10px 12px 4px; }

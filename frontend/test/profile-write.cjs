@@ -67,12 +67,18 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     const card = await page.$eval(first, element => element.textContent);
     assert.doesNotMatch(card, /Add a note|1 note|old notes/, 'no notes on the job');
 
-    // The bullet box: the guide opens the first time, Write it for me needs words.
+    // The panel beside the Profile checks the bullet being written, as it is written.
+    assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Bullet check.*Edit a bullet, or press \+ Add Bullet/s);
+    assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Work experience › Bullets.*action verb \+ what you built/s);
     await page.click(`${first} .ach-add-open`);
     await page.waitForSelector('[aria-label="New bullet"]');
-    assert.equal(await page.$eval(`${first} .ach-guide`, element => element.open), true, 'the guide opens the first time');
-    assert.match(await page.$eval(`${first} .ach-guide`, element => element.textContent), /How to write a strong bullet.*action verb.*20 to 40 words/s);
     assert.equal(await page.$eval(`${first} .ach-write`, element => element.disabled), true);
+    await page.type('[aria-label="New bullet"]', 'Built REST APIs.');
+    await page.waitForFunction(() => document.querySelectorAll('.bullet-panel .bp-gauge b')[1]?.textContent === '3');
+    assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Fair.*Senior Software Engineer · Ciklum.*Words: 3/s);
+    assert.match(await page.$eval('.bullet-panel .bp-fixes', element => element.textContent), /Length:.*Metrics:.*Time statement:/s);
+    assert.match(await page.$eval(`${first} .ach-count`, element => element.textContent), /C: 16 W: 3/);
+    await page.click('[aria-label="New bullet"]', { clickCount: 3 });
     await page.type('[aria-label="New bullet"]', 'built the TLS cert service from scratch, ACME + route53 + step functions. ~20k transactions a day.');
     await page.click(`${first} .ach-write`);
 
@@ -112,13 +118,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(saved[0].notes, oldNotes, 'nothing is added to notes; old ones are left as stored');
     assert.deepEqual(saved[1], state.data.experiences.value[1], 'the other job is untouched');
     assert.match(await page.$eval('.profile-success', element => element.textContent), /Added 2 bullets to Ciklum/);
-
-    // Next time the guide stays closed until asked for.
-    await page.click(`${first} .ach-add-open`);
-    await page.waitForSelector('[aria-label="New bullet"]');
-    assert.equal(await page.$eval(`${first} .ach-guide`, element => element.open), false);
+    assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Bullet check/, 'nothing being written: the panel is back to its guide');
     assert.deepEqual(errors, []);
-    console.log('PASS Write bullets: guide, rough words to reviewed bullets, answers, Back, tools, description, no notes kept');
+    console.log('PASS Write bullets: bullet check panel, rough words to reviewed bullets, answers, Back, tools, description, no notes kept');
   } finally {
     await browser.close();
   }

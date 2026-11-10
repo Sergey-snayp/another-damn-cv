@@ -1,28 +1,19 @@
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { ACHIEVEMENT_WORDS, careerApi, wordsIn, type CareerExperience } from "./careerApi";
 import { tagCounts, tagsOf } from "./achievementTags";
 import { BulletMeter } from "../resume/BulletMeter";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
+import { useSetActiveBullet } from "./bulletFocus";
+
+/** "C: 167  W: 27" under a bullet being written. */
+const Count = ({ text }: { text: string }) => (
+  <span className="ach-count">
+    C: <b>{text.trim().length}</b> W: <b>{text.trim() ? text.trim().split(/\s+/).length : 0}</b>
+  </span>
+);
 
 const SHOWN = 5;
 export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed">;
-
-/** The bullet guide opens by itself the first time, then stays closed until asked for. */
-const GUIDE_SEEN = "profile-bullet-guide-seen";
-const guideSeen = () => {
-  try {
-    return localStorage.getItem(GUIDE_SEEN) === "1";
-  } catch {
-    return true;
-  }
-};
-const markGuideSeen = () => {
-  try {
-    localStorage.setItem(GUIDE_SEEN, "1");
-  } catch {
-    /* Only decides whether the guide opens by itself. */
-  }
-};
 
 /** "- Built X" / "• Built X" / "1. Built X" → "Built X". */
 const clean = (line: string) => line.replace(/^\s*(?:[-•*·–]|\d+[.)])\s+/, "").replace(/\s+/g, " ").trim();
@@ -51,13 +42,20 @@ export function AchievementList({
   const [adding, setAdding] = useState("");
   /** "+ Add bullet" opens the box; it closes after adding, on Cancel or Escape. */
   const [addOpen, setAddOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const starred = new Set(role.starred ?? []);
   const technologies = (role.techStack ?? "").split(/[,|;\n]/).map((tool) => tool.trim()).filter(Boolean);
+  // What is being written here goes to the bullet check panel beside the Profile.
+  const setActive = useSetActiveBullet();
+  const activeText = editing ? editing.text : addOpen ? clean(adding.split("\n")[0] ?? "") : null;
+  useEffect(() => {
+    setActive(activeText === null ? null : { text: activeText, keywords: technologies, job: [role.title, role.company].filter(Boolean).join(" · ") });
+    // The text and whether a box is open decide it; the job's fields are read as they are.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeText]);
   // Starred first, each group in its own order.
   const ordered = role.bullets
     .map((text, index) => ({ text, index }))
@@ -164,7 +162,6 @@ export function AchievementList({
   const closeAdd = () => {
     setAdding("");
     setAddOpen(false);
-    setGuideOpen(false);
   };
 
   const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -252,18 +249,30 @@ export function AchievementList({
                 </svg>
                 {editing?.index === index ? (
                   <div className="ach-body">
-                    <textarea
-                      className="ach-edit"
-                      aria-label="Edit achievement"
-                      autoFocus
-                      rows={1}
-                      maxLength={4000}
-                      value={editing.text}
-                      onChange={(event) => setEditing({ index, text: event.target.value })}
-                      onKeyDown={editKeys}
-                      onBlur={() => void finishEdit()}
-                    />
-                    <BulletMeter text={editing.text} keywords={technologies} compact />
+                    <div className="ach-editor">
+                      <textarea
+                        className="ach-edit"
+                        aria-label="Edit achievement"
+                        autoFocus
+                        rows={2}
+                        maxLength={4000}
+                        value={editing.text}
+                        onChange={(event) => setEditing({ index, text: event.target.value })}
+                        onKeyDown={editKeys}
+                      />
+                      <Count text={editing.text} />
+                    </div>
+                    <div className="ach-meter-narrow">
+                      <BulletMeter text={editing.text} keywords={technologies} compact />
+                    </div>
+                    <div className="ach-editor-actions">
+                      <button type="button" className="profile-text-button" onClick={() => setEditing(null)}>
+                        Cancel
+                      </button>
+                      <button type="button" className="ach-save" disabled={busy} onClick={() => void finishEdit()}>
+                        Save
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="ach-body">
@@ -359,10 +368,6 @@ export function AchievementList({
             disabled={disabled || busy}
             onClick={() => {
               setAddOpen(true);
-              if (!guideSeen()) {
-                setGuideOpen(true);
-                markGuideSeen();
-              }
             }}
           >
             <Icon name="plus" size={18} />
@@ -372,6 +377,7 @@ export function AchievementList({
       </div>
       {addOpen && (
         <div className="ach-add">
+          <div className="ach-editor">
           <textarea
             aria-label="New bullet"
             autoFocus
@@ -392,7 +398,13 @@ export function AchievementList({
               }
             }}
           />
-          {pasted <= 1 && adding.trim() && <BulletMeter text={clean(adding)} keywords={technologies} compact />}
+            <Count text={adding} />
+          </div>
+          {pasted <= 1 && adding.trim() && (
+            <div className="ach-meter-narrow">
+              <BulletMeter text={clean(adding)} keywords={technologies} compact />
+            </div>
+          )}
           <div className="ach-add-actions">
             <button type="button" className="profile-add-button" disabled={disabled || busy || !adding.trim()} onClick={() => void add()}>
               {pasted > 1 ? `Add ${pasted}` : "Add"}
@@ -415,20 +427,6 @@ export function AchievementList({
               Cancel
             </button>
           </div>
-          <details className="ach-guide" open={guideOpen} onToggle={(event) => setGuideOpen(event.currentTarget.open)}>
-            <summary>How to write a strong bullet</summary>
-            <ol>
-              <li>Start with a past-tense action verb: Built, Led, Designed, Cut.</li>
-              <li>Say what you built and name the technologies where they worked.</li>
-              <li>Add a number (users, requests, %, people) and a time frame (daily, in 3 months, still in production).</li>
-              <li>Keep it to 20 to 40 words: about two lines on a CV.</li>
-            </ol>
-            <p className="ach-guide-example">
-              e.g. Built a TLS certificate service from scratch on AWS Step Functions and Route53, renewing certificates
-              for 40 merchant domains automatically; still in production.
-            </p>
-            <p>Only rough words? Type them and press ✦ Write it for me.</p>
-          </details>
         </div>
       )}
       {error && <p className="profile-error" role="alert">{error}</p>}

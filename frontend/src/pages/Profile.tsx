@@ -11,6 +11,8 @@ import { ImportProfileDialog } from "../profile/ImportProfileDialog";
 import { careerApi, type CareerExperience, type CareerState } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
 import { WriteBullets } from "../profile/WriteBullets";
+import { BulletPanel } from "../profile/BulletPanel";
+import { BulletFocusProvider, type ActiveBullet } from "../profile/bulletFocus";
 import { CollectFromCvs } from "../profile/CollectFromCvs";
 import { EmploymentInformation } from '../profile/EmploymentInformation';
 import "../profile/profile.css";
@@ -66,6 +68,8 @@ export function Profile() {
   // "Add a note" open for one job.
   // "✦ Write it for me" open for one job, with the words typed in its bullet box.
   const [writing, setWriting] = useState<{ index: number; text: string } | null>(null);
+  // The bullet being edited or added: the panel on the right checks it as it is written.
+  const [activeBullet, setActiveBullet] = useState<ActiveBullet | null>(null);
   const [collecting, setCollecting] = useState(false);
 
   useEffect(() => {
@@ -283,27 +287,29 @@ export function Profile() {
       {error && active === "career" && <p className="profile-error" role="alert">{error}</p>}
 
       {active === "career" ? (
-        <div className={`profile-layout${missing.length ? "" : " is-single"}`}>
+        <div className="profile-layout has-panel">
           <div className="profile-main" role="region" aria-label="Career">
-            <ProfileCareer
-              imported={careerState?.data ?? {}}
-              importDisabled={dirty || saving || !careerState}
-              onEditCareer={(section, entry) => setEditingCareer({ section, entry })}
-              onWrite={(index, text) => {
-                setNotice("");
-                setWriting({ index, text });
-              }}
-              onDelete={(section, entry) => void deleteEntry(section, entry)}
-              onCollect={() => {
-                setNotice("");
-                setCollecting(true);
-              }}
-              onSaveRole={saveRole}
-            />
+            <BulletFocusProvider value={setActiveBullet}>
+              <ProfileCareer
+                imported={careerState?.data ?? {}}
+                importDisabled={dirty || saving || !careerState}
+                onEditCareer={(section, entry) => setEditingCareer({ section, entry })}
+                onWrite={(index, text) => {
+                  setNotice("");
+                  setWriting({ index, text });
+                }}
+                onDelete={(section, entry) => void deleteEntry(section, entry)}
+                onCollect={() => {
+                  setNotice("");
+                  setCollecting(true);
+                }}
+                onSaveRole={saveRole}
+              />
+            </BulletFocusProvider>
           </div>
-          {missing.length > 0 && (
           <aside className="profile-side">
-            {(
+            <BulletPanel active={activeBullet} />
+            {missing.length > 0 && (
               <section className="profile-panel profile-side-card" aria-labelledby="profile-missing-heading">
                 <h2 id="profile-missing-heading">Finish your profile</h2>
                 <p className="profile-muted">Autofill and job matching use these.</p>
@@ -320,7 +326,6 @@ export function Profile() {
               </section>
             )}
           </aside>
-          )}
         </div>
       ) : active === "answers" ? (
         <div className="profile-main">
