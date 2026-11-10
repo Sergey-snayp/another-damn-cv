@@ -13,6 +13,7 @@ import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "..
 import { WriteBullets } from "../profile/WriteBullets";
 import { BulletPanel } from "../profile/BulletPanel";
 import { BulletFocusProvider, type ActiveBullet } from "../profile/bulletFocus";
+import { useConfirm } from "../components/ConfirmDialog";
 import { CollectFromCvs } from "../profile/CollectFromCvs";
 import { EmploymentInformation } from '../profile/EmploymentInformation';
 import "../profile/profile.css";
@@ -70,6 +71,7 @@ export function Profile() {
   const [writing, setWriting] = useState<{ index: number; text: string } | null>(null);
   // The bullet being edited or added: the panel on the right checks it as it is written.
   const [activeBullet, setActiveBullet] = useState<ActiveBullet | null>(null);
+  const confirm = useConfirm();
   const [collecting, setCollecting] = useState(false);
 
   useEffect(() => {
@@ -164,7 +166,22 @@ export function Profile() {
     const shown = careerState?.data[section]?.value[index];
     if (!shown) return;
     const name = "title" in shown ? `${shown.title} at ${shown.company}` : shown.institution;
-    if (!confirm(`Delete ${name} from your Profile? This cannot be undone.`)) return;
+    const job = section === "experiences";
+    const yes = await confirm({
+      title: `Are you sure you want to remove this ${job ? "position" : "education"}?`,
+      body: job ? (
+        <p>
+          Deleting <b>{name}</b> will delete all of the bullets associated with it from your Profile. Your saved CVs keep their own
+          copy.
+        </p>
+      ) : (
+        <p>
+          <b>{name}</b> will be removed from your Profile. Your saved CVs keep their own copy.
+        </p>
+      ),
+      action: job ? "Delete position" : "Delete education",
+    });
+    if (!yes) return;
     setNotice("");
     setError("");
     try {

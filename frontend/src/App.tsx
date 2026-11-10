@@ -12,6 +12,7 @@ import { ResumeHistory } from './pages/ResumeHistory';
 import { TailorReview } from './pages/TailorReview';
 import { QuickTailor, QuickTailorStart } from './pages/QuickTailor';
 import { FormatToolbar } from './text/FormatToolbar';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import { CoverLetters } from './pages/CoverLetters';
 import { CoverLetterEditor } from './pages/CoverLetterEditor';
 import { InterviewPrep } from './pages/InterviewPrep';
@@ -48,6 +49,7 @@ function Gate() {
 
   return (
     <BrowserRouter>
+      <ConfirmProvider>
       <FormatToolbar />
       <Routes>
         {/* The extension's Quick Tailor opens these in a popup window over the job page: no app bar. */}
@@ -78,6 +80,7 @@ function Gate() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      </ConfirmProvider>
     </BrowserRouter>
   );
 }

@@ -126,9 +126,11 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     // Delete asks first; Keep keeps it.
     await button('Edit Backend Developer at Earlier Employer in Profile').click();
     await button('Remove experience 2').click();
-    assert.match(await page.$eval('.career-confirm', element => element.textContent), /Delete this experience from your Profile\?/);
-    await button('Keep').click();
-    assert.equal(await page.$('.career-confirm'), null);
+    await page.waitForSelector('.confirm-dialog');
+    assert.match(await page.$eval('.confirm-dialog', element => element.textContent), /Are you sure you want to remove this position\?/);
+    await page.click('.confirm-dialog .confirm-cancel');
+    await page.waitForFunction(() => !document.querySelector('.confirm-dialog'));
+    assert.ok(await page.$('.profile-career-editor'), 'Cancel keeps it, and the editor stays open');
     // Closing with changes asks too: Escape, then Keep editing, then Discard.
     await input('Job title').fill('Unsaved title');
     await page.keyboard.press('Escape');
@@ -178,12 +180,14 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     // Deleting a job removes only that job, at once.
     await button('Edit Backend Developer at Earlier Employer in Profile').click();
     await button('Remove experience 2').click();
-    await button('Delete').click();
+    await page.waitForSelector('.confirm-dialog');
+    assert.match(await page.$eval('.confirm-dialog', element => element.textContent), /Are you sure you want to remove this position\?.*delete all of the bullets associated with it/s);
+    await button('Delete position').click();
     await closed();
     assert.deepEqual(state.data.experiences.value.map(role => role.title), ['Senior Backend Engineer']);
     await button('Edit Senior Backend Engineer at Profile Only Inc in Profile').click();
     await button('Remove experience 1').click();
-    await button('Delete').click();
+    await button('Delete position').click();
     await closed();
     assert.deepEqual(state.data.experiences.value, []);
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /No work experience saved in Profile/);
@@ -220,12 +224,13 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await button('Cancel').click();
     await page.waitForFunction(() => !document.querySelector('.profile-career-editor'));
     // The bin on a job deletes it, after asking; "Cancel" in that question keeps it.
-    let answer = false;
-    page.on('dialog', dialog => void (answer ? dialog.accept() : dialog.dismiss()));
     await button('Delete Engineer at Old Co').click();
+    await page.waitForSelector('.confirm-dialog');
+    await page.click('.confirm-dialog .confirm-cancel');
+    await page.waitForFunction(() => !document.querySelector('.confirm-dialog'));
     assert.equal(state.data.experiences.value.length, 1, 'kept when the question is cancelled');
-    answer = true;
     await button('Delete Engineer at Old Co').click();
+    await button('Delete position').click();
     await page.waitForFunction(() => !document.querySelector('[aria-labelledby="profile-work-heading"] .profile-entry'));
     assert.deepEqual(state.data.experiences.value, []);
     assert.match(await page.$eval('.profile-success', element => element.textContent), /Deleted Engineer at Old Co/);

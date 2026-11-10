@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { defaultsApi, type AutofillDefault } from "./answersApi";
+import { useConfirm } from "../components/ConfirmDialog";
 
 const LABELS: Record<AutofillDefault["kind"], string> = {
   requiresSponsorship: "Needs visa sponsorship",
@@ -24,6 +25,7 @@ export function DefaultAnswers() {
   const [rows, setRows] = useState<AutofillDefault[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const confirm = useConfirm();
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -51,6 +53,16 @@ export function DefaultAnswers() {
     }
   }
   async function remove(row: AutofillDefault) {
+    const yes = await confirm({
+      title: "Are you sure you want to remove this answer?",
+      body: (
+        <p>
+          Your answer to <b>{LABELS[row.kind] ?? row.kind}</b> will be removed. Autofill will ask the form again.
+        </p>
+      ),
+      action: "Remove answer",
+    });
+    if (!yes) return;
     setBusy(row.id);
     setError("");
     try {

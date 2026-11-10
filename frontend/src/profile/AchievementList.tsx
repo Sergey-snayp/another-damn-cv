@@ -7,6 +7,7 @@ import { useSetActiveBullet } from "./bulletFocus";
 import { RichEditor } from "../text/RichEditor";
 import { MarkedLine } from "../text/Marked";
 import { withoutMarks } from "../text/marks";
+import { useConfirm } from "../components/ConfirmDialog";
 
 /** "C: 167  W: 27" under a bullet being written. */
 const Count = ({ text }: { text: string }) => {
@@ -119,6 +120,22 @@ export function AchievementList({
       starred: (current.starred ?? []).filter((item) => item !== text),
       removed: [],
     }));
+
+  const confirm = useConfirm();
+  /** The toolbar's Delete: asked first, then gone for good. */
+  async function askRemove(text: string) {
+    const yes = await confirm({
+      title: "Are you sure you want to delete this bullet?",
+      body: (
+        <>
+          <p>It will be removed from this job in your Profile. Your saved CVs keep their own copy.</p>
+          <blockquote>{withoutMarks(text)}</blockquote>
+        </>
+      ),
+      action: "Delete bullet",
+    });
+    if (yes) remove(text);
+  }
 
   /** "Split": a line longer than a CV holds becomes 2 to 4 in its place; a star stays on the first. */
   async function split(text: string) {
@@ -340,7 +357,7 @@ export function AchievementList({
                       aria-label={`Delete: ${text}`}
                       title="Delete"
                       disabled={disabled || busy}
-                      onClick={() => remove(text)}
+                      onClick={() => void askRemove(text)}
                     >
                       <Icon name="trash" size={15} />
                     </button>

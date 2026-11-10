@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { careerApi, type CareerSections, type CareerState } from "./careerApi";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import { RichEditor } from "../text/RichEditor";
+import { useConfirm } from "../components/ConfirmDialog";
 import "./profile-import.css";
 import "./profile-career-editor.css";
 
@@ -116,7 +117,7 @@ export function ProfileCareerEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // The footer asks before something is lost: closing with changes, or deleting the entry.
-  const [confirm, setConfirm] = useState<null | "discard" | "delete">(null);
+  const [confirm, setConfirm] = useState<null | "discard">(null);
   const [focusBullet, setFocusBullet] = useState<number | null>(null);
   const entries = section === "experiences" || section === "educations";
   const isNew = entries && (entry === undefined || entry === "new");
@@ -246,6 +247,21 @@ export function ProfileCareerEditor({
   function save(event: FormEvent) {
     event.preventDefault();
     void persist(sectionsToSave(draft));
+  }
+  const ask = useConfirm();
+  async function askRemove() {
+    const job = section === "experiences";
+    const yes = await ask({
+      title: `Are you sure you want to remove this ${job ? "position" : "education"}?`,
+      body: (
+        <p>
+          {job ? "Deleting this position will delete all of the bullets associated with it from your Profile." : "This education will be removed from your Profile."}{" "}
+          Your saved CVs keep their own copy.
+        </p>
+      ),
+      action: job ? "Delete position" : "Delete education",
+    });
+    if (yes) remove();
   }
   function remove() {
     if (index === null || (section !== "experiences" && section !== "educations")) return;
@@ -479,13 +495,13 @@ export function ProfileCareerEditor({
         )}
         <footer className="profile-import-footer career-editor-footer">
           {confirm ? (
-            <div className="career-confirm" role="alertdialog" aria-label={confirm === "delete" ? `Delete this ${noun}?` : "Discard your changes?"}>
-              <span>{confirm === "delete" ? `Delete this ${noun} from your Profile?` : "Discard your changes?"}</span>
+            <div className="career-confirm" role="alertdialog" aria-label="Discard your changes?">
+              <span>Discard your changes?</span>
               <button type="button" className="profile-button is-secondary" autoFocus disabled={saving} onClick={() => setConfirm(null)}>
-                {confirm === "delete" ? "Keep" : "Keep editing"}
+                Keep editing
               </button>
-              <button type="button" className="profile-button is-danger" disabled={saving} onClick={confirm === "delete" ? remove : onClose}>
-                {confirm === "delete" ? (saving ? "Deleting…" : "Delete") : "Discard"}
+              <button type="button" className="profile-button is-danger" disabled={saving} onClick={onClose}>
+                Discard
               </button>
             </div>
           ) : (
@@ -496,7 +512,7 @@ export function ProfileCareerEditor({
                   className="career-delete"
                   aria-label={`Remove ${noun} ${index + 1}`}
                   disabled={saving || loading}
-                  onClick={() => setConfirm("delete")}
+                  onClick={() => void askRemove()}
                 >
                   Delete {noun}
                 </button>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { answersApi, type SavedAnswer } from "./answersApi";
+import { useConfirm } from "../components/ConfirmDialog";
 
 /**
  * Answers saved from application forms in the extension. The extension fills
@@ -10,7 +11,7 @@ export function SavedAnswers() {
   const [answers, setAnswers] = useState<SavedAnswer[] | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -46,7 +47,6 @@ export function SavedAnswers() {
     try {
       await answersApi.remove(id);
       setAnswers((rows) => rows?.filter((row) => row.id !== id) ?? null);
-      setConfirming(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete this answer.");
     } finally {
@@ -112,22 +112,27 @@ export function SavedAnswers() {
               </p>
               {editing?.id !== row.id && (
                 <div className="saved-answer-actions">
-                  {confirming === row.id ? (
-                    <>
-                      <span>Delete this answer?</span>
-                      <button className="profile-button is-danger" disabled={busy} onClick={() => void remove(row.id)}>
-                        Delete
-                      </button>
-                      <button className="profile-button is-secondary" disabled={busy} onClick={() => setConfirming(null)}>
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
+                  {(
                     <>
                       <button className="profile-button is-secondary" onClick={() => setEditing({ id: row.id, text: row.answer })}>
                         Edit
                       </button>
-                      <button className="profile-button is-secondary" onClick={() => setConfirming(row.id)}>
+                      <button
+                        className="profile-button is-secondary"
+                        disabled={busy}
+                        onClick={async () => {
+                          const yes = await confirm({
+                            title: "Are you sure you want to delete this answer?",
+                            body: (
+                              <p>
+                                Your saved answer to <b>{row.question}</b> will be deleted. Autofill will no longer use it.
+                              </p>
+                            ),
+                            action: "Delete answer",
+                          });
+                          if (yes) void remove(row.id);
+                        }}
+                      >
                         Delete
                       </button>
                     </>
