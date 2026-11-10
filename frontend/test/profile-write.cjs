@@ -70,6 +70,9 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     // The panel beside the Profile checks the bullet being written, as it is written.
     assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Bullet check.*Edit a bullet, or press \+ Add Bullet/s);
     assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Work experience › Bullets.*action verb \+ what you built/s);
+    await page.evaluate(() => [...document.querySelectorAll('.bp-tabs button')].find(tab => tab.textContent === 'Prompts').click());
+    assert.match(await page.$eval('.bullet-panel [role="tabpanel"]', element => element.textContent), /Every “yes” is a bullet.*Did you build a system, service or feature from scratch\?.*Did you lead, mentor or train anyone\?/s);
+    await page.evaluate(() => [...document.querySelectorAll('.bp-tabs button')].find(tab => tab.textContent === 'Suggestions').click());
     await page.click(`${first} .ach-add-open`);
     await page.waitForSelector('[aria-label="New bullet"]');
     assert.equal(await page.$eval(`${first} .ach-write`, element => element.disabled), true);

@@ -71,6 +71,26 @@ function Gauge({ label, value, min, max, scale }: { label: string; value: number
   );
 }
 
+/** Questions that bring back what you achieved, each a possible bullet. */
+const PROMPTS = [
+  "Did you build a system, service or feature from scratch?",
+  "Did you make something faster? (latency, build time, page load)",
+  "Did you make something cheaper to run? (cloud costs, licenses)",
+  "Did you make something more reliable? (fewer incidents, outages, errors)",
+  "Did you automate a manual process?",
+  "Did you handle more scale? (users, requests, data)",
+  "Did you migrate or modernize something? (framework, cloud, database)",
+  "Did you improve security or pass an audit?",
+  "Did you integrate with another system, partner or vendor?",
+  "Did you solve a hard problem others couldn't?",
+  "Did you do something for the first time at your company?",
+  "Did you lead, mentor or train anyone?",
+  "Did you improve how the team works? (tests, CI/CD, code review, docs)",
+  "Did you deliver with fewer people or in less time?",
+  "Did your work make or save the company money?",
+  "Did your work help customers or users directly?",
+];
+
 const EXAMPLES = [
   "Built a TLS certificate service from scratch on AWS Step Functions and Route53, renewing certificates for 40 merchant domains automatically; still in production.",
   "Cut checkout API latency by 30% in 2 months by running sequential PostgreSQL calls in parallel across 3 Node.js services.",
@@ -82,7 +102,7 @@ const EXAMPLES = [
  * recruiter's checker would, with what to fix and how a strong bullet reads.
  */
 export function BulletPanel({ active }: { active: ActiveBullet | null }) {
-  const [tab, setTab] = useState<"suggestions" | "examples">("suggestions");
+  const [tab, setTab] = useState<"suggestions" | "examples" | "prompts">("suggestions");
   const text = active?.text.trim() ?? "";
   const checks = active && text ? checksOf(active) : [];
   const passed = checks.filter((item) => item.ok).length;
@@ -130,9 +150,9 @@ export function BulletPanel({ active }: { active: ActiveBullet | null }) {
       )}
 
       <div className="bp-tabs" role="tablist">
-        {(["suggestions", "examples"] as const).map((name) => (
+        {(["suggestions", "examples", "prompts"] as const).map((name) => (
           <button key={name} type="button" role="tab" aria-selected={tab === name} className={tab === name ? "is-on" : ""} onClick={() => setTab(name)}>
-            {name === "suggestions" ? "Suggestions" : "Examples"}
+            {{ suggestions: "Suggestions", examples: "Examples", prompts: "Prompts" }[name]}
           </button>
         ))}
       </div>
@@ -159,6 +179,16 @@ export function BulletPanel({ active }: { active: ActiveBullet | null }) {
             <li>
               {BULLET_WORDS.min} to {BULLET_WORDS.max} words: about two lines on a CV.
             </li>
+          </ul>
+        </div>
+      ) : tab === "prompts" ? (
+        <div className="bp-body" role="tabpanel">
+          <h3>Work experience › Bullets</h3>
+          <p>Stuck? Go through these for each job. Every “yes” is a bullet.</p>
+          <ul className="bp-prompts">
+            {PROMPTS.map((prompt) => (
+              <li key={prompt}>{prompt}</li>
+            ))}
           </ul>
         </div>
       ) : (
