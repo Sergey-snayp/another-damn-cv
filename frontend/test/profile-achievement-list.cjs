@@ -139,8 +139,23 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(saves.at(-1).bullets, ['First line.', 'Built the TLS certificate service from scratch, still in production.', 'Led a 3-person team on the TLS certificate service.', 'Last line.']);
     assert.deepEqual(saves.at(-1).starred, ['Built the TLS certificate service from scratch, still in production.'], 'the star stays on the first part');
     assert.equal(await page.$('.ach-long'), null);
+
+    // The toolbar: Alt ↓ on the handle moves a bullet; Copy starts a new bullet from one.
+    state = { revision: state.revision + 1, data: { experiences: { value: [{ ...state.data.experiences.value[0], bullets: ['A line.', 'B line.', 'C line.'], starred: [] }], source, importedAt } } };
+    await page.goto(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`);
+    await page.waitForSelector('.ach-grip');
+    const moves = saves.length;
+    await page.focus('[aria-label="Move: A line."]');
+    await page.keyboard.down('Alt');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.up('Alt');
+    await waitSaves(moves + 1);
+    assert.deepEqual(saves.at(-1).bullets, ['B line.', 'A line.', 'C line.']);
+    await page.evaluate(() => document.querySelector('[aria-label="Copy: C line."]').click());
+    await page.waitForSelector('[aria-label="New bullet"]');
+    assert.equal(await page.$eval('[aria-label="New bullet"]', box => box.value), 'C line.');
     assert.deepEqual(errors, []);
-    console.log('PASS achievement list: best five, show all, tag filters, stars, edit in place, delete for good, paste several, split a long one');
+    console.log('PASS achievement list: best five, show all, tag filters, stars, edit in place, delete for good, paste several, split a long one, move, copy');
   } finally {
     await browser.close();
   }

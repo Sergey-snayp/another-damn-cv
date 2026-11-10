@@ -18,6 +18,9 @@ const paths = {
   calendar: 'M5 5h14a2 2 0 0 1 2 2v13H3V7a2 2 0 0 1 2-2Zm2-3v6m10-6v6M3 11h18m-13 4h2m4 0h2',
   search: 'M21 21l-4.5-4.5M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0Z',
   plus: 'M12 5v14M5 12h14',
+  copy: 'M9 9h11v11H9V9Zm-4 6H4V4h11v1',
+  star: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z',
+  grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
   trash: 'M3 6h18M8 6V3h8v3M6 6l1 15h10l1-15M10 11v6m4-6v6',
   options:
     'M3 6h4m4 0h10M3 18h10m4 0h4M11 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM17 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
@@ -71,7 +74,7 @@ export function DashboardIcon({
       height={size}
       viewBox="0 0 24 24"
       stroke="currentColor"
-      strokeWidth={name === 'more' ? 3 : 1.8}
+      strokeWidth={name === 'more' || name === 'grip' ? 3 : 1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
       fill={filled ? 'currentColor' : 'none'}

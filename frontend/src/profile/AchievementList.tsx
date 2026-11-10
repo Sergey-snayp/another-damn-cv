@@ -87,6 +87,26 @@ export function AchievementList({
       return { starred: list.includes(text) ? list.filter((item) => item !== text) : [...list, text] };
     });
 
+  /** Drag (or Alt ↑↓ on the handle): the bullet moves to the other one's place. */
+  const move = (from: string, to: string) =>
+    void run((current) => {
+      const list = [...current.bullets];
+      const at = list.indexOf(from);
+      const target = list.indexOf(to);
+      if (at < 0 || target < 0 || at === target) return {};
+      list.splice(at, 1);
+      list.splice(target, 0, from);
+      return { bullets: list };
+    });
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
+
+  /** Copy: a new bullet that starts as this one, to write a variant of it. */
+  const copy = (text: string) => {
+    setAdding(text);
+    setAddOpen(true);
+  };
+
   // Deleted for good: nothing is kept to restore (older saves' kept copies go too).
   const remove = (text: string) =>
     void run((current) => ({
@@ -184,7 +204,48 @@ export function AchievementList({
           {visible.map(({ text, index }) => {
             const star = starred.has(text);
             return (
-              <li key={`${index}:${text}`} className={`ach-row${star ? " is-starred" : ""}`}>
+              <li
+                key={`${index}:${text}`}
+                className={`ach-row${star ? " is-starred" : ""}${dragging === text ? " is-dragging" : ""}${dropOn === text && dragging !== text ? " is-drop" : ""}`}
+                draggable={dragging === text}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", text);
+                }}
+                onDragOver={(event) => {
+                  if (!dragging) return;
+                  event.preventDefault();
+                  setDropOn(text);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (dragging && dragging !== text) move(dragging, text);
+                  setDragging(null);
+                  setDropOn(null);
+                }}
+                onDragEnd={() => {
+                  setDragging(null);
+                  setDropOn(null);
+                }}
+              >
+                <button
+                  type="button"
+                  className="ach-grip"
+                  aria-label={`Move: ${text}`}
+                  title="Drag to move · Alt ↑↓"
+                  disabled={disabled || busy}
+                  onPointerDown={() => setDragging(text)}
+                  onPointerUp={() => setDragging(null)}
+                  onKeyDown={(event) => {
+                    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+                    event.preventDefault();
+                    const at = visible.findIndex((item) => item.text === text);
+                    const next = visible[at + (event.key === "ArrowUp" ? -1 : 1)];
+                    if (next) move(text, next.text);
+                  }}
+                >
+                  <Icon name="grip" size={14} />
+                </button>
                 <svg className="ach-mark" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
                   <rect x="1.5" y="1.5" width="17" height="17" rx="4" />
                   <path d="m6 10.2 2.7 2.7L14.2 7.3" />
@@ -225,29 +286,52 @@ export function AchievementList({
                     )}
                   </div>
                 )}
-                <span className="ach-tools">
-                  <button
-                    type="button"
-                    className="ach-star"
-                    aria-label={star ? `Unstar: ${text}` : `Star: ${text}`}
-                    aria-pressed={star}
-                    title={star ? "Starred: shown first" : "Star: show first"}
-                    disabled={disabled || busy}
-                    onClick={() => toggleStar(text)}
-                  >
-                    {star ? "★" : "☆"}
-                  </button>
-                  <button
-                    type="button"
-                    className="ach-remove"
-                    aria-label={`Delete: ${text}`}
-                    title="Delete"
-                    disabled={disabled || busy}
-                    onClick={() => remove(text)}
-                  >
-                    ×
-                  </button>
-                </span>
+                {star && <span className="ach-starred" title="Starred: shown first" aria-hidden="true">★</span>}
+                {editing?.index !== index && (
+                  <span className="ach-tools" role="toolbar" aria-label="Bullet actions">
+                    <button
+                      type="button"
+                      className={`ach-tool${star ? " is-on" : ""}`}
+                      aria-label={star ? `Unstar: ${text}` : `Star: ${text}`}
+                      aria-pressed={star}
+                      title={star ? "Starred: shown first" : "Star: show first"}
+                      disabled={disabled || busy}
+                      onClick={() => toggleStar(text)}
+                    >
+                      <Icon name="star" size={18} filled={star} />
+                    </button>
+                    <button
+                      type="button"
+                      className="ach-tool"
+                      aria-label={`Edit: ${text}`}
+                      title="Edit"
+                      disabled={disabled || busy}
+                      onClick={() => setEditing({ index, text })}
+                    >
+                      <Icon name="edit" size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="ach-tool"
+                      aria-label={`Copy: ${text}`}
+                      title="Copy into a new bullet"
+                      disabled={disabled || busy}
+                      onClick={() => copy(text)}
+                    >
+                      <Icon name="copy" size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="ach-tool"
+                      aria-label={`Delete: ${text}`}
+                      title="Delete"
+                      disabled={disabled || busy}
+                      onClick={() => remove(text)}
+                    >
+                      <Icon name="trash" size={18} />
+                    </button>
+                  </span>
+                )}
               </li>
             );
           })}
