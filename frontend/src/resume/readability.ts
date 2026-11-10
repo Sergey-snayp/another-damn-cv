@@ -14,13 +14,17 @@ const TOOLS = /\b(?:Kafka|Redis|Docker|Kubernetes|Terraform|Lambda|Jest|Cypress|
 const SHAPED = /\b(?:[A-Za-z]+\.js|[A-Z][a-z]+[A-Z][A-Za-z]*|[A-Za-z]+\d+[A-Za-z\d]*|[A-Z]{2,}[a-z]*)\b/g;
 const ACRONYM = /\b[A-Z][A-Z0-9]{1,6}s?\b/g;
 
-/** Notes for one line; `context` is the rest of the CV, where an acronym may be spelled out. */
-export function recruiterFlags(line: string, context = ''): string[] {
+/**
+ * Notes for one line; `context` is the rest of the CV, where an acronym may be spelled out.
+ * `countTerms: false` for the Profile, which keeps every achievement in full technical
+ * detail; a CV line, chosen for one posting, is held to fewer.
+ */
+export function recruiterFlags(line: string, context = '', options: { countTerms?: boolean } = {}): string[] {
   const text = line.replace(/\*\*/g, '');
   const terms = new Set([...text.matchAll(TOOLS), ...text.matchAll(SHAPED)].map((match) => match[0].toLowerCase()));
   const notes: string[] = [];
   // A bullet may show its mechanism (the standard), but a line that is mostly names loses a recruiter.
-  if (terms.size > 6)
+  if (options.countTerms !== false && terms.size > 6)
     notes.push(`${terms.size} technical terms in one line. Keep the ones that show how it worked; the rest fit the tech stack line.`);
   const spelled = `${context}\n${text}`;
   const unknown = [

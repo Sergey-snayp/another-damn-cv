@@ -82,6 +82,7 @@ export function DescribeJob({
   const [tools, setTools] = useState<{ name: string; keep: boolean }[]>([]);
   const [description, setDescription] = useState({ text: "", keep: false });
   const [dropped, setDropped] = useState(0);
+  const [uncovered, setUncovered] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
@@ -140,6 +141,7 @@ export function DescribeJob({
       setTools(proposal.techStack.map((name) => ({ name, keep: true })));
       setDescription({ text: proposal.description, keep: Boolean(proposal.description) });
       setDropped(proposal.dropped);
+      setUncovered(proposal.uncovered ?? []);
       setStage("review");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not write achievements. Try again.");
@@ -385,7 +387,7 @@ export function DescribeJob({
                       </p>
                     )}
                     {item.note && <p className="describe-note">{item.note}</p>}
-                    {item.keep && recruiterFlags(item.text, `${role.bullets.join("\n")}\n${source}`).map((note, index) => (
+                    {item.keep && recruiterFlags(item.text, `${role.bullets.join("\n")}\n${source}`, { countTerms: false }).map((note, index) => (
                       <p key={index} className="describe-note describe-hint">{note}</p>
                     ))}
                     <div className="describe-actions">
@@ -398,6 +400,13 @@ export function DescribeJob({
                   </li>
                 ))}
               </ol>
+              {uncovered.length > 0 && (
+                <p className="describe-note describe-uncovered">
+                  Not in any achievement yet: <strong>{uncovered.join(", ")}</strong>. Your notes don't say what{" "}
+                  {uncovered.length === 1 ? "it" : "they"} did here. Add a line about {uncovered.length === 1 ? "it" : "each"} in
+                  your notes, then turn them into bullets again.
+                </p>
+              )}
               {dropped > 0 && (
                 <p className="describe-note">{dropped} more left out: they used numbers your notes don't have.</p>
               )}

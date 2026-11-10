@@ -21,6 +21,8 @@ export interface AchievementSource {
 export interface AchievementDraft {
   achievements: { text: string; asks: string[] }[];
   techStack: string[];
+  /** Every technology named in the job or the notes, for the coverage check. */
+  technologies?: string[];
   description: string;
 }
 
@@ -40,6 +42,8 @@ export interface AchievementProposal {
   description: string;
   /** Lines left out because they held a number or a name the notes do not. */
   dropped: number;
+  /** Technologies the person used that no achievement mentions yet: the notes don't say what they did. */
+  uncovered: string[];
 }
 
 export class AchievementError extends Error {}
@@ -118,7 +122,9 @@ const GENERIC = new Set(
  * codenames. A name copied from an example or guessed cannot pass.
  */
 export function unknownNames(line: string, facts: string): string[] {
-  const known = facts.toLowerCase();
+  // "Let's Encrypt" is the "lets encrypt" the person wrote: apostrophes do not make a new name.
+  const bare = (text: string) => text.toLowerCase().replace(/['’]/g, '');
+  const known = bare(facts);
   const tokens = line.replace(/\*\*/g, '').trim().split(/\s+/);
   const names = tokens
     .map((token, index) => ({
@@ -137,7 +143,7 @@ export function unknownNames(line: string, facts: string): string[] {
       return shaped || capital;
     })
     .map(({ word }) => word);
-  return [...new Set(names.filter((word) => !known.includes(word.toLowerCase())))];
+  return [...new Set(names.filter((word) => !known.includes(bare(word))))];
 }
 
 /**
@@ -202,7 +208,9 @@ export function checkProposal(draft: AchievementDraft, source: AchievementSource
       draft.techStack
         .map((tool) => tool.trim().replace(/\.$/, ''))
         .filter((tool) => tool.length > 0 && tool.length <= 60)
-        .filter((tool) => named(tool) && !have.includes(tool.toLowerCase()))
+        .filter(
+          (tool) => named(tool) && !have.includes(tool.toLowerCase()) && !mentions(source.techStack, tool),
+        )
         .map((tool) => [tool.toLowerCase(), tool]),
     ).values(),
   ].slice(0, 20);
@@ -210,5 +218,54 @@ export function checkProposal(draft: AchievementDraft, source: AchievementSource
     !source.description.trim() && draft.description.trim() && numbersSupported(draft.description, known)
       ? plain(draft.description).slice(0, 600)
       : '';
-  return { achievements, techStack, description, dropped };
+  return { achievements, techStack, description, dropped, uncovered: [] };
 }
+
+/** "AWS Step Functions" is mentioned by "Step Functions"; "Node.js" by "Node.js" or "NodeJS". */
+export function mentions(text: string, tool: string): boolean {
+  const flat = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/['’]/g, '')
+      .replace(/[^a-z0-9+#]+/g, ' ')
+      .trim();
+  const line = ` ${flat(text)} `;
+  const name = flat(tool);
+  if (!name) return true;
+  const core = name.replace(/^(?:aws|amazon|google|gcp|azure|microsoft|apache)\s+/, '');
+  // "Lambdas" mentions "AWS Lambda".
+  return [name, core, name.replace(/\s+/g, '')].some(
+    (form) => form && (line.includes(` ${form} `) || line.includes(` ${form}s `)),
+  );
+}
+
+/**
+ * The technologies of a job that every achievement together must show: those the
+ * person named in the notes or the job, and its tech stack. Each one once.
+ */
+export function toolsToCover(source: AchievementSource, named: string[]): string[] {
+  const facts = [source.description, source.notes, ...source.bullets].join('\n');
+  const tools = [...source.techStack.split(/[,|;\n]/), ...named.filter((tool) => mentions(facts, tool))]
+    .map((tool) => tool.trim().replace(/\.$/, ''))
+    .filter((tool) => tool.length > 1 && tool.length <= 60);
+  return [...new Map(tools.map((tool) => [tool.toLowerCase(), tool])).values()];
+}
+
+/** A tool as the achievements write it ("eventbridge" → "EventBridge"), or as given. */
+export function casedAs(tool: string, lines: string[]): string {
+  const parts = tool.split(/[\s'’-]+/).filter(Boolean);
+  if (!parts.length) return tool;
+  // Letter by letter, an apostrophe allowed between them: "lets" finds "Let's".
+  const escaped = parts.map((part) =>
+    [...part.replace(/['’]/g, '')].map((char) => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join("['’]?"),
+  );
+  const pattern = new RegExp(`(?<![A-Za-z0-9])${escaped.join("[\\s'’-]*")}(?![A-Za-z0-9])`, 'i');
+  for (const line of lines) {
+    const found = pattern.exec(line);
+    if (found) return found[0];
+  }
+  return tool;
+}
+
+export const uncoveredTools = (tools: string[], lines: string[]) =>
+  tools.filter((tool) => !lines.some((line) => mentions(line, tool)));

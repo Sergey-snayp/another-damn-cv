@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   ACHIEVEMENT_WORDS,
+  casedAs,
+  mentions,
+  toolsToCover,
   wordCount,
   checkProposal,
   numbersIn,
@@ -381,6 +384,7 @@ test('an achievement has a standard size: a longer one is split into parts that 
       }),
     deepen: () => Promise.reject(new Error('not used')),
     split: () => Promise.resolve(parts),
+    cover: () => Promise.resolve({ achievements: [], unplaced: [] }),
   }).execute(notes);
   assert.deepEqual(
     proposal.achievements.map((item) => item.text),
@@ -393,10 +397,85 @@ test('an achievement has a standard size: a longer one is split into parts that 
 
   // "Rewrite with my answers" that grows past the size: the rest comes back as more lines.
   const deepened = await new DeepenAchievement({
-    draft: () => Promise.reject(new Error('not used')),
     deepen: () => Promise.resolve({ text: long, asks: [] }),
     split: () => Promise.resolve(parts),
   }).execute({ source: notes, text: parts[0], answers: [{ question: 'More?', answer: long }] });
   assert.equal(deepened.text, parts[0]);
   assert.deepEqual(deepened.more, parts.slice(1));
+});
+
+test('every technology of a job ends up in some achievement, or is named as not placed', async () => {
+  assert.ok(mentions('Orchestrated issuance with Step Functions.', 'AWS Step Functions'));
+  assert.ok(mentions('Built services in Node.js.', 'Node.js'));
+  assert.ok(!mentions('Built services in Node.js.', 'Nest'));
+  const job: AchievementSource = {
+    title: 'Senior Software Engineer',
+    company: 'Ciklum',
+    client: '',
+    description: 'Card payments platform on AWS Lambda.',
+    bullets: ['Built REST APIs in Node.js for card tokenization.'],
+    techStack: 'Node.js, Kafka, Redis',
+    notes: 'kafka carried the order events between services. also used lambda for webhooks.',
+  };
+  assert.deepEqual(toolsToCover(job, ['Kafka', 'AWS Lambda', 'Terraform']), [
+    'Node.js',
+    'Kafka',
+    'Redis',
+    'AWS Lambda',
+  ]);
+  const asked: { missing: string[]; written: string[] }[] = [];
+  const proposal = await new DraftAchievements({
+    draft: () =>
+      Promise.resolve({
+        achievements: [{ text: 'Handled webhooks for card payments.', asks: ['Is it still in use?'] }],
+        techStack: ['Kafka'],
+        technologies: ['Kafka', 'AWS Lambda'],
+        description: '',
+      }),
+    cover: (input) => {
+      asked.push(input);
+      return Promise.resolve({
+        achievements: [
+          {
+            text: 'Handled webhooks for card payments on AWS Lambda.',
+            replaces: 'Handled webhooks for card payments.',
+          },
+          { text: 'Carried order events between services with Kafka.', replaces: '' },
+        ],
+        unplaced: ['Redis'],
+      });
+    },
+    deepen: () => Promise.reject(new Error('not used')),
+    split: () => Promise.reject(new Error('not used')),
+  }).execute(job);
+  assert.deepEqual(
+    asked[0].missing,
+    ['Kafka', 'Redis', 'AWS Lambda'],
+    'Node.js is already in a current bullet',
+  );
+  assert.deepEqual(
+    proposal.achievements.map((item) => [item.text, item.asks]),
+    [
+      ['Handled webhooks for card payments on AWS Lambda.', ['Is it still in use?']],
+      ['Carried order events between services with Kafka.', []],
+    ],
+    'a fuller line takes its place and keeps its questions; a new one is added',
+  );
+  assert.deepEqual(proposal.uncovered, ['Redis'], 'the notes never say what Redis did');
+});
+
+test('tool names: an apostrophe is not a new name, and new tools take the casing the lines use', () => {
+  assert.ok(mentions("Issued certificates with Let's Encrypt.", 'lets encrypt'));
+  assert.deepEqual(
+    unknownNames("Issued certificates with Let's Encrypt.", 'used lets encrypt for certs'),
+    [],
+  );
+  const lines = [
+    'Ran a daily EventBridge sweep.',
+    "Issued certificates with Let's Encrypt and DNS-01 challenges.",
+  ];
+  assert.equal(casedAs('eventbridge', lines), 'EventBridge');
+  assert.equal(casedAs('lets encrypt', lines), "Let's Encrypt");
+  assert.equal(casedAs('dns-01', lines), 'DNS-01');
+  assert.equal(casedAs('Kafka', lines), 'Kafka', 'not in any line: as given');
 });

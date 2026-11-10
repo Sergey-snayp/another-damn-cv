@@ -4,7 +4,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
 
 // Achievements have a standard size: a long one in the review shows its length and splits,
 // and "Rewrite with my answers" that grows past it comes back as more lines. Synthetic data only.
-const LONG = `Built the TLS certificate service from scratch as its principal author, still in production, ${'with renewal retries and cleanup of orphaned records '.repeat(5)}and led a 3-person team.`;
+const LONG = `Built the TLS certificate service from scratch as its principal author, still in production, ${'with renewal retries and cleanup of orphaned records '.repeat(5)}built with TypeScript, Node.js, DynamoDB, Route53, Kafka, Redis and Docker, and led a 3-person team.`;
 (async () => {
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
   try {
@@ -27,7 +27,7 @@ const LONG = `Built the TLS certificate service from scratch as its principal au
         if (pathname === '/api/profile') return reply({ firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com', phone: '1', location: 'Vancouver', linkedin: 'x', workArrangements: '' });
         if (pathname === '/api/resumes' || pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
         if (pathname === '/api/profile/career/achievements')
-          return reply({ achievements: [{ text: LONG, asks: [], duplicateOf: null }, { text: 'Set up Slack alerts for production.', asks: ['What was it like before?'], duplicateOf: null }], techStack: [], description: '', dropped: 0 });
+          return reply({ achievements: [{ text: LONG, asks: [], duplicateOf: null }, { text: 'Set up Slack alerts for production.', asks: ['What was it like before?'], duplicateOf: null }], techStack: [], description: '', dropped: 0, uncovered: ['Redis', 'Kafka'] });
         if (pathname === '/api/profile/career/achievements/split')
           return reply({ parts: ['Built the TLS certificate service from scratch as its principal author, still in production.', 'Added renewal retries and cleanup of orphaned records to the TLS certificate service.', 'Led a 3-person team on the TLS certificate service.'] });
         if (pathname === '/api/profile/career/achievements/deepen')
@@ -52,6 +52,8 @@ const LONG = `Built the TLS certificate service from scratch as its principal au
     await button('✦ Turn into bullets').click();
     await page.waitForSelector('.describe-long');
     assert.match(await page.$eval('.describe-long', element => element.textContent), /\d+ words: a CV line holds about 40/);
+    assert.match(await page.$eval('.describe-uncovered', element => element.textContent), /Not in any achievement yet: Redis, Kafka\. Your notes don't say what they did here/);
+    assert.doesNotMatch(await page.$eval('.describe-review', element => element.textContent), /technical terms in one line/, 'the Profile keeps full technical detail');
 
     await page.evaluate(() => document.querySelector('.describe-long button').click());
     await page.waitForFunction(() => document.querySelectorAll('.describe-item').length === 4);

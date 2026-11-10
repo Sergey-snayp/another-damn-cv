@@ -64,6 +64,8 @@ export interface AchievementProposal {
   techStack: string[];
   description: string;
   dropped: number;
+  /** Technologies of the job no achievement mentions: the notes don't say what they did. */
+  uncovered?: string[];
 }
 export interface CareerEducation {
   institution: string;

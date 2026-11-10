@@ -9,7 +9,7 @@ import { SplitAchievement } from './split-achievement';
  * Grown past the standard size, it comes back split: `text` and `more`.
  */
 export class DeepenAchievement {
-  constructor(private readonly writer: AchievementWriter) {}
+  constructor(private readonly writer: Pick<AchievementWriter, 'deepen' | 'split'>) {}
   async execute(
     input: DeepenInput,
   ): Promise<{ text: string; more: string[]; asks: string[]; changed: boolean }> {

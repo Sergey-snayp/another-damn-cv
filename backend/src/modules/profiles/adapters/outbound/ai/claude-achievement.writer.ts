@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
 import { firstJsonObject } from '../../../../../shared/ai/json';
-import { BULLET_RULES, withoutAddedPurpose, withoutDashPunctuation } from '../../../../resumes/contracts';
+import {
+  DASH_PUNCTUATION_RULE,
+  withoutAddedPurpose,
+  withoutDashPunctuation,
+} from '../../../../resumes/contracts';
 import type { AchievementWriter, DeepenInput } from '../../../application/ports/achievement-writer';
 import {
   AchievementError,
@@ -18,8 +22,36 @@ const HONESTY = `ABSOLUTE RULES. Breaking any of these makes the output unusable
   audits", not "Led 2 audits", and never add an action the notes do not state ("used" does
   not become "migrated", "worked on" does not become "built").`;
 
+/**
+ * How a Profile achievement reads: a finished bullet for an engineering CV, as a
+ * technical recruiter wants it. The Profile is the full, detailed record; each
+ * CV later chooses and rewords from it for one posting (see the resumes rules).
+ */
+const PROFILE_STANDARD = `READ IT AS A SENIOR TECHNICAL RECRUITER: you screen engineering CVs every day and know
+what makes a hiring manager stop. Concrete systems, the technologies that built them named
+in context, what they power, scale, and real ownership. Every achievement is a finished CV
+bullet, as detailed as the facts allow.
+
+How an achievement reads:
+- Shape: strong past-tense verb, what was built or changed, the technologies it used named
+  in the clause that says what each did, what it powers or for whom, then scale or result
+  when the facts give it. For example, in shape only:
+  "Built [system] in [language] on [cloud services], powering [what] for [scale]."
+  "Designed [mechanism] with [technology], so [reason the facts give]."
+  "Led a [n]-person team delivering [system] with [technologies]."
+- Name each technology where it works: "backed by [database] for [what it stores]",
+  "orchestrated with [service]", "secured with [method]". Never a bare list of tools.
+- Ownership lives in the verb: "Built from scratch", "Designed and built", "Owned", "Led a
+  3-person team". Never as an aside ("as its sole author,").
+- Numbers and scale exactly as the facts give them ("~15,000-20,000 transactions a day").
+- A lasting fact ("still in production") is a short closing clause, only when the facts say it.
+- No filler and no benefit the facts do not state.
+- At most 40 words, one or two sentences, ending with a period.
+- ${DASH_PUNCTUATION_RULE}`;
+
 const SYSTEM = `You turn a person's own notes about one job into achievements for their career profile.
-The profile keeps everything they did; later, a few of these are chosen for each CV.
+The profile keeps everything they did, in full detail; later, a few of these are chosen and
+reworded for each CV.
 
 ${HONESTY}
 
@@ -31,8 +63,13 @@ How to split the notes:
   how it was tested; the team they led; what it changed. Each names the work, so it stands
   on its own. Never thin one-fact lines.
 - Do not repeat a line from <current_bullets>; write only what is new or fuller.
+- Every technology named in <notes>, in the job's description or in <current_bullets> is in
+  at least one achievement (new or current), in context of what it did. A technology only in
+  the job's tech stack goes in where the notes say what it did; otherwise it may only be
+  named for the job's platform as a whole ("the platform's services in TypeScript on Node.js,
+  running on AWS Lambda"), never tied to a piece of work the notes do not connect it to.
 
-${BULLET_RULES}
+${PROFILE_STANDARD}
 
 Follow-up questions ("asks"): for each achievement, up to 2 short questions whose answers
 would make it fuller, only about what the notes leave out:
@@ -47,11 +84,33 @@ Also:
 - "techStack": the technologies the notes name, as written: languages, frameworks, libraries,
   databases, cloud services, protocols and developer tools. Not companies, clients, card
   networks, payment providers or chat apps.
+- "technologies": every technology named anywhere in <job> or <notes>, as written.
 - "description": when <job> has no description, one or two sentences on what the role or
   project was (product, team, scale), from the notes only; otherwise "".
 
 Return ONLY JSON, no prose and no code fences:
-{"achievements": [{"text": "...", "asks": ["..."]}], "techStack": ["..."], "description": ""}`;
+{"achievements": [{"text": "...", "asks": ["..."]}], "techStack": ["..."], "technologies": ["..."], "description": ""}`;
+
+const COVER_SYSTEM = `You add achievements to one job on a person's career profile, so that every technology
+they used appears in at least one achievement.
+
+${HONESTY}
+
+- For each technology in <missing>, find in <notes> or <job> what it did in this job, and
+  write it into an achievement: a new one about that work, or a fuller version of one in
+  <written> (then return the fuller version; it replaces that one).
+- A technology listed in the job's tech stack, with no word on what it did, may be named for
+  the job's platform as a whole, in one achievement that says what the platform was built
+  and run with ("Developed the payment platform's services in TypeScript on Node.js, running
+  on AWS Lambda behind API Gateway"). Never tie it to a piece of work the facts do not
+  connect it to, and never guess what it was used for.
+- A technology you cannot place honestly goes in "unplaced".
+- Several missing technologies from the same work belong in one achievement.
+
+${PROFILE_STANDARD}
+
+Return ONLY JSON, no prose and no code fences:
+{"achievements": [{"text": "...", "replaces": "the line from <written> it makes fuller, or empty"}], "unplaced": ["..."]}`;
 
 const DEEPEN_SYSTEM = `You rewrite one achievement on a person's career profile with their answers to follow-up questions.
 
@@ -62,7 +121,7 @@ ${HONESTY}
 - Never bring in other work: only this achievement and the answers are facts here.
 - An answer that says "no", "don't know" or nothing adds nothing.
 
-${BULLET_RULES}
+${PROFILE_STANDARD}
 
 Return ONLY JSON, no prose and no code fences:
 {"text": "...", "asks": ["any question still worth asking, at most 1"]}`;
@@ -78,7 +137,7 @@ ${HONESTY}
 - Together they keep every fact of the original: every number, name and reason. Use only
   its words and facts; add nothing.
 
-${BULLET_RULES}
+${PROFILE_STANDARD}
 
 Return ONLY JSON, no prose and no code fences:
 {"parts": ["...", "..."]}`;
@@ -94,7 +153,12 @@ const answerSchema = z.object({
     )
     .catch([]),
   techStack: z.array(z.string()).catch([]),
+  technologies: z.array(z.string()).catch([]),
   description: z.string().catch(''),
+});
+const coverSchema = z.object({
+  achievements: z.array(z.object({ text: z.string().catch(''), replaces: z.string().catch('') })).catch([]),
+  unplaced: z.array(z.string()).catch([]),
 });
 const deepenSchema = z.object({ text: z.string().catch(''), asks: z.array(z.string()).catch([]) });
 const splitSchema = z.object({ parts: z.array(z.string()).catch([]) });
@@ -148,7 +212,40 @@ export class ClaudeAchievementWriter implements AchievementWriter {
         asks: (item.asks.length ? item.asks : item.ask ? [item.ask] : []).map(withoutDashPunctuation),
       })),
       techStack: answer.techStack,
+      technologies: answer.technologies,
       description: withoutDashPunctuation(answer.description),
+    };
+  }
+
+  async cover(input: {
+    source: AchievementSource;
+    missing: string[];
+    written: string[];
+  }): Promise<{ achievements: { text: string; replaces: string }[]; unplaced: string[] }> {
+    const prompt = `${achievementPrompt(input.source)}
+
+<written>
+${input.written.map((line) => `- ${line}`).join('\n') || '(none)'}
+</written>
+
+<missing>
+${input.missing.join(', ')}
+</missing>`;
+    const raw = await this.llm.complete(prompt, COVER_SYSTEM, {
+      effort: 'medium',
+      timeoutMs: 150_000,
+      maxOutputChars: 40_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) return { achievements: [], unplaced: input.missing };
+    const answer = coverSchema.parse(json);
+    const facts = factsOf(input.source);
+    return {
+      achievements: answer.achievements.map((item) => ({
+        text: withoutDashPunctuation(withoutAddedPurpose(item.text, facts)),
+        replaces: item.replaces.trim(),
+      })),
+      unplaced: answer.unplaced,
     };
   }
 
