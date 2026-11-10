@@ -233,10 +233,17 @@
 .profile-panel .bp-note { font-size: 12px; color: var(--color-muted); }
 
 /* Career with the bullet panel: sections on the left, the panel on the right. */
-.content:has(.profile-layout.has-panel) { max-width: 1480px; }
-.profile-layout.has-panel { grid-template-columns: minmax(0, 1fr) 460px; }
+/* With the panel, the page stays where it is (header, tabs, everything above): only the
+   career column moves left and the panel opens on its right, in the page's side margins.
+   The column keeps its width when the window allows; on a narrower window it gives some. */
+.profile-layout { --panel: 460px; --with-panel: calc(100% + var(--panel) + 18px); transition: margin-left .2s ease, width .2s ease; }
+.profile-layout.has-panel {
+  width: min(var(--with-panel), calc(100vw - 48px));
+  margin-left: calc((100% - min(var(--with-panel), calc(100vw - 48px))) / 2);
+  grid-template-columns: minmax(0, 1fr) var(--panel);
+}
 @media (max-width: 1100px) {
-  .profile-layout.has-panel { grid-template-columns: minmax(0, 1fr); }
+  .profile-layout.has-panel { width: auto; margin-left: 0; grid-template-columns: minmax(0, 1fr); }
   .profile-layout.has-panel .bullet-panel { display: none; }
 }
 @media (min-width: 1101px) { .ach-meter-narrow { display: none; } }
