@@ -1,5 +1,3 @@
-import { z } from 'zod';
-import { firstJsonObject } from '../../../../../shared/ai/json';
 import type { ClaudeProcessRunner } from '../../../../../shared/ai/claude-process.runner';
 import type {
   SummaryDraft,
@@ -12,33 +10,22 @@ import { TailoringError } from '../../../application/tailoring-error';
 import { SUMMARY_INSTRUCTIONS } from './summary-instructions';
 import { withoutDashPunctuation } from '../../../domain/cv-writing-guide';
 
-const answerSchema = z.object({
-  summary: z.string().trim().min(1),
-  word_count: z.coerce.number().int().nonnegative(),
-  mapping: z.array(
-    z.object({
-      item: z.string(),
-      type: z.enum(['required', 'preferred']),
-      evidence: z.string(),
-      employer: z.string().nullable(),
-    }),
-  ),
-  gaps: z.array(z.string()),
-  deciding_gap: z.string().nullable(),
-});
-/** A fix sends back the summary alone; the mapping and gaps stay from the draft it fixes. */
-const fixSchema = z.object({ summary: z.string().trim().min(1) });
-
 type Parsed = { ok: true; draft: SummaryDraft } | { ok: false; problem: string };
+type AskOptions = {
+  timeoutMs: number;
+  effort: 'low' | 'medium';
+  model?: string;
+  onText?: (soFar: string) => void;
+};
 
 /**
  * The CV summary writer: the summary instructions as the system prompt, the
- * posting and the experience record in tags, a JSON answer checked against
- * its schema (one retry when it is not valid). A fix returns only the
- * corrected summary, and a quick fix runs on the smaller, faster model.
- * The draft is written at low effort: at medium, Sonnet 5 thought for about
- * 3,300 tokens and took 38 seconds; Sonnet 5.5 at low takes about 12 and
- * passed the checks as often.
+ * posting and the experience record in tags. The answer is the summary first,
+ * then the gaps, each in its own tag, so the summary can be shown while the
+ * rest is still being written (one retry when the tags are missing). A fix
+ * returns only the corrected summary, and a quick fix runs on the smaller,
+ * faster model. The draft is written at low effort: at medium, Sonnet 5
+ * thought for about 3,300 tokens and took 38 seconds.
  */
 export class ClaudeSummaryWriter implements SummaryWriter {
   constructor(
@@ -46,12 +33,26 @@ export class ClaudeSummaryWriter implements SummaryWriter {
     private readonly models: { draft?: string; quick?: string } = {},
   ) {}
 
-  write(input: SummaryInput): Promise<SummaryDraft> {
-    return this.ask(inputs(input), parse, 'Return only the JSON object described under Output.', {
-      timeoutMs: 150_000,
-      effort: 'low',
-      model: this.models.draft,
-    });
+  write(input: SummaryInput, onSummary?: (soFar: string) => void): Promise<SummaryDraft> {
+    let shown = '';
+    return this.ask(
+      inputs(input),
+      parse,
+      'Return only the <summary>, <gaps> and <deciding_gap> tags described under Output.',
+      {
+        timeoutMs: 150_000,
+        effort: 'low',
+        model: this.models.draft,
+        ...(onSummary
+          ? {
+              onText: (soFar: string) => {
+                const summary = summarySoFar(soFar);
+                if (summary && summary !== shown) onSummary((shown = summary));
+              },
+            }
+          : {}),
+      },
+    );
   }
 
   fix(input: SummaryFixInput): Promise<SummaryDraft> {
@@ -59,8 +60,7 @@ export class ClaudeSummaryWriter implements SummaryWriter {
     const which = input.change
       ? `Rewrite only sentence${input.change.length > 1 ? 's' : ''} ${input.change.map((index) => index + 1).join(', ')}. Copy every other sentence exactly as it is, word for word.`
       : 'Change as little as the failed checks need; keep the sentences that are fine as they are.';
-    const shape =
-      'Return only this JSON object: {"summary": "<the corrected summary>"}. No mapping, gaps or anything else.';
+    const shape = 'Return only the corrected summary in <summary></summary> tags: no gaps, nothing else.';
     const prompt = `${inputs(input)}
 
 <previous_summary>
@@ -74,12 +74,10 @@ You are fixing this summary, not writing a new one: skip Steps 1, 2 and 4. Fix e
 
 ${shape}`;
     const parseFix = (raw: string): Parsed => {
-      const json = firstJsonObject(raw);
-      if (!json) return { ok: false, problem: 'no JSON object found' };
-      const result = fixSchema.safeParse(json);
-      if (!result.success) return { ok: false, problem: 'summary: missing' };
-      // Mapping and gaps carry over from the draft being fixed.
-      return { ok: true, draft: { ...input.previous, summary: result.data.summary } };
+      const summary = tag(raw, 'summary');
+      if (!summary) return { ok: false, problem: 'no <summary> tag' };
+      // The gaps carry over from the draft being fixed.
+      return { ok: true, draft: { ...input.previous, summary } };
     };
     return this.ask(
       prompt,
@@ -95,7 +93,7 @@ ${shape}`;
     prompt: string,
     parseReply: (raw: string) => Parsed,
     shape: string,
-    options: { timeoutMs: number; effort: 'low' | 'medium'; model?: string },
+    options: AskOptions,
   ): Promise<SummaryDraft> {
     const first = await this.llm.complete(prompt, SUMMARY_INSTRUCTIONS, options);
     const parsed = parseReply(first);
@@ -108,7 +106,7 @@ ${shape}`;
 ${first.slice(0, 6_000)}
 </your_previous_reply>
 
-That reply was not valid JSON in the required shape (${parsed.problem}). ${shape}`,
+That reply was not in the required shape (${parsed.problem}). ${shape}`,
       SUMMARY_INSTRUCTIONS,
       options,
     );
@@ -135,27 +133,37 @@ ${input.experience}
   }`;
 }
 
+/** What one tag holds, or null when the answer has no such tag. */
+function tag(raw: string, name: string): string | null {
+  const match = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(raw);
+  const text = match?.[1].trim();
+  return text || null;
+}
+
+/** The summary written so far: after <summary>, without a closing tag that is half written. */
+export function summarySoFar(soFar: string): string {
+  const start = soFar.indexOf('<summary>');
+  if (start < 0) return '';
+  const rest = soFar.slice(start + '<summary>'.length);
+  const end = rest.indexOf('</summary>');
+  return (end >= 0 ? rest.slice(0, end) : rest.replace(/<\/?[a-z_]*$/i, '')).trim();
+}
+
 function parse(raw: string): Parsed {
-  const json = firstJsonObject(raw);
-  if (!json) return { ok: false, problem: 'no JSON object found' };
-  const result = answerSchema.safeParse(json);
-  if (!result.success)
-    return {
-      ok: false,
-      problem: result.error.issues
-        .slice(0, 4)
-        .map((issue) => `${issue.path.join('.') || 'answer'}: ${issue.message}`)
-        .join('; '),
-    };
-  const answer = result.data;
+  const summary = tag(raw, 'summary');
+  if (!summary) return { ok: false, problem: 'no <summary> tag' };
+  const gaps = (tag(raw, 'gaps') ?? '')
+    .split('\n')
+    .map((line) => withoutDashPunctuation(line.replace(/^\s*[-*•]\s*/, '').trim()))
+    .filter((line) => line && !/^none\.?$/i.test(line));
+  const deciding = withoutDashPunctuation(tag(raw, 'deciding_gap') ?? '');
   return {
     ok: true,
     draft: {
-      summary: answer.summary,
-      wordCount: answer.word_count,
-      mapping: answer.mapping.map((line) => ({ ...line, employer: line.employer?.trim() || null })),
-      gaps: answer.gaps.map((gap) => withoutDashPunctuation(gap.trim())).filter(Boolean),
-      decidingGap: withoutDashPunctuation(answer.deciding_gap?.trim() || '') || null,
+      summary,
+      wordCount: 0,
+      gaps,
+      decidingGap: deciding && !/^none\.?$/i.test(deciding) ? deciding : null,
     },
   };
 }

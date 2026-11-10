@@ -276,9 +276,16 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
           gaps: [{ point: 'The Profile does not yet show container operations experience.', jobQuote: 'Build Node.js services.', importance: 'preferred' }],
           questions: ['How much infrastructure ownership is expected?'], basis: { source: 'profile', profileRevision: 3, jobId: 'job-1' } });
       }
-      if (pathname.endsWith('/tailor-summary')) {
+      if (pathname.endsWith('/tailor-summary/stream')) {
         aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(150);
-        return reply({ original: '', summary: 'Built services for **Acme**.', wordCount: 4, mapping: [{ item: 'Node.js', type: 'required', evidence: 'NO EVIDENCE', employer: null }], gaps: ['Node.js'], decidingGap: 'Node.js', failedChecks: [{ id: 'word-count', name: 'Word count', ok: false, detail: '4 words; it must be 80 to 120.' }], attempts: 3 });
+        // The summary as it is written, the fix announced, then the checked result: one JSON object per line.
+        const lines = [
+          { type: 'draft', summary: 'Built services for **Ac' },
+          { type: 'draft', summary: 'Built services for **Acme**.' },
+          { type: 'fixing', failed: ['Word count'] },
+          { type: 'done', original: '', summary: 'Built services for **Acme**.', wordCount: 4, gaps: ['Node.js'], decidingGap: 'Node.js', failedChecks: [{ id: 'word-count', name: 'Word count', ok: false, detail: '4 words; it must be 80 to 120.' }], attempts: 3 },
+        ];
+        return request.respond({ status: 200, contentType: 'application/x-ndjson', body: lines.map(line => JSON.stringify(line)).join('\n') + '\n' });
       }
       if (pathname.endsWith('/tailor-skills')) {
         const body = JSON.parse(request.postData() || '{}');
@@ -548,15 +555,15 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Try again').click());
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(aiRequests.length, asked + 2, 'Try again writes another version');
-      await pause(400); // The line types itself in.
+      await pause(100); // Shown as it was written: the change is drawn at once, not typed in again.
       // The new version shows as a change: the old words red and crossed out, the new ones green.
       assert.deepEqual(await page.$$eval('.qt-unit .qt-change .qt-del', parts => parts.map(part => part.textContent).join('')), 'First edit');
       assert.equal(await page.$$eval('.qt-unit .qt-change .qt-add', parts => parts.map(part => part.textContent).join('')), 'Built services for Acme');
       assert.equal(await page.$eval('.qt-unit .qt-change', element => element.textContent), 'First edit Built services for Acme.');
       assert.equal(await page.$eval('.qt-unit .qt-change b', element => element.textContent.trim()), 'Acme', 'with its bold');
       const report = await page.$eval('.qt-unit', element => element.innerText);
-      for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'How it answers the posting'])
-        assert.ok(report.includes(part), `the summary card shows: ${part}`);
+      for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'Gaps'])
+        assert.ok(report.toLowerCase().includes(part.toLowerCase()), `the summary card shows: ${part}`);
       assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent)), ['Use this', 'Try again', 'Dismiss']);
       await page.$eval('.qt-card', card => { card.scrollTop = card.scrollHeight; });
       await pause(50);

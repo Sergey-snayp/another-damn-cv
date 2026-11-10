@@ -3,15 +3,18 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpException,
   Inject,
   Param,
   Post,
   Put,
   Query,
+  Res,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import type { Response } from 'express';
 import { AuthGuard, CurrentUser } from '../../../../auth/http';
 import { ResumeOwnerGuard } from './resume-owner.guard';
 import { ResumeErrorFilter } from './resume-error.filter';
@@ -22,6 +25,8 @@ import { DescribeTechnology } from '../../../application/use-cases/describe-tech
 import { ChooseRoleBullets } from '../../../application/use-cases/choose-role-bullets';
 import type { CvRole } from '../../../domain/role-bullets';
 import type { AiSettings, ChatMessage, SkillGroupInput } from '../../../domain/resume-assistant';
+import { ResumeError } from '../../../contracts';
+import { TailoringError } from '../../../application/tailoring-error';
 
 const jobSchema = z.union([
   z.object({ jobId: z.string().min(1) }).strict(),
@@ -194,6 +199,47 @@ export class ResumeAssistantController {
     @Body(new ZodValidationPipe(tailorSummarySchema)) body: { instruction?: string; job: JobChoice },
   ) {
     return this.assistant.tailorSummary(userId, id, body);
+  }
+
+  /**
+   * The same summary, streamed as one JSON object per line: "draft" with the
+   * summary so far while it is written, "fixing" when a check failed, then
+   * "done" with the checked result (or "error"). A failure before the first
+   * line is an ordinary error response.
+   */
+  @Post(':id/tailor-summary/stream')
+  async tailorSummaryStream(
+    @CurrentUser() userId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(tailorSummarySchema)) body: { instruction?: string; job: JobChoice },
+    @Res() res: Response,
+  ): Promise<void> {
+    let started = false;
+    const send = (event: Record<string, unknown>) => {
+      if (!started) {
+        started = true;
+        res.status(200);
+        res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+      }
+      res.write(`${JSON.stringify(event)}\n`);
+    };
+    try {
+      const result = await this.assistant.tailorSummary(userId, id, body, {
+        draft: (summary) => send({ type: 'draft', summary }),
+        fixing: (failed) => send({ type: 'fixing', failed: failed.map((check) => check.name) }),
+      });
+      send({ type: 'done', ...result });
+      res.end();
+    } catch (error) {
+      if (!started) throw error;
+      const known =
+        error instanceof TailoringError || error instanceof ResumeError || error instanceof HttpException;
+      send({ type: 'error', message: known ? error.message : 'The AI did not answer. Try again.' });
+      res.end();
+    }
   }
 
   /** Quick tailoring of skills lines; every skill returned is checked against the CV. */

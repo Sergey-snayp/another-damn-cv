@@ -39,6 +39,8 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
    * (one summary call grew to about 395,000 input tokens and 7 minutes).
    * `timeoutMs`: a whole-resume tailoring needs longer than reading one page.
    * `effort`: how much the model thinks before it answers; left out, the model's own default.
+   * `onText`: called with the answer so far while it is written, so a page can show
+   * it before the end; the promise still resolves with the whole answer.
    */
   complete(
     prompt: string,
@@ -48,18 +50,22 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
       model = config.llmModel,
       maxOutputChars = Infinity,
       effort,
+      onText,
     }: {
       timeoutMs?: number;
       model?: string;
       maxOutputChars?: number;
       effort?: 'low' | 'medium' | 'high';
+      onText?: (soFar: string) => void;
     } = {},
   ): Promise<string> {
     if (this.stopping) return Promise.reject(this.cannotRun());
     const args = [
       '-p',
-      '--output-format',
-      'text',
+      // Streamed, the CLI sends one JSON event per line, the text in small pieces.
+      ...(onText
+        ? ['--output-format', 'stream-json', '--include-partial-messages', '--verbose']
+        : ['--output-format', 'text']),
       '--model',
       model,
       '--strict-mcp-config',
@@ -100,13 +106,48 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
       let stdout = '';
       let stderr = '';
 
+      let streamed = '';
+      let finalText: string | null = null;
+      let pending = '';
+      const tooLarge = () => {
+        child.kill('SIGKILL');
+        clearTimeout(timer);
+        reject(new ServiceUnavailableException('The AI response was too large. Try generating again.'));
+      };
+      /** One line of the CLI's stream: a piece of text, or the whole answer at the end. */
+      const readEvent = (line: string) => {
+        let event: StreamEvent;
+        try {
+          event = JSON.parse(line) as StreamEvent;
+        } catch {
+          return;
+        }
+        const delta = event.type === 'stream_event' ? event.event?.delta : undefined;
+        if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+          streamed += delta.text;
+          if (streamed.length > maxOutputChars) return tooLarge();
+          try {
+            onText?.(streamed);
+          } catch {
+            // A listener's slip never stops the answer.
+          }
+        } else if (event.type === 'result' && typeof event.result === 'string') finalText = event.result;
+      };
+
       child.stdout.on('data', (chunk) => {
         stdout += chunk;
-        if (stdout.length > maxOutputChars) {
-          child.kill('SIGKILL');
-          clearTimeout(timer);
-          reject(new ServiceUnavailableException('The AI response was too large. Try generating again.'));
+        if (onText) {
+          pending += chunk;
+          let end: number;
+          while ((end = pending.indexOf('\n')) >= 0) {
+            readEvent(pending.slice(0, end));
+            pending = pending.slice(end + 1);
+          }
+          // Kept short: the events are not needed once read.
+          stdout = stdout.slice(-4000);
+          return;
         }
+        if (stdout.length > maxOutputChars) tooLarge();
       });
       child.stderr.on('data', (chunk) => {
         stderr = (stderr + chunk).slice(0, 4000);
@@ -129,6 +170,11 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
           return;
         }
 
+        if (onText) {
+          if (pending.trim()) readEvent(pending);
+          resolve((finalText ?? streamed).trim());
+          return;
+        }
         resolve(stdout.trim());
       });
 
@@ -172,6 +218,13 @@ export class ClaudeProcessRunner implements OnModuleDestroy {
       keep.map((key) => [key, process.env[key]]).filter(([, v]) => v !== undefined),
     ) as NodeJS.ProcessEnv;
   }
+}
+
+/** The parts of the CLI's stream-json events that are read. */
+interface StreamEvent {
+  type?: string;
+  event?: { delta?: { type?: string; text?: unknown } };
+  result?: unknown;
 }
 
 export interface ClaudeLaunchOptions {

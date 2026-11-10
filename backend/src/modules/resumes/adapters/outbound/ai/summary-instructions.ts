@@ -16,6 +16,8 @@ You get two inputs:
 
 The experience record is the only source of facts about the candidate. If something is not in it, the candidate does not have it.
 
+Do Steps 1, 2 and 4 in your head. Write out only the answer described under Output.
+
 ## Step 1: read the posting
 
 Extract:
@@ -37,7 +39,7 @@ For each item from Step 1, find the strongest evidence in the experience record,
 
 ## Step 3: write the summary
 
-Structure, 3 to 4 sentences, 80 to 120 words:
+Structure: exactly 3 or 4 sentences, never 5; 80 to 120 words:
 
 1. Sentence 1 opens with the title closest to the posting's title, then years of experience, then the core stack, then the domain. Example: "Senior backend engineer with 7 years in TypeScript and Node.js, building payment and banking systems."
 2. Sentences 2 and 3 cover the 2 or 3 items the posting ranks highest, each backed by a result from the record.
@@ -53,6 +55,7 @@ Content rules:
 - Never invent or derive figures the record does not state.
 - Results, not tool lists. Do not end a sentence with a list of tools (testing frameworks, Docker, CI/CD). Those belong in the skills section.
 - State where the expertise actually is. Never blur it toward what the posting wants.
+- Never mention in the summary what the record lacks, a gap, or a skill listed "only" as a skill. Gaps go in \`<gaps>\` only; the summary sells what is there.
 
 Style rules:
 
@@ -60,7 +63,7 @@ Style rules:
 - Third person with no pronouns, starting with a title or a verb: "Senior backend engineer...", "Built...", "Extended...".
 - US/Canadian spelling: "-ize" and "-ization" ("optimize", "normalizing", "modeling"), never "-ise" or "-isation".
 - Numbers as digits: "7 years", "4 card networks".
-- No schema or codebase counts (models, migrations, components, packages).
+- No schema or codebase counts (models, migrations, components, packages), even when the record states them: never "34 models" or "100+ migrations".
 - ${DASH_PUNCTUATION_RULE}
 - Plain words a recruiter understands. No internal jargon such as "concurrency-only defect"; write "a defect that appeared only under concurrent load".
 - No filler: "passionate", "results-driven", "proven track record", "dynamic".
@@ -69,20 +72,16 @@ Style rules:
 
 ## Step 4: check before answering
 
-Go through every required item and confirm it is either answered in the summary or marked NO EVIDENCE. Then check every style rule above.
+Go through every required item and confirm it is either answered in the summary or a gap. Count the sentences (3 or 4) and the words (80 to 120, each sentence at most 35). Then check every rule above.
 
 ## Output
 
-Return JSON only:
+The summary first, then the gaps, in these tags and nothing else:
 
-\`\`\`json
-{
-  "summary": "the summary text",
-  "word_count": 0,
-  "mapping": [
-    { "item": "posting item", "type": "required | preferred", "evidence": "clause in the summary, or NO EVIDENCE", "employer": "employer the evidence comes from, or null" }
-  ],
-  "gaps": ["required or named items the candidate cannot claim, in the posting's own words"],
-  "deciding_gap": "the one gap most likely to decide this application, or null"
-}
-\`\`\``;
+<summary>
+the summary text
+</summary>
+<gaps>
+- each required or named item the candidate cannot claim, in the posting's own words, one per line
+</gaps>
+<deciding_gap>the one gap most likely to decide this application, or none</deciding_gap>`;

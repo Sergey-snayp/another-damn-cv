@@ -37,8 +37,11 @@ before(async () => {
     // The model stands in: it records the prompt and returns the answer set by the test.
     .overrideProvider(ClaudeProcessRunner)
     .useValue({
-      complete: (prompt: string) => {
+      complete: (prompt: string, _system: string, options?: { onText?: (soFar: string) => void }) => {
         prompts.push(prompt);
+        // A streamed call hears the answer in two pieces first.
+        options?.onText?.(answer.slice(0, Math.ceil(answer.length / 2)));
+        options?.onText?.(answer);
         return Promise.resolve(answer);
       },
       onApplicationShutdown: () => undefined,
@@ -470,16 +473,13 @@ test('Quick Tailor skills: only adds, at the end of a line, and only what the CV
 test('Quick Tailor summary: written from the instructions, checked in code, failures sent back at most twice', async () => {
   const { id } = await cv();
   const before = prompts.length;
-  answer = JSON.stringify({
-    summary: 'Engineer — optimised **Node.js** APIs on **PostgreSQL** with **Docker**.',
-    word_count: 9,
-    mapping: [
-      { item: 'Node.js', type: 'required', evidence: 'optimised Node.js APIs', employer: 'Acme' },
-      { item: 'Kafka', type: 'required', evidence: 'NO EVIDENCE', employer: null },
-    ],
-    gaps: ['Kafka and event-driven systems'],
-    deciding_gap: 'Kafka and event-driven systems',
-  });
+  answer = `<summary>
+Engineer — optimised **Node.js** APIs on **PostgreSQL** with **Docker**.
+</summary>
+<gaps>
+- Kafka and event-driven systems
+</gaps>
+<deciding_gap>Kafka and event-driven systems</deciding_gap>`;
   const response = await call(`/resumes/${id}/tailor-summary`, {
     method: 'POST',
     user: owner.user.id,
@@ -490,7 +490,6 @@ test('Quick Tailor summary: written from the instructions, checked in code, fail
     original: string;
     summary: string;
     wordCount: number;
-    mapping: unknown[];
     gaps: string[];
     decidingGap: string | null;
     failedChecks: Array<{ id: string; name: string; detail?: string }>;
@@ -502,7 +501,6 @@ test('Quick Tailor summary: written from the instructions, checked in code, fail
   assert.equal(body.wordCount, 8, 'counted in code');
   assert.deepEqual(body.gaps, ['Kafka and event-driven systems']);
   assert.equal(body.decidingGap, 'Kafka and event-driven systems');
-  assert.equal(body.mapping.length, 2);
   assert.equal(body.attempts, 3, 'the same failures every time: 3 attempts, then stop');
   assert.equal(prompts.length, before + 3);
   const failed = body.failedChecks.map((check) => check.id);
@@ -516,11 +514,51 @@ test('Quick Tailor summary: written from the instructions, checked in code, fail
     /<experience>\nProfessional experience since 2020[\s\S]*<role employer="Acme"[\s\S]*Responsible for Node\.js APIs on PostgreSQL with Docker\.[\s\S]*<\/experience>/,
   );
   assert.match(first, /<candidate_request>\nStress payments/);
-  assert.match(prompts.at(-1)!, /<previous_answer>/);
+  assert.match(prompts.at(-1)!, /<previous_summary>/);
   assert.doesNotMatch(prompts.at(-1)!, /- No em dashes/, 'a repaired slip is not sent back');
   assert.match(prompts.at(-1)!, /- Word count:/);
 
-  // Not valid JSON twice: an error to try again, not a broken summary.
+  // Streamed: the draft while it is written, each fix announced, then the checked result.
+  const streamed = await call(`/resumes/${id}/tailor-summary/stream`, {
+    method: 'POST',
+    user: owner.user.id,
+    body: { job: { description: JOB } },
+  });
+  assert.equal(streamed.status, 200);
+  assert.match(streamed.headers.get('content-type') ?? '', /application\/x-ndjson/);
+  const events = (await streamed.text())
+    .trim()
+    .split('\n')
+    .map(
+      (line) => JSON.parse(line) as { type: string; summary?: string; failed?: string[]; attempts?: number },
+    );
+  const types = events.map((event) => event.type);
+  assert.deepEqual(types.slice(-3), ['fixing', 'fixing', 'done']);
+  const drafts = events.filter((event) => event.type === 'draft');
+  assert.ok(drafts.length >= 1 && types.indexOf('fixing') === drafts.length, 'the draft comes first');
+  assert.equal(
+    drafts.at(-1)!.summary,
+    'Engineer — optimised **Node.js** APIs on **PostgreSQL** with **Docker**.',
+  );
+  assert.ok(events[drafts.length].failed?.includes('Word count'));
+  assert.equal(
+    events.at(-1)!.summary,
+    'Engineer, optimized **Node.js** APIs on **PostgreSQL** with **Docker**.',
+  );
+  assert.equal(events.at(-1)!.attempts, 3);
+  assert.equal(
+    (
+      await call(`/resumes/${id}/tailor-summary/stream`, {
+        method: 'POST',
+        user: other.user.id,
+        body: { job: { description: JOB } },
+      })
+    ).status,
+    404,
+    'another person’s CV is refused before anything streams',
+  );
+
+  // No summary tag twice: an error to try again, not a broken summary.
   answer = 'Sorry, I cannot.';
   const broken = await call(`/resumes/${id}/tailor-summary`, {
     method: 'POST',

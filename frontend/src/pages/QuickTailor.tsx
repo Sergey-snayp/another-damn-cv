@@ -60,8 +60,13 @@ interface Suggestion {
   dropped?: string[];
   error?: string;
   decided?: 'used' | 'skipped';
-  /** For the summary: how it answers the posting, and the checks it still fails. */
+  /** For the summary: its gaps, and the checks it still fails. */
   report?: SummaryReport;
+  /** The summary while the AI writes it, and the checks a fix is putting right. */
+  streaming?: string;
+  fixing?: string[];
+  /** The summary was shown as it was written: the change appears at once, not typed in again. */
+  streamed?: boolean;
   /** A job's bullet chosen from the Profile: which achievement, as written there, and where it came from. */
   chosenId?: string;
   original?: string;
@@ -90,16 +95,14 @@ interface ChosenBullet {
 /** What the summary writer returns besides the summary. */
 interface SummaryReport {
   wordCount: number;
-  mapping: Array<{ item: string; type: 'required' | 'preferred'; evidence: string; employer: string | null }>;
   gaps: string[];
   decidingGap: string | null;
   failedChecks: Array<{ id: string; name: string; detail?: string }>;
   attempts: number;
 }
 
-/** The summary's report in the card: failed checks first, then gaps, then the mapping. */
+/** The summary's report in the card: failed checks first, then the gaps. */
 function SummaryReportView({ report }: { report: SummaryReport }) {
-  const missing = report.mapping.filter((line) => /^no evidence$/i.test(line.evidence.trim()));
   return (
     <div className="qt-report">
       {report.failedChecks.length ? (
@@ -116,25 +119,6 @@ function SummaryReportView({ report }: { report: SummaryReport }) {
           <p className="qt-report-label">Gaps</p>
           <ul>{report.gaps.map((gap, index) => <li key={index}>{gap}</li>)}</ul>
         </div>
-      )}
-      {report.mapping.length > 0 && (
-        <details className="qt-report-mapping">
-          <summary>How it answers the posting · {report.mapping.length - missing.length} of {report.mapping.length} items</summary>
-          <table>
-            <tbody>
-              {report.mapping.map((line, index) => {
-                const none = /^no evidence$/i.test(line.evidence.trim());
-                return (
-                  <tr key={index} className={none ? 'none' : ''}>
-                    <td><span className={`qt-report-type ${line.type}`}>{line.type === 'required' ? 'Req' : 'Pref'}</span> {line.item}</td>
-                    <td>{none ? 'No evidence' : line.evidence}</td>
-                    <td>{line.employer ?? ''}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </details>
       )}
     </div>
   );
@@ -155,12 +139,12 @@ function useElapsed(active: boolean): number {
 
 /** What the AI is doing, so a long wait never looks like nothing is happening. */
 function WorkingStatus({ seconds, summary, skills, progress }: {
-  seconds: number; summary: boolean; skills: boolean; progress: string | null;
+  seconds: number; summary: Suggestion | null; skills: boolean; progress: string | null;
 }) {
   const step = !summary ? (progress ?? 'Tailoring this for the job…')
-    : seconds < 20 ? 'Reading the job and your experience…'
-      : seconds < 50 ? 'Writing the summary and checking it against the 10 rules…'
-        : 'Fixing what the checks found. A summary can take up to 2 minutes.';
+    : summary.fixing ? `Fixing ${summary.fixing.length === 1 ? `1 check: ${summary.fixing[0]}` : `${summary.fixing.length} checks: ${summary.fixing.join(', ')}`}…`
+      : summary.streaming ? 'Writing the summary…'
+        : 'Reading the job and your experience…';
   return (
     <p className="qt-working-status" role="status">
       <span className="qt-spinner" aria-hidden="true" />
@@ -170,6 +154,9 @@ function WorkingStatus({ seconds, summary, skills, progress }: {
   );
 }
 
+/** Text still being written: a bold mark opened but not yet closed is left out until it closes. */
+const closedMarks = (text: string) => ((text.match(/\*\*/g)?.length ?? 0) % 2 ? text.replace(/\*\*(?!.*\*\*)/s, '') : text);
+
 /** "**Kafka**" in bold, as it will print. */
 /** A line as the CV shows it: bold, italic, underline and links. */
 const withBold = (text: string) => <MarkedLine text={text} />;
@@ -178,10 +165,10 @@ const withBold = (text: string) => <MarkedLine text={text} />;
  * The new version as a change of the old: what was taken out in red and crossed out, what
  * was put in in green. It types itself in, holding its finished size from the first letter.
  */
-function DiffLine({ before, after }: { before: string; after: string }) {
+function DiffLine({ before, after, instant = false }: { before: string; after: string; instant?: boolean }) {
   const pieces = useMemo(() => lineDiff(before, after), [before, after]);
   const total = pieces.reduce((sum, piece) => sum + piece.text.length + (piece.space ? 1 : 0), 0);
-  const still = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const still = instant || (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const [shown, setShown] = useState(still ? total : 0);
   useEffect(() => {
     if (still) { setShown(total); return; }
@@ -667,6 +654,29 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return response.json() as Promise<T>;
   }
 
+  /** A POST whose answer comes one JSON object per line, each handed on as it arrives. */
+  async function postStream(path: string, body: unknown, onEvent: (event: Record<string, unknown>) => void): Promise<void> {
+    const response = await fetch(`/api/resumes/${encodeURIComponent(contextId)}/${path}`, {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!response.ok || !response.body) throw new Error((await response.json().catch(() => null))?.message ?? `The AI did not answer (${response.status}). Try again.`);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const read = (line: string) => { if (line.trim()) onEvent(JSON.parse(line) as Record<string, unknown>); };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end: number;
+      while ((end = buffer.indexOf('\n')) >= 0) {
+        read(buffer.slice(0, end));
+        buffer = buffer.slice(end + 1);
+      }
+    }
+    read(buffer + decoder.decode());
+  }
+
   /** The other bullets (and description) of a bullet's job, as the draft has them now. */
   function neighboursOf(target: RewriteTarget): string[] {
     const role = draftRef.current?.experiences.find((entry) =>
@@ -680,16 +690,27 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
 
   async function tailorLine(run: number, item: Suggestion, request: string) {
     const { target } = item;
-    updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, report: undefined });
+    updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, report: undefined, streaming: undefined, fixing: undefined, streamed: undefined });
     try {
-      // The summary has its own writer: the summary instructions, checked in code.
+      // The summary has its own writer: the summary instructions, checked in code. It is
+      // shown while it is written, then the checked version (fixed if a check failed) lands.
       if (target.kind === 'summary') {
-        const result = await post<SummaryReport & { summary: string }>('tailor-summary', {
+        let finished = false;
+        let shown = false;
+        await postStream('tailor-summary/stream', {
           ...(request.trim() ? { instruction: request.trim().slice(0, 500) } : {}),
           job: { jobId },
+        }, (event) => {
+          if (event.type === 'draft') { shown = true; updateItem(run, item.key, { streaming: String(event.summary ?? '') }); }
+          else if (event.type === 'fixing') updateItem(run, item.key, { fixing: (event.failed as string[] | undefined) ?? [] });
+          else if (event.type === 'error') throw new Error(String(event.message ?? 'The AI did not answer. Try again.'));
+          else if (event.type === 'done') {
+            finished = true;
+            const { type: _type, summary, ...report } = event as unknown as SummaryReport & { type: string; summary: string };
+            updateItem(run, item.key, { busy: false, after: summary, value: summary, report, streaming: undefined, fixing: undefined, streamed: shown });
+          }
         });
-        const { summary, ...report } = result;
-        updateItem(run, item.key, { busy: false, after: summary, value: summary, report });
+        if (!finished) throw new Error('The AI stopped before the summary was ready. Try again.');
         return;
       }
       const result = await post<{ suggestion: string; cannotDo: string[] }>('tailor-line', {
@@ -1163,7 +1184,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                       <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}${LISTED.has(item.target.kind) ? ' is-listed' : ''}`}>
                         {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
                         {/* Back: the change, red out and green in. Still waiting: the line as it is. */}
-                        {back ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /></div>
+                        {back ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} instant={item.streamed} /></div>
+                          : item.busy && item.streaming ? <div className="qt-screen-text qt-streaming" aria-live="polite">{withBold(closedMarks(item.streaming))}<span className="qt-caret" aria-hidden="true" /></div>
                           : <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>}
                         {back && item.target.kind === 'bullet' && item.after!.trim() && (
                           <BulletMeter text={item.after!} keywords={jobKeywords} compact />
@@ -1201,7 +1223,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   ) : itemActions(solo!)}
                   {waiting > 0 && (many || (solo!.target.kind !== 'bullet' && solo!.target.kind !== 'blurb' && solo!.target.kind !== 'headline')) && (
                     <WorkingStatus seconds={elapsed}
-                      summary={tailoring.items.some((item) => item.busy && item.target.kind === 'summary')}
+                      summary={tailoring.items.find((item) => item.busy && item.target.kind === 'summary') ?? null}
                       skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
                       progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
                   )}

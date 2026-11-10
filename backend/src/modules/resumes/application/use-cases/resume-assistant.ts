@@ -27,7 +27,12 @@ import {
 import type { RenderedResume } from '../../domain/resume';
 import type { LineRewriter, RewriteResult } from './rewrite-resume-line';
 import { experienceRecord } from '../../domain/summary-checks';
-import { writeCheckedSummary, type CheckedSummary, type SummaryWriter } from './tailor-summary';
+import {
+  writeCheckedSummary,
+  type CheckedSummary,
+  type SummaryProgress,
+  type SummaryWriter,
+} from './tailor-summary';
 
 const TAILOR_LINE = `Tailor this line for the job below, so a recruiter for this job sees the match at once:
 - Lead with the part of the line this job cares about most.
@@ -125,11 +130,13 @@ export class ResumeAssistant {
    * Quick tailoring of the summary: written from the summary instructions with
    * the posting and the experience record, checked in code, and sent back for
    * a fix at most twice. Returns the best version with any checks it still fails.
+   * `progress` hears the draft as it is written, and when a fix starts.
    */
   async tailorSummary(
     userId: string,
     id: string,
     input: { instruction?: string; job: JobChoice },
+    progress: SummaryProgress = {},
   ): Promise<CheckedSummary & { original: string }> {
     if (!this.summaryWriter) throw new ResumeError('invalid', 'Summary writing is not available.');
     const resume = await this.resumes.current(userId, id);
@@ -149,6 +156,7 @@ export class ResumeAssistant {
         request: input.instruction,
       },
       record,
+      progress,
     );
     return { ...written, original: resume.summaries.default ?? '' };
   }

@@ -127,6 +127,33 @@ test('the runner preserves CLI arguments, isolated cwd, environment allowlist, s
   assert.equal(existsSync(cwd), false);
 });
 
+test('with onText the answer streams: each piece of text as it comes, then the whole answer', async (context) => {
+  const child = new FakeChild(),
+    runner = fixture(context, [child]);
+  const seen: string[] = [];
+  const result = runner.complete('prompt', 'system', { onText: (soFar) => seen.push(soFar) });
+  const args = runner.launches[0].args;
+  assert.deepEqual(args.slice(1, 5), [
+    '--output-format',
+    'stream-json',
+    '--include-partial-messages',
+    '--verbose',
+  ]);
+  const delta = (text: string) =>
+    JSON.stringify({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'text_delta', text } },
+    });
+  // An event split across chunks, one that is not JSON, and one with no text are all read safely.
+  const first = delta('<summary>Built');
+  child.stdout.write(`${JSON.stringify({ type: 'system', subtype: 'init' })}\n${first.slice(0, 20)}`);
+  child.stdout.write(`${first.slice(20)}\nnot json\n${delta(' APIs.')}\n`);
+  child.stdout.write(`${JSON.stringify({ type: 'result', result: '<summary>Built APIs.</summary>' })}\n`);
+  child.close(0);
+  assert.equal(await result, '<summary>Built APIs.</summary>');
+  assert.deepEqual(seen, ['<summary>Built', '<summary>Built APIs.']);
+});
+
 test('spawn errors and synchronous launch failures keep the existing unavailable response', async (context) => {
   for (const synchronous of [false, true]) {
     const child = new FakeChild(),
