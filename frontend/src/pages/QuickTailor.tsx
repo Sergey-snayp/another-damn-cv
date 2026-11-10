@@ -889,7 +889,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const jobRef = useRef<HTMLDivElement>(null);
   const [slots, setSlots] = useState<{ run: number; at: Record<string, HTMLElement> } | null>(null);
   const keyOnPage = (key?: string) => Boolean(key && behind?.querySelector(`[data-edit-key="${CSS.escape(key)}"]`));
-  const inJob = Boolean(tailoring && tailoring.items.length > 1 && behind?.matches('article')
+  // A job or a whole section: the new versions are drawn into the CV's own text, never a list in
+  // another style, whenever every line is on the page (a skills line is not: it stays a list).
+  const inJob = Boolean(tailoring && tailoring.items.length > 1 && behind?.matches('article, .doc-section')
     && tailoring.items.every((item) => keyOnPage(item.target.key ?? item.insertAfter)));
   const run = tailoring?.run;
   const lineCount = tailoring?.items.length;

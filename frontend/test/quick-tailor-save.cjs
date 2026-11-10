@@ -741,16 +741,20 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.click('[title="Tailor every job for this job posting"]');
         await page.waitForSelector('.qt-unit .qt-generate');
         await page.click('.qt-unit .qt-generate');
-        await page.waitForFunction(() => [...document.querySelectorAll('.qt-unit .qt-screen-line')].some(slot => /Other Co.*bullet/.test(slot.querySelector('.qt-screen-line-label')?.textContent || '') && slot.querySelector('.primary:not([disabled])')));
+        // A whole section is shown in the CV's own text too, each line's change in its own place.
+        await page.waitForFunction(() => [...document.querySelectorAll('.qt-unit .qt-slot')].some(slot => /Go tooling\./.test(slot.textContent) && slot.querySelector('.primary:not([disabled])')));
+        assert.equal(await page.$('.qt-unit .qt-screen-line'), null, 'no list in another style');
+        assert.ok(await page.$eval('.qt-unit .qt-screen-body', body => /Acme Labs/.test(body.textContent) && /Other Co/.test(body.textContent)), 'both jobs as the CV draws them');
         assert.equal(roleRequests.length, groupedBefore + 2);
         assert.deepEqual(roleRequests.slice(groupedBefore).map(body => [body.role.company, body.role.bullets.length]).sort(), [['Acme Labs', 2], ['Other Co', 1]]);
         await page.evaluate(() => {
-          const slot = [...document.querySelectorAll('.qt-unit .qt-screen-line')].find(slot => /Other Co.*bullet/.test(slot.querySelector('.qt-screen-line-label')?.textContent || ''));
+          const slot = [...document.querySelectorAll('.qt-unit .qt-slot')].find(slot => /Go tooling\./.test(slot.textContent));
           [...slot.querySelectorAll('button')].find(button => button.textContent === 'Swap').click();
         });
-        const slots = await page.$$eval('.qt-unit .qt-screen-line', rows => rows.map(row => row.textContent));
-        assert.ok(slots.some(text => /Other Co.*bullet/.test(text) && text.includes('Redis operational') && text.includes('From your saved CVs')));
-        assert.ok(slots.some(text => /Acme Labs.*bullet/.test(text) && text.includes('30%')));
+        await pause(1500);
+        const slots = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
+        assert.ok(slots.some(text => text.includes('Redis operational') && text.includes('From your saved CVs')));
+        assert.ok(slots.some(text => text.includes('30%')));
         assert.ok(!slots.some(text => text.includes('Mentored two engineers')), 'Swap never borrows another role’s alternatives');
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close').click());
         profileChoice = false;
