@@ -112,9 +112,10 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.doesNotMatch(await page.$eval('.ach', element => element.textContent), /deleted|Restore/);
 
     // Paste several lines: several achievements, cleaned, no repeats.
-    await page.click('[aria-label="Add an achievement"]');
+    await button('Add Bullet').click();
+    await page.waitForSelector('[aria-label="New bullet"]');
     await page.evaluate(() => {
-      const box = document.querySelector('[aria-label="Add an achievement"]');
+      const box = document.querySelector('[aria-label="New bullet"]');
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
       setter.call(box, '- Led the migration to Node.js 20.\n• Added rate limiting to the public API.\nStored token state in DynamoDB.\n');
       box.dispatchEvent(new Event('input', { bubbles: true }));
@@ -123,7 +124,8 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await waitSaves(4);
     assert.deepEqual(saves[3].bullets.slice(-2), ['Led the migration to Node.js 20.', 'Added rate limiting to the public API.']);
     assert.equal(saves[3].bullets.filter(item => item === 'Stored token state in DynamoDB.').length, 1, 'a repeat is not added twice');
-    assert.equal(await page.$eval('[aria-label="Add an achievement"]', box => box.value), '');
+    assert.equal(await page.$('[aria-label="New bullet"]'), null, 'the box closes after adding');
+    assert.ok(await page.$('.ach-add-open'), '"+ Add Bullet" is back');
 
     // Longer than a CV line holds: its length shows, and Split puts the parts in its place.
     const long = `Built the TLS certificate service from scratch, still in production, ${'and covered every renewal path with tests '.repeat(6)}and led a 3-person team.`;

@@ -89,9 +89,17 @@
 .ach-removed { display: grid; gap: 4px; margin: 6px 0 0; padding: 8px 10px; list-style: none; border: 1px dashed var(--color-border); border-radius: 10px; font-size: 13px; color: var(--color-muted); }
 .ach-removed li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .ach-removed .profile-text-button { margin: 0; flex: none; }
-.ach-add { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; }
-.ach-add textarea { flex: 1; min-width: 0; padding: 7px 10px; border: 1px dashed var(--color-border); border-radius: 9px; background: none; color: var(--color-text); font: inherit; font-size: 13px; line-height: 1.5; resize: none; field-sizing: content; max-height: 40vh; }
-.ach-add textarea:focus { border-style: solid; border-color: var(--color-text); background: var(--color-surface); outline: none; }
+/* "+ Add Bullet": an outlined button, in the Profile and the job editor. */
+.add-bullet-button { display: inline-flex; align-items: center; gap: 10px; width: fit-content; padding: 8px 18px 8px 14px; border: 1px solid #1e4d45; border-radius: 7px; background: var(--color-surface); color: #1e4d45; font: inherit; font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer; }
+.add-bullet-button:hover { background: #eef5f3; }
+.add-bullet-button:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.add-bullet-button:disabled { opacity: .45; cursor: default; }
+.ach-more .add-bullet-button { margin-top: 10px; }
+.ach-add { display: grid; gap: 6px; margin-top: 10px; }
+.ach-add textarea { width: 100%; min-height: 3.2em; padding: 8px 11px; border: 1px solid var(--color-text); border-radius: 9px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 15px; line-height: 1.55; resize: none; field-sizing: content; max-height: 40vh; }
+.ach-add textarea:focus { outline: none; box-shadow: 0 0 0 3px var(--color-accent-soft); }
+.ach-add-actions { display: flex; align-items: center; gap: 14px; }
+.ach-add-actions .profile-text-button { margin: 0; }
 @media (hover: none) { .ach-remove, .ach-star { opacity: 1; } }
 .profile-entry-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 12px; font-size: 12px; }
 .profile-describe-button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--color-accent-border); border-radius: 999px; background: var(--color-accent-soft); color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }

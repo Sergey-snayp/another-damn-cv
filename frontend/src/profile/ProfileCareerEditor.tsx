@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { careerApi, type CareerSections, type CareerState } from "./careerApi";
+import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import "./profile-import.css";
 import "./profile-career-editor.css";
 
@@ -416,16 +417,16 @@ export function ProfileCareerEditor({
                   )}
                   <button
                     type="button"
-                    className="profile-text-button"
+                    className="add-bullet-button"
                     disabled={role.bullets.length >= 100}
                     onClick={() => {
                       setBullets([...role.bullets, ""]);
                       setFocusBullet(role.bullets.length);
                     }}
                   >
-                    + Add bullet
+                    <Icon name="plus" size={18} />
+                    Add Bullet
                   </button>
-                  <p className="career-hint">Enter starts the next one · Alt ↑↓ moves it.</p>
                 </fieldset>
 
                 <label>

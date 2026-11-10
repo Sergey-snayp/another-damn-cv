@@ -46,7 +46,6 @@
 .career-bullet-tools button:disabled { opacity: .3; cursor: default; }
 .career-bullet-tools .career-remove:hover { color: var(--color-error); }
 .career-edit-bullet:has(.career-remove:hover), .career-edit-bullet:has(.career-remove:focus-visible) { border-color: var(--color-error-border); background: var(--color-error-soft); }
-.profile-import-dialog .career-hint { margin: 2px 0 0; font-size: 12px; }
 
 /* Footer: delete on the left, cancel and save on the right; a question takes its place. */
 .career-editor-footer { align-items: center; }
@@ -135,3 +134,7 @@
 .collect-cvs .collect-job > header p { color: var(--color-text); }
 .profile-heading-actions .profile-text-button { margin: 0; }
 .describe-long .profile-text-button { margin: 0 0 0 4px; }
+
+.profile-import-dialog .add-bullet-button { display: inline-flex; align-items: center; gap: 10px; width: fit-content; margin-top: 8px; padding: 8px 18px 8px 14px; border: 1px solid #1e4d45; border-radius: 7px; background: var(--color-surface); color: #1e4d45; font: inherit; font-size: 15px; font-weight: 600; line-height: 1.3; cursor: pointer; }
+.profile-import-dialog .add-bullet-button:hover { background: #eef5f3; }
+.profile-import-dialog .add-bullet-button:disabled { opacity: .45; cursor: default; }

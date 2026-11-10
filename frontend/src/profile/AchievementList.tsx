@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent } from "react";
 import { ACHIEVEMENT_WORDS, careerApi, wordsIn, type CareerExperience } from "./careerApi";
 import { tagCounts, tagsOf } from "./achievementTags";
 import { BulletMeter } from "../resume/BulletMeter";
+import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 
 const SHOWN = 5;
 export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed">;
@@ -28,6 +29,8 @@ export function AchievementList({
   const [filter, setFilter] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
   const [adding, setAdding] = useState("");
+  /** "+ Add bullet" opens the box; it closes after adding, on Cancel or Escape. */
+  const [addOpen, setAddOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -113,9 +116,15 @@ export function AchievementList({
     const lines = adding.split("\n").map(clean).filter((line) => line.length > 1);
     if (!lines.length) return;
     const fresh = lines.filter((line) => !role.bullets.includes(line));
-    if (await run((current) => ({ bullets: [...current.bullets, ...fresh.filter((line) => !current.bullets.includes(line))] })))
+    if (await run((current) => ({ bullets: [...current.bullets, ...fresh.filter((line) => !current.bullets.includes(line))] }))) {
       setAdding("");
+      setAddOpen(false);
+    }
   }
+  const closeAdd = () => {
+    setAdding("");
+    setAddOpen(false);
+  };
 
   const editKeys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -234,29 +243,46 @@ export function AchievementList({
             {expanded ? "Show fewer" : `Show all ${role.bullets.length}`}
           </button>
         )}
-      </div>
-      <div className="ach-add">
-        <textarea
-          aria-label="Add an achievement"
-          rows={1}
-          maxLength={20000}
-          placeholder="Add an achievement… paste several lines to add several"
-          disabled={disabled || busy}
-          value={adding}
-          onChange={(event) => setAdding(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !adding.includes("\n")) {
-              event.preventDefault();
-              void add();
-            }
-          }}
-        />
-        {adding.trim() && (
-          <button type="button" className="profile-add-button" disabled={disabled || busy} onClick={() => void add()}>
-            {pasted > 1 ? `Add ${pasted}` : "Add"}
+        {!addOpen && (
+          <button type="button" className="add-bullet-button ach-add-open" disabled={disabled || busy} onClick={() => setAddOpen(true)}>
+            <Icon name="plus" size={18} />
+            Add Bullet
           </button>
         )}
       </div>
+      {addOpen && (
+        <div className="ach-add">
+          <textarea
+            aria-label="New bullet"
+            autoFocus
+            rows={2}
+            maxLength={20000}
+            placeholder="What you did, with what, and what it changed. Paste several lines to add several."
+            disabled={disabled || busy}
+            value={adding}
+            onChange={(event) => setAdding(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                closeAdd();
+              } else if (event.key === "Enter" && !event.shiftKey && !adding.includes("\n")) {
+                event.preventDefault();
+                void add();
+              }
+            }}
+          />
+          {pasted <= 1 && adding.trim() && <BulletMeter text={clean(adding)} keywords={technologies} compact />}
+          <div className="ach-add-actions">
+            <button type="button" className="profile-add-button" disabled={disabled || busy || !adding.trim()} onClick={() => void add()}>
+              {pasted > 1 ? `Add ${pasted}` : "Add"}
+            </button>
+            <button type="button" className="profile-text-button" disabled={busy} onClick={closeAdd}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {error && <p className="profile-error" role="alert">{error}</p>}
     </div>
   );

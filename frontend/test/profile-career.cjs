@@ -76,7 +76,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await button('Remove bullet 1 from experience 1').hover();
     assert.notEqual(await page.$eval('.career-edit-bullet', element => getComputedStyle(element).borderColor), 'rgba(0, 0, 0, 0)', 'the removal target is highlighted');
     await button('Remove bullet 1 from experience 1').click();
-    await button('+ Add bullet').click();
+    await button('Add Bullet').click();
     assert.equal(await focused(), 'Bullet 2', 'a new bullet takes the cursor');
     await input('Bullet 2').fill('Led Node.js services and mentored the delivery team.');
     await page.keyboard.press('Enter');
