@@ -26,6 +26,8 @@ import './quick-tailor-theme.css';
 import { AiBadge } from '../profile/AiBox';
 
 const PAGE_WIDTH = 794;
+/** The canvas's padding, left and right (see .qt-canvas): the right one holds the lines' buttons. */
+const CANVAS_GUTTERS = 24 + 48;
 const newId = () => crypto.randomUUID();
 
 /** Marks the job's keywords in its description: found on the CV, or not yet. */
@@ -392,8 +394,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     observer.observe(el);
     return () => observer.disconnect();
   }, [draft !== null]);
-  // The canvas keeps 24px on the left and 84px on the right, where the lines' buttons sit.
-  const fitScale = canvasWidth ? Math.min(1, Math.max(0.5, (canvasWidth - 108) / PAGE_WIDTH)) : 1;
+  // The canvas keeps 24px on the left and 48px on the right, where the lines' buttons sit.
+  const fitScale = canvasWidth ? Math.min(1, Math.max(0.5, (canvasWidth - CANVAS_GUTTERS) / PAGE_WIDTH)) : 1;
   // Zoom: "fit" follows the window; a chosen size (50% to 200%) stays, in this browser.
   const [zoom, setZoomState] = useState<number | null>(() => {
     try {
@@ -461,6 +463,34 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return () => document.removeEventListener('keydown', shortcut);
   }, [moveHistory]);
 
+  /** The name being typed; a name chosen before the first Save is given to the CV when it is saved. */
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const chosenName = useRef<string | null>(null);
+  async function renameSaved(resumeId: string, next: string) {
+    const response = await fetch(`/api/resumes/${encodeURIComponent(resumeId)}/name`, {
+      method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: next }),
+    });
+    if (!response.ok) throw new Error(`${response.status}`);
+    notifyResumesChanged(resumeId);
+  }
+  async function rename() {
+    const next = renaming?.trim();
+    setRenaming(null);
+    if (!next || next === name) return;
+    const before = name;
+    setName(next);
+    if (!workspace?.resumeId) {
+      chosenName.current = next;
+      return;
+    }
+    try {
+      await renameSaved(workspace.resumeId, next);
+    } catch {
+      setName(before);
+      setSaveError('Could not rename the CV.');
+    }
+  }
+
   async function save() {
     const sent = history.current?.document;
     if (!sent || !workspace || savingRef.current) return false;
@@ -476,6 +506,17 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       if (!saved.resumeId) throw new Error('The CV could not be created.');
       setWorkspace(saved);
       setName(saved.name);
+      // A name chosen before this first Save goes to the new CV.
+      const wanted = chosenName.current;
+      if (wanted && wanted !== saved.name) {
+        chosenName.current = null;
+        try {
+          await renameSaved(saved.resumeId, wanted);
+          setName(wanted);
+        } catch {
+          setSaveError('Saved, but the new name could not be set. Rename it again.');
+        }
+      }
       setLoaded(saved.document);
       const savedEdit = history.acceptSaved(sent, saved.document, !workspace.resumeId);
       if (savedEdit) { setDraft(savedEdit.document); setSavedStep(savedEdit.id); }
@@ -895,6 +936,19 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   if (error) return <div className="studio-message"><h1>Quick tailoring</h1><p className="error">{error}</p></div>;
   if (!draft) return <div className="studio-message"><h1>Quick tailoring</h1><p className="muted">Loading…</p></div>;
 
+  const nameControl = renaming !== null ? (
+    <input className="studio-rename qt-rename" aria-label="CV name" autoFocus value={renaming} maxLength={200}
+      onChange={(event) => setRenaming(event.target.value)}
+      onBlur={() => void rename()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') void rename();
+        if (event.key === 'Escape') setRenaming(null);
+      }} />
+  ) : (
+    <button type="button" className="studio-name qt-name-button" title="Rename" aria-label={`Rename: ${name}`} disabled={saving} onClick={() => setRenaming(name)}>
+      <b className="qt-name">{name}</b> <span className="pen" aria-hidden="true">✎</span>
+    </button>
+  );
   const pdfReady = !dirty && !pendingEdit && !layoutChanged && pdfSnapshot === draft.snapshot;
   const status = saving ? creatingPdf ? 'Creating PDF…' : 'Saving CV…'
     : saveError ? 'Save failed' : !resumeId ? 'Unsaved CV draft' : dirty || pendingEdit || layoutChanged ? 'Unsaved changes' : pdfReady ? 'CV and PDF saved' : 'Click Save to create the PDF';
@@ -945,13 +999,13 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       <header className="studio-bar">
         {popup ? (
           <nav className="studio-crumb" aria-label="Quick tailoring">
-            <b className="qt-name" title={name}>{name}</b>
+            {nameControl}
           </nav>
         ) : (
           <nav className="studio-crumb">
             <Link to="/documents" onClick={(event) => { if (dirty && !confirm('Discard your unsaved changes?')) event.preventDefault(); }}>Documents</Link>
             <span className="sep">›</span>
-            <b className="qt-name" title={name}>{name}</b>
+            {nameControl}
           </nav>
         )}
         <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined}>{status}</span>

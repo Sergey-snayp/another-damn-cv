@@ -129,9 +129,6 @@
   .qt .studio-actions .ghost, .qt .studio-actions a.ghost, .qt .studio-actions .primary { padding: 7px 11px; }
 }
 
-/* The right column a little wider, so the assessment and the job read comfortably. */
-.qt .qt-body { grid-template-columns: minmax(0, 1fr) clamp(380px, 32vw, 460px); }
-
 /* Zoom: a small control pinned to the top right of the CV, as it scrolls. */
 .qt .qt-zoom-bar {
   position: sticky; top: 10px; z-index: 6; display: flex; align-items: center; gap: 2px; width: fit-content;
@@ -146,3 +143,17 @@
 .qt .qt-zoom-bar button:disabled { color: #b5b5b1; cursor: default; }
 .qt .qt-zoom-bar .qt-zoom-value { min-width: 50px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .qt .qt-zoom-bar .qt-zoom-fit { font-size: 12.5px; color: var(--qt-green); }
+
+/* Less empty space between the CV and the right column: a narrower gutter for the lines'
+   buttons, and the CV's column no wider than a full-size page needs (the rest goes right). */
+.qt .qt-canvas { padding-right: 48px; }
+.qt .qt-zoom-bar { margin-right: -36px; }
+.qt .qt-body { grid-template-columns: minmax(0, 890px) minmax(380px, 1fr); }
+
+/* The CV's name: click to rename, as in the full editor. */
+.qt .qt-name-button { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: 7px; background: none; color: var(--color-text); font: inherit; cursor: text; }
+.qt .qt-name-button .qt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qt .qt-name-button .pen { opacity: 0; color: var(--color-muted); font-size: 13px; transition: opacity .12s; }
+.qt .qt-name-button:hover, .qt .qt-name-button:focus-visible { background: var(--qt-grey-strong); }
+.qt .qt-name-button:hover .pen, .qt .qt-name-button:focus-visible .pen { opacity: 1; }
+.qt .qt-rename { min-width: 220px; width: min(520px, 40vw); padding: 5px 9px; border: 1px solid var(--qt-green); border-radius: 7px; font: inherit; font-size: 14px; font-weight: 700; outline: none; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }

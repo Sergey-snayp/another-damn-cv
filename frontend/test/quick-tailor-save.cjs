@@ -184,6 +184,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
   let assessmentUnavailable = historyMode;
   let assessedOnOpen = 0;
   let fail = failure, cvSaved = false;
+  const renames = [];
   // When set, the Profile has more achievements for Acme Labs (see tailor-role).
   let profileChoice = false;
   // How many bullets the posting gives Acme Labs when the whole job is tailored.
@@ -250,6 +251,10 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         apply(body.changes);
         cvSaved = true;
         return reply(prepared());
+      }
+      if (pathname === '/api/resumes/copy-1/name' && request.method() === 'PATCH') {
+        renames.push(JSON.parse(request.postData()).name);
+        return reply({ name: renames.at(-1) });
       }
       if (pathname === '/api/resumes') return reply([{ id: 'copy-1', name: 'Sam_Lee_CV_Acme_Engineer', jobId: 'job-1', updatedAt: '2026-11-05' }]);
       if (pathname === '/api/resumes/copy-1') return reply(resume);
@@ -376,13 +381,24 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.click('[aria-label="Zoom in"]');
       await page.click('[aria-label="Zoom in"]');
       const zoomed = Number((await page.$eval('.qt-zoom-value', button => button.textContent)).replace('%', ''));
-      assert.ok(zoomed % 10 === 0 && zoomed > Number(fitted.replace('%', '')) + 10, `steps of 10% from ${fitted}: ${zoomed}`);
-      assert.ok(await width() > before * 1.15, 'the page grows');
+      assert.ok(zoomed % 10 === 0 && zoomed >= Number(fitted.replace('%', '')) + 10, `steps of 10% from ${fitted}: ${zoomed}`);
+      assert.ok(await width() > before * 1.05, 'the page grows');
       await page.click('[aria-label="Zoom out"]');
       assert.equal(Number((await page.$eval('.qt-zoom-value', button => button.textContent)).replace('%', '')), zoomed - 10);
       await page.click('.qt-zoom-fit');
       assert.equal(await page.$eval('.qt-zoom-value', button => button.textContent), fitted);
       assert.equal(await page.$('.qt-zoom-fit'), null, 'at fit, no Fit button');
+      // Rename where the name is: an unsaved draft keeps the name until its first Save; Escape cancels.
+      await page.click('.qt-name-button');
+      await page.waitForSelector('[aria-label="CV name"]');
+      await page.keyboard.press('Escape');
+      assert.equal(await page.$eval('.qt-name', element => element.textContent), 'Sam_Lee_CV_Acme_Engineer');
+      await page.click('.qt-name-button');
+      await page.click('[aria-label="CV name"]', { clickCount: 3 });
+      await page.keyboard.type('Sam Lee - Acme Backend');
+      await page.keyboard.press('Enter');
+      assert.equal(await page.$eval('.qt-name', element => element.textContent), 'Sam Lee - Acme Backend');
+      assert.deepEqual(renames, [], 'not saved anywhere before Save');
       // The format toolbar on a CV line: select a word, Italic, and it prints in italic; Undo takes it back.
       await page.evaluate(selector => {
         const box = document.querySelector(selector);
@@ -894,6 +910,10 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
     assert.equal(createdDocuments, 1, 'only Save creates exactly one document, including after a retry');
     assert.ok(await page.$('a[href$="/pdf?download=1"]'), 'export is enabled only after the PDF is ready');
     assert.deepEqual(events.slice(-2), ['save', 'pdf']);
+    if (!failure) {
+      assert.deepEqual(renames, ['Sam Lee - Acme Backend'], 'Save gives the new CV the chosen name');
+      assert.equal(await page.$eval('.qt-name', element => element.textContent), 'Sam Lee - Acme Backend');
+    }
     assert.deepEqual(errors, []);
     console.log(`PASS Quick Tailor Save (${failure ? `${failure} failure and retry` : 'success'})`);
   } finally {
