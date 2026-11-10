@@ -71,6 +71,16 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.match(await page.$eval('.ai-option', row => row.innerHTML), /<mark class="ai-placeholder">\[X\]<\/mark>/);
     assert.match(await page.$eval('.ai-pane', element => element.textContent), /Replace \[X\] with your own numbers/);
     assert.equal(await page.$('[aria-label="Edit achievement"]'), null, 'the wand opens the box under the bullet as it is');
+    // Another tab and back: the Automatic versions are still there, nothing asked again.
+    const automatic = await options();
+    const asked = asks.length;
+    await clickText('.ai-tabs button', 'Keywords');
+    await page.waitForSelector('.ai-chip');
+    assert.equal(await page.$('.ai-option'), null, 'Keywords shows its own choices');
+    await clickText('.ai-tabs button', 'Automatic');
+    await page.waitForSelector('.ai-option');
+    assert.deepEqual(await options(), automatic, 'the Automatic versions are kept');
+    assert.equal(asks.length, asked, 'and not written again');
     assert.ok(await page.$('.ach-row-ai .ai-box'));
     assert.ok(await page.evaluate(() => [...document.querySelectorAll('.ai-actions button')].some(button => button.textContent === 'Cancel')), 'after Automatic: Cancel');
     // Use it: into the editor, and the placeholder must be filled before Save.
@@ -114,6 +124,11 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await button('Back').click();
     await page.waitForSelector('.ai-chip');
 
+    // Keywords keep their results too, while another tab is open.
+    await button('Generate Bullets').click();
+    await page.waitForSelector('.ai-option');
+    const keywordResults = await options();
+
     // Coach Me: a task, then what it changed.
     await clickText('.ai-tabs button', 'Coach Me');
     await clickText('.ai-task', 'Live production support');
@@ -124,6 +139,11 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await button('Generate Bullets').click();
     await page.waitForSelector('.ai-option');
     assert.deepEqual(asks.at(-1).coach, { task: 'Live production support', impacts: ['More reliable'], amount: '40% fewer incidents', period: 'in 3 months' });
+    await clickText('.ai-tabs button', 'Keywords');
+    await page.waitForSelector('.ai-option');
+    assert.deepEqual(await options(), keywordResults, 'back on Keywords: its results');
+    await clickText('.ai-tabs button', 'Coach Me');
+    await page.waitForSelector('.ai-option');
 
     // Custom Prompt.
     await clickText('.ai-tabs button', 'Custom Prompt');

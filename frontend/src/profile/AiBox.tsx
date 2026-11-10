@@ -68,11 +68,20 @@ export function AiBox({
   onClose(): void;
 }) {
   const [tab, setTab] = useState<Tab>("automatic");
-  const [stage, setStage] = useState<"input" | "working" | "results">("input");
-  const [options, setOptions] = useState<AssistOption[]>([]);
-  const [selected, setSelected] = useState(0);
+  /** Each tab keeps its own results: going to another tab and back shows them again. */
+  const [byTab, setByTab] = useState<Partial<Record<Tab, { options: AssistOption[]; request: Request; selected: number }>>>({});
+  /** Which tabs show their results (rather than their choices). */
+  const [showing, setShowing] = useState<Partial<Record<Tab, boolean>>>({});
+  const [working, setWorking] = useState(false);
+  const current = byTab[tab];
+  const stage: "input" | "working" | "results" = working ? "working" : showing[tab] && current ? "results" : "input";
+  const options = current?.options ?? [];
+  const selected = current?.selected ?? 0;
+  const last = current?.request ?? null;
+  const setSelected = (index: number) =>
+    setByTab((all) => (all[tab] ? { ...all, [tab]: { ...all[tab]!, selected: index } } : all));
+  const showResults = (on: boolean) => setShowing((all) => ({ ...all, [tab]: on }));
   const [error, setError] = useState("");
-  const [last, setLast] = useState<Request | null>(null);
   const [lists, setLists] = useState<{ keywords: string[]; tasks: string[] } | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [ownKeyword, setOwnKeyword] = useState("");
@@ -98,17 +107,16 @@ export function AiBox({
   }, []);
 
   async function generate(request: Request) {
-    setLast(request);
-    setStage("working");
+    setWorking(true);
     setError("");
     try {
       const result = await careerApi.assistAchievement({ source: sourceOf(role), mode, text, keywords: request.keywords, instruction: request.instruction, coach: request.coach });
-      setOptions(result.options);
-      setSelected(0);
-      setStage("results");
+      setByTab((all) => ({ ...all, [request.tab]: { options: result.options, request, selected: 0 } }));
+      setShowing((all) => ({ ...all, [request.tab]: true }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The AI did not write a bullet. Try again.");
-      setStage("input");
+    } finally {
+      setWorking(false);
     }
   }
 
@@ -130,7 +138,6 @@ export function AiBox({
     if (keyword && !picked.includes(keyword) && picked.length < 3) setPicked([...picked, keyword]);
     setOwnKeyword("");
   };
-  const working = stage === "working";
 
   const inputs = () => {
     if (tab === "automatic")
@@ -300,7 +307,7 @@ export function AiBox({
         {last?.tab === "automatic" ? (
           <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
         ) : (
-          <button type="button" className="ai-cancel" onClick={() => setStage("input")}>Back</button>
+          <button type="button" className="ai-cancel" onClick={() => showResults(false)}>Back</button>
         )}
         <button type="button" className="ai-go" disabled={!options[selected]} onClick={() => options[selected] && onUse(options[selected]!.text)}>
           Use Bullet
@@ -322,8 +329,8 @@ export function AiBox({
               className={tab === item.key ? "is-on" : ""}
               disabled={working}
               onClick={() => {
+                // Its own results, if it has any, or its choices.
                 setTab(item.key);
-                setStage("input");
                 setError("");
               }}
             >
