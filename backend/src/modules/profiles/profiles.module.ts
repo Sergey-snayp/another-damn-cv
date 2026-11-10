@@ -10,7 +10,7 @@ import { ClaudeAchievementWriter } from './adapters/outbound/ai/claude-achieveme
 import { DraftAchievements } from './application/use-cases/draft-achievements';
 import { DeepenAchievement } from './application/use-cases/deepen-achievement';
 import { SplitAchievement } from './application/use-cases/split-achievement';
-import { AssistAchievement } from './application/use-cases/assist-achievement';
+import { AssistAchievement, SuggestForJob } from './application/use-cases/assist-achievement';
 import { CollectFromCvs } from './application/use-cases/collect-from-cvs';
 import { ResumeJobsReader } from './adapters/outbound/resume-jobs.reader';
 import { RESUMES_API } from '../resumes/resumes.tokens';
@@ -63,6 +63,11 @@ import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITO
       provide: AssistAchievement,
       inject: [ClaudeProcessRunner],
       useFactory: (runner: ClaudeProcessRunner) => new AssistAchievement(new ClaudeAchievementWriter(runner)),
+    },
+    {
+      provide: SuggestForJob,
+      inject: [ClaudeProcessRunner],
+      useFactory: (runner: ClaudeProcessRunner) => new SuggestForJob(new ClaudeAchievementWriter(runner)),
     },
     {
       provide: SaveProfileCareer,

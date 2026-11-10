@@ -1,0 +1,331 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { careerApi, type AssistOption, type CareerExperience } from "./careerApi";
+import "./ai-box.css";
+
+type Tab = "automatic" | "keywords" | "coach" | "custom";
+type Request = { tab: Tab; keywords: string[]; instruction: string; coach?: { task: string; impacts: string[]; amount: string; period: string } };
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "automatic", label: "Automatic" },
+  { key: "keywords", label: "Keywords" },
+  { key: "coach", label: "Coach Me" },
+  { key: "custom", label: "Custom Prompt" },
+];
+const IMPACTS = ["Faster", "Cheaper to run", "More reliable", "More secure", "Less manual work", "More users or volume", "A new feature or product", "Better team or process"];
+/** "[X]%", "[N] months": a number the person fills in. */
+const PLACEHOLDER = /\[[A-Z]\]/;
+
+/** Keywords and tasks per job, asked for once a session. */
+const suggestions = new Map<string, Promise<{ keywords: string[]; tasks: string[] }>>();
+
+const sourceOf = (role: CareerExperience) => ({
+  title: role.title,
+  company: role.company,
+  client: role.client,
+  description: role.description,
+  bullets: role.bullets,
+  techStack: role.techStack ?? "",
+  notes: "",
+});
+
+/** The option's text with the chosen keywords underlined and placeholders marked. */
+function highlighted(text: string, keywords: string[]): ReactNode[] {
+  const words = keywords.filter(Boolean).map((keyword) => keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(\\[[A-Z]\\]|${words.length ? words.join("|") : "(?!)"})`, "gi");
+  return text.split(pattern).map((part, index) =>
+    index % 2 === 0 ? part : PLACEHOLDER.test(part) ? <mark key={index} className="ai-placeholder">{part}</mark> : <span key={index} className="ai-keyword">{part}</span>,
+  );
+}
+
+/**
+ * Write with AI / Improve with AI, under a bullet being written: Automatic,
+ * Keywords, Coach Me or a Custom Prompt, then 3 versions to choose from. Every
+ * version is checked against the person's facts; a number they never gave is
+ * left as a placeholder ([X]) for them to fill.
+ */
+export function AiBox({
+  role,
+  mode,
+  text,
+  autoStart = false,
+  onUse,
+  onClose,
+}: {
+  role: CareerExperience;
+  /** "improve": the bullet in the editor; "write": a new bullet, from what is typed (maybe nothing). */
+  mode: "improve" | "write";
+  text: string;
+  autoStart?: boolean;
+  onUse(text: string): void;
+  onClose(): void;
+}) {
+  const [tab, setTab] = useState<Tab>("automatic");
+  const [stage, setStage] = useState<"input" | "working" | "results">("input");
+  const [options, setOptions] = useState<AssistOption[]>([]);
+  const [selected, setSelected] = useState(0);
+  const [error, setError] = useState("");
+  const [last, setLast] = useState<Request | null>(null);
+  const [lists, setLists] = useState<{ keywords: string[]; tasks: string[] } | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [ownKeyword, setOwnKeyword] = useState("");
+  const [coachStep, setCoachStep] = useState<1 | 2>(1);
+  const [task, setTask] = useState("");
+  const [ownTask, setOwnTask] = useState("");
+  const [impacts, setImpacts] = useState<string[]>([]);
+  const [amount, setAmount] = useState("");
+  const [period, setPeriod] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const started = useRef(false);
+
+  useEffect(() => {
+    const key = [role.company, role.title, role.client, role.from].join("|");
+    if (!suggestions.has(key)) suggestions.set(key, careerApi.assistSuggestions(sourceOf(role)).catch(() => ({ keywords: [], tasks: [] })));
+    let alive = true;
+    void suggestions.get(key)!.then((value) => alive && setLists(value));
+    return () => {
+      alive = false;
+    };
+    // Once per job.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function generate(request: Request) {
+    setLast(request);
+    setStage("working");
+    setError("");
+    try {
+      const result = await careerApi.assistAchievement({ source: sourceOf(role), mode, text, keywords: request.keywords, instruction: request.instruction, coach: request.coach });
+      setOptions(result.options);
+      setSelected(0);
+      setStage("results");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The AI did not write a bullet. Try again.");
+      setStage("input");
+    }
+  }
+
+  useEffect(() => {
+    if (autoStart && !started.current) {
+      started.current = true;
+      void generate({ tab: "automatic", keywords: [], instruction: "" });
+    }
+    // Once, when opened from the wand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const keywordList = [...new Set([...(lists?.keywords ?? []), ...picked])];
+  const taskList = [...new Set([...(lists?.tasks ?? []), ...(ownTask.trim() && task === ownTask.trim() ? [task] : [])])];
+  const togglePick = (keyword: string) =>
+    setPicked((list) => (list.includes(keyword) ? list.filter((item) => item !== keyword) : list.length < 3 ? [...list, keyword] : list));
+  const addOwnKeyword = () => {
+    const keyword = ownKeyword.trim();
+    if (keyword && !picked.includes(keyword) && picked.length < 3) setPicked([...picked, keyword]);
+    setOwnKeyword("");
+  };
+  const working = stage === "working";
+
+  const inputs = () => {
+    if (tab === "automatic")
+      return (
+        <div className="ai-pane">
+          <p className="ai-question">
+            {mode === "improve" ? "3 stronger versions of this bullet, from your own facts." : text.trim() ? "3 bullets from what you wrote and this job." : "3 bullets from this job's details. Type a few words above to steer them."}
+          </p>
+          <div className="ai-actions">
+            <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
+            <button type="button" className="ai-go" disabled={working} onClick={() => void generate({ tab, keywords: [], instruction: "" })}>
+              {working ? "Writing…" : mode === "improve" ? "Improve" : "Generate Bullets"}
+            </button>
+          </div>
+        </div>
+      );
+    if (tab === "keywords")
+      return (
+        <div className="ai-pane">
+          <p className="ai-question">Select up to 3 keywords to include in your bullet:</p>
+          <div className="ai-choices">
+            {!lists && <p className="ai-muted">Finding keywords for this job…</p>}
+            <div className="ai-chips">
+              {keywordList.map((keyword) => (
+                <label key={keyword} className={`ai-chip${picked.includes(keyword) ? " is-on" : ""}`}>
+                  <input type="checkbox" checked={picked.includes(keyword)} disabled={!picked.includes(keyword) && picked.length >= 3} onChange={() => togglePick(keyword)} />
+                  {keyword}
+                </label>
+              ))}
+            </div>
+            <div className="ai-own">
+              <input
+                aria-label="Add a keyword"
+                placeholder="Manually add keywords for the AI to use"
+                value={ownKeyword}
+                maxLength={60}
+                onChange={(event) => setOwnKeyword(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addOwnKeyword();
+                  }
+                }}
+              />
+              <button type="button" aria-label="Add keyword" disabled={!ownKeyword.trim() || picked.length >= 3} onClick={addOwnKeyword}>+</button>
+            </div>
+          </div>
+          <div className="ai-actions">
+            <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
+            <button type="button" className="ai-go" disabled={working || !picked.length} onClick={() => void generate({ tab, keywords: picked, instruction: "" })}>
+              {working ? "Writing…" : "Generate Bullets"}
+            </button>
+          </div>
+        </div>
+      );
+    if (tab === "coach")
+      return coachStep === 1 ? (
+        <div className="ai-pane">
+          <p className="ai-question">Which of the following responsibilities do you have experience with?</p>
+          <div className="ai-choices">
+            {!lists && <p className="ai-muted">Finding this job's responsibilities…</p>}
+            <div className="ai-tasks" role="radiogroup" aria-label="Responsibilities">
+              {taskList.map((item) => (
+                <label key={item} className={`ai-task${task === item ? " is-on" : ""}`}>
+                  <input type="radio" name="ai-task" checked={task === item} onChange={() => setTask(item)} />
+                  {item}
+                </label>
+              ))}
+            </div>
+            <div className="ai-own">
+              <input
+                aria-label="Add a task"
+                placeholder="Manually add a task"
+                value={ownTask}
+                maxLength={200}
+                onChange={(event) => {
+                  setOwnTask(event.target.value);
+                  setTask(event.target.value.trim());
+                }}
+              />
+            </div>
+          </div>
+          <div className="ai-actions">
+            <button type="button" className="ai-cancel" onClick={onClose}>Cancel</button>
+            <button type="button" className="ai-go" disabled={!task} onClick={() => setCoachStep(2)}>Continue</button>
+          </div>
+        </div>
+      ) : (
+        <div className="ai-pane">
+          <p className="ai-question">What changed because of “{task}”?</p>
+          <div className="ai-choices">
+            <div className="ai-chips">
+              {IMPACTS.map((impact) => (
+                <label key={impact} className={`ai-chip${impacts.includes(impact) ? " is-on" : ""}`}>
+                  <input type="checkbox" checked={impacts.includes(impact)} onChange={() => setImpacts((list) => (list.includes(impact) ? list.filter((item) => item !== impact) : [...list, impact]))} />
+                  {impact}
+                </label>
+              ))}
+            </div>
+            <div className="ai-fields">
+              <label>
+                How much? <span>(optional)</span>
+                <input value={amount} maxLength={200} placeholder="e.g. 30% faster, 2 hours a week, 12 services" onChange={(event) => setAmount(event.target.value)} />
+              </label>
+              <label>
+                Over how long? <span>(optional)</span>
+                <input value={period} maxLength={200} placeholder="e.g. in 3 months, daily, still in production" onChange={(event) => setPeriod(event.target.value)} />
+              </label>
+            </div>
+          </div>
+          <div className="ai-actions">
+            <button type="button" className="ai-cancel" onClick={() => setCoachStep(1)}>Back</button>
+            <button type="button" className="ai-go" disabled={working} onClick={() => void generate({ tab, keywords: [], instruction: "", coach: { task, impacts, amount: amount.trim(), period: period.trim() } })}>
+              {working ? "Writing…" : "Generate Bullets"}
+            </button>
+          </div>
+        </div>
+      );
+    return (
+      <div className="ai-pane">
+        <p className="ai-question">Custom Prompt</p>
+        <div className="ai-prompt">
+          <input
+            aria-label="Custom prompt"
+            placeholder={'Ex: "Make it concise" or "Focus on teamwork"'}
+            value={prompt}
+            maxLength={500}
+            onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && prompt.trim()) {
+                event.preventDefault();
+                void generate({ tab, keywords: [], instruction: prompt.trim() });
+              }
+            }}
+          />
+          <button type="button" className="ai-go" aria-label="Generate" disabled={working || !prompt.trim()} onClick={() => void generate({ tab, keywords: [], instruction: prompt.trim() })}>
+            {working ? "…" : "↑"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const results = () => (
+    <div className="ai-pane">
+      <div className="ai-options" role="radiogroup" aria-label="Versions">
+        {options.map((option, index) => (
+          <label key={index} className={`ai-option${selected === index ? " is-on" : ""}`}>
+            <input type="radio" name="ai-option" checked={selected === index} onChange={() => setSelected(index)} />
+            <span>{highlighted(option.text, last?.keywords ?? [])}</span>
+          </label>
+        ))}
+      </div>
+      {options[selected]?.placeholders.length ? (
+        <p className="ai-note">Replace {options[selected]!.placeholders.join(" and ")} with your own numbers before you save.</p>
+      ) : null}
+      <div className="ai-actions">
+        <button type="button" className="ai-regenerate" disabled={working || !last} onClick={() => last && void generate(last)}>
+          {working ? "Writing…" : "Regenerate"}
+        </button>
+        <span className="ai-spacer" />
+        <button type="button" className="ai-cancel" onClick={() => setStage("input")}>Back</button>
+        <button type="button" className="ai-go" disabled={!options[selected]} onClick={() => options[selected] && onUse(options[selected]!.text)}>
+          Use Bullet
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="ai-box" aria-label={mode === "improve" ? "Improve with AI" : "Write with AI"}>
+      <header className="ai-head">
+        <div className="ai-tabs" role="tablist">
+          {TABS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.key}
+              className={tab === item.key ? "is-on" : ""}
+              disabled={working}
+              onClick={() => {
+                setTab(item.key);
+                setStage("input");
+                setError("");
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="ai-close" aria-label="Close" onClick={onClose}>×</button>
+      </header>
+      {stage === "working" ? (
+        <p className="ai-working" role="status">
+          <span className="ai-dot" aria-hidden="true" /> Writing 3 versions…
+        </p>
+      ) : stage === "results" ? (
+        results()
+      ) : (
+        inputs()
+      )}
+      {error && <p className="profile-error" role="alert">{error}</p>}
+    </section>
+  );
+}

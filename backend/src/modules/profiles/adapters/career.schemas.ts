@@ -131,8 +131,22 @@ export const assistAchievementSchema = z
     text: z.string().trim().max(4000).default(''),
     keywords: z.array(z.string().trim().min(1).max(60)).max(3).default([]),
     instruction: z.string().trim().max(500).default(''),
+    coach: z
+      .object({
+        task: z.string().trim().min(1).max(300),
+        impacts: z.array(z.string().trim().min(1).max(120)).max(8).default([]),
+        amount: z.string().trim().max(200).default(''),
+        period: z.string().trim().max(200).default(''),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
+
+/** Keywords and tasks to pick from for one job's bullets. */
+export const assistSuggestionsSchema = achievementDraftSchema.extend({
+  notes: z.string().max(60000).default(''),
+});
 
 /** "Rewrite with my answers": one proposed achievement, its job, and the answers to its questions. */
 export const splitAchievementSchema = z

@@ -76,20 +76,26 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.match(await page.$eval('.bullet-panel [role="tabpanel"]', element => element.textContent), /Every “yes” is a bullet.*Did you build a system, service or feature from scratch\?.*Did you lead, mentor or train anyone\?/s);
     await page.evaluate(() => [...document.querySelectorAll('.bp-tabs button')].find(tab => tab.textContent === 'Suggestions').click());
     await page.waitForSelector('[aria-label="New bullet"]');
-    assert.equal(await page.$eval(`${first} .ach-write`, element => element.disabled), true);
     await page.type('[aria-label="New bullet"]', 'Built REST APIs.');
     await page.waitForFunction(() => document.querySelectorAll('.bullet-panel .bp-gauge b')[1]?.textContent === '3');
     assert.match(await page.$eval('.bullet-panel', element => element.textContent), /Fair.*Senior Software Engineer · Ciklum.*Words: 3/s);
     assert.match(await page.$eval('.bullet-panel .bp-fixes', element => element.textContent), /Length:.*Metrics:.*Time statement:/s);
     assert.match(await page.$eval(`${first} .ach-count`, element => element.textContent), /C: 16 W: 3/);
-    await page.click('[aria-label="New bullet"]', { clickCount: 3 });
-    await page.type('[aria-label="New bullet"]', 'built the TLS cert service from scratch, ACME + route53 + step functions. ~20k transactions a day.');
-    await page.click(`${first} .ach-write`);
+    // Several lines of rough words: Write with AI turns them into bullets to review together.
+    await page.evaluate(text => {
+      const box = document.querySelector('[aria-label="New bullet"]');
+      box.innerHTML = '';
+      box.focus();
+      const data = new DataTransfer();
+      data.setData('text/plain', text);
+      box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, 'built the TLS cert service from scratch, ACME + route53 + step functions.\n~20k transactions a day.');
+    await page.click(`${first} .ach-ai-button`);
 
     // Straight to review, written from the words typed and the job.
     await page.waitForSelector('.describe-review');
     assert.equal(drafts.length, 1);
-    assert.equal(drafts[0].notes, 'built the TLS cert service from scratch, ACME + route53 + step functions. ~20k transactions a day.', 'only what was typed, no old notes');
+    assert.equal(drafts[0].notes, 'built the TLS cert service from scratch, ACME + route53 + step functions.\n~20k transactions a day.', 'only what was typed, no old notes');
     assert.deepEqual(drafts[0].bullets, ['Developed Node.js microservices and REST APIs for card tokenization.']);
     assert.equal(await page.$eval('#describe-title', element => element.textContent), 'Review 3 bullets');
     assert.equal(await page.$$eval('.describe-item.is-dropped', rows => rows.length), 1, 'a repeat starts dropped');

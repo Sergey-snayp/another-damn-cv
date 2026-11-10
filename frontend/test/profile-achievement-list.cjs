@@ -121,7 +121,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
       data.setData('text/plain', '- Led the migration to Node.js 20.\n• Added rate limiting to the public API.\nStored token state in DynamoDB.\n');
       document.querySelector('[aria-label="New bullet"]').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
     });
-    await button('Add 3').click();
+    await button('Save 3').click();
     await waitSaves(4);
     assert.deepEqual(saves[3].bullets.slice(-2), ['Led the migration to Node.js 20.', 'Added rate limiting to the public API.']);
     assert.equal(saves[3].bullets.filter(item => item === 'Stored token state in DynamoDB.').length, 1, 'a repeat is not added twice');

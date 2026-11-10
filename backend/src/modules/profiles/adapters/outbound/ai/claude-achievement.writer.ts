@@ -155,8 +155,13 @@ ${HONESTY}
 - "improve": <bullet> is the bullet as it is now. Keep everything it says (every number, tool
   and fact); make it read better. "write": <words> is what the person wrote about the work,
   maybe rough or empty; write a new bullet from it and <job>.
-- Use only facts in <bullet> or <words>, <job> and <keywords>. A keyword goes in only where the
-  work used it; otherwise leave it out. Never add a number, a time frame or an outcome.
+- Use only facts in <bullet> or <words>, <job>, <keywords> and <coach>. A keyword goes in only
+  where it is true of this work; otherwise leave it out. <coach> is the task the person did and
+  what it changed, in their words: build the bullet around it.
+- Never make up a number, a time frame or an outcome. Where a number would make the bullet
+  stronger but the facts give none, write a placeholder the person fills in: "[X]%" for a
+  share, "[N]" for a count, "[N] months" for a time. At most 2 placeholders per version.
+- "Led", "managed" or "mentored" only when the facts say so.
 - Follow <request> when there is one, within these rules.
 - The 3 versions, each from another angle:
   1. "Result first": open with what the work changed or what it powers.
@@ -188,6 +193,24 @@ const coverSchema = z.object({
 });
 const deepenSchema = z.object({ text: z.string().catch(''), asks: z.array(z.string()).catch([]) });
 const splitSchema = z.object({ parts: z.array(z.string()).catch([]) });
+const suggestSchema = z.object({
+  keywords: z.array(z.string()).catch([]),
+  tasks: z.array(z.string()).catch([]),
+});
+
+const SUGGEST_SYSTEM = `You list, for one job on a person's career profile, what its bullets could be about.
+
+- "keywords": about 12 short terms (1 to 3 words, Title Case) a recruiter for this kind of job
+  searches for, taken from <job>, <current_bullets> and <notes>: domain terms ("Payment
+  Processing", "Tokenization"), technologies from its tech stack ("AWS Lambda"), and practices
+  ("API Integration", "Production Support"). Only what this job's text points to.
+- "tasks": about 10 responsibilities someone in this job does, each a short phrase in sentence
+  case ("Card payment processing", "REST API development", "Live production support"), from the
+  same text. The person picks the ones they did; never claim one for them.
+
+Return ONLY JSON, no prose and no code fences:
+{"keywords": ["..."], "tasks": ["..."]}`;
+
 const assistSchema = z.object({
   options: z.array(z.object({ angle: z.string().catch(''), text: z.string().catch('') })).catch([]),
 });
@@ -291,7 +314,11 @@ ${input.mode === 'improve' ? `<bullet>\n${input.text}\n</bullet>` : `<words>\n${
 
 <keywords>
 ${input.keywords.join(', ') || '(none)'}
-</keywords>${input.instruction ? `\n\n<request>\n${input.instruction}\n</request>` : ''}`;
+</keywords>${
+      input.coach
+        ? `\n\n<coach>\nTask: ${input.coach.task}\nWhat it changed: ${input.coach.impacts.join(', ') || '(not given)'}\nHow much: ${input.coach.amount || '(not given)'}\nOver how long: ${input.coach.period || '(not given)'}\n</coach>`
+        : ''
+    }${input.instruction ? `\n\n<request>\n${input.instruction}\n</request>` : ''}`;
     const raw = await this.llm.complete(prompt, ASSIST_SYSTEM, {
       effort: 'medium',
       timeoutMs: 120_000,
@@ -299,11 +326,29 @@ ${input.keywords.join(', ') || '(none)'}
     });
     const json = firstJsonObject(raw);
     if (!json) throw new AchievementError('The AI did not write a bullet. Try again.');
-    const facts = [input.source.description, input.text, ...input.keywords].join('\n');
+    const facts = [
+      input.source.description,
+      input.text,
+      ...input.keywords,
+      ...(input.coach
+        ? [input.coach.task, ...input.coach.impacts, input.coach.amount, input.coach.period]
+        : []),
+    ].join('\n');
     return assistSchema.parse(json).options.map((option) => ({
       angle: option.angle,
       text: withoutDashPunctuation(withoutAddedPurpose(option.text, facts)),
     }));
+  }
+
+  async suggest(source: AchievementSource): Promise<{ keywords: string[]; tasks: string[] }> {
+    const raw = await this.llm.complete(achievementPrompt(source), SUGGEST_SYSTEM, {
+      effort: 'low',
+      timeoutMs: 90_000,
+      maxOutputChars: 10_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) return { keywords: [], tasks: [] };
+    return suggestSchema.parse(json);
   }
 
   async split(input: { source: AchievementSource; text: string }): Promise<string[]> {

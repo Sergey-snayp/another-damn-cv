@@ -43,6 +43,14 @@ export interface CareerNote {
   text: string;
   at: string;
 }
+/** One version of a bullet from the AI, with the chosen keywords it works in and the numbers left for you. */
+export interface AssistOption {
+  angle: string;
+  text: string;
+  keywords: string[];
+  placeholders: string[];
+}
+
 /** The standard size of an achievement: about two lines on a CV. Longer ones are split. */
 export const ACHIEVEMENT_WORDS = 40;
 export const wordsIn = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
@@ -171,6 +179,19 @@ export const careerApi = {
       body: JSON.stringify(source),
     }),
   /** "Rewrite with my answers": one achievement filled out with the answers to its questions. */
+  /** "Improve with AI" / "Write with AI": 3 checked versions of one bullet. Nothing is saved. */
+  assistAchievement: (input: {
+    source: { title: string; company: string; client: string; description: string; bullets: string[]; techStack: string; notes: string };
+    mode: "improve" | "write";
+    text: string;
+    keywords: string[];
+    instruction: string;
+    coach?: { task: string; impacts: string[]; amount: string; period: string };
+  }) =>
+    request<{ options: AssistOption[] }>("/achievements/assist", { method: "POST", body: JSON.stringify(input) }),
+  /** Keywords and tasks to pick from, for one job. */
+  assistSuggestions: (source: { title: string; company: string; client: string; description: string; bullets: string[]; techStack: string; notes: string }) =>
+    request<{ keywords: string[]; tasks: string[] }>("/achievements/suggestions", { method: "POST", body: JSON.stringify(source) }),
   /** One achievement too long for a CV line, as 2 to 4 that fit. Nothing is saved. */
   splitAchievement: (input: {
     source: { title: string; company: string; client: string; description: string; bullets: string[]; techStack: string; notes: string };

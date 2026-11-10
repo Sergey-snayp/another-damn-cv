@@ -47,8 +47,15 @@ const LONG = `Built the TLS certificate service from scratch as its principal au
     await page.goto(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`);
     await page.waitForSelector('.profile-entry');
     await page.click('.ach-add-open');
-    await page.type('[aria-label="New bullet"]', 'tls service, alerts');
-    await page.click('.ach-write');
+    await page.evaluate(text => {
+      const box = document.querySelector('[aria-label="New bullet"]');
+      box.innerHTML = '';
+      box.focus();
+      const data = new DataTransfer();
+      data.setData('text/plain', text);
+      box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, 'tls service\nalerts');
+    await page.click('.ach-ai-button');
     await page.waitForSelector('.describe-long');
     assert.match(await page.$eval('.describe-long', element => element.textContent), /\d+ words: a CV line holds about 40/);
     // The bullet check: length, verb, metric, time, keywords; a missing metric opens its question.

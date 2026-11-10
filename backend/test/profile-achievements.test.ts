@@ -518,8 +518,8 @@ test('Improve with AI and Write with AI: 3 versions, each checked against the fa
   ]).execute({ source, mode: 'improve', text: `**${bullet}**`, keywords: ['Node.js'], instruction: '' });
   assert.deepEqual(
     result.options.map((option) => option.angle),
-    ['Result first', 'Technical'],
-    'a version with a number or a name nobody wrote is dropped, and so is the bullet unchanged',
+    ['Technical', 'Result first'],
+    'a version with a number or a name nobody wrote is dropped, and so is the bullet unchanged; the one using the keyword comes first',
   );
   assert.equal((seen[0] as { text: string }).text, bullet, 'the AI reads the words, without marks');
   await assert.rejects(
@@ -542,4 +542,65 @@ test('Improve with AI and Write with AI: 3 versions, each checked against the fa
     instruction: '',
   });
   assert.equal(written.options.length, 1, 'a keyword the person chose is a fact it may use');
+});
+
+test('AI bullets: placeholders instead of made-up numbers, no unclaimed leading, Coach Me answers are facts, keywords first', async () => {
+  const source: AchievementSource = {
+    title: 'Senior Software Engineer',
+    company: 'Ciklum',
+    client: '',
+    description: 'Card payments platform on AWS Lambda.',
+    bullets: [],
+    techStack: '',
+    notes: '',
+  };
+  const assistant = (options: { angle: string; text: string }[]) =>
+    new AssistAchievement({ assist: () => Promise.resolve(options) });
+  const result = await assistant([
+    {
+      angle: 'Result first',
+      text: 'Cut incident response time by [X]% over [N] months on the card payments platform.',
+    },
+    {
+      angle: 'Technical',
+      text: 'Led production support for AWS Lambda services on the card payments platform.',
+    },
+    {
+      angle: 'Concise',
+      text: 'Provided production support for AWS Lambda services on the payments platform.',
+    },
+  ]).execute({
+    source,
+    mode: 'write',
+    text: 'production support',
+    keywords: ['AWS Lambda', 'Production Support'],
+    instruction: '',
+  });
+  assert.deepEqual(
+    result.options.map((option) => option.angle),
+    ['Concise', 'Result first'],
+    '"Led" is dropped when nothing says so; the version with both keywords comes first',
+  );
+  assert.deepEqual(result.options[0].keywords, ['AWS Lambda', 'Production Support']);
+  assert.deepEqual(result.options[1].placeholders, ['[X]', '[N]']);
+
+  const coached = await assistant([
+    {
+      angle: 'Result first',
+      text: 'Cut card payment incidents by 30% in 3 months with live production support on the payments platform.',
+    },
+  ]).execute({
+    source,
+    mode: 'write',
+    text: '',
+    keywords: [],
+    instruction: '',
+    coach: {
+      task: 'Live production support',
+      impacts: ['Fewer incidents'],
+      amount: '30%',
+      period: '3 months',
+    },
+  });
+  assert.equal(coached.options.length, 1, 'numbers the person gave in Coach Me may be used');
 });

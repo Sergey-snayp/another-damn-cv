@@ -22,7 +22,7 @@ import { CareerImportError, type CareerImport, type CareerSections } from '../..
 import { DraftAchievements } from '../../../application/use-cases/draft-achievements';
 import { DeepenAchievement } from '../../../application/use-cases/deepen-achievement';
 import { SplitAchievement } from '../../../application/use-cases/split-achievement';
-import { AssistAchievement } from '../../../application/use-cases/assist-achievement';
+import { AssistAchievement, SuggestForJob } from '../../../application/use-cases/assist-achievement';
 import type { AssistInput } from '../../../application/ports/achievement-writer';
 import { CollectFromCvs } from '../../../application/use-cases/collect-from-cvs';
 import type { DeepenInput } from '../../../application/ports/achievement-writer';
@@ -34,6 +34,7 @@ import {
   deepenAchievementSchema,
   splitAchievementSchema,
   assistAchievementSchema,
+  assistSuggestionsSchema,
 } from '../../career.schemas';
 @Catch(AchievementError)
 class AchievementErrorFilter implements ExceptionFilter {
@@ -65,7 +66,14 @@ export class ProfileCareerController {
     @Inject(CollectFromCvs) private readonly collect: CollectFromCvs,
     @Inject(SplitAchievement) private readonly splitter: SplitAchievement,
     @Inject(AssistAchievement) private readonly assistant: AssistAchievement,
+    @Inject(SuggestForJob) private readonly suggestions: SuggestForJob,
   ) {}
+  /** Keywords and tasks to pick from in "Write with AI", for one job. Nothing is saved. */
+  @Post('achievements/suggestions') @HttpCode(200) suggestForJob(
+    @Body(new ZodValidationPipe(assistSuggestionsSchema)) source: AchievementSource,
+  ) {
+    return this.suggestions.execute(source);
+  }
   /** "Improve with AI" / "Write with AI": 3 checked versions of one bullet. Nothing is saved. */
   @Post('achievements/assist') @HttpCode(200) assistAchievement(
     @Body(new ZodValidationPipe(assistAchievementSchema)) input: AssistInput,

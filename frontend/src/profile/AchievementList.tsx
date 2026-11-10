@@ -8,6 +8,12 @@ import { RichEditor } from "../text/RichEditor";
 import { MarkedLine } from "../text/Marked";
 import { withoutMarks } from "../text/marks";
 import { useConfirm } from "../components/ConfirmDialog";
+import { AiBox } from "./AiBox";
+
+/** A number left for the person to fill: "[X]%", "[N] months". */
+const PLACEHOLDER = /\[[A-Z]\]/;
+const PlaceholderNote = ({ text }: { text: string }) =>
+  PLACEHOLDER.test(text) ? <p className="ach-placeholder-note">Replace [X] and [N] with your own numbers to save.</p> : null;
 
 /** "C: 167  W: 27" under a bullet being written. */
 const Count = ({ text }: { text: string }) => {
@@ -49,6 +55,8 @@ export function AchievementList({
   const [adding, setAdding] = useState("");
   /** "+ Add bullet" opens the box; it closes after adding, on Cancel or Escape. */
   const [addOpen, setAddOpen] = useState(false);
+  /** Write with AI / Improve with AI, open under the bullet being edited or added. */
+  const [ai, setAi] = useState<null | { for: "edit" | "add"; autoStart: boolean }>(null);
   const [busy, setBusy] = useState(false);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -162,7 +170,8 @@ export function AchievementList({
   }
 
   async function finishEdit() {
-    if (!editing) return;
+    if (!editing || PLACEHOLDER.test(editing.text)) return;
+    setAi(null);
     const before = role.bullets[editing.index];
     const text = clean(editing.text);
     setEditing(null);
@@ -175,6 +184,7 @@ export function AchievementList({
   }
 
   async function add() {
+    if (PLACEHOLDER.test(adding)) return;
     // Several lines pasted: several achievements.
     const lines = adding.split("\n").map(clean).filter((line) => line.length > 1);
     if (!lines.length) return;
@@ -186,6 +196,7 @@ export function AchievementList({
   const closeAdd = () => {
     setAdding("");
     setAddOpen(false);
+    setAi(null);
   };
 
   const editKeys = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -196,6 +207,7 @@ export function AchievementList({
       event.preventDefault();
       event.stopPropagation();
       setEditing(null);
+      setAi(null);
     }
   };
 
@@ -287,14 +299,41 @@ export function AchievementList({
                     <div className="ach-meter-narrow">
                       <BulletMeter text={editing.text} keywords={technologies} compact />
                     </div>
+                    <PlaceholderNote text={editing.text} />
                     <div className="ach-editor-actions">
-                      <button type="button" className="profile-text-button" onClick={() => setEditing(null)}>
+                      {ai?.for !== "edit" && (
+                        <button type="button" className="ai-write ach-ai-button" disabled={busy} onClick={() => setAi({ for: "edit", autoStart: true })}>
+                          <Icon name="wand" size={15} /> Improve with AI
+                        </button>
+                      )}
+                      <span className="ach-actions-gap" />
+                      <button
+                        type="button"
+                        className="profile-text-button"
+                        onClick={() => {
+                          setEditing(null);
+                          setAi(null);
+                        }}
+                      >
                         Cancel
                       </button>
-                      <button type="button" className="ach-save" disabled={busy} onClick={() => void finishEdit()}>
+                      <button type="button" className="ach-save" disabled={busy || PLACEHOLDER.test(editing.text)} onClick={() => void finishEdit()}>
                         Save
                       </button>
                     </div>
+                    {ai?.for === "edit" && (
+                      <AiBox
+                        role={role}
+                        mode="improve"
+                        text={editing.text}
+                        autoStart={ai.autoStart}
+                        onUse={(next) => {
+                          setEditing({ index, text: next });
+                          setAi(null);
+                        }}
+                        onClose={() => setAi(null)}
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="ach-body">
@@ -320,6 +359,19 @@ export function AchievementList({
                 {star && <span className="ach-starred" title="Starred: shown first" aria-hidden="true">★</span>}
                 {editing?.index !== index && (
                   <span className="ach-tools" role="toolbar" aria-label="Bullet actions">
+                    <button
+                      type="button"
+                      className="ach-tool"
+                      aria-label={`Improve with AI: ${text}`}
+                      title="Improve with AI"
+                      disabled={disabled || busy}
+                      onClick={() => {
+                        setEditing({ index, text });
+                        setAi({ for: "edit", autoStart: true });
+                      }}
+                    >
+                      <Icon name="wand" size={15} />
+                    </button>
                     <button
                       type="button"
                       className={`ach-tool${star ? " is-on" : ""}`}
@@ -391,7 +443,7 @@ export function AchievementList({
             label="New bullet"
             multiline
             autoFocus
-            placeholder="Write the bullet, or a few rough words and let AI write it. Paste several lines to add several."
+            placeholder="Type a bullet or use AI to write a draft for you."
             value={adding}
             onChange={setAdding}
             onKeyDown={(event) => {
@@ -412,28 +464,46 @@ export function AchievementList({
               <BulletMeter text={clean(adding)} keywords={technologies} compact />
             </div>
           )}
+          <PlaceholderNote text={adding} />
           <div className="ach-add-actions">
-            <button type="button" className="profile-add-button" disabled={disabled || busy || !adding.trim()} onClick={() => void add()}>
-              {pasted > 1 ? `Add ${pasted}` : "Add"}
-            </button>
-            {onWrite && (
+            {ai?.for !== "add" && (
               <button
                 type="button"
-                className="profile-add-button ach-write"
-                disabled={disabled || busy || !adding.trim()}
-                title="Turn rough words into finished bullets to review"
+                className="ai-write ach-ai-button"
+                disabled={disabled || busy}
+                title="Write with AI: 3 drafts from what you typed, this job and your choices"
                 onClick={() => {
-                  onWrite(adding.trim());
-                  closeAdd();
+                  // Several lines: each one written into bullets, reviewed together.
+                  if (pasted > 1 && onWrite) {
+                    onWrite(adding.trim());
+                    closeAdd();
+                  } else setAi({ for: "add", autoStart: true });
                 }}
               >
-                ✦ Write it for me
+                <Icon name="wand" size={15} /> Write with AI
               </button>
             )}
+            <span className="ach-actions-gap" />
             <button type="button" className="profile-text-button" disabled={busy} onClick={closeAdd}>
               Cancel
             </button>
+            <button type="button" className="ach-save" disabled={disabled || busy || !adding.trim() || PLACEHOLDER.test(adding)} onClick={() => void add()}>
+              {pasted > 1 ? `Save ${pasted}` : "Save"}
+            </button>
           </div>
+          {ai?.for === "add" && (
+            <AiBox
+              role={role}
+              mode="write"
+              text={adding}
+              autoStart={ai.autoStart}
+              onUse={(next) => {
+                setAdding(next);
+                setAi(null);
+              }}
+              onClose={() => setAi(null)}
+            />
+          )}
         </div>
       )}
       {error && <p className="profile-error" role="alert">{error}</p>}

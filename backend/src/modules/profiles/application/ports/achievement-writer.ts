@@ -8,6 +8,14 @@ export interface AssistInput {
   /** Up to 3 words to work in where the facts support them. */
   keywords: string[];
   instruction: string;
+  /** "Coach Me": the task the person did and what it changed, in their words. */
+  coach?: { task: string; impacts: string[]; amount: string; period: string };
+}
+
+/** Per job: words worth working into its bullets, and the tasks such a job has, for the person to pick. */
+export interface AssistSuggestions {
+  keywords: string[];
+  tasks: string[];
 }
 
 export interface DeepenInput {
@@ -31,6 +39,8 @@ export interface AchievementWriter {
   }): Promise<{ achievements: { text: string; replaces: string }[]; unplaced: string[] }>;
   /** 3 versions of one bullet (improve) or 3 drafts of a new one (write), each from another angle. */
   assist(input: AssistInput): Promise<{ angle: string; text: string }[]>;
+  /** Keywords and tasks for one job, from its description, bullets and tech stack. */
+  suggest(source: AchievementSource): Promise<AssistSuggestions>;
   /** One achievement too long for a CV line, as 2 to 4 shorter ones that each stand alone. */
   split(input: { source: AchievementSource; text: string }): Promise<string[]>;
 }

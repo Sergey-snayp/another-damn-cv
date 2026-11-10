@@ -267,3 +267,10 @@
 .profile-layout.has-panel .profile-side > .bullet-panel { flex: 0 1 auto; min-height: 0; overflow: hidden; }
 .bullet-panel > * { flex: none; }
 .bullet-panel > .bp-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+/* Write with AI / Improve with AI in a bullet's card: yellow, on the left; Cancel and Save on the right. */
+.ach-ai-button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; }
+.ach-actions-gap { flex: 1; }
+.ach-add-actions { justify-content: flex-start; }
+.ach-add-actions .ach-save, .ach-editor-actions .ach-save { flex: none; }
+.profile-panel .ach-placeholder-note, .ach-placeholder-note { margin: 6px 0 0; font-size: 12px; color: #8a5a00; }
+.ach-add-actions .profile-text-button { margin: 0; color: #1e4d45; font-size: 13px; text-decoration: none; }
