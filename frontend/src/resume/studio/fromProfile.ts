@@ -37,7 +37,8 @@ export function resumeFromProfile(current: RenderedResume, profile: ContactField
         blurb: role.description || null,
         techStack: role.techStack?.trim() || null,
         position,
-        achievements: role.bullets.filter((bullet) => bullet.trim()).map((bullet, order) => ({
+        // Unticked on the Profile page: left out of CVs.
+        achievements: role.bullets.filter((bullet) => bullet.trim() && !(role.excluded ?? []).includes(bullet)).map((bullet, order) => ({
           lineageId: newId(), experienceLineageId: lineageId, bullet, verified: false, position: order,
         })),
       };

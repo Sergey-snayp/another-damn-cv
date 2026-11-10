@@ -35,6 +35,7 @@ const sectionsSchema = z
               .max(50)
               .optional(),
             starred: z.array(z.string().max(4000)).max(100).optional(),
+            excluded: z.array(z.string().max(4000)).max(100).optional(),
             removed: z
               .array(z.object({ text: z.string().trim().min(1).max(4000), at: z.string().max(40) }).strict())
               .max(50)

@@ -16,7 +16,8 @@ export class PublicProfileRolesReader implements ProfileRolesReader {
       client: role.client,
       description: role.description,
       techStack: role.techStack,
-      bullets: role.bullets,
+      // Unticked on the Profile page: kept there, never offered for a CV.
+      bullets: role.bullets.filter((bullet) => !(role.excluded ?? []).includes(bullet)),
       starred: role.starred ?? [],
     }));
   }

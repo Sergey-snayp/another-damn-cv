@@ -27,7 +27,7 @@ const Count = ({ text }: { text: string }) => {
 
 /** A list this long gets topic filters above it. */
 const FILTER_FROM = 8;
-export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed">;
+export type RolePatch = Pick<CareerExperience, "bullets" | "starred" | "removed" | "excluded">;
 
 /** "- Built X" / "• Built X" / "1. Built X" → "Built X". */
 const clean = (line: string) => line.replace(/^\s*(?:[-•*·–]|\d+[.)])\s+/, "").replace(/\s+/g, " ").trim();
@@ -71,6 +71,13 @@ export function AchievementList({
     // The text and whether a box is open decide it; the job's fields are read as they are.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeText]);
+  /** Unticked: kept here, left out of every CV. */
+  const excluded = new Set(role.excluded ?? []);
+  const toggleUse = (text: string) =>
+    void run((current) => {
+      const list = current.excluded ?? [];
+      return { excluded: list.includes(text) ? list.filter((item) => item !== text) : [...list, text] };
+    });
   // In the order they were written (and dragged).
   const ordered = role.bullets.map((text, index) => ({ text, index }));
   const filtered = filter ? ordered.filter((item) => tagsOf(item.text).includes(filter)) : ordered;
@@ -119,6 +126,7 @@ export function AchievementList({
     void run((current) => ({
       bullets: current.bullets.filter((item) => item !== text),
       starred: (current.starred ?? []).filter((item) => item !== text),
+      excluded: (current.excluded ?? []).filter((item) => item !== text),
       removed: [],
     }));
 
@@ -154,6 +162,7 @@ export function AchievementList({
       await run((current) => ({
         bullets: current.bullets.flatMap((item) => (item === text ? parts : [item])),
         starred: (current.starred ?? []).map((item) => (item === text ? parts[0]! : item)),
+        excluded: (current.excluded ?? []).flatMap((item) => (item === text ? parts : [item])),
       }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not split. Try again.");
@@ -173,6 +182,7 @@ export function AchievementList({
     await run((current) => ({
       bullets: current.bullets.map((item) => (item === before ? text : item)),
       starred: (current.starred ?? []).map((item) => (item === before ? text : item)),
+      excluded: (current.excluded ?? []).map((item) => (item === before ? text : item)),
     }));
   }
 
@@ -228,10 +238,11 @@ export function AchievementList({
       {visible.length > 0 && (
         <ul className="ach-list">
           {visible.map(({ text, index }) => {
+            const off = excluded.has(text);
             return (
               <li
                 key={`${index}:${text}`}
-                className={`ach-row${dragging === text ? " is-dragging" : ""}${dropOn === text && dragging !== text ? " is-drop" : ""}`}
+                className={`ach-row${off ? " is-off" : ""}${dragging === text ? " is-dragging" : ""}${dropOn === text && dragging !== text ? " is-drop" : ""}`}
                 draggable={dragging === text}
                 onDragStart={(event) => {
                   event.dataTransfer.effectAllowed = "move";
@@ -271,10 +282,21 @@ export function AchievementList({
                 >
                   <Icon name="grip" size={12} />
                 </button>
-                <svg className="ach-mark" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                  <rect x="1.5" y="1.5" width="17" height="17" rx="4" />
-                  <path d="m6 10.2 2.7 2.7L14.2 7.3" />
-                </svg>
+                <button
+                  type="button"
+                  className={`ach-mark${off ? " is-off" : ""}`}
+                  role="checkbox"
+                  aria-checked={!off}
+                  aria-label={off ? `Use in CVs: ${text}` : `Leave out of CVs: ${text}`}
+                  title={off ? "Left out of your CVs: tick to use it" : "Used in your CVs: untick to leave it out"}
+                  disabled={disabled || busy}
+                  onClick={() => toggleUse(text)}
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                    <rect x="1.5" y="1.5" width="17" height="17" rx="4" />
+                    {!off && <path d="m6 10.2 2.7 2.7L14.2 7.3" />}
+                  </svg>
+                </button>
                 {editing?.index === index ? (
                   <div className="ach-body">
                     <div className="ach-editor">

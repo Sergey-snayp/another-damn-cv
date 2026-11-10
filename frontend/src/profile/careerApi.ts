@@ -36,6 +36,8 @@ export interface CareerExperience {
   notes?: CareerNote[];
   /** Your strongest achievements, by their text: shown first. */
   starred?: string[];
+  /** Kept in the Profile but left out of CVs (unticked), by their text. */
+  excluded?: string[];
   /** Achievements deleted on the Profile page, restorable for 30 days. */
   removed?: CareerNote[];
 }

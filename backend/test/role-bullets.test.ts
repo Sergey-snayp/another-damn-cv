@@ -267,7 +267,8 @@ test('the Profile reader includes active role descriptions and tools, not old no
                 current: false,
                 description: 'Mobile development.',
                 techStack: 'React Native',
-                bullets: [],
+                bullets: ['Shipped the offline mode.', 'Unticked: not for CVs.'],
+                excluded: ['Unticked: not for CVs.'],
                 notes: [{ text: 'Built mobile screens with React Native.', at: '' }],
                 removed: [{ text: 'Deleted achievement.', at: '' }],
               },
@@ -281,6 +282,11 @@ test('the Profile reader includes active role descriptions and tools, not old no
   assert.equal(role.client, 'SymphonyAI');
   assert.equal(role.techStack, 'React Native');
   assert.doesNotMatch(JSON.stringify(role), /Deleted achievement|Built mobile screens/);
+  assert.deepEqual(
+    role.bullets,
+    ['Shipped the offline mode.'],
+    'a bullet unticked on the Profile is never offered for a CV',
+  );
 });
 
 test('single-bullet generation uses the matching client facts and the account’s saved CVs, leaving other clients out', async () => {

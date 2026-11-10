@@ -33,6 +33,8 @@ export interface CareerExperience {
   notes?: CareerNote[];
   /** The strongest achievements, by their text: shown first, preferred when tailoring. */
   starred?: string[];
+  /** Achievements kept in the Profile but left out of CVs (unticked), by their text. */
+  excluded?: string[];
   /** Achievements deleted from the Profile page, restorable for 30 days. */
   removed?: CareerNote[];
 }
@@ -127,11 +129,13 @@ function keepNotes(
     const old = earlier.get(key(role));
     if (!old) return role;
     const starred = (old.starred ?? []).filter((text) => role.bullets.includes(text));
+    const excluded = (old.excluded ?? []).filter((text) => role.bullets.includes(text));
     return {
       ...role,
       ...((role.notes === undefined || (fromImport && !role.notes.length)) &&
         old.notes?.length && { notes: old.notes }),
       ...(starred.length && { starred }),
+      ...(role.excluded === undefined && excluded.length && { excluded }),
       ...(old.removed?.length && { removed: old.removed }),
     };
   });

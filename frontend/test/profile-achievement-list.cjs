@@ -76,6 +76,17 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await pause(300);
     await page.screenshot({ path: '/private/tmp/job-agent-achievement-list.png' });
 
+    // The tick: unticked, a bullet stays here (greyed) and CVs leave it out; ticked again, it is back.
+    await page.click('[aria-label="Leave out of CVs: Stored token state in DynamoDB."]');
+    await waitSaves(1);
+    assert.deepEqual(saves[0].excluded, ['Stored token state in DynamoDB.']);
+    assert.ok(await page.$eval('[aria-label="Use in CVs: Stored token state in DynamoDB."]', box => box.closest('.ach-row').classList.contains('is-off')));
+    assert.equal(await page.$eval('[aria-label="Use in CVs: Stored token state in DynamoDB."]', box => box.getAttribute('aria-checked')), 'false');
+    await page.click('[aria-label="Use in CVs: Stored token state in DynamoDB."]');
+    await waitSaves(2);
+    assert.deepEqual(saves[1].excluded, []);
+    saves.length = 0;
+
     // Edit in place: Enter saves; Escape cancels.
     await page.evaluate(() => [...document.querySelectorAll('.ach-text')].find(item => item.textContent.startsWith('Built a TLS')).click());
     await page.waitForSelector('.ach-edit');
@@ -150,7 +161,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('[aria-label="New bullet"]');
     assert.equal(await page.$eval('[aria-label="New bullet"]', box => box.textContent), 'C line.');
     assert.deepEqual(errors, []);
-    console.log('PASS achievement list: all shown, no stars, tag filters, edit in place, delete for good, paste several, split a long one, move, copy');
+    console.log('PASS achievement list: all shown, no stars, tick in or out of CVs, tag filters, edit in place, delete for good, paste several, split a long one, move, copy');
   } finally {
     await browser.close();
   }

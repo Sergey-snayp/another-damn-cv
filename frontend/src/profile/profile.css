@@ -70,7 +70,14 @@
 /* A bullet: drag handle, check box, text; on hover a grey row and a dark toolbar above it. */
 .ach-row { position: relative; display: grid; grid-template-columns: 12px 17px minmax(0, 1fr) auto; align-items: start; gap: 0 8px; margin: 0 -10px; padding: 5px 10px 5px 4px; border-radius: 8px; }
 .ach-row:hover, .ach-row:focus-within { background: var(--color-background); }
-.ach-mark { width: 17px; height: 17px; margin-top: 2px; fill: none; stroke: #1e4d45; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+/* The tick: this bullet is used in CVs. Unticked, it stays here, greyed, and CVs leave it out. */
+.ach-mark { display: grid; place-items: center; width: 17px; height: 17px; margin-top: 2px; padding: 0; border: 0; background: none; cursor: pointer; }
+.ach-mark svg { width: 17px; height: 17px; fill: none; stroke: #1e4d45; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ach-mark:hover svg rect { fill: #eef5f3; }
+.ach-mark:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; border-radius: 4px; }
+.ach-mark:disabled { cursor: default; }
+.ach-mark.is-off svg { stroke: #a3a39f; }
+.ach-row.is-off .ach-text { color: var(--color-muted); }
 .ach-grip { display: grid; place-items: center; width: 12px; height: 21px; padding: 0; border: 0; background: none; color: var(--color-muted); cursor: grab; opacity: 0; }
 .ach-row:hover .ach-grip, .ach-grip:focus-visible { opacity: 1; }
 .ach-grip:disabled { cursor: default; }
