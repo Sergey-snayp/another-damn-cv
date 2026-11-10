@@ -145,9 +145,7 @@ export function BulletPanel({ active }: { active: ActiveBullet | null }) {
             ))}
           </ul>
         </>
-      ) : (
-        <p className="bp-empty">Edit a bullet, or press + Add Bullet, and it is checked here as you write.</p>
-      )}
+      ) : null}
 
       <div className="bp-tabs" role="tablist">
         {(["suggestions", "examples", "prompts"] as const).map((name) => (

@@ -219,7 +219,6 @@
 .bp-dot { display: grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 10px; font-weight: 700; }
 .bp-dot.is-ok { background: #1e4d45; }
 .bp-dot.is-missing { background: #8b2a3c; }
-.profile-panel .bp-empty { margin: 0; font-size: 13px; }
 .bp-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--color-border); }
 .bp-tabs button { position: relative; padding: 6px 0; border: 0; background: none; color: #1e4d45; font: inherit; font-size: 13px; cursor: pointer; }
 .bp-tabs button.is-on { font-weight: 700; }
