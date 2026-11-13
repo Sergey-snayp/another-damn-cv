@@ -166,6 +166,14 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(await page.$$eval('.profile-career-editor .career-edit-entry', rows => rows.length), 1);
     await button('Cancel').click();
     await closed();
+    // Adding one: the big + after the last entry, as for jobs; none in the heading.
+    assert.equal(await page.$eval('[aria-labelledby="profile-education-heading"]', section => section.lastElementChild.getAttribute('aria-label')), 'Add education', 'after the entries');
+    assert.equal(await page.$('#profile-education-heading + .profile-add-button'), null);
+    await page.click('[aria-label="Add education"]');
+    await page.waitForSelector('.profile-career-editor .career-edit-entry');
+    assert.equal(await page.$eval('#career-editor-title', element => element.textContent), 'Add education');
+    await button('Cancel').click();
+    await closed();
     await page.evaluate(() => scrollTo(0, 0)); // The app's sticky header must not cover the button.
     // The summary is edited in place; the panel beside it checks it as a summary.
     await button('Edit profile summary').click();

@@ -88,12 +88,6 @@ export function ProfileCareer({
     if (item.tools.length) return `${plural(item.tools.length, "new tool")} from your CVs`;
     return "";
   };
-  const add = (section: CareerSectionKey, label: string) => (
-    <button className="profile-add-button" aria-label={label} onClick={() => onEditCareer(section, "new")} disabled={importDisabled}>
-      <Icon name="plus" size={15} />
-      Add
-    </button>
-  );
   const edit = (section: CareerSectionKey, label: string, entry?: number) => (
     <button
       className="profile-edit-button"
@@ -210,7 +204,6 @@ export function ProfileCareer({
       <section className="profile-panel" aria-labelledby="profile-education-heading">
         <div className="profile-panel-heading">
           <h2 id="profile-education-heading">Education</h2>
-          {add("educations", "Add education")}
         </div>
         {educations.length ? (
           educations.map((row, index) => (
@@ -234,6 +227,11 @@ export function ProfileCareer({
         ) : (
           <p className="profile-empty-line">No education saved in Profile yet.</p>
         )}
+        {/* After the last entry, as for jobs. */}
+        <button type="button" className="profile-add-entry" aria-label="Add education" onClick={() => onEditCareer("educations", "new")} disabled={importDisabled}>
+          <span className="profile-add-entry-icon" aria-hidden="true"><Icon name="plus" size={20} /></span>
+          Add education
+        </button>
       </section>
 
       <section className="profile-panel" aria-labelledby="profile-skills-heading">
