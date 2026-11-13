@@ -58,9 +58,15 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     // Location: a country only, alongside Remote.
     await pill('+ Location');
     await page.waitForSelector('.job-fact-card input[name="country"]');
+    assert.equal(await page.$eval('.job-fact-card', node => getComputedStyle(node).position), 'absolute', 'it floats over the page: nothing below moves');
+    assert.deepEqual(await page.$$eval('.job-fact-card .job-fact-field > span', nodes => nodes.map(node => node.textContent)), ['Country', 'City optional'], 'every field has a label above it');
     await page.keyboard.press('Escape');
     assert.equal(await page.$('.job-fact-card'), null, 'Escape closes it');
-    assert.equal(writes.length, 0, 'and saves nothing');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), '+ Location', 'and the keyboard is back on its pill');
+    await pill('+ Location');
+    await page.mouse.click(5, 5);
+    await page.waitForFunction(() => !document.querySelector('.job-fact-card'));
+    assert.equal(writes.length, 0, 'a click outside closes it too, and nothing is saved');
     await pill('+ Location');
     await page.type('.job-fact-card input[name="country"]', 'Canada');
     await page.keyboard.press('Enter');
@@ -94,9 +100,9 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
 
     // Dates: no longer current, with an end date.
     await pill('Oct 2024 – Present');
-    await page.click('.job-fact-card .career-current input');
-    await page.select('.job-fact-card [aria-label="End date month"]', '01');
-    await page.select('.job-fact-card [aria-label="End date year"]', '2026');
+    await page.click('.job-fact-card .job-fact-check input');
+    await page.select('.job-fact-card [aria-label="End month"]', '01');
+    await page.select('.job-fact-card [aria-label="End year"]', '2026');
     await card('Save').click();
     await saves(5);
     assert.deepEqual([writes[4].from, writes[4].to, writes[4].current], ['2024-10', '2026-01', false]);

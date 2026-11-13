@@ -89,8 +89,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.evaluate(() => [...document.querySelectorAll('.job-fact')].find(node => node.textContent === 'Mar 2020 – Present').click());
     await page.waitForSelector('.job-fact-card');
     assert.match(await page.$eval('.job-fact-card .career-date-fixed', element => element.textContent), /Present/, 'a current job ends at Present');
-    await page.select('.job-fact-card [aria-label="Start date year"]', '2019');
-    await page.select('.job-fact-card [aria-label="Start date month"]', '03');
+    await page.select('.job-fact-card [aria-label="Start year"]', '2019');
+    await page.select('.job-fact-card [aria-label="Start month"]', '03');
     await page.locator('.job-fact-card ::-p-text(Save)').click();
     await page.waitForFunction(() => [...document.querySelectorAll('.job-fact')].some(node => node.textContent === 'Mar 2019 – Present'));
     assert.equal(state.data.experiences.value[0].from, '2019-03');

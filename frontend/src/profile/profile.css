@@ -310,18 +310,6 @@
 .job-fact.is-empty:hover { color: #1e4d45; }
 .job-fact:disabled { cursor: default; opacity: .6; }
 .profile-pills li:has(> .job-fact) { padding: 0; border: 0; background: none; }
-.job-fact-card { display: grid; gap: 8px; max-width: 520px; margin-top: 10px; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background); }
-.profile-panel .job-fact-title { margin: 0; font-size: 13px; font-weight: 600; }
-.profile-panel .job-fact-hint { margin: -4px 0 0; color: var(--color-muted); font-size: 12px; }
-.job-fact-card input:not([type="checkbox"]) { min-width: 0; padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 14px; }
-.job-fact-card input:focus { border-color: #1e4d45; outline: none; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
-.job-fact-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.job-fact-choices { display: flex; flex-wrap: wrap; gap: 8px; }
-.job-fact-choices button { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 13px; cursor: pointer; }
-.job-fact-choices button.is-on, .job-fact-choices button:hover { border-color: #1e4d45; background: #eef5f3; color: #1e4d45; }
-.job-fact-card .ach-editor-actions { margin-top: 0; }
-.job-fact-card .job-fact-remove { color: #a33 !important; }
-@media (max-width: 560px) { .job-fact-row { grid-template-columns: 1fr; } }
 /* A job's title and company: click to edit in place. */
 .inline-text { max-width: 100%; margin: 0 -6px; padding: 1px 6px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: text; }
 .inline-text:hover, .inline-text:focus-visible { background: var(--color-background); outline: none; box-shadow: inset 0 0 0 1px var(--color-border); }
@@ -369,3 +357,65 @@
 .collect-job-link:hover { text-decoration: underline; }
 .collect-job-link:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; border-radius: 4px; }
 .collect-job-link:disabled { opacity: .5; cursor: default; }
+
+/*
+ * A pill's editor: a small panel anchored under its pill, pointing at it, over
+ * the page (nothing below moves). Title and ×, labelled fields of one height,
+ * then Remove on the left, Cancel and Save on the right.
+ */
+.job-facts { position: relative; }
+.job-fact-card { --arrow: 24px; position: absolute; z-index: 20; width: 360px; max-width: 100%; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 12px 32px rgba(15, 23, 20, .16), 0 2px 6px rgba(15, 23, 20, .06); animation: job-fact-in .14s ease-out; }
+.job-fact-card.is-wide { width: 440px; }
+.job-fact-card::before { content: ""; position: absolute; top: -7px; left: calc(var(--arrow) - 6px); width: 12px; height: 12px; border-top: 1px solid var(--color-border); border-left: 1px solid var(--color-border); background: var(--color-surface); transform: rotate(45deg); }
+@keyframes job-fact-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .job-fact-card { animation: none; } }
+.job-fact-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 0 16px; }
+.profile-panel .job-fact-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--color-text); }
+.job-fact-close { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--color-muted); cursor: pointer; }
+.job-fact-close:hover { background: var(--color-background); color: var(--color-text); }
+.job-fact-close:focus-visible { outline: 2px solid #1e4d45; outline-offset: 1px; }
+.job-fact-body { display: grid; gap: 12px; padding: 12px 16px 14px; }
+.job-fact-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 10px; border-top: 1px solid var(--color-border); }
+.job-fact-foot .ach-save { padding: 7px 16px; }
+.job-fact-cancel { padding: 7px 12px; border: 0; border-radius: 7px; background: none; color: var(--color-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.job-fact-cancel:hover { background: var(--color-background); }
+.job-fact-remove { display: inline-flex; align-items: center; gap: 6px; padding: 7px 8px; border: 0; border-radius: 7px; background: none; color: var(--color-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.job-fact-remove:hover { background: #fdf0ef; color: #a33; }
+.job-fact-cancel:focus-visible, .job-fact-remove:focus-visible { outline: 2px solid #1e4d45; outline-offset: 1px; }
+
+/* Fields: a label above each, the same height and look for inputs and dropdowns. */
+.job-fact-field { display: grid; gap: 6px; min-width: 0; }
+.job-fact-field > span, .job-fact-card .career-date legend { padding: 0; margin: 0 0 6px; color: var(--color-text); font-size: 13px; font-weight: 600; }
+.job-fact-field > span { margin: 0; }
+.job-fact-field em { margin-left: 4px; color: var(--color-muted); font-style: normal; font-weight: 400; }
+.job-fact-field small, .job-fact-help { color: var(--color-muted); font-size: 12px; line-height: 1.45; }
+.job-fact-card input:not([type="checkbox"]), .job-fact-card select { box-sizing: border-box; width: 100%; height: 38px; min-width: 0; margin: 0; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 14px; font-weight: 400; }
+.job-fact-card select { appearance: none; padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; cursor: pointer; }
+.job-fact-card input:not([type="checkbox"]):hover, .job-fact-card select:hover { border-color: #b8beb9; }
+.job-fact-card input:not([type="checkbox"]):focus, .job-fact-card select:focus { border-color: #1e4d45; outline: none; box-shadow: 0 0 0 3px rgba(30, 77, 69, .14); }
+.job-fact-card input::placeholder { color: #9aa19c; }
+.job-fact-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Dates: Start and End side by side (month, year); "I currently work here" below. */
+.job-fact-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.job-fact-card .career-date { margin: 0; padding: 0; border: 0; min-width: 0; }
+.job-fact-card .career-date > div { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.job-fact-card .career-date-fixed { box-sizing: border-box; display: flex; align-items: center; height: 38px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-muted); font-size: 14px; font-weight: 400; }
+.job-fact-check { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 8px; width: fit-content; font-size: 14px; cursor: pointer; }
+.job-fact-check input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: #1e4d45; cursor: pointer; }
+
+/* Remote / hybrid / on-site: one segmented control; a choice saves at once. */
+.job-fact-segments { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background); }
+.job-fact-segments button { height: 34px; border: 0; border-radius: 7px; background: none; color: var(--color-text); font: inherit; font-size: 14px; cursor: pointer; }
+.job-fact-segments button:hover { background: rgba(30, 77, 69, .07); }
+.job-fact-segments button.is-on { background: var(--color-surface); color: #1e4d45; font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.job-fact-segments button:focus-visible { outline: 2px solid #1e4d45; outline-offset: 1px; }
+
+/* Narrow screens: the panel takes the full width under the pills. */
+@media (max-width: 560px) {
+  .job-fact-card, .job-fact-card.is-wide { left: 0 !important; width: 100%; }
+  .job-fact-card::before { display: none; }
+  .job-fact-row, .job-fact-dates { grid-template-columns: 1fr; }
+}
+/* The Country field suggests names as you type, without Chrome's dropdown arrow. */
+.job-fact-card input[list]::-webkit-calendar-picker-indicator { display: none !important; }
