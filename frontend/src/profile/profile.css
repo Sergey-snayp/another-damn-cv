@@ -354,3 +354,9 @@
 @media (hover: none) {
   .ach-tools, .job-fact-x { opacity: 1; visibility: visible; transition: none; }
 }
+/* "Add work experience" after the last job: a big + on a dashed row, where the next job goes. */
+.profile-add-entry { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 14px; padding: 12px 14px; border: 1.5px dashed var(--color-border); border-radius: 12px; background: none; color: #1e4d45; font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.profile-add-entry:hover { border-color: #1e4d45; background: #eef5f3; }
+.profile-add-entry:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.profile-add-entry:disabled { opacity: .5; cursor: default; }
+.profile-add-entry-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #1e4d45; color: #fff; }

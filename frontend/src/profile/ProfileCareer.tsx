@@ -108,7 +108,6 @@ export function ProfileCareer({
                 Collect from my CVs
               </button>
             )}
-            {add("experiences", "Add work experience")}
           </div>
         </div>
         {experiences.length ? (
@@ -166,6 +165,11 @@ export function ProfileCareer({
         ) : (
           <p className="profile-empty-line">No work experience saved in Profile yet. Import a CV or add your roles.</p>
         )}
+        {/* After the last job, where the next one goes. */}
+        <button type="button" className="profile-add-entry" aria-label="Add work experience" onClick={() => onEditCareer("experiences", "new")} disabled={importDisabled}>
+          <span className="profile-add-entry-icon" aria-hidden="true"><Icon name="plus" size={20} /></span>
+          Add work experience
+        </button>
       </section>
 
       <section className="profile-panel" aria-labelledby="profile-education-heading">
