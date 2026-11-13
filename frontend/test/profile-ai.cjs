@@ -90,6 +90,8 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.deepEqual(await options(), automatic, 'the Automatic versions are kept');
     assert.equal(asks.length, asked, 'and not written again');
     assert.ok(await page.$('.ach-row-ai .ai-box'));
+    assert.equal(await page.$('.ach-row:has(.ai-box) .ach-text'), null, 'the wand: the AI box in the bullet\'s place, not under it');
+    assert.equal(await page.$('.ach-row:has(.ai-box) .ach-tools'), null);
     assert.ok(await page.evaluate(() => [...document.querySelectorAll('.ai-actions button')].some(button => button.textContent === 'Cancel')), 'after Automatic: Cancel');
     // Use it: into the editor, and the placeholder must be filled before Save.
     await button('Use Bullet').click();
@@ -98,6 +100,14 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     assert.equal(await page.$eval('.ach-editor-actions .ach-save', save => save.disabled), true, 'no Save with a placeholder');
     assert.match(await page.$eval('.ach-placeholder-note', note => note.textContent), /Replace \[X\] and \[N\] with your own numbers/);
     await setEditor('Edit achievement', 'Cut card tokenization latency by 30% with REST APIs.');
+    // Improve with AI from the editor: the AI box in the editor's place; closing it brings the editor back as it was.
+    await page.click('.ach-editor-actions .ach-ai-button');
+    await page.waitForSelector('.ach-row .ai-box');
+    assert.equal(await page.$('[aria-label="Edit achievement"]'), null, 'only AI: no editor');
+    assert.equal(await page.$('.ach-editor-actions'), null, 'and no Cancel / Save of its own');
+    await page.click('.ach-row .ai-box .ai-close');
+    await page.waitForSelector('[aria-label="Edit achievement"]');
+    assert.equal(await page.$eval('[aria-label="Edit achievement"]', box => box.textContent), 'Cut card tokenization latency by 30% with REST APIs.', 'the editor comes back as it was');
     await page.waitForFunction(() => !document.querySelector('.ach-editor-actions .ach-save').disabled);
     await page.click('.ach-editor-actions .ach-save');
     for (let i = 0; i < 40 && !saves.length; i++) await pause(100);

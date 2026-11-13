@@ -297,7 +297,23 @@ export function AchievementList({
                     {!off && <path d="m6 10.2 2.7 2.7L14.2 7.3" />}
                   </svg>
                 </button>
-                {editing?.index === index ? (
+                {editing?.index === index && ai?.for === "edit" ? (
+                  // "Improve with AI" takes the editor's place: only AI until a version is used
+                  // (it comes back into the editor) or the box is closed (the editor comes back).
+                  <div className="ach-body">
+                    <AiBox
+                      role={role}
+                      mode="improve"
+                      text={editing.text}
+                      autoStart={ai.autoStart}
+                      onUse={(next) => {
+                        setEditing({ index, text: next });
+                        setAi(null);
+                      }}
+                      onClose={() => setAi(null)}
+                    />
+                  </div>
+                ) : editing?.index === index ? (
                   <div className="ach-body">
                     <div className="ach-editor">
                       <RichEditor
@@ -315,11 +331,9 @@ export function AchievementList({
                     </div>
                     <PlaceholderNote text={editing.text} />
                     <div className="ach-editor-actions">
-                      {ai?.for !== "edit" && (
-                        <button type="button" className="ai-write ach-ai-button" disabled={busy} onClick={() => setAi({ for: "edit", autoStart: true })}>
-                          Improve with AI <AiBadge />
-                        </button>
-                      )}
+                      <button type="button" className="ai-write ach-ai-button" disabled={busy} onClick={() => setAi({ for: "edit", autoStart: true })}>
+                        Improve with AI <AiBadge />
+                      </button>
                       <span className="ach-actions-gap" />
                       <button
                         type="button"
@@ -335,19 +349,22 @@ export function AchievementList({
                         Save
                       </button>
                     </div>
-                    {ai?.for === "edit" && (
-                      <AiBox
-                        role={role}
-                        mode="improve"
-                        text={editing.text}
-                        autoStart={ai.autoStart}
-                        onUse={(next) => {
-                          setEditing({ index, text: next });
-                          setAi(null);
-                        }}
-                        onClose={() => setAi(null)}
-                      />
-                    )}
+                  </div>
+                ) : ai?.for === "row" && ai.index === index ? (
+                  // The wand: the AI box in the bullet's place until it is used or closed.
+                  <div className="ach-body ach-row-ai">
+                    <AiBox
+                      role={role}
+                      mode="improve"
+                      text={text}
+                      autoStart
+                      onUse={(next) => {
+                        // Into the editor: fill any [X], then Save.
+                        setEditing({ index, text: next });
+                        setAi(null);
+                      }}
+                      onClose={() => setAi(null)}
+                    />
                   </div>
                 ) : (
                   <div className="ach-body">
@@ -370,7 +387,7 @@ export function AchievementList({
                     )}
                   </div>
                 )}
-                {editing?.index !== index && (
+                {editing?.index !== index && !(ai?.for === "row" && ai.index === index) && (
                   <span className="ach-tools" role="toolbar" aria-label="Bullet actions">
                     <button
                       type="button"
@@ -416,22 +433,6 @@ export function AchievementList({
                       <Icon name="trash" size={15} />
                     </button>
                   </span>
-                )}
-                {ai?.for === "row" && ai.index === index && editing?.index !== index && (
-                  <div className="ach-row-ai">
-                    <AiBox
-                      role={role}
-                      mode="improve"
-                      text={text}
-                      autoStart
-                      onUse={(next) => {
-                        // Into the editor: fill any [X], then Save.
-                        setEditing({ index, text: next });
-                        setAi(null);
-                      }}
-                      onClose={() => setAi(null)}
-                    />
-                  </div>
                 )}
               </li>
             );
