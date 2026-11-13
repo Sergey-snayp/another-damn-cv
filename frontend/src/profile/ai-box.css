@@ -76,3 +76,6 @@
 .ai-prompt-box textarea::placeholder { color: #8a8a86; }
 .ai-prompt-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ai-prompt-foot .ach-count b { margin-right: 2px; }
+/* Under the versions: what to change in the chosen one, sent with it by Regenerate. */
+.ai-comment { padding: 8px 12px; }
+.ai-comment textarea { min-height: 1.6em; }

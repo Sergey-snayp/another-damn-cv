@@ -124,7 +124,7 @@ export function SummaryEditor({
               tabs={["automatic", "keywords", "custom"]}
               keywordChoices={keywords}
               run={async (request) =>
-                (await careerApi.assistSummary({ mode, text: editing, keywords: request.keywords, instruction: request.instruction })).options
+                (await careerApi.assistSummary({ mode: request.text ? "improve" : mode, text: request.text ?? editing, keywords: request.keywords, instruction: request.instruction })).options
               }
               onUse={(next) => {
                 setEditing(next);

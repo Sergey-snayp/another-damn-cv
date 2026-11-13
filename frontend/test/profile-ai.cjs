@@ -177,6 +177,14 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.keyboard.press('Enter');
     await page.waitForSelector('.ai-option');
     assert.equal(asks.at(-1).instruction, 'Make it concise');
+    // Not quite: a comment under the versions; Regenerate sends it with the chosen version.
+    await page.evaluate(() => document.querySelectorAll('.ai-option input')[1].click());
+    const chosen = await page.$eval('.ai-option.is-on span', node => node.textContent);
+    await page.type('[aria-label="What to change in the chosen version"]', 'Make it shorter');
+    await page.click('.ai-regenerate');
+    await page.waitForSelector('.ai-option');
+    assert.deepEqual([asks.at(-1).mode, asks.at(-1).text, asks.at(-1).instruction], ['improve', chosen, 'Make it shorter'], 'the chosen version and the comment');
+    assert.equal(await page.$eval('[aria-label="What to change in the chosen version"]', field => field.value), '', 'the comment is sent, then cleared');
     await page.evaluate(() => document.querySelectorAll('.ai-option input')[2].click());
     await button('Use Bullet').click();
     await page.waitForFunction(() => !document.querySelector('.ai-box'));

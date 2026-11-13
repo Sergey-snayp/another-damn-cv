@@ -11,7 +11,14 @@ export const AiBadge = () => (
 );
 
 type Tab = "automatic" | "keywords" | "coach" | "custom";
-type Request = { tab: Tab; keywords: string[]; instruction: string; coach?: { task: string; impacts: string[]; amount: string; period: string } };
+type Request = {
+  tab: Tab;
+  keywords: string[];
+  instruction: string;
+  coach?: { task: string; impacts: string[]; amount: string; period: string };
+  /** Refine: the chosen version, rewritten as the person's comment (the instruction) asks. */
+  base?: string;
+};
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "automatic", label: "Automatic" },
@@ -72,7 +79,7 @@ export function AiBox({
   /** What is written: a job's "bullet", or the "summary". */
   subject?: "bullet" | "summary";
   /** Writes the versions; a job's bullet uses the bullet writer by default. */
-  run?(request: { keywords: string[]; instruction: string }): Promise<AssistOption[]>;
+  run?(request: { keywords: string[]; instruction: string; text?: string }): Promise<AssistOption[]>;
   /** The keywords to choose from, when they do not come from the job. */
   keywordChoices?: string[];
   tabs?: Tab[];
@@ -106,6 +113,8 @@ export function AiBox({
   const [amount, setAmount] = useState("");
   const [period, setPeriod] = useState("");
   const [prompt, setPrompt] = useState("");
+  /** Under the versions: what to change in the chosen one; Regenerate sends both. */
+  const [comment, setComment] = useState("");
   const started = useRef(false);
 
   useEffect(() => {
@@ -129,8 +138,10 @@ export function AiBox({
     setError("");
     try {
       const result = run
-        ? { options: await run({ keywords: request.keywords, instruction: request.instruction }) }
-        : await careerApi.assistAchievement({ source: sourceOf(role!), mode, text, keywords: request.keywords, instruction: request.instruction, coach: request.coach });
+        ? { options: await run({ keywords: request.keywords, instruction: request.instruction, text: request.base }) }
+        : request.base
+          ? await careerApi.assistAchievement({ source: sourceOf(role!), mode: "improve", text: request.base, keywords: request.keywords, instruction: request.instruction })
+          : await careerApi.assistAchievement({ source: sourceOf(role!), mode, text, keywords: request.keywords, instruction: request.instruction, coach: request.coach });
       setByTab((all) => ({ ...all, [request.tab]: { options: result.options, request, selected: 0 } }));
       setShowing((all) => ({ ...all, [request.tab]: true }));
     } catch (reason) {
@@ -319,6 +330,16 @@ export function AiBox({
     );
   };
 
+  /** With a comment: the chosen version and the comment; without: the same request again. */
+  const regenerate = () => {
+    if (!last || working) return;
+    const note = comment.trim();
+    const chosen = options[selected]?.text;
+    if (note && chosen) {
+      void generate({ tab, keywords: last.keywords, instruction: note, base: chosen });
+      setComment("");
+    } else void generate(last);
+  };
   const results = () => (
     <div className="ai-pane">
       <div className="ai-options" role="radiogroup" aria-label="Versions">
@@ -332,8 +353,31 @@ export function AiBox({
       {options[selected]?.placeholders.length ? (
         <p className="ai-note">Replace {options[selected]!.placeholders.join(" and ")} with your own numbers before you save.</p>
       ) : null}
+      {/* Not quite right? Say what to change; Regenerate rewrites the chosen version that way. */}
+      <div className="ai-prompt-box ai-comment">
+        <textarea
+          aria-label="What to change in the chosen version"
+          rows={1}
+          placeholder="Not quite? Say what to change in the chosen version: “shorter”, “mention Route53”…"
+          value={comment}
+          maxLength={500}
+          onChange={(event) => setComment(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              regenerate();
+            }
+          }}
+        />
+      </div>
       <div className="ai-actions">
-        <button type="button" className="ai-regenerate" disabled={working || !last} onClick={() => last && void generate(last)}>
+        <button
+          type="button"
+          className="ai-regenerate"
+          disabled={working || !last}
+          title={comment.trim() ? "Rewrite the chosen version as your comment says" : "Write 3 new versions the same way"}
+          onClick={regenerate}
+        >
           {working ? "Writing…" : "Regenerate"} <AiBadge />
         </button>
         <span className="ai-spacer" />
