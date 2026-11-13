@@ -265,7 +265,23 @@
 
 /* ── preview ─────────────────────────────────────────────────────────────── */
 
-.studio-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--color-background); }
+.studio-preview { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--color-background); }
+/* A panel's fold: a round tab on its edge, halfway down, half over the panel and half over the page. */
+.studio-fold {
+  position: absolute; top: 50%; z-index: 6; display: grid; place-items: center; width: 26px; height: 52px; padding: 0;
+  border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-muted);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .06); transform: translateY(-50%); cursor: pointer;
+}
+.studio-fold.left { left: -13px; }
+.studio-fold.right { right: -13px; }
+/* Folded: the tab rests inside the page's edge. */
+.studio-body.left-closed .studio-fold.left { left: 6px; }
+.studio-body.right-closed .studio-fold.right { right: 6px; }
+.studio-fold:hover { color: var(--color-text); border-color: var(--color-text); }
+.studio-fold:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.studio-fold svg { display: block; }
+.studio-preview:fullscreen .studio-fold { display: none; }
+@media print { .studio-fold { display: none !important; } }
 .studio-tools {
   display: flex; align-items: center; gap: 4px; flex: none; padding: 8px 14px;
   border-bottom: 1px solid var(--color-border); background: var(--color-surface);
@@ -295,7 +311,51 @@
   min-height: 0; overflow-y: auto; scrollbar-gutter: stable;
   background: var(--color-surface); border-left: 1px solid var(--color-border);
 }
-.ra { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.studio-right { display: flex; flex-direction: column; }
+.ra { display: flex; flex-direction: column; gap: 12px; padding: 0 14px 14px; flex: 1; min-height: 0; }
+/* Two tabs, underlined like the Profile's. */
+.ra-tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 4px; margin: 0 -14px; padding: 0 14px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+.ra-tabs button { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 13px 10px 11px; border: 0; background: none; color: var(--color-muted); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ra-tabs button:hover { color: var(--color-text); }
+.ra-tabs button.on { color: var(--color-text); }
+.ra-tabs button.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--color-text); }
+.ra-tabs button:focus-visible { outline: 2px solid var(--color-text); outline-offset: -2px; border-radius: 6px; }
+.ra-pane { display: flex; flex-direction: column; gap: 12px; }
+
+/* Chat: the job and its score on top, the conversation, the box at the bottom. */
+.ra.is-chat { overflow: hidden; }
+.ra-chat-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 10px; }
+.ra-chat-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.ra-tailoring { flex: 1; min-width: 0; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; line-height: 1.4; text-align: left; color: var(--color-text); cursor: pointer; }
+.ra-tailoring span { display: block; font-size: 12px; color: var(--color-muted); }
+.ra-tailoring b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ra-tailoring:hover b { text-decoration: underline; }
+.ra-mini-score { flex: none; }
+.ra-mini-score .ra-gauge { width: 68px; }
+.ra-mini-score.busy { opacity: .55; }
+.ra-chat-pane .ra-messages { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; }
+.ra-empty { display: flex; flex-direction: column; align-items: center; margin: auto 0; padding: 16px 6px; text-align: center; }
+.ra-empty-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 10px; border-radius: 12px; background: var(--color-accent); color: var(--color-text); }
+.ra-empty h4 { margin: 0; font-size: 15px; }
+.ra-empty p { margin: 6px 0 14px; font-size: 12px; line-height: 1.45; color: var(--color-muted); }
+.ra-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.ra-chips button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.ra-chips button:hover { border-color: var(--color-text); }
+.ra-chips button:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.ra-compose { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 8px 8px 6px 12px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
+.ra-compose:focus-within { border-color: var(--color-text); }
+.ra-compose textarea { width: 100%; min-height: 40px; max-height: 160px; padding: 2px 0; border: 0; outline: none; resize: none; background: none; color: var(--color-text); font: inherit; font-size: 13px; line-height: 1.45; }
+.ra-compose-bar { display: flex; align-items: center; justify-content: space-between; }
+.ra-plus, .ra-send { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border-radius: 50%; cursor: pointer; }
+.ra-plus { margin-left: -4px; border: 1px solid var(--color-border); background: none; color: var(--color-text); }
+.ra-plus:hover, .ra-plus[aria-expanded="true"] { background: var(--color-background); }
+.ra-send { border: 0; background: var(--color-text); color: var(--color-surface); }
+.ra-send:disabled { background: var(--color-border); cursor: default; }
+.ra-plus svg, .ra-send svg { display: block; }
+.ra-plus:focus-visible, .ra-send:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.ra-quick-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
+.ra-quick-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; background: none; color: var(--color-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.ra-quick-menu button.on { background: var(--color-background); }
 .ra-card { padding: 14px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
 .ra-card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; }
 .ra-beta {
@@ -310,11 +370,11 @@
 .ra-row { display: flex; gap: 8px; }
 
 .ra-pick { display: flex; flex-direction: column; gap: 8px; }
-.ra-pick select, .ra-pick input, .ra-pick textarea, .ra-ask textarea {
+.ra-pick select, .ra-pick input, .ra-pick textarea {
   width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit; font-size: 13px;
   border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface);
 }
-.ra-pick textarea, .ra-ask textarea { resize: vertical; }
+.ra-pick textarea { resize: vertical; }
 .studio-tabs.small { padding: 0; border: 0; position: static; }
 .studio-tabs.small button { padding: 5px; font-size: 12px; }
 
@@ -361,13 +421,6 @@
 .ra-kw.have { color: var(--color-success); background: var(--color-success-soft); border-color: var(--color-success-border); }
 .ra-kw.miss { color: var(--color-muted); }
 
-.ra-chat .ra-messages { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; margin-bottom: 8px; }
-.ra-starters { display: flex; flex-direction: column; gap: 6px; }
-.ra-starters button {
-  padding: 7px 10px; font: inherit; font-size: 12px; text-align: left; color: var(--color-text);
-  background: var(--color-background); border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer;
-}
-.ra-starters button:hover { border-color: var(--color-text); }
 .ra-msg p { margin: 0; white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
 .ra-msg.user { align-self: flex-end; max-width: 85%; padding: 7px 10px; background: var(--color-accent-soft); border-radius: 10px 10px 2px 10px; }
 .ra-msg.assistant { align-self: stretch; }
@@ -375,7 +428,6 @@
 .ra-where { font-size: 11px; font-weight: 700; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .ra-suggestion .before { margin-top: 4px; font-size: 12px; color: var(--color-muted); text-decoration: line-through; }
 .ra-suggestion .after { margin: 4px 0; font-size: 13px; }
-.ra-ask { display: flex; gap: 6px; align-items: flex-end; }
 
 /* A popup window from the extension: the page is the whole window. */
 .popup-frame .studio { height: 100vh; }

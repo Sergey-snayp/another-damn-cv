@@ -293,10 +293,11 @@ export function ResumeEditor() {
     }
   }
 
-  async function exportPdf(e: MouseEvent<HTMLAnchorElement>) {
-    e.preventDefault();
+  /** Saves, makes the PDF and downloads it: from the header's button or the chat's "Export to PDF". */
+  async function exportPdf(e?: MouseEvent<HTMLAnchorElement>) {
+    e?.preventDefault();
     if (exporting || saving || held) return;
-    const href = e.currentTarget.href;
+    const href = `/api/resumes/${id}/pdf?download=1`;
     setExporting(true);
     try {
       // Content and layout must be persisted before the explicit PDF action.
@@ -448,11 +449,8 @@ export function ResumeEditor() {
               </button>}
         </nav>
         <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined}>{status}</span>
-        {/* The view's tools sit in the header: side panels, fit, zoom, full screen. */}
+        {/* The view's tools sit in the header: fit, zoom, full screen. */}
         <div className="studio-tools" role="toolbar" aria-label="View">
-          <button title={leftOpen ? 'Hide the side panel' : 'Show the side panel'} onClick={() => setLeftOpen(!leftOpen)}>
-            {leftOpen ? '«' : '»'}
-          </button>
           <button className={zoom === 'fit-page' ? 'on' : ''} onClick={() => setZoom('fit-page')}>Fit to Page</button>
           <button title="Zoom out" onClick={() => zoomBy(-0.1)}><DashboardIcon name="minus" size={16} /></button>
           <button className={zoom === 'fit-width' ? 'pct on' : 'pct'} title="Fit to width" onClick={() => setZoom('fit-width')}>
@@ -463,9 +461,6 @@ export function ResumeEditor() {
             if (document.fullscreenElement) void document.exitFullscreen();
             else void preview.current?.requestFullscreen();
           }}>⛶</button>
-          <button title={rightOpen ? 'Hide Resume Score and Chat' : 'Show Resume Score and Chat'} onClick={() => setRightOpen(!rightOpen)}>
-            {rightOpen ? '»' : '«'}
-          </button>
         </div>
         <span className="studio-actions">
           <Link className="ghost" to={`/documents/${id}/history`}>History</Link>
@@ -598,6 +593,19 @@ export function ResumeEditor() {
         )}
 
         <main className="studio-preview" ref={preview}>
+          {/* Round handles on the panels' edges, halfway down: each folds its panel away and back. */}
+          <button type="button" className="studio-fold left" aria-expanded={leftOpen}
+            aria-label={leftOpen ? 'Hide the side panel' : 'Show the side panel'} title={leftOpen ? 'Hide the side panel' : 'Show the side panel'}
+            onClick={() => setLeftOpen(!leftOpen)}>
+            <DashboardIcon name={leftOpen ? 'chevronLeft' : 'chevron'} size={16} />
+          </button>
+          {jobId !== undefined && (
+            <button type="button" className="studio-fold right" aria-expanded={rightOpen}
+              aria-label={rightOpen ? 'Hide Resume Score and Chat' : 'Show Resume Score and Chat'} title={rightOpen ? 'Hide Resume Score and Chat' : 'Show Resume Score and Chat'}
+              onClick={() => setRightOpen(!rightOpen)}>
+              <DashboardIcon name={rightOpen ? 'chevron' : 'chevronLeft'} size={16} />
+            </button>
+          )}
           <div className="studio-canvas" ref={canvas}>
             <ScaledPage className="studio-zoom" scale={scale} onClick={openFromPreview}>
               {/* Drawn as the PDF's sheets, with the same page breaks. */}
@@ -619,6 +627,7 @@ export function ResumeEditor() {
               onIssues={setScore}
               onApply={applySuggestion}
               onOpenSection={(key: IssueSection) => { setTab('editor'); setSection(key); setLeftOpen(true); }}
+              onExport={() => void exportPdf()}
             />
           </aside>
         )}

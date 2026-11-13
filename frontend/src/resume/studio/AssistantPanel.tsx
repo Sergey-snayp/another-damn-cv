@@ -43,11 +43,13 @@ interface ChatEntry extends ChatMessage {
 }
 
 /**
- * The right column, as in Simplify's editor: the CV's score for a job with
- * what to fix, a button that tailors the CV for that job, and a chat about
- * the CV whose suggestions you apply one by one.
+ * The right column, two tabs. Resume Score: the CV's score for a job with what
+ * to fix, and a button that tailors a copy for that job. Chat: "Tailoring for
+ * <job>" with its score, then a conversation about the CV whose suggestions
+ * are applied one by one; quick actions as chips when it is empty, and from
+ * "+" or "/" in the box.
  */
-export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIssues, onApply, onOpenSection }: {
+export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIssues, onApply, onOpenSection, onExport }: {
   resumeId: string;
   /** The CV as it is being edited, for the keyword cards' "Used in". */
   resume?: RenderedResume | null;
@@ -59,6 +61,8 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
   /** Applies one chat suggestion to the CV; returns false when the person cancels. */
   onApply(suggestion: ChatSuggestion): boolean;
   onOpenSection(section: IssueSection): void;
+  /** Saves and downloads the PDF, as the header's button does. */
+  onExport?(): void;
 }) {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
@@ -91,6 +95,11 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
   const [chatError, setChatError] = useState<string | null>(null);
   const [applied, setApplied] = useState<Set<string>>(new Set());
   const chatEnd = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const [view, setView] = useState<'score' | 'chat'>('score');
+  /** The quick actions' menu, from "+" or a "/" typed first; the highlighted one. */
+  const [menu, setMenu] = useState(false);
+  const [active, setActive] = useState(0);
 
   useEffect(() => {
     void jobsApi.list().then(
@@ -157,6 +166,30 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
     }
   }
 
+  /** Choosing a job happens on the score tab, where the job picker is. */
+  function chooseJob() {
+    setView('score');
+    setPicking(true);
+  }
+
+  const quick: { label: string; icon: Parameters<typeof DashboardIcon>[0]['name']; run(): void }[] = [
+    { label: 'Fit to one page', icon: 'file', run: () => void ask('Fit my resume to one page: what should I shorten or cut, without losing the strongest points?') },
+    { label: 'Tailor to job', icon: 'briefcase', run: () => (choice ? void ask('Tailor my resume to this job: which lines should change first, and how?') : chooseJob()) },
+    { label: 'Review my resume', icon: 'search', run: () => void ask('Review my resume. What are the most important things to fix first?') },
+    ...(onExport ? [{ label: 'Export to PDF', icon: 'download' as const, run: onExport }] : []),
+  ];
+  const slash = typed.startsWith('/') ? typed.slice(1).trim().toLowerCase() : null;
+  const offered = slash === null ? quick : quick.filter((item) => item.label.toLowerCase().includes(slash));
+  const menuOpen = (menu || slash !== null) && offered.length > 0;
+  function pick(at: number) {
+    const item = offered[at];
+    if (!item) return;
+    setMenu(false);
+    setTyped('');
+    setActive(0);
+    item.run();
+  }
+
   const chosenName = choice && ('jobId' in choice
     ? (() => { const job = jobs?.find((item) => item.id === choice.jobId); return job ? `${jobName(job)}${job.company ? ` · ${job.company}` : ''}` : score?.job.title ?? 'Job'; })()
     : choice.title || 'Pasted job');
@@ -164,9 +197,16 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
   for (const issue of score?.issues ?? []) bySection.set(issue.section, (bySection.get(issue.section) ?? 0) + 1);
 
   return (
-    <div className="ra">
-      <section className="ra-card">
-        <h3>Resume Score</h3>
+    <div className={`ra is-${view}`}>
+      <div className="ra-tabs" role="tablist" aria-label="Resume Score and Chat">
+        <button type="button" role="tab" aria-selected={view === 'score'} className={view === 'score' ? 'on' : ''} onClick={() => setView('score')}>Resume Score</button>
+        <button type="button" role="tab" aria-selected={view === 'chat'} className={view === 'chat' ? 'on' : ''} onClick={() => setView('chat')}>
+          Chat <span className="ra-beta">Beta</span>
+        </button>
+      </div>
+      {view === 'score' && <div className="ra-pane">
+      {/* The tab names it: no heading of its own. */}
+      <section className="ra-card" aria-label="Resume Score">
         {picking ? (
           <div className="ra-pick">
             <div className="studio-tabs small">
@@ -251,49 +291,105 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
         </button>
         {generateError && <p className="ra-error">{generateError}</p>}
       </section>
+      </div>}
 
-      <section className="ra-card ra-chat">
-        <h3>Chat <span className="ra-beta">Beta</span></h3>
-        <div className="ra-messages">
-          {chat.length === 0 && (
-            <div className="ra-starters">
-              {['Make my bullets stronger', 'Rewrite my summary for this job', 'What should I fix first?'].map((starter) => (
-                <button key={starter} onClick={() => void ask(starter)}>{starter}</button>
-              ))}
-            </div>
-          )}
-          {chat.map((entry, index) => (
-            <div key={index} className={`ra-msg ${entry.role}`}>
-              <p>{entry.text}</p>
-              {entry.suggestions?.map((suggestion, j) => {
-                const key = `${index}:${j}`;
-                return (
-                  <div key={key} className="ra-suggestion">
-                    <span className="ra-where">{suggestion.where}</span>
-                    {suggestion.before && <p className="before">{suggestion.before}</p>}
-                    <p className="after">{suggestion.target === 'add-skill' ? `Add skill: ${suggestion.after}` : suggestion.after}</p>
-                    {suggestion.reason && <p className="ra-muted">{suggestion.reason}</p>}
-                    <button className="ghost small" disabled={applied.has(key)}
-                      onClick={() => { if (onApply(suggestion)) setApplied(new Set(applied).add(key)); }}>
-                      {applied.has(key) ? 'Applied' : 'Apply'}
+      {view === 'chat' && (
+        <div className="ra-chat-pane" role="tabpanel" aria-label="Chat">
+          <div className="ra-chat-head">
+            <button type="button" className="ra-tailoring" title="Choose another job" onClick={chooseJob}>
+              {choice ? <><span>Tailoring for</span> <b>{chosenName}</b></> : <><span>Not tailored for a job yet.</span> <b>Choose a job</b></>}
+            </button>
+            {score && score.score !== null && <div className={`ra-mini-score${scoring ? ' busy' : ''}`}><Gauge score={score.score} /></div>}
+          </div>
+          <div className="ra-messages">
+            {chat.length === 0 && !asking ? (
+              <div className="ra-empty">
+                <span className="ra-empty-icon" aria-hidden="true"><DashboardIcon name="wand" size={22} /></span>
+                <h4>Edit your resume with AI</h4>
+                <p>Ask for a change in your own words, or start with one of these.</p>
+                <div className="ra-chips">
+                  {quick.map((item) => (
+                    <button key={item.label} type="button" onClick={item.run}>
+                      <DashboardIcon name={item.icon} size={14} />
+                      {item.label}
                     </button>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              </div>
+            ) : (
+              chat.map((entry, index) => (
+                <div key={index} className={`ra-msg ${entry.role}`}>
+                  <p>{entry.text}</p>
+                  {entry.suggestions?.map((suggestion, j) => {
+                    const key = `${index}:${j}`;
+                    return (
+                      <div key={key} className="ra-suggestion">
+                        <span className="ra-where">{suggestion.where}</span>
+                        {suggestion.before && <p className="before">{suggestion.before}</p>}
+                        <p className="after">{suggestion.target === 'add-skill' ? `Add skill: ${suggestion.after}` : suggestion.after}</p>
+                        {suggestion.reason && <p className="ra-muted">{suggestion.reason}</p>}
+                        <button className="ghost small" disabled={applied.has(key)}
+                          onClick={() => { if (onApply(suggestion)) setApplied(new Set(applied).add(key)); }}>
+                          {applied.has(key) ? 'Applied' : 'Apply'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+            )}
+            {asking && <div className="ra-msg assistant"><p className="ra-muted">Thinking…</p></div>}
+            <div ref={chatEnd} />
+          </div>
+          {chatError && <p className="ra-error">{chatError}</p>}
+          <form className="ra-compose" onSubmit={(event) => { event.preventDefault(); void ask(typed); }}>
+            {menuOpen && (
+              <ul className="ra-quick-menu" role="listbox" aria-label="Quick actions">
+                {offered.map((item, at) => (
+                  <li key={item.label} role="option" aria-selected={at === active}>
+                    <button type="button" className={at === active ? 'on' : ''} onMouseEnter={() => setActive(at)}
+                      // Keeps the box focused, so the click picks and the menu does not close first.
+                      onMouseDown={(event) => event.preventDefault()} onClick={() => pick(at)}>
+                      <DashboardIcon name={item.icon} size={14} />
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <textarea ref={box} rows={2} value={typed} aria-label="Ask AI to edit your resume"
+              placeholder="Ask AI to edit your resume, or type / for quick actions"
+              onChange={(event) => { setTyped(event.target.value); setActive(0); }}
+              onBlur={() => setMenu(false)}
+              onKeyDown={(event) => {
+                if (menuOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                  event.preventDefault();
+                  setActive((at) => (at + (event.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length);
+                } else if (menuOpen && event.key === 'Escape') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setMenu(false);
+                  if (slash !== null) setTyped('');
+                } else if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  if (menuOpen) pick(active);
+                  else void ask(typed);
+                }
+              }} />
+            <div className="ra-compose-bar">
+              <button type="button" className="ra-plus" aria-label="Quick actions" aria-expanded={menuOpen} title="Quick actions"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => { setMenu(!menu); setActive(0); box.current?.focus(); }}>
+                <DashboardIcon name="plus" size={16} />
+              </button>
+              <button type="submit" className="ra-send" aria-label="Send" title="Send (Enter)" disabled={!typed.trim() || slash !== null || asking}>
+                <DashboardIcon name="arrowUp" size={16} />
+              </button>
             </div>
-          ))}
-          {asking && <div className="ra-msg assistant"><p className="ra-muted">Thinking…</p></div>}
-          <div ref={chatEnd} />
+          </form>
+          <p className="ra-muted tiny">It only rewords what your CV says. Nothing changes until you click Apply.</p>
         </div>
-        {chatError && <p className="ra-error">{chatError}</p>}
-        <div className="ra-ask">
-          <textarea rows={2} value={typed} placeholder="Ask about your CV…"
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ask(typed); } }} />
-          <button className="primary" disabled={!typed.trim() || asking} onClick={() => void ask(typed)}>Send</button>
-        </div>
-        <p className="ra-muted tiny">It only rewords what your CV says. Nothing changes until you click Apply.</p>
-      </section>
+      )}
       {keywordCards.card}
     </div>
   );
