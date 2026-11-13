@@ -10,6 +10,13 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
 const extension = path.resolve(__dirname, '..');
 const url = 'https://www.linkedin.com/jobs/view/111/';
 const html = `<!doctype html><title>Jobs | LinkedIn</title><main>
+  <div class="search-filters" role="group" aria-label="Search filters">
+    <label><input type="checkbox" name="workplace"> Remote</label>
+    <label><input type="checkbox" name="skill"> Azure</label>
+    <label><input type="checkbox" name="applicants"> Under 10 applicants</label>
+    <label for="where">City, state, or zip code</label><input id="where" placeholder="City, state, or zip code">
+    <input aria-label="Search by title, skill, or company">
+  </div>
   <section class="jobs-search__job-details--container" data-job-id="111">
     <h2 class="job-details-jobs-unified-top-card__job-title"><a href="/jobs/view/111">Senior Software Engineer</a></h2>
     <div class="job-details-jobs-unified-top-card__company-name"><a href="/company/conexiom">Conexiom</a></div>
@@ -81,6 +88,7 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
 
     await settle();
     assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'the posting alone does not open the panel, even in a tab that had it open');
+    assert.deepEqual(await fieldsOnPage(), [], 'LinkedIn\'s search filters are no application form: no fields until Easy Apply opens');
     // LinkedIn's other dialogs: sign-in, and a job alert with a field, drawn where Easy Apply is.
     await page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<div role="dialog" id="signin"><h2>Sign in</h2><input type="email"><input type="password"><button>Sign in</button></div>'));
     await showStep('<div role="dialog"><h2>Create job alert</h2><label for="kw">Keywords</label><input id="kw"><button type="button">Save</button></div>');
@@ -141,6 +149,8 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
       return { linkedin: window.CVAutofillMarks.statusOf(root.getElementById('li')), website: window.CVAutofillMarks.statusOf(root.getElementById('site')) };
     });
     assert.deepEqual(icons, { linkedin: 'ok', website: 'empty' }, 'filled fields are green; a field with no Profile value is gray');
+    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.search-filters input')].map(input => [input.name || input.id || input.getAttribute('aria-label'), window.CVAutofillMarks.statusOf(input) ?? null, input.type === 'checkbox' ? input.checked : input.value])),
+      [['workplace', null, false], ['skill', null, false], ['applicants', null, false], ['where', null, ''], ['Search by title, skill, or company', null, '']], 'the search filters outside Easy Apply: never filled, never marked');
     const once = await page.evaluate(async () => {
       const site = document.getElementById('interop-outlet').shadowRoot.getElementById('site');
       await window.CVAutofillMarks.open(site);

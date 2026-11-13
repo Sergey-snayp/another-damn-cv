@@ -213,12 +213,26 @@ function rootOf(element) {
   return root && (root.nodeType === Node.DOCUMENT_NODE || root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) ? root : document;
 }
 
-/** The document and every open shadow root inside it, nested ones too. */
-function searchRoots() {
-  const roots = [document];
+/** The document (or an element) and every open shadow root inside it, nested ones too. */
+function allRoots(start = document) {
+  const roots = [start];
   for (let i = 0; i < roots.length; i++)
     for (const element of roots[i].querySelectorAll('*')) if (element.shadowRoot) roots.push(element.shadowRoot);
   return roots;
+}
+
+/**
+ * Where forms are looked for. The whole page, unless a site narrows it: on
+ * LinkedIn only the Easy Apply window is an application form, and its search
+ * filters (checkboxes such as "Remote" or "Azure") must never count as fields.
+ * The scope returns that window, or null when none is open (then: no fields).
+ */
+let scopeOf = null;
+function setScope(find) { scopeOf = find; }
+function searchRoots() {
+  if (!scopeOf) return allRoots();
+  const start = scopeOf();
+  return start ? allRoots(start) : [];
 }
 
 const deepAll = (selector, roots = searchRoots()) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
@@ -844,6 +858,8 @@ window.CVAutofillFields = {
   rootOf,
   searchRoots,
   deepAll,
+  allRoots,
+  setScope,
   deepOne,
   byTag: taggedField,
   radiosOf: groupRadios,

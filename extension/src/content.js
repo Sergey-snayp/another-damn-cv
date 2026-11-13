@@ -780,12 +780,17 @@ function looksLikeEasyApply(box) {
 function easyApplyDialog() {
   const top = window.CVAutofillTopLayer?.window();
   if (top && !OWN_NODES.has(top.id) && looksLikeEasyApply(top)) return top;
-  return Fields.deepAll('[role="dialog"]').find((dialog) => {
+  // The whole page: this is what finds the window the field scope narrows to.
+  return Fields.deepAll('[role="dialog"]', Fields.allRoots()).find((dialog) => {
     const root = dialog.getRootNode();
     if (!dialog.matches('.jobs-easy-apply-modal') && !(root instanceof ShadowRoot && root.host.id === 'interop-outlet')) return false;
     return shown(dialog) && looksLikeEasyApply(dialog);
   }) ?? null;
 }
+// On LinkedIn the only application form is the Easy Apply window: fields are looked for
+// there and nowhere else, so its search filters never get filled or marked.
+if (window.CVAutofillLinkedIn?.isPage()) Fields.setScope(() => easyApplyDialog());
+
 function updateLauncher() {
   if (TINY_FRAME) return;
   scheduleStep();
@@ -940,7 +945,7 @@ function formChanged() {
 const watchedRoots = new WeakSet();
 function watchShadowRoots() {
   if (TINY_FRAME) return;
-  for (const root of Fields.searchRoots()) {
+  for (const root of Fields.allRoots()) { // The whole page: the Easy Apply window appears inside one.
     if (root === document || watchedRoots.has(root)) continue;
     watchedRoots.add(root);
     pageWatcher.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'disabled', 'type', 'class', 'style', 'aria-checked', 'aria-selected'] });
