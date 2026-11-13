@@ -73,6 +73,8 @@ function scan() {
       key: field.key,
       ...(field.country && { country: field.country }),
       ...(field.key === 'workedHereBefore' && { company: companyAskedAbout(field.element) }),
+      // A cover letter the form insists on is written for it when there is none yet.
+      ...(field.key === 'coverLetter' && { required: Fields.isRequired(field.element) }),
       kind: field.kind,
       group: Fields.groupOf(field.key),
       source: field.source,

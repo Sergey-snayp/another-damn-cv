@@ -21,6 +21,7 @@ async function scan(browser, fixture) {
       questions: F.detectQuestions(found).map((question) => question.question),
       missing: F.findMissingRequired(found).map((item) => item.label),
       countries: found.filter((field) => field.countries).map((field) => field.countries),
+      coverLetterRequired: found.some((field) => field.key === 'coverLetter' && F.isRequired(field.element)),
     };
   });
   await page.close();
@@ -53,7 +54,14 @@ const keyOf = (fields, needle) => fields.find((field) => field.label.includes(ne
 
     const ashby = await scan(browser, 'ashby-quo.html');
     assert.ok(ashby.countries.some((countries) => countries.includes('United States') && countries.includes('Canada')), '"the United States or Canada" names both');
-    console.log('PASS real forms: Greenhouse, Lever and Ashby fields are taken for what they ask');
+    // Zaber: the application form, not the site search or the footer's newsletter sign-up;
+    // its "*" is drawn by CSS, and the cover letter upload is required.
+    const zaber = await scan(browser, 'zaber-careers.html');
+    assert.deepEqual(zaber.fields.map((field) => `${field.key}:${field.kind}`), ['firstName:text', 'lastName:text', 'email:text', 'phone:text', 'resume:file', 'coverLetter:file'],
+      'one email field: the newsletter box is left alone');
+    assert.ok(zaber.coverLetterRequired, 'the cover letter is required (its "*" comes from the page\'s CSS)');
+    assert.ok(zaber.missing.includes('Cover Letter') && !zaber.missing.some((label) => /Transcript/.test(label)), 'required: the cover letter; optional: the transcript');
+    console.log('PASS real forms: Greenhouse, Lever, Ashby and Zaber fields are taken for what they ask; side forms are left alone');
   } finally {
     await browser.close();
   }

@@ -678,6 +678,10 @@ async function runFill() {
   const button = $('fill'); button.disabled = true;
   status('fill-status', 'Filling…');
   const target = currentTab;
+  // A form that requires a cover letter gets one written when this job has none yet. Saving
+  // the job for it may need the site's permission, which Chrome only grants inside the click.
+  const letterAsked = groupOn('coverLetter') && scan?.fields.some(field => field.key === 'coverLetter' && field.required);
+  const letterAccess = letterAsked && !(savedJob.url === jobAddress(target) && savedJob.job) ? requestSiteAccess(target) : Promise.resolve(true);
   try {
     // The fields on the page now, not at the last scan: a multi-step form may be on another step.
     const fresh = target ? await scanFrames(target) : null;
@@ -701,7 +705,20 @@ async function runFill() {
     }
     // The saved job's cover letter: its PDF for an upload box, its text for a text box.
     let coverLetter = {}, letterProblem = '';
-    const ownLetter = letterForPage();
+    // Still being read from the server: wait for it rather than write a second one.
+    for (let waited = 0; letter.loading && waited < 50; waited++) await new Promise(resolve => setTimeout(resolve, 100));
+    let ownLetter = letterForPage();
+    const letterRequired = groupOn('coverLetter') && scan?.fields.some(field => field.key === 'coverLetter' && field.required);
+    if (letterRequired && !ownLetter) {
+      if (!resumes.chosen) letterProblem = 'Cover letter not written: choose a CV first, the letter is written from it.';
+      else {
+        status('fill-status', 'This form requires a cover letter. Writing one for this job…');
+        await generateLetter(letterAccess);
+        ownLetter = letterForPage();
+        if (!ownLetter) letterProblem = `Cover letter not written: ${letter.problem || 'try Generate Cover Letter below.'}`;
+        status('fill-status', 'Filling…');
+      }
+    }
     if (groupOn('coverLetter') && ownLetter && scan?.fields.some(field => field.key === 'coverLetter')) {
       try {
         status('fill-status', 'Getting your cover letter…');
@@ -739,6 +756,8 @@ async function runFill() {
     }
     if (cvProblem && result) result.failures.push(cvProblem);
     if (letterProblem && result) result.failures.push(letterProblem);
+    if (result && !ownLetter && !letterRequired && groupOn('coverLetter') && scan?.fields.some(field => field.key === 'coverLetter'))
+      (result.notes ??= []).push('This form takes an optional cover letter: Generate Cover Letter below to add one');
     if (result && coverLetter.coverLetterText) letter.attachedUrl = jobAddress(target) ?? null;
     if (!result) throw new Error(pageDisconnected ? 'The extension was updated. Reload this page, then try again.' : 'Lost contact with the page. Reload it and try again.');
     fillReport = {

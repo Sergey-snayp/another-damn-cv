@@ -518,13 +518,41 @@ function detectDropzones() {
   return found;
 }
 
+/**
+ * A form beside the application, never part of it: a newsletter sign-up, a
+ * site search. Zaber's careers page has its application form and, in the
+ * footer, "Get monthly updates" with an email box and Subscribe. Known by its
+ * name, its search role, or a small form whose button subscribes or searches.
+ * A form with an upload in it is an application form.
+ */
+const SIDE_FORM_NAME = /\b(newsletter|subscribe|subscription|mailing list|search)\b/i;
+const SIDE_FORM_BUTTON = /^(subscribe|search|go|notify me|get updates|sign up for (our )?(newsletter|updates))$/i;
+function isSideForm(form) {
+  if (!form) return false;
+  if (form.getAttribute('role') === 'search') return true;
+  const controls = [...form.querySelectorAll('input, textarea, select')].filter((control) => !['hidden', 'submit', 'button', 'reset', 'image'].includes(control.type));
+  if (controls.some((control) => control.type === 'file') || controls.length > 3) return false;
+  const named = ['id', 'class', 'name', 'action', 'aria-label'].map((attribute) => form.getAttribute(attribute) ?? '').join(' ').replace(/[-_]+/g, ' ');
+  if (SIDE_FORM_NAME.test(named)) return true;
+  return [...form.querySelectorAll('button, input[type="submit"]')].some((button) => SIDE_FORM_BUTTON.test((button.textContent || button.value || '').replace(/\s+/g, ' ').trim()));
+}
+
 function detectFields() {
   const elements = deepAll('input, textarea, select');
   const found = [];
   const skipped = [];
+  const sideForms = new Map();
 
   for (const element of elements) {
     if (!isFillable(element)) continue;
+    const form = element.closest('form, [role="search"]');
+    if (form) {
+      if (!sideForms.has(form)) sideForms.set(form, isSideForm(form.tagName === 'FORM' ? form : null) || form.getAttribute('role') === 'search');
+      if (sideForms.get(form)) {
+        skipped.push({ signals: signalsFor(element).slice(0, 60), reason: 'side form' });
+        continue;
+      }
+    }
 
     const signals = signalsFor(element);
 
@@ -612,9 +640,16 @@ function rawLabel(element) {
   return [groupQuestion(element), labelledByText(element), labelFor(element)?.textContent, wrapText(element), boxLabel(element)].filter(Boolean).join(' ');
 }
 
+/** A label whose "*" is drawn by the page's CSS (Zaber's "required-after"), not written in it. */
+function starredByStyle(label) {
+  if (!label) return false;
+  return ['::after', '::before'].some((part) => /[*✱]/.test(getComputedStyle(label, part).content || ''));
+}
+
 function isRequired(element) {
   if (element.required || element.getAttribute('aria-required') === 'true') return true;
-  return /\*|\brequired\b/i.test(rawLabel(element));
+  if (/\*|\brequired\b/i.test(rawLabel(element))) return true;
+  return starredByStyle(labelFor(element)) || starredByStyle(element.closest('label'));
 }
 
 /**
@@ -691,7 +726,8 @@ function findMissingRequired(found = detectFields().found) {
     for (const element of scope.querySelectorAll('input, select, textarea')) {
       if (element.type === 'hidden' || element.disabled || ['submit', 'button', 'reset', 'image', 'password'].includes(element.type)) continue;
       if (isHelperInput(element)) continue;
-      const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length;
+      // A file input hidden behind its own "Attach" button counts as shown.
+      const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length || (element.type === 'file' && hasUploadButton(element));
       if (!visible || !isRequired(element) || !isEmpty(element)) continue;
       if ((element.type === 'radio' || element.type === 'checkbox') && element.name) {
         if (seenRadios.has(element.name)) continue;
@@ -836,6 +872,7 @@ function groupOf(key) {
 // Content scripts cannot be ES modules, so the API hangs off window.
 window.CVAutofillFields = {
   detectFields,
+  isRequired,
   findMissingRequired,
   detectQuestions,
   detectAcknowledgements,
