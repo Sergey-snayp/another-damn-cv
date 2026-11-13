@@ -638,7 +638,26 @@ document.addEventListener('input', event => {
     if (save && !letter.saving) save.disabled = letter.draft.trim() === (letterForPage()?.text ?? '');
   }
 });
+/**
+ * Redraws the Autofill tab. The tab is rebuilt whenever the page changes (a new
+ * scan, a status line), so what the person is in the middle of is carried over:
+ * where they are in the cover letter (its scroll, cursor and focus) and how far
+ * down the panel they are. Without this, reading the letter jumped to its top.
+ */
 function renderAutofill() {
+  const box = $('cover-text');
+  const kept = box && { scrollTop: box.scrollTop, start: box.selectionStart, end: box.selectionEnd, focused: document.activeElement === box };
+  const main = document.querySelector('main');
+  const panelTop = main?.scrollTop ?? 0;
+  drawAutofill();
+  if (main && main.scrollTop !== panelTop) main.scrollTop = panelTop;
+  const again = $('cover-text');
+  if (!kept || !again) return;
+  if (kept.focused) again.focus({ preventScroll: true });
+  if (kept.focused) again.setSelectionRange(kept.start, kept.end);
+  again.scrollTop = kept.scrollTop;
+}
+function drawAutofill() {
   const host = $('panel-autofill');
   if (!scan && pageDisconnected) {
     host.innerHTML = `<div class="notice">${icon('refresh')}<div><strong>Reload this page to reconnect</strong><p>The extension was updated while this page was open, so it can no longer read the form. Reloading keeps nothing you typed on the page.</p><button class="primary" id="reload-page">${icon('refresh')}Reload page</button></div></div>`;

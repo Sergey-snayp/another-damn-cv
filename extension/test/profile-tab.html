@@ -30,7 +30,9 @@
   let jobDetailReads = 0, failJobLoad = false, failJobUpdate = false;
   // ?applied: the page's job was saved and applied to before the panel opened.
   const APPLIED_MODE = location.search.includes('applied');
-  const SAVED_MODE = location.search.includes('saved');
+  // ?letter: a saved job with a long cover letter, read in the panel while the page changes.
+  const LETTER_MODE = location.search.includes('letter');
+  const SAVED_MODE = location.search.includes('saved') || LETTER_MODE;
   // ?form: the page shows no company, so Add opens the short form first.
   const FORM_MODE = location.search.includes('form');
   // ?cvs: three CVs and a job posting; the Resume tab's CV dropdown, and switching after Autofill uploaded a CV.
@@ -95,6 +97,8 @@
     const path = String(url).replace(/^https?:\/\/[^/]+/, '');
     if (path.startsWith('/api/jobs/posting-date')) return reply({ posting: BOARD_MODE ? { posted: '2026-10-30T11:49:29-04:00', updated: '2026-11-04T13:11:09-05:00', board: 'greenhouse' } : null });
     if (path.startsWith('/api/jobs/lookup')) return reply(lookupReply);
+    if (/^\/api\/extension\/jobs\/[^/]+\/cover-letter$/.test(path) && LETTER_MODE)
+      return reply({ letter: { text: Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1} of the letter, long enough to wrap onto a second line in the panel.`).join('\n\n'), fileName: 'Sergey_Proniuk_Cover_Letter_Acme.pdf' } });
     if (path.startsWith('/api/extension/jobs/')) {
       if (options.method === 'PATCH') {
         if (failJobUpdate) { failJobUpdate = false; return new Response('{"message":"Update failed."}', { status: 503 }); }
@@ -146,6 +150,26 @@
     expect(APPLIED_MODE || SAVED_MODE ? stateCard?.querySelector('.job-card-action svg circle') && stateCard.dataset.jobAction === 'edit' : stateCard?.querySelector('.job-card-action svg') && stateCard.dataset.jobAction === 'add', 'saved frames have a check icon and unsaved frames have a plus action');
     // ?layout keeps the initial state for visual checks of the real panel.
     if (new URLSearchParams(location.search).has('layout')) throw Object.assign(new Error('done'), { done: true });
+    if (LETTER_MODE) {
+      // Reading the letter in the middle: the panel redraws when the page changes, and the place stays.
+      const card = document.querySelector('.cover-card');
+      card.open = true;
+      document.querySelector('[data-cover-view]').click();
+      await wait(100);
+      let box = document.getElementById('cover-text');
+      expect(box && box.scrollHeight > box.clientHeight * 3, 'the letter is long enough to scroll');
+      box.focus();
+      box.scrollTop = Math.round(box.scrollHeight / 2);
+      box.setSelectionRange(1500, 1500);
+      const before = { top: box.scrollTop, caret: box.selectionStart };
+      runtimeListeners.forEach(listener => listener({ type: 'form-changed' }, { tab: { id: 1 }, frameId: 0 }));
+      await wait(800);
+      box = document.getElementById('cover-text');
+      expect(sentToPage.filter(message => message.type === 'scan').length >= 2, 'the page change rescanned and redrew the panel');
+      expect(box && Math.abs(box.scrollTop - before.top) <= 2, `the letter stays where it was read (scrollTop ${before.top} → ${box?.scrollTop})`);
+      expect(box && box.selectionStart === before.caret && document.activeElement === box, 'the cursor and focus stay in the letter');
+      throw Object.assign(new Error('done'), { done: true });
+    }
     if (SYNC_MODE) {
       expect(/No CVs in Documents yet/.test(document.getElementById('panel-resume').textContent), 'an empty backend replaces the old persisted documents');
       serverResumes = [{ id: 'cv1', name: 'New CV', isPrimary: true, updatedAt: '2026-11-05' }, { id: 'cv2', name: 'For Acme', tailoredForJob: true, updatedAt: '2026-11-05' }];
