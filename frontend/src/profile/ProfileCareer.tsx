@@ -4,6 +4,7 @@ import { AchievementList } from "./AchievementList";
 import { InlineEdit, InlineText } from "./InlineEdit";
 import { TagList, splitTags } from "./TagList";
 import { JobFacts } from "./JobFacts";
+import { DescriptionAi } from "./DescriptionAi";
 import { SummaryEditor } from "./SummaryEditor";
 import { Marked } from "../text/Marked";
 import { withoutMarks } from "../text/marks";
@@ -167,6 +168,7 @@ export function ProfileCareer({
                   deleteTitle="Are you sure you want to delete this description?"
                   deleteBody={<p>It will be removed from {role.title} at {role.company} in your Profile. Your saved CVs keep their own copy.</p>}
                   onSave={(text) => onSaveRole(index, () => ({ description: text }))}
+                  ai={({ text, onUse, onClose }) => <DescriptionAi role={role} text={text} onUse={onUse} onClose={onClose} />}
                   onDraft={(text) =>
                     setActive(
                       text === null

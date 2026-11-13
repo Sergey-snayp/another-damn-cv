@@ -62,3 +62,8 @@
 .ai-dot { width: 9px; height: 9px; border-radius: 50%; background: #e9b73c; animation: ai-pulse 1s ease-in-out infinite; }
 @keyframes ai-pulse { 50% { transform: scale(.55); } }
 @media (max-width: 640px) { .ai-fields { grid-template-columns: 1fr; } .ai-tabs button { padding: 5px 8px; font-size: 12px; } }
+/* Write with AI for a job's description: a title instead of tabs; the AI's questions as fields. */
+.description-ai .ai-question { display: inline-flex; align-items: center; gap: 10px; }
+.description-ai-answer { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: #1f1f1f; }
+.description-ai-answer input { box-sizing: border-box; width: 100%; height: 38px; padding: 0 11px; border: 1px solid #d9d9d6; border-radius: 8px; background: #fff; color: #1f1f1f; font: inherit; font-size: 14px; font-weight: 400; }
+.description-ai-answer input:focus { border-color: #1e4d45; outline: none; box-shadow: 0 0 0 3px rgba(30, 77, 69, .14); }

@@ -12,7 +12,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     const page = await browser.newPage();
     page.setDefaultTimeout(10000);
     await page.setViewport({ width: 1200, height: 900 });
-    const errors = [], writes = [];
+    const errors = [], writes = [], describes = [];
     const source = { kind: 'file', name: 'career.txt' }, importedAt = '2026-11-12T12:00:00Z';
     let state = { revision: 1, data: {
       summary: { value: 'Backend engineer.', source, importedAt },
@@ -30,6 +30,18 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
       if (pathname === '/api/auth/me') return reply({ id: 'owner', name: 'Sam Lee', email: 'sam@example.com' });
       if (pathname === '/api/profile') return reply({ firstName: 'Sam', lastName: 'Lee', fullName: 'Sam Lee', email: 'sam@example.com' });
       if (pathname === '/api/resumes' || pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
+      if (pathname === '/api/profile/career/collect') return reply({ revision: 1, jobs: [] });
+      if (pathname === '/api/profile/career/description/assist') {
+        const input = JSON.parse(request.postData());
+        describes.push(input);
+        // Too little to go on at first: questions. With answers: versions.
+        return reply(input.answers.length
+          ? { options: [
+            { angle: 'Product', text: 'Payments platform that lets German online retailers offer invoice checkout to their shoppers.', keywords: [], placeholders: [] },
+            { angle: 'Users', text: 'Invoice checkout used by German online retailers to let their shoppers pay after delivery.', keywords: [], placeholders: [] },
+          ], questions: [] }
+          : { options: [], questions: ['What does the product do?', 'Who uses it?'] });
+      }
       if (pathname === '/api/profile/career') {
         if (request.method() === 'GET') return reply(state);
         const input = JSON.parse(request.postData());
@@ -135,8 +147,30 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(writes[6].experiences[0].description, '');
     await page.waitForFunction(() => !document.body.textContent.includes('Payments platform for German retailers.'));
 
+    // Write with AI for the description: it takes the editor's place, asks when the job's facts
+    // are too thin, writes from the answers; the chosen version comes back into the editor.
+    await page.click('.inline-edit-empty');
+    await page.waitForSelector('[aria-label="Edit description"][contenteditable]');
+    await page.locator('.inline-edit ::-p-text(Write with AI)').click();
+    await page.waitForSelector('.description-ai .description-ai-answer');
+    assert.equal(await page.$('[aria-label="Edit description"][contenteditable]'), null, 'only AI while it is open');
+    assert.deepEqual(describes[0].source.bullets, ['Built a certificate service.'], 'written from the job');
+    assert.deepEqual(await page.$$eval('.description-ai-answer span', nodes => nodes.map(node => node.textContent)), ['What does the product do?', 'Who uses it?']);
+    assert.ok(await page.$eval('.description-ai .ai-generate', node => node.disabled), 'nothing answered yet');
+    await page.type('.description-ai-answer input', 'Invoice and instalment checkout for online shops');
+    await page.click('.description-ai .ai-generate');
+    await page.waitForSelector('.description-ai .ai-option');
+    assert.deepEqual(describes[1].answers, [{ question: 'What does the product do?', answer: 'Invoice and instalment checkout for online shops' }]);
+    await page.evaluate(() => document.querySelectorAll('.description-ai .ai-option input')[1].click());
+    await page.locator('.description-ai ::-p-text(Use Description)').click();
+    await page.waitForSelector('[aria-label="Edit description"][contenteditable]');
+    assert.equal(await page.$eval('[aria-label="Edit description"]', node => node.textContent), 'Invoice checkout used by German online retailers to let their shoppers pay after delivery.');
+    await page.locator('.inline-edit.is-editing ::-p-text(Save)').click();
+    await waitWrites(8);
+    assert.equal(writes[7].experiences[0].description, 'Invoice checkout used by German online retailers to let their shoppers pay after delivery.');
+
     assert.deepEqual(errors, []);
-    console.log('PASS description in place; technologies and skills as chips: add with Enter or a list, no repeats, hover ×, Undo; Delete asks first');
+    console.log('PASS Write with AI for the description: in the editor\'s place, questions then versions; description in place; technologies and skills as chips: add with Enter or a list, no repeats, hover ×, Undo; Delete asks first');
   } finally {
     await browser.close();
   }

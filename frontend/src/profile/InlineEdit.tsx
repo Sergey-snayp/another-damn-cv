@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import { RichEditor } from "../text/RichEditor";
 import { useConfirm } from "../components/ConfirmDialog";
+import { AiBadge } from "./AiBox";
 
 /**
  * A piece of the Profile edited where it is, as bullets are: pointing at it
@@ -21,6 +22,7 @@ export function InlineEdit({
   deleteBody,
   onSave,
   onDraft,
+  ai,
 }: {
   /** What it is, for buttons and the editor: "description", "technologies". */
   label: string;
@@ -41,7 +43,10 @@ export function InlineEdit({
   onSave(text: string): Promise<void>;
   /** The text as it is being written, for a check panel; null when not editing. */
   onDraft?(text: string | null): void;
+  /** "Write with AI": its box, shown in the editor's place; a chosen version comes back into the editor. */
+  ai?(props: { text: string; onUse(text: string): void; onClose(): void }): ReactNode;
 }) {
+  const [aiOpen, setAiOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   // Reported while editing, and once when editing ends (not when the page first draws).
   const drafting = useRef(false);
@@ -97,6 +102,19 @@ export function InlineEdit({
     }
   };
 
+  if (editing !== null && aiOpen && ai)
+    return (
+      <div className="inline-edit is-editing">
+        {ai({
+          text: editing,
+          onUse: (text) => {
+            setEditing(text);
+            setAiOpen(false);
+          },
+          onClose: () => setAiOpen(false),
+        })}
+      </div>
+    );
   if (editing !== null)
     return (
       <div className="inline-edit is-editing">
@@ -116,8 +134,13 @@ export function InlineEdit({
           )}
         </div>
         <div className="ach-editor-actions">
+          {ai && (
+            <button type="button" className="ai-write ach-ai-button" disabled={busy} onClick={() => setAiOpen(true)}>
+              {editing.trim() ? "Improve with AI" : "Write with AI"} <AiBadge />
+            </button>
+          )}
           <span className="ach-actions-gap" />
-          <button type="button" className="profile-text-button" disabled={busy} onClick={() => { setEditing(null); setError(""); }}>
+          <button type="button" className="profile-text-button" disabled={busy} onClick={() => { setEditing(null); setAiOpen(false); setError(""); }}>
             Cancel
           </button>
           <button type="button" className="ach-save" disabled={busy} onClick={finish}>
