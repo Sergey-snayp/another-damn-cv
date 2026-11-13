@@ -1,6 +1,7 @@
 import type { ContactFields } from '../../api';
 import type { CareerData } from '../../profile/careerApi';
 import { jobPlace } from '../../profile/workPlace';
+import { stackLine } from '../techStack';
 import type { RenderedResume } from '../../resumeApi';
 
 const newId = () => crypto.randomUUID();
@@ -36,7 +37,7 @@ export function resumeFromProfile(current: RenderedResume, profile: ContactField
         to: role.current ? '' : role.to,
         current: role.current,
         blurb: role.description || null,
-        techStack: role.techStack?.trim() || null,
+        techStack: stackLine(role.techStack) || null,
         position,
         // Unticked on the Profile page: left out of CVs.
         achievements: role.bullets.filter((bullet) => bullet.trim() && !(role.excluded ?? []).includes(bullet)).map((bullet, order) => ({

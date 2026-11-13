@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { DEFAULT_THEME, NAME_SIZES, type ResumeTheme } from '../theme';
 import { DashboardIcon } from '../../jobs/DashboardIcon';
 
-const DEFAULT_SIZE = DEFAULT_THEME.nameSize ?? 30;
+const DEFAULT_SIZE = DEFAULT_THEME.nameSize ?? 20;
 const clamp = (value: number) => Math.min(NAME_SIZES.max, Math.max(NAME_SIZES.min, Math.round(value)));
 
 /**

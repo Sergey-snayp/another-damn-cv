@@ -772,10 +772,11 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         profileChoice = false;
       }
 
-      // The second job's "Tech stack:" bullet is its tech stack line, tailored as a list.
+      // The second job's "Tech stack:" bullet is its tech stack line, tailored as a list,
+      // and written "Go | Redis" (the AI's commas too).
       {
         const other = '[data-section="experience"] article:nth-of-type(2)';
-        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Go, Redis/);
+        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Go \| Redis/);
         assert.ok(!(await page.$$eval(`${other} li[data-edit-item="bullet"]`, rows => rows.map(row => row.textContent))).some(text => /Tech stack/.test(text)), 'no longer a bullet');
         await page.hover(`${other} .doc-role-stack`);
         await page.click(`${other} .doc-role-stack [title="Tailor the tech stack for the job"]`);
@@ -787,9 +788,9 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         assert.equal(sent.kind, 'techStack');
         assert.match(sent.context, /Maintained internal tooling\./, "the job's own lines go with it");
         await page.click('.qt-unit .qt-actions .primary');
-        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Redis, Go/);
+        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Redis \| Go/);
         await page.click(undo);
-        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Go, Redis/);
+        assert.match(await page.$eval(`${other} .doc-role-stack`, element => element.textContent), /Tech stack:\s*Go \| Redis/);
       }
 
       // Every skills line at once: the same screen over the section, one row per line.

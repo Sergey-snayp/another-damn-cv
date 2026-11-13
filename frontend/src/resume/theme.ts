@@ -47,7 +47,7 @@ export const DEFAULT_THEME: ResumeTheme = {
   fontSize: 10,
   lineHeight: 1.3,
   sectionGap: 12,
-  nameSize: 30,
+  nameSize: 20,
   sectionOrder: ['summary', 'experience', 'projects', 'skills', 'education', 'certifications'],
 };
 

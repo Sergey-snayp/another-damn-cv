@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { Contact, RenderedResume } from '../../resumeApi';
 import { RewritePopover } from '../RewritePopover';
 import { DashboardIcon } from '../../jobs/DashboardIcon';
+import { stackLine } from '../techStack';
 
 export type Change = (mutate: (draft: RenderedResume) => void) => void;
 
@@ -174,8 +175,9 @@ export function ExperienceForm({ resume, resumeId, onChange }: { resume: Rendere
                   </label>
                   <label className="sf-field wide">
                     <span>Tech stack</span>
-                    <input value={role.techStack ?? ''} placeholder="Node.js, TypeScript, PostgreSQL"
-                      onChange={(e) => onChange((d) => { d.experiences[i]!.techStack = e.target.value; })} />
+                    <input value={role.techStack ?? ''} placeholder="Node.js | TypeScript | PostgreSQL"
+                      onChange={(e) => onChange((d) => { d.experiences[i]!.techStack = e.target.value; })}
+                      onBlur={() => { if (role.techStack && stackLine(role.techStack) !== role.techStack) onChange((d) => { d.experiences[i]!.techStack = stackLine(d.experiences[i]!.techStack); }); }} />
                   </label>
                 </div>
 

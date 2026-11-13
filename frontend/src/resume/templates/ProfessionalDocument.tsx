@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { roleLines } from '../techStack';
+import { roleLines, stackLine } from '../techStack';
 import type { RenderedResume } from '../../resumeApi';
 import { RewritePopover } from '../RewritePopover';
 import { DiffText } from '../DiffText';
@@ -314,7 +314,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
         append: (next, d) => appendBullet(d, i, role.lineageId, next) });
     });
     if ((role.techStack ?? '').trim()) targets.push({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack', label: `${role.company || 'Job'} · Tech stack`, key: `tech-stack:${role.lineageId ?? i}`,
-      apply: (next, d) => { d.experiences[i]!.techStack = next; } });
+      apply: (next, d) => { d.experiences[i]!.techStack = stackLine(next); } });
     return targets;
   };
   /** One skills line, tailored as a whole: reordered, maybe with skills the CV shows. */
@@ -495,15 +495,18 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                 </li>
               ))}
             </ul>
-            {/* The job's tools: one line under its bullets, "Tech stack: Node.js, TypeScript". */}
+            {/* The job's tools: one line under its bullets, "Tech stack: Node.js | TypeScript". */}
             {((role.techStack ?? '').trim() || (!readOnly && stacking === (role.lineageId ?? String(i)))) && (
               <div className="doc-role-stack" data-edit-item="tech-stack" data-edit-key={`tech-stack:${role.lineageId ?? i}`}
                 onBlur={(event) => {
+                  if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
                   // Left empty: the line closes again, so it takes no room on the page.
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.querySelector('.pro-text')?.textContent?.trim()) setStacking(null);
+                  if (!event.currentTarget.querySelector('.pro-text')?.textContent?.trim()) setStacking(null);
+                  // Typed with commas: written in the CV's style once the person is done.
+                  else if (stackLine(role.techStack) !== (role.techStack ?? '')) onChange((d) => { d.experiences[i]!.techStack = stackLine(d.experiences[i]!.techStack); });
                 }}>
                 <b className="doc-stack-label">Tech stack: </b>
-                <RichText line value={role.techStack ?? ''} bold={null} readOnly={readOnly} placeholder="The tools of this job, separated by commas"
+                <RichText line value={role.techStack ?? ''} bold={null} readOnly={readOnly} placeholder="The tools of this job: Node.js | TypeScript"
                   onChange={(v) => {
                     const list = v.replace(/^\s*tech(?:nology)?\s+stack\s*:\s*/i, '').trim();
                     onChange((d) => { d.experiences[i]!.techStack = list; });
@@ -511,7 +514,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                   }} />
                 {!readOnly && <span className="doc-bulletmeta">
                   {tailorButton('Tailor the tech stack for the job', (event) => ask({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack',
-                    apply: (next, d) => { d.experiences[i]!.techStack = next; } }, event))}
+                    apply: (next, d) => { d.experiences[i]!.techStack = stackLine(next); } }, event))}
                   <DocumentControl action="remove" compact label="Remove tech stack" description={`Remove the tech stack of ${role.title} at ${role.company}`}
                     onClick={() => { setStacking(null); removeItem(`add-tech-stack:${role.lineageId ?? i}`, (d) => { d.experiences[i]!.techStack = ''; }); }} />
                 </span>}

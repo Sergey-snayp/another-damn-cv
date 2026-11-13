@@ -252,8 +252,9 @@ export function ResumeEditor() {
     return () => observer.disconnect();
   }, [draft !== null]);
 
+  // Opens at 100%, the page's real size; a narrow window shrinks it to fit. + zooms past it.
   const scale = zoom === 'fit-width'
-    ? Math.min(1.25, Math.max(0.3, (canvasSize.width - 108) / PAGE_WIDTH))
+    ? Math.min(1, Math.max(0.3, (canvasSize.width - 108) / PAGE_WIDTH))
     : zoom === 'fit-page'
       ? Math.max(0.3, Math.min((canvasSize.width - 108) / PAGE_WIDTH, (canvasSize.height - 48) / PAGE_HEIGHT))
       : zoom;
