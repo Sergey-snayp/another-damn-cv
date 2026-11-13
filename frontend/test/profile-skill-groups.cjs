@@ -10,7 +10,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     const page = await browser.newPage();
     page.setDefaultTimeout(10000);
     await page.setViewport({ width: 1200, height: 900 });
-    const errors = [], writes = [];
+    const errors = [], writes = [], sorts = [];
     const source = { kind: 'file', name: 'cv.pdf' }, importedAt = '2026-11-13T12:00:00Z';
     let state = { revision: 1, data: {
       summary: { value: 'Backend engineer.', source, importedAt },
@@ -28,6 +28,10 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
       if (pathname === '/api/profile') return reply({ firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com' });
       if (pathname === '/api/resumes' || pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
       if (pathname === '/api/profile/career/collect') return reply({ revision: 1, jobs: [] });
+      if (pathname === '/api/profile/career/skills/group') {
+        sorts.push(JSON.parse(request.postData()).skills);
+        return reply({ groups: [{ name: 'Core', skills: ['TypeScript', 'Node.js'] }, { name: 'AI', skills: ['Claude', 'MCP'] }, { name: 'Other', skills: ['Docker'] }] });
+      }
       if (pathname === '/api/profile/career') {
         if (request.method() === 'GET') return reply(state);
         const input = JSON.parse(request.postData());
@@ -102,8 +106,23 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await waitWrites(5);
     assert.deepEqual(writes[4].skills, ['TypeScript', 'Node.js', 'Docker', 'Claude', 'MCP']);
 
+    // "Regroup with AI": the groups are shown first; nothing is saved until Keep.
+    await page.click(`${panel} .skill-group-add:nth-child(2)`);
+    await page.waitForSelector(`${panel} .skill-proposal`);
+    assert.deepEqual(sorts[0], ['TypeScript', 'Node.js', 'Docker', 'Claude', 'MCP']);
+    assert.equal(writes.length, 5, 'a suggestion saves nothing');
+    await page.screenshot({ path: '/private/tmp/job-agent-skill-proposal.png', clip: await page.$eval(panel, node => { const box = node.getBoundingClientRect(); return { x: box.x, y: box.y + window.scrollY, width: box.width, height: box.height }; }) });
+    await page.locator(`${panel} ::-p-text(Discard)`).click();
+    await page.waitForSelector(`${panel} .skill-proposal`, { hidden: true });
+    assert.equal(writes.length, 5, 'Discard saves nothing');
+    await page.click(`${panel} .skill-group-add:nth-child(2)`);
+    await page.locator(`${panel} ::-p-text(Keep these groups)`).click();
+    await waitWrites(6);
+    assert.deepEqual(writes[5].skills, ['TypeScript', 'Node.js', 'Claude', 'MCP', 'Docker']);
+    assert.deepEqual(writes[5].skillTypes, { TypeScript: 'Core', 'Node.js': 'Core', Claude: 'AI', MCP: 'AI' }, '"Other" is the row without a group');
+
     assert.deepEqual(errors, []);
-    console.log('PASS Profile skills in groups: rows, add, move, rename, new group, remove with a question');
+    console.log('PASS Profile skills in groups: rows, add, move, rename, new group, remove with a question; AI groups shown first, kept or discarded');
   } finally {
     await browser.close();
   }

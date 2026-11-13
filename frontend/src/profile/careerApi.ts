@@ -171,6 +171,12 @@ function withStacks(state: CareerState): CareerState {
 }
 export const careerApi = {
   read: () => request<CareerState>("").then(withStacks),
+  /** "Sort into groups": the skills in a CV's groups, each once. Nothing is saved. */
+  groupSkills: (skills: string[]) =>
+    request<{ groups: { name: string; skills: string[] }[] }>("/skills/group", {
+      method: "POST",
+      body: JSON.stringify({ skills }),
+    }),
   save: (expectedRevision: number, sections: Partial<CareerSections>) =>
     request<CareerState>("", {
       method: "PUT",

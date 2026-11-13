@@ -573,3 +573,14 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 .tpl-professional .doc-add.pro-add-stack { position: absolute; left: 0; bottom: -12px; z-index: 3; margin: 0; padding: 3px 8px; opacity: 0; }
 .tpl-professional .pro-editable-role:is(:hover, :focus-within) > .pro-add-stack { opacity: 1; }
 @media print { .doc-role-stack > .doc-bulletmeta, .pro-add-stack { display: none !important; } }
+
+/* Skills: "Sort into groups" in the heading, shown like the heading's other tools. */
+.tpl-professional .doc-section > h2 > .pro-sort-skills {
+  display: inline-flex; align-items: center; gap: 4px; height: 20px; margin: 0 0 0 6px; padding: 0 8px; border: 0; border-radius: 6px;
+  background: var(--color-accent); color: var(--color-text); font: 600 11px/1 var(--font-sans, system-ui), sans-serif; letter-spacing: 0; text-transform: none;
+  vertical-align: middle; cursor: pointer; opacity: 0;
+}
+.tpl-professional:not(.read-only) .doc-section:is(:hover, :focus-within) > h2 > .pro-sort-skills,
+.tpl-professional .doc-section > h2 > .pro-sort-skills:is(:focus-visible, :disabled) { opacity: 1; }
+.tpl-professional .doc-section > h2 > .pro-sort-error { margin-left: 8px; color: var(--color-error, #a33); font: 500 11px/1.3 system-ui, sans-serif; text-transform: none; letter-spacing: 0; }
+@media print { .tpl-professional .pro-sort-skills, .tpl-professional .pro-sort-error { display: none; } }

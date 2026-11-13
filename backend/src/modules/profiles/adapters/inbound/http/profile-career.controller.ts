@@ -25,6 +25,7 @@ import { SplitAchievement } from '../../../application/use-cases/split-achieveme
 import { AssistAchievement, SuggestForJob } from '../../../application/use-cases/assist-achievement';
 import { AssistSummary } from '../../../application/use-cases/assist-summary';
 import { AssistDescription, type AssistDescriptionInput } from '../../../application/use-cases/assist-description';
+import { GroupSkills } from '../../../application/use-cases/group-skills';
 import type { AssistInput } from '../../../application/ports/achievement-writer';
 import { CollectFromCvs } from '../../../application/use-cases/collect-from-cvs';
 import type { DeepenInput } from '../../../application/ports/achievement-writer';
@@ -39,6 +40,7 @@ import {
   assistSuggestionsSchema,
   summaryAssistSchema,
   descriptionAssistSchema,
+  groupSkillsSchema,
 } from '../../career.schemas';
 @Catch(AchievementError)
 class AchievementErrorFilter implements ExceptionFilter {
@@ -73,7 +75,14 @@ export class ProfileCareerController {
     @Inject(SuggestForJob) private readonly suggestions: SuggestForJob,
     @Inject(AssistSummary) private readonly summaryAssistant: AssistSummary,
     @Inject(AssistDescription) private readonly descriptionAssistant: AssistDescription,
+    @Inject(GroupSkills) private readonly skillGrouper: GroupSkills,
   ) {}
+  /** "Sort into groups": the skills in a CV's groups ("Core", "Databases"), each once. Nothing is saved. */
+  @Post('skills/group') @HttpCode(200) groupSkills(
+    @Body(new ZodValidationPipe(groupSkillsSchema)) input: { skills: string[] },
+  ) {
+    return this.skillGrouper.execute(input.skills);
+  }
   /** "Write with AI" / "Improve with AI" for the summary: 3 versions from the whole Profile. Nothing is saved. */
   @Post('summary/assist') @HttpCode(200) assistSummary(
     @CurrentUser() userId: string,

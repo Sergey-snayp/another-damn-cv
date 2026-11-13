@@ -10,6 +10,7 @@ import { MONTHS, monthYear, range } from '../dates';
 import { htmlToMarks, spanHtml, spansOf } from '../../text/marks';
 import { SpanView } from '../../text/Marked';
 import { DashboardIcon } from '../../jobs/DashboardIcon';
+import { careerApi } from '../../profile/careerApi';
 
 
 /** Keep dates typed as "Sep 2020" usable by the editor and education autofill. */
@@ -343,6 +344,35 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const tailorButton = (title: string, onClick: (event: React.MouseEvent<HTMLButtonElement>) => void, className = '') =>
     onTailor && !readOnly ? <button type="button" className={`ai pro-tailor ${className}`} title={title} aria-label={title} onClick={onClick}><DashboardIcon name="sparkle" size={13} /></button> : null;
   const bold = useMemo(() => boldPattern(resume), [given]);
+  /** "Sort into groups": the AI puts each skill under a CV group ("Core", "Databases"); History undoes it. */
+  const [sortingSkills, setSortingSkills] = useState(false);
+  const [sortError, setSortError] = useState('');
+  async function sortSkills() {
+    setSortingSkills(true);
+    setSortError('');
+    try {
+      const { groups } = await careerApi.groupSkills(resume.skills.map((skill) => skill.name.trim()).filter(Boolean));
+      onChange((d) => {
+        const byName = new Map(d.skills.map((skill) => [skill.name.trim().toLowerCase(), skill]));
+        const next: typeof d.skills = [];
+        for (const group of groups)
+          for (const name of group.skills) {
+            const skill = byName.get(name.trim().toLowerCase());
+            if (!skill || next.includes(skill)) continue;
+            // "Other" stays a line without a name.
+            skill.category = group.name.toLowerCase() === 'other' ? '' : group.name;
+            next.push(skill);
+          }
+        next.push(...d.skills.filter((skill) => !next.includes(skill)));
+        next.forEach((skill, position) => { skill.position = position; });
+        d.skills = next;
+      });
+    } catch (reason) {
+      setSortError(reason instanceof Error ? reason.message : 'Could not sort the skills. Try again.');
+    } finally {
+      setSortingSkills(false);
+    }
+  }
 
   const changeFor = new Map((changes ?? []).map((change) => [change.lineageId, change]));
   const markOf = (lineageId?: string) => {
@@ -561,7 +591,15 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
         <h2>
           Skills
           {tailorButton('Tailor every skills line for the job', (event) => askAll([...groups].map(([category, indices]) => skillTarget(category, indices)), event))}
+          {!readOnly && resume.skills.length > 1 && (
+            <button type="button" className="pro-sort-skills" disabled={sortingSkills} onClick={() => void sortSkills()}
+              title="Put each skill under a group, one line per group (Core: TypeScript, Node.js)">
+              <DashboardIcon name="wand" size={12} />
+              {sortingSkills ? 'Sorting…' : 'Sort into groups'}
+            </button>
+          )}
           {removeSection('skills', 'Skills')}
+          {sortError && <span className="pro-sort-error" role="alert">{sortError}</span>}
         </h2>
         <ul className="doc-bullets">
           {[...groups].map(([category, indices]) => {

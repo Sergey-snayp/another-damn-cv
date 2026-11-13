@@ -196,3 +196,6 @@ export const deepenAchievementSchema = z
       .max(4),
   })
   .strict();
+
+/** "Sort into groups": the Profile's skills, to be grouped as a CV writes them. */
+export const groupSkillsSchema = z.object({ skills: z.array(z.string().trim().min(1).max(200)).min(1).max(400) }).strict();

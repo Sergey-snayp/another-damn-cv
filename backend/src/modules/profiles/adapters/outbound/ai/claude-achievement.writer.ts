@@ -263,6 +263,33 @@ Return ONLY JSON, no prose and no code fences:
 or
 {"options": [], "questions": ["...", "..."]}`;
 
+const GROUP_SKILLS_SYSTEM = `You sort a software engineer's skills into the groups of a CV's skills section,
+one line per group, as a recruiter in tech reads it: "Core: TypeScript, Node.js, NestJS".
+
+Rules:
+- 6 to 10 groups, each with a short plain name of 1 to 3 words, such as Core, APIs, Databases,
+  Cloud & DevOps, Messaging, Testing, Security, Frontend, AI, Payments, AdTech, Compliance,
+  Observability, Practices.
+- "Core" comes first: the main languages, runtime and backend frameworks. Then the other groups,
+  the ones that matter most for this person first.
+- A skill goes where a recruiter would look for it:
+  - an industry's own standards and protocols go to that industry (ISO 8583 and EMV to Payments,
+    OpenRTB to AdTech), and a provider of that industry too (a payment gateway to Payments);
+  - laws and regulations (GDPR, CCPA, PCI DSS) go to Compliance;
+  - ways of working (code review, system design, mentoring) go to Practices, not Testing;
+  - monitoring tools (New Relic, CloudWatch, Grafana) go to Observability when there are a few;
+  - an email or SMS service goes with the APIs or the cloud, not with messaging queues.
+- Put every skill in exactly one group, spelled exactly as given. Never add, rename, merge,
+  split or drop a skill.
+- Inside a group, the most important skills first.
+- No group called "Other" or "Misc": find the group each skill belongs to.
+
+Return JSON only: {"groups":[{"name":"Core","skills":["TypeScript","Node.js"]}]}`;
+
+const groupSkillsSchema = z.object({
+  groups: z.array(z.object({ name: z.string().max(200), skills: z.array(z.string().max(400)).max(400) })).max(40),
+});
+
 const describeSchema = z.object({
   options: z.array(z.object({ angle: z.string().catch(''), text: z.string().catch('') })).catch([]),
   questions: z.array(z.string()).catch([]),
@@ -477,6 +504,17 @@ ${source.notes.slice(0, 20_000) || '(none)'}
       options: parsed.options.map((option) => ({ angle: option.angle, text: withoutDashPunctuation(option.text) })),
       questions: parsed.questions.map((question) => question.trim()).filter(Boolean).slice(0, 3),
     };
+  }
+
+  async groupSkills(skills: string[]): Promise<{ name: string; skills: string[] }[]> {
+    const raw = await this.llm.complete(`<skills>\n${skills.map((skill) => `- ${skill}`).join('\n')}\n</skills>`, GROUP_SKILLS_SYSTEM, {
+      effort: 'low',
+      timeoutMs: 90_000,
+      maxOutputChars: 20_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) throw new AchievementError('The AI did not sort the skills. Try again.');
+    return groupSkillsSchema.parse(json).groups;
   }
 
   async suggest(source: AchievementSource): Promise<{ keywords: string[]; tasks: string[] }> {

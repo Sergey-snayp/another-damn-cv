@@ -67,6 +67,8 @@ export interface AchievementWriter {
    * say it accurately, up to 3 questions for the person instead.
    */
   describe(input: DescribeInput): Promise<{ options: { angle: string; text: string }[]; questions: string[] }>;
+  /** The skills in the groups of a CV's skills section ("Core", "Databases"), each skill once, spelled as given. */
+  groupSkills(skills: string[]): Promise<{ name: string; skills: string[] }[]>;
   /** Keywords and tasks for one job, from its description, bullets and tech stack. */
   suggest(source: AchievementSource): Promise<AssistSuggestions>;
   /** One achievement too long for a CV line, as 2 to 4 shorter ones that each stand alone. */

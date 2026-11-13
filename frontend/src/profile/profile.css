@@ -473,3 +473,8 @@
 .skill-group-add:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
 .skill-group-add:disabled { opacity: .5; cursor: default; }
 @media (max-width: 560px) { .skill-groups.is-grouped .skill-group { grid-template-columns: 1fr; gap: 6px; } }
+.skill-group-actions { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.skill-group-label.is-static { cursor: default; }
+.skill-proposal { padding: 14px 16px; border: 1px solid #b9d3cc; border-radius: 10px; background: #f6faf9; }
+.skill-proposal-note { display: flex; align-items: center; gap: 8px; margin: 0; color: #1e4d45; font-size: 13px; font-weight: 600; }
+.skill-proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; }

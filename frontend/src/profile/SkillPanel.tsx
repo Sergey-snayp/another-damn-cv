@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import { useConfirm } from "../components/ConfirmDialog";
 import { TagList } from "./TagList";
+import { careerApi } from "./careerApi";
 import { flattenGroups, groupSkills, type SkillGroup } from "./skillGroups";
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -33,6 +34,10 @@ export function SkillGroups({
   /** The new group's name while it is typed; null when not adding one. */
   const [naming, setNaming] = useState<string | null>(null);
   const [error, setError] = useState("");
+  /** The AI's groups, shown for a yes or no before anything is saved. */
+  const [proposal, setProposal] = useState<SkillGroup[] | null>(null);
+  const [sorting, setSorting] = useState(false);
+  const [keeping, setKeeping] = useState(false);
 
   const saved = groupSkills(skills, types);
   const named = saved.filter((group) => group.name);
@@ -88,6 +93,35 @@ export function SkillGroups({
     }
   }
 
+  async function sort() {
+    setSorting(true);
+    setError("");
+    try {
+      const { groups: next } = await careerApi.groupSkills(skills);
+      setProposal(next);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not sort the skills. Try again.");
+    } finally {
+      setSorting(false);
+    }
+  }
+
+  async function keep() {
+    if (!proposal) return;
+    setKeeping(true);
+    setError("");
+    try {
+      // "Other" is the row of skills without a group.
+      await save(proposal.map((group) => (group.name.toLowerCase() === "other" ? { ...group, name: "" } : group)));
+      setFresh([]);
+      setProposal(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not save. Try again.");
+    } finally {
+      setKeeping(false);
+    }
+  }
+
   function addGroup() {
     if (naming === null) return;
     const name = naming.trim();
@@ -95,6 +129,42 @@ export function SkillGroups({
     if (!name || groups.some((group) => same(group.name, name))) return;
     setFresh((names) => [...names, name]);
   }
+
+  if (proposal)
+    return (
+      <div className="skill-groups is-grouped skill-proposal" aria-busy={sorting || keeping}>
+        <p className="skill-proposal-note" role="status">
+          <Icon name="wand" size={15} />
+          Suggested groups for your {skills.length} skills. Nothing changes until you keep them.
+        </p>
+        {proposal.map((group) => (
+          <div className="skill-group" key={group.name}>
+            <div className="skill-group-name">
+              <span className="skill-group-label is-static">{group.name}</span>
+            </div>
+            <ul className="tag-chips">
+              {group.skills.map((skill) => (
+                <li key={skill} className="tag-chip">
+                  <span>{skill}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        <div className="skill-proposal-actions">
+          <button type="button" className="profile-button" disabled={keeping || sorting} onClick={() => void keep()}>
+            {keeping ? "Saving…" : "Keep these groups"}
+          </button>
+          <button type="button" className="profile-button is-secondary" disabled={keeping || sorting} onClick={() => void sort()}>
+            {sorting ? "Sorting…" : "Try again"}
+          </button>
+          <button type="button" className="profile-button is-secondary" disabled={keeping} onClick={() => setProposal(null)}>
+            Discard
+          </button>
+        </div>
+        {error && <p className="profile-error" role="alert">{error}</p>}
+      </div>
+    );
 
   return (
     <div className={`skill-groups${grouped ? " is-grouped" : ""}`}>
@@ -136,10 +206,18 @@ export function SkillGroups({
           />
         </div>
       ) : (
-        <button type="button" className="skill-group-add" disabled={disabled} onClick={() => setNaming("")}>
-          <Icon name="plus" size={14} />
-          Add group
-        </button>
+        <div className="skill-group-actions">
+          <button type="button" className="skill-group-add" disabled={disabled} onClick={() => setNaming("")}>
+            <Icon name="plus" size={14} />
+            Add group
+          </button>
+          {skills.length > 1 && (
+            <button type="button" className="skill-group-add" disabled={disabled || sorting} onClick={() => void sort()}>
+              <Icon name="wand" size={14} />
+              {sorting ? "Sorting your skills…" : grouped ? "Regroup with AI" : "Sort into groups with AI"}
+            </button>
+          )}
+        </div>
       )}
       {error && <p className="profile-error" role="alert">{error}</p>}
     </div>
