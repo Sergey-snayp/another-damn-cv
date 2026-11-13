@@ -87,9 +87,32 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
     await settle();
     assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'sign-in and job alert dialogs do not open the panel');
     await page.evaluate(() => document.getElementById('signin').remove());
+    // Iframes (ads, LinkedIn's own) report in; the reported bug: any report opened the panel on a posting.
+    await page.evaluate(() => {
+      for (const found of [false, true]) {
+        const frame = document.createElement('iframe');
+        frame.style.cssText = 'width:300px;height:250px';
+        frame.srcdoc = `<script>parent.postMessage({ adcvFrameForm: ${found} }, '*')<\/script>`;
+        document.body.append(frame);
+      }
+    });
+    await settle();
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'iframes reporting in do not open the panel on a posting');
+    assert.ok(await page.evaluate(() => Boolean(document.getElementById('adcv-autofill-launcher'))), 'the D! button stays');
+    // Easy Apply drawn ahead of time but not shown.
+    await showStep(contactStep.replace('<div role="dialog">', '<div role="dialog" style="opacity:0">'));
+    await settle();
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'a transparent Easy Apply dialog does not open the panel');
     await showStep(contactStep);
     await settle();
     assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'opening Easy Apply opens the panel');
+    // Easy Apply dismissed: the panel it opened closes; the next Easy Apply opens it again.
+    await showStep('');
+    await page.waitForFunction(() => !CVAutofillPanel.isOpen(), { timeout: 5000 }).catch(() => {});
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'closing Easy Apply closes the panel it opened');
+    await showStep(contactStep);
+    await settle();
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'Easy Apply again opens it again');
     const afterContact = await formChanges();
     assert.ok(afterContact >= 1, 'opening Easy Apply tells the panel the form changed');
     assert.ok((await fieldsOnPage()).includes('firstName:text'), 'the contact step is found inside the shadow root');

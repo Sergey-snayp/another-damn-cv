@@ -15,6 +15,9 @@
   // formHere: the form itself is on the page, not one click away on a job page.
   let available = false, formHere = false, enabled = true, disabledHosts = [], dismissedUrl = null, position = null, panelOpen = false, keepAfterPanel = false;
   let settingsLoaded = false, autoOpenedUrl = null;
+  // Why the panel may open by itself (said in the console when it does); whether
+  // it did; and whether it closes again once that form is gone (LinkedIn Easy Apply).
+  let openReason = '', autoOpened = false, closeWhenGone = false, goneTimer = null;
   const clamp = y => Math.max(48, Math.min(y, Math.max(48, innerHeight - 100)));
   const css = `
     :host { all: initial; position: fixed !important; right: 0 !important; top: min(22vh,160px); z-index: 2147483646 !important; font: 14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color: var(--color-text); }
@@ -46,7 +49,11 @@
     // forms found in iframes. Wait for saved hide/disable settings first.
     // Closing the panel leaves it closed through later scans of the same form.
     if (settingsLoaded && available && formHere && !hiddenByChoice && !panelOpen && autoOpenedUrl !== location.href) {
-      if (window.CVAutofillPanel?.open()) return;
+      if (window.CVAutofillPanel?.open()) {
+        autoOpened = true;
+        console.info(`[Another Damn CV] Opened the panel by itself: ${openReason || 'an application form'} on this page.`);
+        return;
+      }
     }
     if (!panelOpen && (keepAfterPanel || (available && !hiddenByChoice))) {
       loadTheme();
@@ -131,9 +138,25 @@
   });
   addEventListener('resize', renderVisibility);
   window.CVAutofillLauncher = {
-    update(value, { form = true } = {}) { available = value; formHere = value && form; renderVisibility(); },
+    update(value, { form = true, reason = '', closeWhenGone: closeLater = false } = {}) {
+      available = value; formHere = value && form; openReason = reason; closeWhenGone = closeLater;
+      // Easy Apply closed or sent: close the panel it opened, after a moment, in
+      // case the dialog was only changing step. Opened by hand, it stays. Later
+      // scans don't restart the wait; the form coming back cancels it.
+      if (formHere) { clearTimeout(goneTimer); goneTimer = null; }
+      else if (closeWhenGone && autoOpened && panelOpen && !goneTimer) {
+        goneTimer = setTimeout(() => {
+          goneTimer = null;
+          if (formHere || !autoOpened || !panelOpen) return;
+          window.CVAutofillPanel?.close();
+          autoOpenedUrl = null; // The next Easy Apply on this page opens it again.
+          console.info('[Another Damn CV] Closed the panel it opened: that form is gone.');
+        }, 1500);
+      }
+      renderVisibility();
+    },
     /** Puts the button back after a page rebuilt its document and dropped it. */
     reattach() { if (!host.isConnected) renderVisibility(); },
-    panelChanged(open) { panelOpen = open; autoOpenedUrl = location.href; if (open) keepAfterPanel = true; renderVisibility(); },
+    panelChanged(open) { panelOpen = open; autoOpenedUrl = location.href; if (open) keepAfterPanel = true; else autoOpened = false; renderVisibility(); },
   };
 })();

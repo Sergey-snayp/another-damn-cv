@@ -707,41 +707,68 @@ const IS_TOP = window === window.top;
 const TINY_FRAME = !IS_TOP && (innerWidth < 250 || innerHeight < 150);
 const framesWithForms = new Set();
 let frameVerdict = null;
-function showLauncher(ownForm, { form = true } = {}) {
-  if (IS_TOP) { window.CVAutofillLauncher?.update(ownForm || framesWithForms.size > 0, { form: form || framesWithForms.size > 0 }); return; }
-  if (ownForm === frameVerdict) return;
-  frameVerdict = ownForm;
-  window.top.postMessage({ adcvFrameForm: ownForm }, '*');
+/**
+ * What this page last found, kept so a frame's report reuses it instead of
+ * guessing: show the button; form, the form itself is here (the panel may open
+ * by itself); frames, whether forms in iframes count (not on LinkedIn, where
+ * only Easy Apply opens it); reason, said in the console when it opens.
+ */
+let own = { show: false, form: false, frames: true, reason: '', closeWhenGone: false };
+let lastOwnForm = false;
+function showLauncher(next) {
+  if (next) { own = { form: true, frames: true, reason: '', closeWhenGone: false, ...next }; lastOwnForm = own.show; }
+  if (IS_TOP) {
+    const framed = own.frames && framesWithForms.size > 0;
+    window.CVAutofillLauncher?.update(own.show || framed, {
+      form: (own.show && own.form) || framed,
+      reason: own.show && own.form ? own.reason : 'an application form in a frame',
+      closeWhenGone: own.closeWhenGone,
+    });
+    return;
+  }
+  if (own.show === frameVerdict) return;
+  frameVerdict = own.show;
+  window.top.postMessage({ adcvFrameForm: own.show }, '*');
 }
 if (IS_TOP) {
   // Announces a form only: opening the panel never fills or submits anything.
   addEventListener('message', (event) => {
     if (typeof event.data?.adcvFrameForm !== 'boolean' || event.source === window) return;
     if (event.data.adcvFrameForm) framesWithForms.add(event.source); else framesWithForms.delete(event.source);
-    showLauncher(lastOwnForm);
+    showLauncher();
   });
 }
-let lastOwnForm = false;
 let lastLinkedInContext;
+/** On screen for real: a box of some size in the viewport, and nothing above it hides it. */
+function shown(element) {
+  const box = element.getBoundingClientRect();
+  if (box.width < 40 || box.height < 40 || box.bottom <= 0 || box.right <= 0 || box.top >= innerHeight || box.left >= innerWidth) return false;
+  for (let node = element; node; node = node.parentElement ?? node.getRootNode().host) {
+    if (node.hidden || node.inert || node.getAttribute('aria-hidden') === 'true') return false;
+    const style = getComputedStyle(node);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+  }
+  return true;
+}
 /**
- * LinkedIn's Easy Apply dialog is on screen. LinkedIn draws it inside
+ * LinkedIn's Easy Apply dialog on screen, or null. LinkedIn draws it inside
  * #interop-outlet's shadow root (older pages: .jobs-easy-apply-modal). Other
  * LinkedIn dialogs (sign-in, job alerts, sharing) must not count, so the
  * dialog needs an Easy Apply sign: its "Apply to …" heading, its upload boxes,
  * or fields with a Next / Review / Submit button. A password field rules it out.
  */
 const EASY_APPLY_BUTTON = /^(next|review|submit application|continue to next step|review your application)$/i;
-function easyApplyOpen() {
-  return Fields.deepAll('[role="dialog"]').some((dialog) => {
-    if (!dialog.getClientRects().length || dialog.querySelector('input[type="password"]')) return false;
+function easyApplyDialog() {
+  return Fields.deepAll('[role="dialog"]').find((dialog) => {
+    if (dialog.querySelector('input[type="password"]')) return false;
     const root = dialog.getRootNode();
-    const easyApplyBox = dialog.matches('.jobs-easy-apply-modal') || (root instanceof ShadowRoot && root.host.id === 'interop-outlet');
-    if (!easyApplyBox) return false;
+    if (!dialog.matches('.jobs-easy-apply-modal') && !(root instanceof ShadowRoot && root.host.id === 'interop-outlet')) return false;
+    if (!shown(dialog)) return false;
     if (dialog.querySelector('[id^="easyApply"], .jobs-easy-apply-content, #jobs-apply-header')) return true;
     if ([...dialog.querySelectorAll('h1, h2, h3')].some((heading) => /^apply to\b/i.test(heading.textContent.trim()))) return true;
     return Boolean(dialog.querySelector('input:not([type="hidden"]), textarea, select'))
       && [...dialog.querySelectorAll('button')].some((button) => EASY_APPLY_BUTTON.test(button.textContent.replace(/\s+/g, ' ').trim()));
-  });
+  }) ?? null;
 }
 function updateLauncher() {
   if (TINY_FRAME) return;
@@ -755,12 +782,13 @@ function updateLauncher() {
       lastLinkedInContext = context;
       try { void chrome.runtime.sendMessage({ type: 'job-context-changed' }).catch(() => {}); } catch { /* extension reloaded */ }
     }
-    // A selected posting shows the button; the panel opens by itself only
-    // once Easy Apply's form is on screen. Nothing else on LinkedIn opens it:
-    // its search boxes are no application form.
-    const applying = easyApplyOpen();
-    lastOwnForm = Boolean(job) || applying;
-    showLauncher(lastOwnForm, { form: applying });
+    // A selected posting shows the button; the panel opens by itself only for
+    // Easy Apply, and closes again when Easy Apply goes away. Nothing else on
+    // LinkedIn opens it: not its search boxes, not its iframes.
+    const dialog = easyApplyDialog();
+    const heading = dialog?.querySelector('h1, h2, h3')?.textContent.replace(/\s+/g, ' ').trim();
+    showLauncher({ show: Boolean(job || dialog), form: Boolean(dialog), frames: false, closeWhenGone: true,
+      reason: `LinkedIn Easy Apply${heading ? ` ("${heading.slice(0, 60)}")` : ''}` });
     if (lastOwnForm) formChanged();
     return;
   }
@@ -768,16 +796,15 @@ function updateLauncher() {
     // A job page whose form is one click away (Ashby's Overview tab, Lever's posting):
     // the button shows, and the panel offers to open the form. It opens by itself once
     // the form is on the page.
+    showLauncher({ show: Boolean(Sites.formOpener()), form: false });
     lastOwnForm = false;
-    showLauncher(Boolean(Sites.formOpener()), { form: false });
     return;
   }
   scan();
   // Teamtailor and other boards on company domains are known by page structure.
   const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });
   // Always passed on: update() also puts the button back if the page removed it.
-  lastOwnForm = verdict.show;
-  showLauncher(verdict.show);
+  showLauncher({ show: verdict.show, reason: verdict.reason });
 }
 
 /**
