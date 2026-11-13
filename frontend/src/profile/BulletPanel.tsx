@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BULLET_WORDS, checkBullet } from "../resume/bulletCheck";
 import type { ActiveBullet } from "./bulletFocus";
+import { DESCRIPTION_WORDS, descriptionChecks } from "./descriptionCheck";
 
 /** Characters a bullet of 20 to 40 words takes, about. */
 const CHARACTERS = { min: 100, max: 220 } as const;
@@ -103,6 +104,7 @@ const EXAMPLES = [
  */
 export function BulletPanel({ active }: { active: ActiveBullet | null }) {
   if (active?.kind === "summary") return <SummaryPanel active={active} />;
+  if (active?.kind === "description") return <DescriptionPanel active={active} />;
   return <BulletChecks active={active} />;
 }
 
@@ -211,6 +213,102 @@ function SummaryPanel({ active }: { active: ActiveBullet }) {
           </li>
         </ul>
       </div>
+    </section>
+  );
+}
+
+const DESCRIPTION_EXAMPLES = [
+  "Payments platform that lets 300 German online retailers offer invoice and instalment checkout to their shoppers.",
+  "Anti-money-laundering system that screens card transactions in real time for compliance teams at 12 regional banks.",
+  "Ad exchange that matches publishers' mobile ad slots with advertisers' bids in under 100 ms, about 20,000 requests a second.",
+];
+
+/** A job's (or its project's) description, checked against the one-sentence standard. */
+function DescriptionPanel({ active }: { active: ActiveBullet }) {
+  const [tab, setTab] = useState<"suggestions" | "examples">("suggestions");
+  const text = active.text.trim();
+  const checks = text ? descriptionChecks(active) : [];
+  const passed = checks.filter((item) => item.ok).length;
+  const score = checks.length ? Math.round((passed / checks.length) * 5) : 0;
+  const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+  const missing = checks.filter((item) => !item.ok);
+  return (
+    <section className="profile-panel bullet-panel" aria-label="Description check">
+      <header className="bp-head">
+        {text ? (
+          <h2 className={`bp-grade is-${score >= 4 ? "good" : score >= 2 ? "fair" : "weak"}`}>
+            <span aria-hidden="true">{score >= 4 ? "✅" : score >= 2 ? "🟡" : "⚠️"}</span> {GRADES[score]}
+          </h2>
+        ) : (
+          <h2 className="bp-grade">Description check</h2>
+        )}
+        <p className="bp-job">{active.job}</p>
+      </header>
+      <div className="bp-segments" aria-label={text ? `${passed} of ${checks.length} checks met` : undefined}>
+        {[0, 1, 2, 3, 4].map((at) => (
+          <span key={at} className={at < score ? "is-on" : ""} />
+        ))}
+      </div>
+      {text && (
+        <>
+          <div className="bp-gauges">
+            <Gauge label="Words" value={words} min={DESCRIPTION_WORDS.min} max={DESCRIPTION_WORDS.max} scale={40} />
+          </div>
+          <ul className="bp-checks">
+            {checks.map((item) => (
+              <li key={item.key}>
+                {item.label}
+                <span className={`bp-dot ${item.ok ? "is-ok" : "is-missing"}`} aria-label={item.ok ? "met" : "missing"}>
+                  {item.ok ? "✓" : "✕"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="bp-tabs" role="tablist">
+        {(["suggestions", "examples"] as const).map((name) => (
+          <button key={name} type="button" role="tab" aria-selected={tab === name} className={tab === name ? "is-on" : ""} onClick={() => setTab(name)}>
+            {{ suggestions: "Suggestions", examples: "Examples" }[name]}
+          </button>
+        ))}
+      </div>
+      {tab === "suggestions" ? (
+        <div className="bp-body" role="tabpanel">
+          {missing.length > 0 && (
+            <ul className="bp-fixes">
+              {missing.map((item) => (
+                <li key={item.key}>
+                  <b>{item.label}:</b> {item.fix}
+                </li>
+              ))}
+            </ul>
+          )}
+          <h3>Work experience › Description</h3>
+          <p>One sentence that tells a stranger what you worked on, before the bullets say what you did.</p>
+          <ul>
+            <li>
+              {DESCRIPTION_WORDS.min} to {DESCRIPTION_WORDS.max} words: what the product does, who uses it, and why it exists for the business.
+            </li>
+            <li>Factual and specific. No responsibilities, results, technologies or buzzwords: those belong in the bullets and Technologies.</li>
+            <li>Don't repeat the company or job title: they are already above.</li>
+            <li>Through an agency or outsourcing company? Describe the client's product, not the agency.</li>
+            <li>Present tense if the product still runs; past tense if it was closed.</li>
+            <li>A plain scale fact helps: “used by 300 merchants”, “about 20,000 requests a second”.</li>
+            <li>Spell out an acronym the reader may not know, once.</li>
+            <li>Not sure what the product does or who uses it? Leave it out rather than guess.</li>
+          </ul>
+        </div>
+      ) : (
+        <div className="bp-body" role="tabpanel">
+          <ul className="bp-examples">
+            {DESCRIPTION_EXAMPLES.map((example) => (
+              <li key={example}>{example}</li>
+            ))}
+          </ul>
+          <p className="bp-note">How they read, not what they say: write your own facts.</p>
+        </div>
+      )}
     </section>
   );
 }

@@ -6,6 +6,8 @@ import { TagList, splitTags } from "./TagList";
 import { JobFacts } from "./JobFacts";
 import { SummaryEditor } from "./SummaryEditor";
 import { Marked } from "../text/Marked";
+import { withoutMarks } from "../text/marks";
+import { useSetActiveBullet } from "./bulletFocus";
 import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -52,11 +54,15 @@ export function ProfileCareer({
   /** With `entry`, only that job or education entry is edited, or a new one added. */
   onEditCareer(section: CareerSectionKey, entry?: CareerEntry): void;
 }) {
+  // A job's description being written goes to the check panel beside the Profile.
+  const setActive = useSetActiveBullet();
   const experiences = imported.experiences?.value ?? [];
   const educations = imported.educations?.value ?? [];
   const skills = imported.skills?.value ?? [];
   const summary = imported.summary?.value ?? "";
   // Every technology and skill on the Profile: what a summary's "Keywords" looks for.
+  // Only the jobs' technologies: what a job description should leave out.
+  const technologies = [...new Set(experiences.flatMap((role) => (role.techStack ?? "").split(/[,|;\n]/)).map((item) => item.trim()).filter(Boolean))];
   const keywords = [
     ...new Set(
       [...experiences.flatMap((role) => (role.techStack ?? "").split(/[,|;\n]/)), ...skills].map((item) => item.trim()).filter(Boolean),
@@ -161,6 +167,13 @@ export function ProfileCareer({
                   deleteTitle="Are you sure you want to delete this description?"
                   deleteBody={<p>It will be removed from {role.title} at {role.company} in your Profile. Your saved CVs keep their own copy.</p>}
                   onSave={(text) => onSaveRole(index, () => ({ description: text }))}
+                  onDraft={(text) =>
+                    setActive(
+                      text === null
+                        ? null
+                        : { kind: "description", text: withoutMarks(text), keywords: technologies, job: [role.title, role.company].filter(Boolean).join(" · "), title: role.title, company: role.company, client: role.client },
+                    )
+                  }
                 >
                   <div className="profile-body">
                     <Marked text={role.description} />

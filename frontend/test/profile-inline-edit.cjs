@@ -62,7 +62,13 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.ok(await page.$('[aria-label="Delete description"]'), 'with Delete');
     await button('Edit description').click();
     await page.waitForSelector('[aria-label="Edit description"][contenteditable]');
+    // Editing it opens the description check beside the Profile, as a bullet's does.
+    await page.waitForSelector('.bullet-panel[aria-label="Description check"]');
+    assert.deepEqual(await page.$$eval('.bullet-panel .bp-checks li', items => items.map(item => item.firstChild.textContent)),
+      ['Length', 'One sentence', 'Who uses it', 'About the product, not you', 'No technologies', 'No results', 'No buzzwords', "Doesn't repeat the title"]);
+    assert.match(await page.$eval('.bullet-panel', node => node.textContent), /Under 15 words|Add what the product does or who uses it/, 'what to fix');
     await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.bullet-panel'));
     assert.equal(await page.$('[aria-label="Edit description"][contenteditable]'), null, 'Escape closes the editor');
     assert.equal(writes.length, 0, 'Escape saves nothing');
     await page.click('.inline-edit .profile-body');

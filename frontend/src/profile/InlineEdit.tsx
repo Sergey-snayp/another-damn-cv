@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import { RichEditor } from "../text/RichEditor";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -20,6 +20,7 @@ export function InlineEdit({
   deleteTitle,
   deleteBody,
   onSave,
+  onDraft,
 }: {
   /** What it is, for buttons and the editor: "description", "technologies". */
   label: string;
@@ -38,8 +39,26 @@ export function InlineEdit({
   deleteBody: ReactNode;
   /** Saves the text ("" deletes it); rejects with a message when it cannot. */
   onSave(text: string): Promise<void>;
+  /** The text as it is being written, for a check panel; null when not editing. */
+  onDraft?(text: string | null): void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  // Reported while editing, and once when editing ends (not when the page first draws).
+  const drafting = useRef(false);
+  useEffect(() => {
+    if (editing !== null) {
+      drafting.current = true;
+      onDraft?.(editing);
+    } else if (drafting.current) {
+      drafting.current = false;
+      onDraft?.(null);
+    }
+    // Only the text decides it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
+  useEffect(() => () => {
+    if (drafting.current) onDraft?.(null);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const confirm = useConfirm();
