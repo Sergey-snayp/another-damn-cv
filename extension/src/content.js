@@ -27,6 +27,9 @@ let lastScan = { found: [], skipped: [] };
 const BOARD_HOST = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
 function companyName() {
   if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.company ?? '';
+  // A job board's own place for it (Jobvite's header logo).
+  const fromBoard = window.CVAutofillJobDetails?.company?.();
+  if (fromBoard) return fromBoard.slice(0, 100);
   const named = document.querySelector('.company-name, [data-testid="company-name"]')?.textContent?.trim()
     || document.querySelector('meta[property="og:site_name"]')?.content?.trim();
   if (named) return named.slice(0, 100);
@@ -65,9 +68,11 @@ function scan() {
     site: site?.name ?? null,
     ruleCount,
     context: {
-      title: linkedin ? selected?.title || (selected ? 'LinkedIn job' : 'Open a LinkedIn job') : (document.querySelector('h1')?.innerText || document.title || 'Application form').trim().slice(0, 180),
+      title: linkedin ? selected?.title || (selected ? 'LinkedIn job' : 'Open a LinkedIn job') : (window.CVAutofillJobDetails?.title?.() || document.querySelector('h1')?.innerText || document.title || 'Application form').trim().slice(0, 180),
       company: linkedin ? selected?.company ?? '' : companyName(),
       ...(selected && { jobUrl: selected.url, isJobPosting: true }),
+      // An apply page's job is its job page: both are one saved job.
+      ...(!selected && window.CVAutofillJobDetails?.jobUrl?.() && { jobUrl: window.CVAutofillJobDetails.jobUrl() }),
     },
     fields: unique.map((field) => ({
       key: field.key,
@@ -672,10 +677,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'job-details') {
     // For the panel's "Save job" form: what the page says about the job, checked by the person before saving.
     const context = scan().context;
-    let details = {};
-    try { details = window.CVAutofillJobDetails?.read() ?? {}; } catch { /* the form opens with what is known */ }
-    sendResponse({ title: context.title, company: context.company, url: context.jobUrl || location.href, ...details });
-    return false;
+    void (async () => {
+      let details = {};
+      try { details = (await window.CVAutofillJobDetails?.readAsync?.()) ?? window.CVAutofillJobDetails?.read() ?? {}; } catch { /* the form opens with what is known */ }
+      sendResponse({ title: context.title, company: context.company, url: context.jobUrl || location.href, ...details });
+    })();
+    return true;
   }
   if (message.type === 'check-required') {
     const missing = missingWithReasons();

@@ -1,0 +1,167 @@
+<!-- Varonis on Jobvite (jobs.jobvite.com/careers/varonis/job/oitNzfwR/apply), saved 2026-11-13 without scripts or styles. -->
+
+    <!doctype html>
+    <html class="no-js" lang="en-US">
+            <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>Varonis Careers - Apply for Senior Software Engineer (Python)</title>
+            <meta name="robots" content="noindex">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body class="jv-desktop jv-page-apply " ng-app="jv.careersite.desktop.app" ng-controller="JVMain">
+            <div class="jv-page-container">
+        <div class="jv-page">
+                <div class="jv-page-content">
+            <header class="jv-page-header" role="banner">
+        <div class="jv-wrapper">
+            <div class="row">
+                <div class="jv-logo">
+                        <a href="/varonis/jobs">
+                                                                <img src="//careers.jobvite.com/varonis/header-logo.webp" alt="Varonis Home">
+                        </a>
+                </div>
+            </div>
+        </div>
+    </header>
+    <article class="jv-page-body" role="main"  ng-controller="JVApply" >
+            <div class="jv-wrapper">
+            <h2 class="jv-header">
+                                Senior Software Engineer (Python)
+    </h2>
+    <p class="jv-apply-meta">
+        R&D<span class='jv-inline-separator'></span>
+            Vancouver,
+            Canada
+    </p>
+                <p>
+Thank you for considering a career at Varonis. Please take a minute to fill out the following form. After you have completed your application an email will be sent to you with information about how to check the status of your application.        </p>
+        <hr />
+    <div class="jv-content-loader" ng-hide="initialized">
+        <span class="jv-spinner"></span>
+    </div>
+    <div class="jv-form jv-apply-form" ng-cloak>
+        <form name="scopeData.applyForm" ng-submit="submitApplication()" novalidate ng-class="{ 'jv-form-submitted': applyForm.submitted }" aria-live="polite">
+    <div ng-form="scopeData.step1" ng-if="showStep(1)" class="jv-apply-step">
+    <div ng-show="showInvalidField(errors.resume)">
+    <h3 class="jv-step-header" id="jv-resume-header">
+        Add Resume*
+    </h3>
+        <div ng-controller="JVApplyWith" class="jv-apply-with jv-apply-section" id="attachResume">
+            <div ng-show="!resumeName" ng-class="{ 'jv-invalid-field': errors.resume }">
+                <button jv-add-attachment="{ social: true }" on-success="sendResume(type, res)" attachment-label="Resume" pasted-label="Pasted Resume" class="jv-button" type="button" aria-haspopup="true" aria-labelledby="jv-resume-header" aria-expanded="false" jv-focus-on="resumeDeleted" aria-required="true">
+Select <i class="icon icon-arrow-down jv-text-icon"></i>
+                </button>
+                <div ng-if="errors.resume && !applyWithErrors.resumeUpload">
+                	<span class="jv-form-error">
+Please provide this information.            		</span>
+            	</div>
+            </div>
+            <div jv-edit-resume resume-content="resumeContent" visible="showEditResume" on-success="saveContent(resumeContent)"></div>
+            <ul class="jv-file-list">
+                <li ng-if="resumeName">
+                    <div class="jv-file">
+                        <span class="jv-spinner" ng-show="resumeLoading"></span>
+                        <span ng-class="{'jv-text-link': canPreview || canEdit }" ng-click="editOrPreviewResume()" jv-focus-on="resumeName" tabindex="0">{{ resumeName }}</span>
+                                    <a href="" class="jv-text-link jv-text-action" ng-click="removeResume()">remove</a>
+                    </div>
+                </li>
+            </ul>
+            <p ng-if="applyWithErrors.resumeUpload" class="jv-error">{{ applyWithErrors.resumeUpload }}</p>
+        </div>
+    </div>
+    <div ng-show="showInvalidField(!step1.validOnSubmit)" class="jv-apply-section">
+    <h3 class="jv-step-header" id="">
+        Personal Information
+    </h3>
+        <div ng-repeat="field in applyFields" jv-apply-field="field"  jv-apply-fields="(field.fieldId && field.fieldId === -7) ? applyFields : null" jv-apply-field-show="showInvalidField(error)" jv-step="1" ng-model="applyData.fieldMap" class="jv-form-field"></div>
+    </div>
+        <div ng-controller="JVAttachProfile" ng-show="showInvalidField()" class="jv-apply-section" id="socialProfile">
+    <h3 class="jv-step-header" id="">
+        Social Profile (optional)
+    </h3>
+            <div class="jv-apply-section-content">
+                        <div>
+                            <p >Use this option if you want to share your full LinkedIn profile in addition to your resume.</p>
+                        </div>
+                        <div class="jv-attach-social-profile" ng-class="{ 'jv-attach-social-profile-boxed': socialProfileAttached }">
+                            <div ng-if="socialProfileAttached">
+                                <div class="jv-float-left">
+                                      <i class="jv-icon-success icon icon-check"></i>
+                                </div>
+                                <div class="jv-float-right">
+                                    <a class="jv-close" href="" ng-click="removeProfile('linkedin')">
+                                        <i class="icon icon-close"><span>Close</span></i>
+                                    </a>
+                                </div>
+                            </div>
+                            <div>
+                                <span id="attachProfile" ng-mouseenter="widgetType(false)"> <span class="awli-container">
+</span>
+ </span>
+                            </div>
+                        </div>
+            </div>
+        </div>
+        <div class="jv-additional-files jv-apply-section" ng-show="showInvalidField()">
+    <h3 class="jv-step-header" id="">
+        Additional Files (optional)
+    </h3>
+            <span ng-show="visible.addCoverLetter">
+                <button jv-add-attachment on-success="addCoverLetter(type, res)" attachment-label="Cover Letter" pasted-label="Pasted Cover Letter" class="jv-button" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Add Cover Letter">
+Add Cover Letter                </button>
+            </span>
+            <ul class="jv-file-list">
+                <li ng-repeat="file in resources">
+                    <div class="jv-file">
+                        <span class="jv-spinner" ng-show="file.isLoading"></span>
+                        <span jv-focus-on="(resources.length -1 === $index)" tabindex="0">{{ file.name }}</span>
+                                    <a href="" class="jv-text-link jv-text-action" ng-click="removeFile($index)">remove</a>
+                    </div>
+                </li>
+            </ul>
+            <p ng-if="errors.attachmentUpload" jv-focus-on="errors.attachmentUpload" class="jv-error" tabindex="-1">{{ errors.attachmentUpload }}</p>
+        </div>
+    </div>
+                    <div class="jv-apply-form-actions">
+        <div ng-show="message.text" class="jv-message jv-message-{{ message.type }}">
+            {{ message.text }}
+        </div>
+        <div ng-show="showRequiredError()" class="jv-apply-error">
+            <p role="alert">
+                <strong>The above information is required.</strong>
+To complete this application, you must provide the minimum required information.            </p>
+            <p><a href="" ng-click="showAllFields = true"><strong>View Full Application Form</strong></a></p>
+        </div>
+        <div ng-show="showRequiredErrorForAllFields()" class="jv-apply-error">
+            <p role="alert">
+                <strong>Please fill the required fields</strong>
+            </p>
+        </div>
+        <button ng-show="showNextButton()" class="jv-button jv-button-primary jv-button-large" type="button" ng-click="nextStep()" aria-controls="applyForm" aria-label="Next">
+Next &rarr;
+        </button>
+        <button ng-show="!showNextButton()" class="jv-button jv-button-primary jv-button-large" type="submit" ng-disabled="submitting" tabindex="0" aria-label="Send Application">
+            <span ng-show="!submitting">Send Application</span>
+            <span ng-show="submitting">Sending Application <span class="jv-submit-spinner"></span></span>
+        </button>
+            </div>
+            <div id="captcha"></div>
+            <div class="jv-wrapper jv-job-apply-pane"></div>
+        </form>
+    </div>
+            </div>
+    </article>
+    <footer class="jv-footer">
+        <div class="jv-wrapper">
+            <p class="jv-text-center">
+                                <hr />
+                    <a class="jv-powered-by" target="_parent" href="https://www.jobvite.com/support/job-seeker-support/"><i class="icon icon-powered-by"><span>Powered by Jobvite</span></i></a>
+            </p>
+        </div>
+    </footer>
+    </div>
+        </div>
+    </div>
+    </body>
+    </html>

@@ -35,6 +35,60 @@
     return body.textContent.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
   };
 
+  /**
+   * Job boards whose pages say the job's details in their own places, as
+   * Simplify keeps for each board (jobTitlePath, jobLocationPath…). Jobvite:
+   * the title is the h2 "jv-header", the line under it is "R&D | Vancouver,
+   * Canada", the company is the header logo ("Varonis Home"). Its apply page
+   * has no description: that is on the job page, the same address without
+   * "/apply", which is also the job's own address.
+   */
+  const textAfterLastSeparator = (node) => {
+    if (!node) return '';
+    const separators = node.querySelectorAll('.jv-inline-separator');
+    if (!separators.length) return clean(node.textContent);
+    let text = '';
+    for (let at = separators[separators.length - 1].nextSibling; at; at = at.nextSibling) text += at.textContent;
+    return clean(text);
+  };
+  const BOARDS = [{
+    host: /(^|\.)jobs\.jobvite\.com$/i,
+    title: () => clean(document.querySelector('h2.jv-header, h1.jv-header')?.textContent),
+    location: () => clean(document.querySelector('h3.jv-job-detail-location')?.textContent) || textAfterLastSeparator(document.querySelector('p.jv-apply-meta, p.jv-job-detail-meta')),
+    company: () => clean(document.querySelector('.jv-logo img[alt]')?.alt).replace(/\s+(home|careers?|jobs|logo)$/i, '')
+      || tabParts()?.company
+      || slugName(location.pathname.match(/^\/(?:careers\/)?([^/]+)\/(?:job|jobs|search)\b/)?.[1]),
+    description: '.jv-job-detail-description',
+    jobUrl: () => {
+      const found = location.pathname.match(/^\/((?:careers\/)?[^/]+\/job\/[^/]+)/);
+      return found ? `${location.origin}/${found[1]}` : null;
+    },
+  }];
+  const board = () => BOARDS.find((item) => item.host.test(location.hostname)) ?? null;
+  /** "varonis" → "Varonis"; "acme-corp" → "Acme Corp". */
+  function slugName(slug) {
+    if (!slug) return '';
+    return decodeURIComponent(slug).split(/[-_]+/).filter(Boolean).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ');
+  }
+  /** A tab titled "Varonis Careers - Apply for Senior Software Engineer": the company and the title. */
+  function tabParts() {
+    const found = clean(document.title).match(/^(.+?)\s+Careers?\s*[-–—|:]\s*(?:Apply(?:ing)?\s+(?:for|to)\s+)?(.+)$/i);
+    return found ? { company: found[1], title: found[2] } : null;
+  }
+
+  /** The job's title: the board's place for it, the page's h1, else the tab's title without "X Careers - Apply for". */
+  function title() {
+    return board()?.title() || clean(document.querySelector('h1')?.innerText) || tabParts()?.title || clean(document.title);
+  }
+  /** The company, when the board says it in its own place or the tab title does ("Varonis Careers - …"). */
+  function company() {
+    return board()?.company() || '';
+  }
+  /** The job's own address: an apply page's job page. */
+  function jobUrl() {
+    return board()?.jobUrl?.() ?? null;
+  }
+
   /** The page's JobPosting structured data, if any. */
   function posting() {
     if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.posting ?? null;
@@ -135,6 +189,12 @@
 
   /** The job's own text: a description element, else the main content without the application form. */
   function descriptionOnPage() {
+    const own = board()?.description;
+    if (own) {
+      const node = document.querySelector(own);
+      // The board's own place: an apply page without it waits for the job page (readAsync).
+      return node ? htmlText(node.innerHTML).slice(0, 20000) : '';
+    }
     const selectors = ['.job__description', '#job-description', '[data-qa="job-description"]', '[class*="job-description" i]', '[class*="jobDescription"]', '[class*="description" i]', 'article', 'main', '[role="main"]'];
     for (const selector of selectors) {
       for (const node of document.querySelectorAll(selector)) {
@@ -158,7 +218,7 @@
     const salary = salaryFrom(job) ?? salaryInText(bodyText) ?? { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null };
     const types = [].concat(job?.employmentType ?? []).join(' ');
     return {
-      location: linkedin ? selected?.location || locationFrom(job) : locationFrom(job) || locationOnPage(),
+      location: linkedin ? selected?.location || locationFrom(job) : locationFrom(job) || board()?.location() || locationOnPage(),
       ...salary,
       employmentType: typeOf(types) || typeOf(bodyText.slice(0, 3000)),
       description,
@@ -166,5 +226,25 @@
     };
   }
 
-  window.CVAutofillJobDetails = { read, postedAt, salaryInText, typeOf };
+  /**
+   * read(), and on an apply page without the description, the description from
+   * the job page (same site, so the page's own fetch can read it).
+   */
+  async function readAsync() {
+    const details = read();
+    const own = board();
+    const url = own?.jobUrl?.();
+    if (details.description || !own?.description || !url || url === location.origin + location.pathname) return details;
+    try {
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) return details;
+      const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const node = page.querySelector(own.description);
+      if (node) details.description = htmlText(node.innerHTML).slice(0, 20000);
+      if (!details.employmentType && details.description) details.employmentType = typeOf(details.description.slice(0, 3000));
+    } catch { /* the form opens without it; the person can paste it */ }
+    return details;
+  }
+
+  window.CVAutofillJobDetails = { read, readAsync, title, company, jobUrl, postedAt, salaryInText, typeOf };
 })();
