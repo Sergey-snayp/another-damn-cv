@@ -278,6 +278,9 @@
 .studio-tools button:hover { background: var(--color-background); border-color: var(--color-border); }
 .studio-tools button.on { border-color: var(--color-border); background: var(--color-background); font-weight: 600; }
 .studio-tools .pct { min-width: 54px; font-variant-numeric: tabular-nums; }
+/* In the header row: no row of its own; History and Save follow after a divider. */
+.studio-bar > .studio-tools { margin-left: auto; padding: 0; border: 0; background: none; }
+.studio-bar > .studio-tools + .studio-actions { margin-left: 6px; padding-left: 14px; border-left: 1px solid var(--color-border); }
 
 .studio-canvas { flex: 1; min-height: 0; overflow: auto; padding: 24px 84px 24px 24px; scrollbar-gutter: stable; }
 .studio-zoom { margin: 0 auto; }

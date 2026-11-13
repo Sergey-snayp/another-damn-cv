@@ -574,3 +574,7 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 .tpl-professional .pro-editable-role:is(:hover, :focus-within) > .pro-add-stack { opacity: 1; }
 @media print { .doc-role-stack > .doc-bulletmeta, .pro-add-stack { display: none !important; } }
 
+
+/* A section heading's tools (✦, delete) sit at its right end, over the rule. */
+.tpl-professional:not(.read-only) .doc-section > h2 { display: flex; align-items: center; gap: 4px; }
+.tpl-professional:not(.read-only) .doc-section > h2 > button:first-of-type { margin-left: auto; }

@@ -448,6 +448,25 @@ export function ResumeEditor() {
               </button>}
         </nav>
         <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined}>{status}</span>
+        {/* The view's tools sit in the header: side panels, fit, zoom, full screen. */}
+        <div className="studio-tools" role="toolbar" aria-label="View">
+          <button title={leftOpen ? 'Hide the side panel' : 'Show the side panel'} onClick={() => setLeftOpen(!leftOpen)}>
+            {leftOpen ? '«' : '»'}
+          </button>
+          <button className={zoom === 'fit-page' ? 'on' : ''} onClick={() => setZoom('fit-page')}>Fit to Page</button>
+          <button title="Zoom out" onClick={() => zoomBy(-0.1)}><DashboardIcon name="minus" size={16} /></button>
+          <button className={zoom === 'fit-width' ? 'pct on' : 'pct'} title="Fit to width" onClick={() => setZoom('fit-width')}>
+            {Math.round(scale * 100)}%
+          </button>
+          <button title="Zoom in" onClick={() => zoomBy(0.1)}><DashboardIcon name="plus" size={16} /></button>
+          <button title="Full screen" onClick={() => {
+            if (document.fullscreenElement) void document.exitFullscreen();
+            else void preview.current?.requestFullscreen();
+          }}>⛶</button>
+          <button title={rightOpen ? 'Hide Resume Score and Chat' : 'Show Resume Score and Chat'} onClick={() => setRightOpen(!rightOpen)}>
+            {rightOpen ? '»' : '«'}
+          </button>
+        </div>
         <span className="studio-actions">
           <Link className="ghost" to={`/documents/${id}/history`}>History</Link>
           <a className="studio-export" href={`/api/resumes/${id}/pdf?download=1`} onClick={(e) => void exportPdf(e)}>
@@ -579,25 +598,6 @@ export function ResumeEditor() {
         )}
 
         <main className="studio-preview" ref={preview}>
-          <div className="studio-tools">
-            <button title={leftOpen ? 'Hide the side panel' : 'Show the side panel'} onClick={() => setLeftOpen(!leftOpen)}>
-              {leftOpen ? '«' : '»'}
-            </button>
-            <span className="spacer" />
-            <button className={zoom === 'fit-page' ? 'on' : ''} onClick={() => setZoom('fit-page')}>Fit to Page</button>
-            <button title="Zoom out" onClick={() => zoomBy(-0.1)}><DashboardIcon name="minus" size={16} /></button>
-            <button className={zoom === 'fit-width' ? 'pct on' : 'pct'} title="Fit to width" onClick={() => setZoom('fit-width')}>
-              {Math.round(scale * 100)}%
-            </button>
-            <button title="Zoom in" onClick={() => zoomBy(0.1)}><DashboardIcon name="plus" size={16} /></button>
-            <button title="Full screen" onClick={() => {
-              if (document.fullscreenElement) void document.exitFullscreen();
-              else void preview.current?.requestFullscreen();
-            }}>⛶</button>
-            <button title={rightOpen ? 'Hide Resume Score and Chat' : 'Show Resume Score and Chat'} onClick={() => setRightOpen(!rightOpen)}>
-              {rightOpen ? '»' : '«'}
-            </button>
-          </div>
           <div className="studio-canvas" ref={canvas}>
             <ScaledPage className="studio-zoom" scale={scale} onClick={openFromPreview}>
               {/* Drawn as the PDF's sheets, with the same page breaks. */}
