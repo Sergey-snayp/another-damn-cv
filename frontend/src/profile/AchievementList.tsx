@@ -454,7 +454,24 @@ export function AchievementList({
           </button>
         )}
       </div>
-      {addOpen && (
+      {/* "Write with AI" takes the box's place: only AI until a version is chosen (it comes back
+          into the box to check and save) or the AI box is closed (the box comes back as it was). */}
+      {addOpen && ai?.for === "add" && (
+        <div className="ach-add">
+          <AiBox
+            role={role}
+            mode="write"
+            text={adding}
+            autoStart={ai.autoStart}
+            onUse={(next) => {
+              setAdding(next);
+              setAi(null);
+            }}
+            onClose={() => setAi(null)}
+          />
+        </div>
+      )}
+      {addOpen && ai?.for !== "add" && (
         <div className="ach-add">
           <div className="ach-editor">
           <RichEditor
@@ -484,23 +501,21 @@ export function AchievementList({
           )}
           <PlaceholderNote text={adding} />
           <div className="ach-add-actions">
-            {ai?.for !== "add" && (
-              <button
-                type="button"
-                className="ai-write ach-ai-button"
-                disabled={disabled || busy}
-                title="Write with AI: 3 drafts from what you typed, this job and your choices"
-                onClick={() => {
-                  // Several lines: each one written into bullets, reviewed together.
-                  if (pasted > 1 && onWrite) {
-                    onWrite(adding.trim());
-                    closeAdd();
-                  } else setAi({ for: "add", autoStart: true });
-                }}
-              >
-                Write with AI <AiBadge />
-              </button>
-            )}
+            <button
+              type="button"
+              className="ai-write ach-ai-button"
+              disabled={disabled || busy}
+              title="Write with AI: 3 drafts from what you typed, this job and your choices"
+              onClick={() => {
+                // Several lines: each one written into bullets, reviewed together.
+                if (pasted > 1 && onWrite) {
+                  onWrite(adding.trim());
+                  closeAdd();
+                } else setAi({ for: "add", autoStart: true });
+              }}
+            >
+              Write with AI <AiBadge />
+            </button>
             <span className="ach-actions-gap" />
             <button type="button" className="profile-text-button" disabled={busy} onClick={closeAdd}>
               Cancel
@@ -509,19 +524,6 @@ export function AchievementList({
               {pasted > 1 ? `Save ${pasted}` : "Save"}
             </button>
           </div>
-          {ai?.for === "add" && (
-            <AiBox
-              role={role}
-              mode="write"
-              text={adding}
-              autoStart={ai.autoStart}
-              onUse={(next) => {
-                setAdding(next);
-                setAi(null);
-              }}
-              onClose={() => setAi(null)}
-            />
-          )}
         </div>
       )}
       {error && <p className="profile-error" role="alert">{error}</p>}
