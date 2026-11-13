@@ -20,6 +20,7 @@ export function TagList({
   items,
   suggestions = [],
   addLabel,
+  startAdding = false,
   disabled,
   onChange,
 }: {
@@ -30,11 +31,13 @@ export function TagList({
   suggestions?: string[];
   /** The add button's text; "Add" by default. */
   addLabel?: string;
+  /** Opens with the field ready to type: a group just made. */
+  startAdding?: boolean;
   disabled: boolean;
   /** Saves the new list; rejects with a message when it cannot. */
   onChange(items: string[]): Promise<void>;
 }) {
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(startAdding);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +48,11 @@ export function TagList({
   /** Escape cancels: the blur that follows must not add what was typed. */
   const cancelled = useRef(false);
   const listId = useId();
+  /** Bumped after an add from Enter or ✓: the field gets the cursor back after the save re-enables it. */
+  const [refocus, setRefocus] = useState(0);
+  useEffect(() => {
+    if (refocus) field.current?.focus();
+  }, [refocus]);
 
   useEffect(() => {
     if (!undo) return;
@@ -85,8 +93,8 @@ export function TagList({
       setText("");
       setUndo(null);
       if (close) setAdding(false);
-      // Otherwise it stays open for the next one.
-      else requestAnimationFrame(() => field.current?.focus());
+      // Otherwise it stays open for the next one, focused once it is enabled again.
+      else setRefocus((count) => count + 1);
     }
   }
 

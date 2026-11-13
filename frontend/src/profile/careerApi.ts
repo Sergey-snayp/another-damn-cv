@@ -2,6 +2,7 @@ import type { ContactFields } from "../api";
 import type { RenderedResume } from "../resumeApi";
 import type { ImportProposal } from "../resume/fromImport";
 import { splitStackBullet } from "../resume/techStack";
+import { flattenGroups } from "./skillGroups";
 
 export const IMPORT_CONTACT_LABELS = {
   firstName: "First name",
@@ -96,6 +97,8 @@ export interface CareerSections {
   experiences: CareerExperience[];
   educations: CareerEducation[];
   skills: string[];
+  /** Each skill's group, as a CV writes it ("Core: TypeScript, Node.js"), by the skill's name. */
+  skillTypes?: Record<string, string>;
 }
 export type CareerSource =
   | { kind: "profile" }
@@ -107,7 +110,7 @@ export interface CareerSection<T> {
   importedAt: string;
 }
 export type CareerData = {
-  [K in keyof CareerSections]?: CareerSection<CareerSections[K]>;
+  [K in keyof CareerSections]?: CareerSection<NonNullable<CareerSections[K]>>;
 };
 export interface CareerState {
   revision: number;
@@ -310,14 +313,25 @@ export function profileDraftFromFile(
           to: text(r.to, 80),
         };
       }),
-      skills: [
-        ...new Set(
-          list(p.skills, 400)
-            .map((value) => text(value, 200))
-            .filter(Boolean),
-        ),
-      ],
+      // The CV's skills section as it is written, one group per line, when the file has groups.
+      ...fileSkills(p),
     },
+  };
+}
+function fileSkills(p: Record<string, unknown>): Pick<CareerSections, "skills" | "skillTypes"> {
+  const groups = list(p.skillGroups, 100).map((value) => {
+    const r = row(value);
+    return { name: text(r.category, 80), skills: list(r.skills, 400).map((skill) => text(skill, 200)) };
+  });
+  if (groups.some((group) => group.name && group.skills.some(Boolean))) return flattenGroups(groups);
+  return {
+    skills: [
+      ...new Set(
+        list(p.skills, 400)
+          .map((value) => text(value, 200))
+          .filter(Boolean),
+      ),
+    ],
   };
 }
 export function profileDraftFromResume(
@@ -360,6 +374,7 @@ export function profileDraftFromResume(
           to: r.to || "",
         })),
         skills: cv.skills.map((s) => s.name),
+        skillGroups: cv.skills.map((s) => ({ category: s.category ?? "", skills: [s.name] })),
       },
     },
     "",
@@ -382,8 +397,10 @@ export function importInput(
     expectedContact: Object.fromEntries(
       selectedContact.map((key) => [key, profile[key] ?? ""]),
     ),
-    sections: Object.fromEntries(
-      selectedSections.map((key) => [key, draft.sections[key]]),
-    ),
+    sections: Object.fromEntries([
+      ...selectedSections.map((key) => [key, draft.sections[key]]),
+      // The skills come with their groups.
+      ...(selectedSections.includes("skills") && draft.sections.skillTypes ? [["skillTypes", draft.sections.skillTypes]] : []),
+    ]),
   };
 }

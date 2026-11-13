@@ -60,6 +60,8 @@ export interface CareerSections {
   experiences: CareerExperience[];
   educations: CareerEducation[];
   skills: string[];
+  /** Each skill's group, as a CV writes it ("Core: TypeScript, Node.js"), by the skill's name. A skill without one is ungrouped. */
+  skillTypes?: Record<string, string>;
 }
 export type CareerSource =
   | { kind: 'file'; name: string }
@@ -70,7 +72,7 @@ export interface CareerSection<T> {
   source: CareerSource;
   importedAt: string;
 }
-export type CareerData = { [K in keyof CareerSections]?: CareerSection<CareerSections[K]> };
+export type CareerData = { [K in keyof CareerSections]?: CareerSection<NonNullable<CareerSections[K]>> };
 export interface CareerState {
   revision: number;
   data: CareerData;

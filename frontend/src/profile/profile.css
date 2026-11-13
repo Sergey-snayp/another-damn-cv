@@ -455,3 +455,21 @@
 .tag-apply:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
 .tag-apply:disabled { background: #c9d6d2; cursor: default; }
 .tag-apply svg { display: block; }
+
+/* Skills in groups, one row each: the name on the left, its chips on the right. */
+.skill-groups { display: grid; gap: 12px; }
+.skill-groups.is-grouped .skill-group { display: grid; grid-template-columns: minmax(96px, 150px) 1fr; align-items: start; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border); }
+.skill-groups.is-grouped .skill-group:last-of-type { border-bottom: 0; padding-bottom: 0; }
+.skill-group-name { position: relative; display: inline-flex; align-items: center; justify-self: start; min-height: 29px; }
+.skill-group-label { padding: 4px 8px; margin-left: -8px; border: 0; border-radius: 6px; background: none; color: var(--color-text); font: inherit; font-size: 13px; font-weight: 700; text-align: left; cursor: text; }
+.skill-group-label.is-other { color: var(--color-muted); font-weight: 600; }
+.skill-group-label:hover:not(:disabled) { background: #eef5f3; }
+.skill-group-label:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.skill-group-name .tag-chip-x { top: -5px; right: -12px; }
+.skill-group-name:hover .tag-chip-x, .skill-group-name .tag-chip-x:focus-visible { opacity: 1; visibility: visible; transition: opacity .12s ease .1s, visibility 0s linear .1s; }
+.skill-group-name.is-editing .tag-add-input { width: 140px; }
+.skill-group-add { display: inline-flex; align-items: center; justify-self: start; gap: 5px; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: 6px; background: none; color: #1e4d45; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.skill-group-add:hover:not(:disabled) { background: #eef5f3; }
+.skill-group-add:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.skill-group-add:disabled { opacity: .5; cursor: default; }
+@media (max-width: 560px) { .skill-groups.is-grouped .skill-group { grid-template-columns: 1fr; gap: 6px; } }

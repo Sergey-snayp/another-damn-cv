@@ -30,7 +30,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
       if (p === '/api/profile/career') return reply({ revision: 1, data: {
         summary: { value: 'Backend engineer with 7 years of experience.', source, importedAt },
         experiences: { value: [{ title: 'Senior Software Engineer', company: 'Ciklum', client: '', location: 'Canada', workType: 'remote', from: '2024-10', to: '', current: true, description: '', bullets: ['Built a TLS certificate service.'], techStack: 'Node.js' }], source, importedAt },
-        skills: { value: ['Node.js'], source, importedAt },
+        skills: { value: ['Docker', 'Node.js', 'Claude', 'TypeScript'], source, importedAt },
+        skillTypes: { value: { 'Node.js': 'Core', TypeScript: 'Core', Claude: 'AI' }, source, importedAt },
       } });
       if (p === '/api/resumes' && method === 'GET') return reply(rows);
       if (p === '/api/resumes' && method === 'POST') { const body = JSON.parse(request.postData()); const id = `new-${created.length + 1}`; created.push({ id, ...body }); return reply(summary(id, body.name)); }
@@ -73,6 +74,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(saved['new-1'].message, 'filled from Profile');
     assert.equal(saved['new-1'].experiences[0].company, 'Ciklum');
     assert.deepEqual(saved['new-1'].achievements.map(item => item.bullet), ['Built a TLS certificate service.']);
+    assert.deepEqual(saved['new-1'].skills.map(skill => `${skill.category}: ${skill.name}`), ['Core: Node.js', 'Core: TypeScript', 'AI: Claude', ': Docker'], 'one skills line per Profile group');
 
     // A copy: the content with new ids (each line still on its job) and the design.
     await open();

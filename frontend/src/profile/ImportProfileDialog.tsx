@@ -15,6 +15,7 @@ import {
   type ImportContactKey,
   type ProfileImportDraft,
 } from "./careerApi";
+import { flattenGroups, groupLines, groupSkills, parseGroupLines } from "./skillGroups";
 import "./profile-import.css";
 
 export function ImportProfileDialog({
@@ -126,10 +127,11 @@ export function ImportProfileDialog({
       ),
     );
     setSelectedSections(
-      (Object.keys(next.sections) as (keyof CareerSections)[]).filter(
+      (["summary", "experiences", "educations", "skills"] as const).filter(
         (key) => !!next.sections[key].length && !base.career.data[key],
       ),
     );
+    setSkillText(groupLines(groupSkills(next.sections.skills, next.sections.skillTypes)));
     requestAnimationFrame(() =>
       dialog.current
         ?.querySelector<HTMLElement>("#profile-import-review")
@@ -223,6 +225,13 @@ export function ImportProfileDialog({
         ? values.filter((value) => value !== key)
         : [...values, key],
     );
+  }
+  /** The skills as typed in the review: one group per line, "Core: TypeScript, Node.js". */
+  const [skillText, setSkillText] = useState("");
+  function skillLines(value: string) {
+    setSkillText(value);
+    const { skills, skillTypes } = flattenGroups(parseGroupLines(value));
+    setDraft((current) => (current ? { ...current, sections: { ...current.sections, skills, skillTypes } } : current));
   }
   function section<K extends keyof CareerSections>(
     key: K,
@@ -483,22 +492,12 @@ export function ImportProfileDialog({
                       </label>
                     ) : key === "skills" ? (
                       <label>
-                        Skills, one per line
+                        Skills, one group per line (Core: TypeScript, Node.js)
                         <textarea
                           rows={5}
-                          value={draft.sections.skills.join("\n")}
-                          onChange={(event) =>
-                            section("skills", event.target.value.split("\n"))
-                          }
-                          onBlur={() =>
-                            section("skills", [
-                              ...new Set(
-                                draft.sections.skills
-                                  .map((s) => s.trim())
-                                  .filter(Boolean),
-                              ),
-                            ])
-                          }
+                          value={skillText}
+                          onChange={(event) => skillLines(event.target.value)}
+                          onBlur={() => setSkillText(groupLines(groupSkills(draft.sections.skills, draft.sections.skillTypes)))}
                         />
                       </label>
                     ) : key === "experiences" ? (

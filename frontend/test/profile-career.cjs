@@ -195,7 +195,10 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.keyboard.type('TypeScript, Node.js');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelectorAll('[aria-labelledby="profile-skills-heading"] .tag-chip').length === 2);
+    // Esc once the save is done: the field is busy (disabled) while it saves.
+    await page.waitForFunction(() => document.activeElement?.classList.contains('tag-add-input') && !document.activeElement.disabled);
     await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[aria-labelledby="profile-skills-heading"] .tag-add-input'));
     assert.deepEqual(state.data.skills.value, ['Node.js', 'TypeScript'], 'a skill already there is not added twice');
     assert.equal(state.data.summary.value, 'Updated in another session.', 'saving reads the latest revision and preserves another session’s changes');
     await button('Edit Training Provider in Profile').click();

@@ -51,6 +51,11 @@ const sectionsSchema = z
       .max(50)
       .optional(),
     skills: z.array(z.string().trim().min(1).max(200)).max(400).optional(),
+    // Each skill's group ("Core", "AI"), by the skill's name.
+    skillTypes: z
+      .record(z.string().trim().min(1).max(200), z.string().trim().max(80))
+      .refine((types) => Object.keys(types).length <= 400, 'Too many skills.')
+      .optional(),
   })
   .strict();
 const contactSchema = z
@@ -108,6 +113,9 @@ export const careerDataSchema = z
       .optional(),
     skills: z
       .object({ value: sectionsSchema.shape.skills.unwrap(), source: sourceSchema, importedAt: z.string() })
+      .optional(),
+    skillTypes: z
+      .object({ value: sectionsSchema.shape.skillTypes.unwrap(), source: sourceSchema, importedAt: z.string() })
       .optional(),
   })
   .strict();

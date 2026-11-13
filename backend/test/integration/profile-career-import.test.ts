@@ -169,6 +169,26 @@ test('a job keeps how it was worked (remote, hybrid, on site) apart from where; 
   assert.equal((await json<CareerState>('/profile/career', 'GET', undefined, fresh.user.id)).data.experiences!.value[0].workType, 'remote');
 });
 
+test('skills keep their groups, as a CV writes them', async () => {
+  const fresh = await createUser('Skill Groups');
+  await json<CareerState>(
+    '/profile/career',
+    'PUT',
+    { expectedRevision: 0, sections: { skills: ['TypeScript', 'Claude', 'Docker'], skillTypes: { TypeScript: 'Core', Claude: 'AI' } } },
+    fresh.user.id,
+  );
+  const loaded = await json<CareerState>('/profile/career', 'GET', undefined, fresh.user.id);
+  assert.deepEqual(loaded.data.skills!.value, ['TypeScript', 'Claude', 'Docker']);
+  assert.deepEqual(loaded.data.skillTypes!.value, { TypeScript: 'Core', Claude: 'AI' });
+  const refused = await request(
+    '/profile/career',
+    'PUT',
+    { expectedRevision: loaded.revision, sections: { skillTypes: { TypeScript: 'x'.repeat(81) } } },
+    fresh.user.id,
+  );
+  assert.equal(refused.status, 400, 'a group name is short');
+});
+
 test('a first file import fills a profile without creating or requiring a CV in Documents', async () => {
   const fresh = await createUser('First File Import');
   const source = { kind: 'file', name: 'first-cv.txt' };

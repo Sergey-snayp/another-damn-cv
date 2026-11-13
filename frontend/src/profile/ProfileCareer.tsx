@@ -2,6 +2,7 @@ import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { CareerData, CareerExperience, CollectedJob } from "./careerApi";
 import { AchievementList } from "./AchievementList";
 import { InlineEdit, InlineText } from "./InlineEdit";
+import { SkillGroups } from "./SkillPanel";
 import { TagList, splitTags } from "./TagList";
 import { JobFacts } from "./JobFacts";
 import { DescriptionAi } from "./DescriptionAi";
@@ -50,8 +51,8 @@ export function ProfileCareer({
   onDelete?(section: "experiences" | "educations", entry: number): void;
   /** Saves one job's fields (achievements, description, technologies) on the latest Profile. */
   onSaveRole(entry: number, patch: (current: CareerExperience) => Partial<CareerExperience>): Promise<void>;
-  /** Saves the Profile's skills list. */
-  onSaveSkills(skills: string[]): Promise<void>;
+  /** Saves the Profile's skills and each one's group. */
+  onSaveSkills(skills: string[], skillTypes: Record<string, string>): Promise<void>;
   /** With `entry`, only that job or education entry is edited, or a new one added. */
   onEditCareer(section: CareerSectionKey, entry?: CareerEntry): void;
 }) {
@@ -253,7 +254,7 @@ export function ProfileCareer({
         <div className="profile-panel-heading">
           <h2 id="profile-skills-heading">Skills</h2>
         </div>
-        <TagList label="skill" items={skills} suggestions={keywords} addLabel="Add skill" disabled={importDisabled} onChange={onSaveSkills} />
+        <SkillGroups skills={skills} types={imported.skillTypes?.value} suggestions={keywords} disabled={importDisabled} onSave={onSaveSkills} />
       </section>
     </>
   );

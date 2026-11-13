@@ -1,6 +1,7 @@
 import type { ContactFields } from '../../api';
 import type { CareerData } from '../../profile/careerApi';
 import { jobPlace } from '../../profile/workPlace';
+import { groupSkills } from '../../profile/skillGroups';
 import { stackLine } from '../techStack';
 import type { RenderedResume } from '../../resumeApi';
 
@@ -52,8 +53,10 @@ export function resumeFromProfile(current: RenderedResume, profile: ContactField
     }));
   }
   if (career.skills) {
-    next.skills = career.skills.value.filter((name) => name.trim()).map((name, position) => ({
-      lineageId: newId(), name, category: '', position,
+    // One line per group, as the Profile has them: "Core: TypeScript, Node.js".
+    const groups = groupSkills(career.skills.value.filter((name) => name.trim()), career.skillTypes?.value);
+    next.skills = groups.flatMap((group) => group.skills.map((name) => ({ name, category: group.name }))).map((skill, position) => ({
+      lineageId: newId(), ...skill, position,
     }));
   }
   return next;
