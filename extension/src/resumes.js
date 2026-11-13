@@ -14,15 +14,29 @@ import { APP_URL, NotSignedInError } from './jobs.js';
  *
  * The list lives only in this panel's memory, after the server answered for
  * the current sign-in. A persisted list from an older visit is never shown.
- * Only chosenResumeId (the CV to upload) is remembered between visits.
+ *
+ * Which CV a job page starts with: the one picked by hand on that page; else
+ * the copy tailored for that job; else the default CV, the master the others
+ * are tailored from (the server always marks one). A pick is remembered for
+ * its page only, so the CV picked on one job never follows to the next.
+ * chosenResumeId holds the CV chosen for the page now, for the background's
+ * answer drafts.
  */
 let library = null;
 let pending = null;
+/** The page the panel is on, and its saved job's id when it is saved. */
+let context = { page: null, jobId: null };
+const PICKS_KEPT = 100;
 
-/** Drops this account's CV list, choice and texts: after a failed fetch or a sign-out. */
+/** The job page the choice is for: set when the page or its saved job changes. */
+export function setResumeContext(page, jobId) {
+  context = { page: page ?? null, jobId: jobId ?? null };
+}
+
+/** Drops this account's CV list, choices and texts: after a failed fetch or a sign-out. */
 export function forgetResumes() {
   library = null;
-  return chrome.storage.local.remove(['appResumes', 'chosenResumeId', 'cvTexts']);
+  return chrome.storage.local.remove(['appResumes', 'chosenResumeId', 'pickedResumes', 'cvTexts']);
 }
 
 /** The CV was deleted in the app since the list was fetched. */
@@ -32,12 +46,25 @@ export class ResumeGoneError extends Error {
 
 /** This panel's last server answer, only for the current sign-in. */
 export async function cachedResumes() {
-  const { auth, chosenResumeId } = await chrome.storage.local.get(['auth', 'chosenResumeId']);
-  return withChoice(auth?.syncToken && library?.token === auth.syncToken ? library.items : [], chosenResumeId);
+  const { auth, pickedResumes } = await chrome.storage.local.get(['auth', 'pickedResumes']);
+  return withChoice(auth?.syncToken && library?.token === auth.syncToken ? library.items : [], pickedResumes);
 }
 
-function withChoice(items, chosenId) {
-  const chosen = items.find(item => item.id === chosenId) ?? items.find(item => item.isPrimary) ?? items[0] ?? null;
+/** The CV for this page: picked here, tailored for this job, or the default. */
+export function choiceFor(items, picks, { page, jobId } = context) {
+  const picked = page ? picks?.[page] : null;
+  return items.find(item => item.id === picked)
+    ?? (jobId ? items.find(item => item.jobId === jobId) : null)
+    ?? items.find(item => item.isPrimary)
+    ?? items[0]
+    ?? null;
+}
+
+async function withChoice(items, picks) {
+  const chosen = choiceFor(items, picks);
+  const { chosenResumeId } = await chrome.storage.local.get('chosenResumeId');
+  if (!chosen && chosenResumeId !== undefined) await chrome.storage.local.remove('chosenResumeId');
+  else if (chosen && chosenResumeId !== chosen.id) await chrome.storage.local.set({ chosenResumeId: chosen.id });
   return { items, chosen };
 }
 
@@ -60,7 +87,7 @@ async function readLibrary(token) {
     const items = response.ok ? await response.json() : null;
     // A slow response from an earlier account must never restore its CVs or
     // sign out the account selected while the request was in flight.
-    const { auth, chosenResumeId } = await chrome.storage.local.get(['auth', 'chosenResumeId']);
+    const { auth, pickedResumes } = await chrome.storage.local.get(['auth', 'pickedResumes']);
     if (auth?.syncToken !== token) throw new NotSignedInError();
     if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
     if (!response.ok) throw new Error(`Server returned ${response.status}.`);
@@ -68,8 +95,7 @@ async function readLibrary(token) {
     library = { token, items };
     // Remove the old persisted library; it is never a source of documents.
     await chrome.storage.local.remove('appResumes');
-    if (chosenResumeId && !items.some(item => item.id === chosenResumeId)) await chrome.storage.local.remove('chosenResumeId');
-    return withChoice(items, chosenResumeId);
+    return withChoice(items, pickedResumes);
   } catch (error) {
     // Leave a newer account's successful request alone.
     const { auth } = await chrome.storage.local.get('auth');
@@ -85,8 +111,17 @@ async function currentSignIn(token) {
   return (await chrome.storage.local.get('auth')).auth?.syncToken === token;
 }
 
-export function chooseResume(id) {
-  return chrome.storage.local.set({ chosenResumeId: id });
+/** A CV picked by hand: for this page only. */
+export async function chooseResume(id) {
+  const { pickedResumes = {} } = await chrome.storage.local.get('pickedResumes');
+  const picks = { ...pickedResumes };
+  if (context.page) {
+    delete picks[context.page];
+    picks[context.page] = id;
+  }
+  // The newest picks are kept: insertion order is oldest first.
+  const kept = Object.fromEntries(Object.entries(picks).slice(-PICKS_KEPT));
+  return chrome.storage.local.set({ pickedResumes: kept, chosenResumeId: id });
 }
 
 /** The CV's PDF in the app, for "Preview resume" (the app's own sign-in). */

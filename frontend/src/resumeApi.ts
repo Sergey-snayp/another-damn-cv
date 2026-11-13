@@ -261,6 +261,13 @@ export const resumeApi = {
   createPdf: (id: string) =>
     request<{ fileName: string; version: string }>(`/resumes/${encodeURIComponent(id)}/pdf`, { method: 'POST' }),
 
+  /** Makes this CV the default: the master others are tailored from, and the one the extension offers first. */
+  makeDefault: (id: string) =>
+    fetch(`/api/resumes/${encodeURIComponent(id)}/default`, { method: 'PUT', credentials: 'include' }).then(async (response) => {
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? `${response.status} ${response.statusText}`);
+      notifyResumesChanged(id);
+    }),
+
   /** Deletes the CV with its versions and PDF. */
   remove: (id: string) =>
     fetch(`/api/resumes/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' }).then(async (response) => {

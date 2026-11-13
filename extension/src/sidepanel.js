@@ -2,7 +2,7 @@ import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.j
 import { captureTab, getSavedJob, lookupJob, postingDatesFor, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, updateSavedJob, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
 import { observeTextPreviews, previewCvName } from './text-display.js';
-import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl, ResumeGoneError } from './resumes.js';
+import { cachedResumes, chooseResume, cvTexts, fetchResumes, fileNameFor, pdfFor, pdfUrl, ResumeGoneError, setResumeContext } from './resumes.js';
 import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv } from './match.js';
 import { matchAnswers } from './answers.js';
 import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
@@ -303,6 +303,12 @@ async function checkSaved(url) {
   const pending = savedJob;
   try { const job = await lookupJob(url); if (savedJob === pending) savedJob.job = job; }
   catch { /* signed out or offline: the button offers saving, which explains */ }
+  // A saved job may have its own tailored CV: that one is offered on its page.
+  if (savedJob === pending && jobAddress() === url) {
+    setResumeContext(url, savedJob.job?.id);
+    const next = await cachedResumes();
+    if (next.chosen?.id !== resumes.chosen?.id && !filling && !switchingCv) { resumes = next; rerenderResumes(); void rescore(); }
+  }
   void loadLetter();
   if (!filling) renderAutofill();
 }
@@ -1124,7 +1130,12 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   const fromApp = sender.tab?.url?.startsWith(APP_URL) || sender.url?.startsWith(chrome.runtime.getURL('src/tailor.html'));
   if (!['app-resumes-changed', 'app-use-resume'].includes(message?.type) || !fromApp) return false;
   clearTimeout(appChangeTimer);
-  appChangeTimer = setTimeout(() => void reloadResumes(message.type === 'app-use-resume'), 300);
+  // Quick tailoring, started from this page, hands over its copy: picked for this page.
+  const useId = message.type === 'app-use-resume' && typeof message.resumeId === 'string' ? message.resumeId : null;
+  appChangeTimer = setTimeout(() => void (async () => {
+    if (useId) await chooseResume(useId);
+    await reloadResumes(Boolean(useId));
+  })(), 300);
   return false;
 });
 // Back on the job's tab (or the panel shown again): fetch the list if it is not fresh, in case a message was missed.
@@ -1388,6 +1399,8 @@ async function refresh() {
     const tab = pageTab ? { ...pageTab, jobUrl: nextScan?.context?.jobUrl || pageTab.url } : null;
     // Scanning may outlast a backend refresh. Read the latest library after
     // it finishes, so an earlier empty list cannot replace the fresh one.
+    // The CV this page starts with depends on the page and its saved job.
+    setResumeContext(jobAddress(tab), savedJob.url === jobAddress(tab) ? savedJob.job?.id : null);
     const nextResumes = await cachedResumes();
     if (sequence !== refreshId) return;
     if (jobAddress() !== jobAddress(tab)) {

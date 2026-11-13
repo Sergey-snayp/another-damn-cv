@@ -131,6 +131,12 @@ export class PrismaResumeRepository extends PrismaResumeTransaction implements R
     });
     return rows.map(({ tailoring, ...row }) => ({ ...row, hasTailoring: tailoring !== null }));
   }
+  async setDefault(profileId: string, id: string): Promise<void> {
+    await this.database.$transaction([
+      this.database.resume.updateMany({ where: { profileId, isPrimary: true, id: { not: id } }, data: { isPrimary: false } }),
+      this.database.resume.updateMany({ where: { profileId, id }, data: { isPrimary: true } }),
+    ]);
+  }
   async rename(id: string, name: string): Promise<void> {
     await this.client.resume.update({ where: { id }, data: { name } });
   }

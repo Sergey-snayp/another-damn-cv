@@ -18,6 +18,7 @@ import {
   GetResumeProposal,
   GetResumeWorkspace,
   ListResumes,
+  MakeDefaultResume,
   StoreResumeProposal,
 } from './use-cases/manage-resumes';
 
@@ -34,6 +35,7 @@ export function createResumesApi(
   const save = new SaveResume(repository, ids),
     revert = new RevertResume(repository, save),
     rebuild = new RebuildResume(repository);
+  const makeDefault = new MakeDefaultResume(repository, profiles);
   const list = new ListResumes(repository, profiles),
     create = new CreateResume(repository, profiles),
     career = new GetResumeCareer(repository),
@@ -50,7 +52,10 @@ export function createResumesApi(
     remove: async (userId, id) => {
       await assertOwned(repository, userId, id);
       await repository.remove(id);
+      // The default gone: the next one is chosen now, not on the next read.
+      await list.execute({ userId });
     },
+    makeDefault: (userId, id) => makeDefault.execute({ userId, id }),
     current: (userId, id) => read.execute({ userId, id }),
     atSnapshot: (userId, id, number) => snapshot.execute({ userId, id, number }),
     history: (userId, id, table, lineageId) => history.execute({ userId, id, table, lineageId }),

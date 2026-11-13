@@ -9,6 +9,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   UseFilters,
   UseGuards,
@@ -43,6 +44,10 @@ export class ResumesController {
   }
   @Delete(':id') @HttpCode(204) remove(@CurrentUser() userId: string, @Param('id') id: string) {
     return this.resumes.remove(userId, id);
+  }
+  /** "Make default" on the Documents page. */
+  @Put(':id/default') @HttpCode(204) makeDefault(@CurrentUser() userId: string, @Param('id') id: string) {
+    return this.resumes.makeDefault(userId, id);
   }
   @Get(':id') read(@CurrentUser() userId: string, @Param('id') id: string) {
     return this.resumes.current(userId, id);

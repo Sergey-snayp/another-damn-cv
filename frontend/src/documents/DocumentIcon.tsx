@@ -1,4 +1,4 @@
-import { ArrowUpRight, EllipsisVertical, FileText, History, Plus, Search, SlidersHorizontal, Star, Trash2, Upload, X, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, BadgeCheck, EllipsisVertical, FileText, History, Plus, Search, SlidersHorizontal, Star, Trash2, Upload, X, type LucideIcon } from "lucide-react";
 
 /** The Documents page's icons, from the same Lucide set as the rest of the app (see DashboardIcon). */
 const icons = {
@@ -13,6 +13,7 @@ const icons = {
   history: History,
   arrow: ArrowUpRight,
   trash: Trash2,
+  default: BadgeCheck,
 } satisfies Record<string, LucideIcon>;
 
 export function DocumentIcon({

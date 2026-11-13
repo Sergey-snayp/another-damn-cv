@@ -7,16 +7,34 @@ import type {
 import { ResumeError } from '../errors';
 import { copyOf, isAutomaticTailoredResumeName, tailoredResumeName } from '../../domain/document';
 import { careerFrom } from '../../domain/career';
+import { defaultResumeId } from '../../domain/default-resume';
 import type { SaveResume } from './save-resume';
 import { assertOwned, currentDocument } from './read-resume';
 
+/** The CVs, newest first, with exactly one default: set here when none is (or several are). */
 export class ListResumes {
   constructor(
     private readonly repository: ResumeRepository,
     private readonly profiles: ProfileDirectory,
   ) {}
   async execute(input: { userId: string }) {
-    return this.repository.list((await this.profiles.ensureProfile(input.userId)).id);
+    const profileId = (await this.profiles.ensureProfile(input.userId)).id;
+    const rows = await this.repository.list(profileId);
+    if (!rows.length || rows.filter((row) => row.isPrimary).length === 1) return rows;
+    const id = defaultResumeId(rows)!;
+    await this.repository.setDefault(profileId, id);
+    return rows.map((row) => ({ ...row, isPrimary: row.id === id }));
+  }
+}
+/** "Make default" on the Documents page: this CV becomes the master the others start from. */
+export class MakeDefaultResume {
+  constructor(
+    private readonly repository: ResumeRepository,
+    private readonly profiles: ProfileDirectory,
+  ) {}
+  async execute(input: { userId: string; id: string }) {
+    await assertOwned(this.repository, input.userId, input.id);
+    await this.repository.setDefault((await this.profiles.ensureProfile(input.userId)).id, input.id);
   }
 }
 export class CreateResume {

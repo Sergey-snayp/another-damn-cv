@@ -117,3 +117,23 @@ test('PDF uploads use the full backend CV name, including international names', 
     assert.equal(file.fileName, name);
   }
 });
+
+test('a job page starts with: the CV picked on that page, else the copy tailored for its job, else the default', async (context) => {
+  const items = [cv('newest'), cv('tailored', { jobId: 'job-1', tailoredForJob: true }), cv('master', { isPrimary: true })];
+  const { store, api } = await fixture(context);
+  context.mock.method(globalThis, 'fetch', async () => reply(items));
+
+  api.setResumeContext('https://jobs.example.com/new', null);
+  assert.equal((await api.fetchResumes()).chosen.id, 'master', 'a new job: the default, not the newest CV');
+
+  api.setResumeContext('https://jobs.example.com/acme', 'job-1');
+  assert.equal((await api.cachedResumes()).chosen.id, 'tailored', "a saved job with its own copy: that copy");
+
+  await api.chooseResume('newest');
+  assert.equal((await api.cachedResumes()).chosen.id, 'newest', 'a pick on this page wins');
+  api.setResumeContext('https://jobs.example.com/other', null);
+  assert.equal((await api.cachedResumes()).chosen.id, 'master', 'and stays on its page: the next job starts from the default');
+  api.setResumeContext('https://jobs.example.com/acme', 'job-1');
+  assert.equal((await api.cachedResumes()).chosen.id, 'newest', 'back on that page, the pick is still there');
+  assert.equal(store.chosenResumeId, 'newest', "the background's drafts use the page's CV");
+});

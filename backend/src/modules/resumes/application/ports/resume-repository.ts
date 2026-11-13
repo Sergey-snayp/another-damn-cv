@@ -43,6 +43,8 @@ export interface ResumeRepository extends ResumeTransaction {
   list(profileId: string): Promise<ResumeSummary[]>;
   rename(id: string, name: string): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Makes this CV the profile's only default. */
+  setDefault(profileId: string, id: string): Promise<void>;
   history(resumeId: string, table: VersionedTable, lineageId: string): Promise<VersionedRow[]>;
   snapshots(resumeId: string): Promise<Snapshot[]>;
   snapshot(resumeId: string, number: number): Promise<Snapshot | null>;

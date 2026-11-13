@@ -25,6 +25,8 @@ export class ExtensionResumesController {
       targetRole: resume.targetRole,
       isPrimary: resume.isPrimary,
       tailoredForJob: resume.jobId !== null,
+      // The job a tailored copy is for: the extension offers it on that job's page.
+      jobId: resume.jobId,
       updatedAt: resume.updatedAt,
     }));
   }

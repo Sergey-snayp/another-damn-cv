@@ -40,6 +40,8 @@ export interface ResumesApi {
   create(userId: string, name: string, targetRole?: string): Promise<ResumeRecord>;
   /** Deletes the CV with its versions and PDF. Jobs applied with it keep the job, without the CV. */
   remove(userId: string, id: string): Promise<void>;
+  /** Makes this CV the default: the master others are tailored from, offered first on a new job. */
+  makeDefault(userId: string, id: string): Promise<void>;
   current(userId: string, id: string): Promise<RenderedResume>;
   atSnapshot(userId: string, id: string, number: number): Promise<RenderedResume>;
   history(userId: string, id: string, table: VersionedTable, lineageId: string): Promise<VersionedRow[]>;

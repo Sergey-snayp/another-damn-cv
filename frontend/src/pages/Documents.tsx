@@ -223,6 +223,17 @@ export function Documents() {
     }));
   }
 
+  /** "Make default": the master CV the others are tailored from, offered first by the extension. */
+  async function makeDefault(row: ResumeSummary) {
+    setError(null);
+    try {
+      await resumeApi.makeDefault(row.id);
+      setRows((current) => current && current.map((item) => ({ ...item, isPrimary: item.id === row.id })));
+    } catch (err) {
+      setError(`Could not make "${row.name}" the default: ${(err as Error).message}`);
+    }
+  }
+
   /** Deletes after asking; the CV, its versions and its PDF are gone for good. */
   async function remove(ids: string[]) {
     const names = (rows ?? [])
@@ -254,6 +265,8 @@ export function Documents() {
         ),
     );
     setSelected(new Set(failed));
+    // The default deleted: the server has passed it on to another CV.
+    void resumeApi.list().then(setRows).catch(() => undefined);
     if (failed.length)
       setError(
         `${failed.length === 1 ? 'One resume' : `${failed.length} resumes`} could not be deleted. Try again.`,
@@ -495,6 +508,19 @@ export function Documents() {
                     </Link>
                   )}
                   <div className="documents-menu-divider" />
+                  {!row.isPrimary && (
+                    <button
+                      type="button"
+                      className="documents-menu-item"
+                      onClick={() => {
+                        closePanel();
+                        void makeDefault(row);
+                      }}
+                    >
+                      <DocumentIcon name="default" />
+                      <span>Make default</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="documents-menu-item"
@@ -519,6 +545,11 @@ export function Documents() {
                   </button>
                 </DocumentPopover>
                 <p className="documents-card-meta">
+                  {row.isPrimary && (
+                    <span className="documents-default" title="Your master CV: new jobs start from it">
+                      Default
+                    </span>
+                  )}
                   <time
                     dateTime={row.updatedAt}
                     title={new Date(row.updatedAt).toLocaleString()}
