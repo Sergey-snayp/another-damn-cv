@@ -4,7 +4,8 @@ import { useAuth } from '../AuthContext';
 import { resumeApi, type ResumeSummary } from '../resumeApi';
 import { onResumesChanged } from '../extensionBridge';
 import { importCv, draftFromImport } from '../resume/fromImport';
-import { CreateResumeDialog } from '../documents/CreateResumeDialog';
+import { NewResumeDialog } from '../documents/NewResumeDialog';
+import { createCopy, createFromProfile } from '../documents/newResume';
 import {
   DocumentFilters,
   type ResumeType,
@@ -270,11 +271,6 @@ export function Documents() {
   function closeCreate() {
     setCreating(false);
     requestAnimationFrame(() => createTrigger.current?.focus());
-  }
-
-  async function create(name: string, targetRole?: string) {
-    const created = await resumeApi.create(name, targetRole);
-    navigate(`/documents/${created.id}`);
   }
 
   async function upload(file: File) {
@@ -569,7 +565,16 @@ export function Documents() {
         </p>
       )}
       {creating && (
-        <CreateResumeDialog onClose={closeCreate} onCreate={create} />
+        <NewResumeDialog
+          resumes={rows}
+          onClose={closeCreate}
+          onProfile={async () => navigate(`/documents/${await createFromProfile()}`)}
+          onCopy={async (resume) => navigate(`/documents/${await createCopy(resume)}`)}
+          onUpload={() => {
+            setCreating(false);
+            fileInput.current?.click();
+          }}
+        />
       )}
     </section>
   );

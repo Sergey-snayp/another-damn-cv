@@ -932,3 +932,43 @@ a.documents-card-title:hover {
   .letter-editor-body { grid-template-columns: minmax(0, 1fr); }
   .letter-editor-side { position: static; }
 }
+
+/* New resume: "How would you like to create this resume?" — two ways as cards, OR, then a copy of one you have. */
+.documents-dialog.new-resume { position: relative; width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 32px 28px 24px; overflow-y: auto; }
+.new-resume-close { position: absolute; top: 14px; right: 14px; }
+.new-resume-head { margin-bottom: 22px; text-align: center; }
+.new-resume-head h2 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
+.new-resume-head p { margin: 0; color: var(--color-muted); font-size: 15px; }
+.new-resume-options { display: grid; gap: 12px; }
+.new-resume-option, .new-resume-existing { display: grid; gap: 14px; padding: 18px 20px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
+.new-resume-option { grid-template-columns: auto minmax(0, 1fr); align-items: center; width: 100%; color: var(--color-text); font: inherit; text-align: left; cursor: pointer; }
+.new-resume-option:hover:not(:disabled) { border-color: #1e4d45; background: #f3f8f6; }
+.new-resume-option:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.new-resume-option:disabled { cursor: default; opacity: .6; }
+.new-resume-option strong, .new-resume-existing-head strong { display: block; font-size: 17px; }
+.new-resume-option small, .new-resume-existing-head small { display: block; margin-top: 3px; color: var(--color-muted); font-size: 14px; line-height: 1.45; }
+.new-resume-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #eef5f3; color: #1e4d45; }
+.new-resume-or { display: flex; align-items: center; gap: 14px; margin: 20px auto; width: 220px; color: var(--color-muted); font-size: 14px; font-weight: 600; }
+.new-resume-or::before, .new-resume-or::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
+.new-resume-existing-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.new-resume-search { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-muted); }
+.new-resume-search:focus-within { border-color: #1e4d45; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
+.new-resume-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--color-text); font: inherit; font-size: 14px; }
+.new-resume-list { max-height: 300px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.new-resume-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 12px 4px; }
+.new-resume-row + .new-resume-row { border-top: 1px solid var(--color-border); }
+.new-resume-row-main strong { display: block; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.new-resume-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; }
+.new-resume-tag { padding: 1px 9px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 12px; font-weight: 600; }
+.new-resume-date { color: var(--color-muted); font-size: 12px; }
+.new-resume-view { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 8px; color: var(--color-text); font-size: 14px; font-weight: 600; text-decoration: none; }
+.new-resume-view:hover { background: var(--color-background); }
+.new-resume-select { padding: 8px 18px; border: 0; border-radius: 8px; background: var(--color-background); color: var(--color-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.new-resume-select:hover:not(:disabled) { background: #1e4d45; color: #fff; }
+.new-resume-select:disabled { cursor: default; opacity: .6; }
+.new-resume-muted { padding: 14px 4px; color: var(--color-muted); font-size: 14px; }
+@media (max-width: 560px) { .new-resume-row { grid-template-columns: minmax(0, 1fr) auto; } .new-resume-view { display: none; } }
+/* The search box in the new resume window: the dialog's own label and input rules don't apply. */
+.documents-dialog .new-resume-search { display: flex; margin: 0; font-weight: 400; }
+.documents-dialog .new-resume-search input { display: block; height: 38px; padding: 0; border: 0; background: none; box-shadow: none; }
+.documents-dialog .new-resume-search input:focus { outline: none; }
