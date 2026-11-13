@@ -448,3 +448,10 @@
 .tag-undo button:hover { background: rgba(255, 255, 255, .24); }
 @media (hover: none) { .tag-chip-x { opacity: 1; visibility: visible; transition: none; } }
 .tag-chips .tag-add-input:focus, .tag-chips .tag-add-input:focus-visible { outline: none; }
+/* The ✓ beside the field adding a skill or technology: adds what is typed. */
+.tag-add-item { display: inline-flex; align-items: center; gap: 6px; }
+.tag-apply { display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 0; border-radius: 50%; background: #1e4d45; color: #fff; cursor: pointer; }
+.tag-apply:hover:not(:disabled) { background: #163a34; }
+.tag-apply:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.tag-apply:disabled { background: #c9d6d2; cursor: default; }
+.tag-apply svg { display: block; }

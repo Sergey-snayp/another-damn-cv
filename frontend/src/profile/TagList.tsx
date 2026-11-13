@@ -42,6 +42,8 @@ export function TagList({
   /** The last removal, for Undo: the list as it was before it. */
   const [undo, setUndo] = useState<{ name: string; before: string[] } | null>(null);
   const field = useRef<HTMLInputElement>(null);
+  /** Escape cancels: the blur that follows must not add what was typed. */
+  const cancelled = useRef(false);
   const listId = useId();
 
   useEffect(() => {
@@ -64,7 +66,8 @@ export function TagList({
     }
   }
 
-  async function add() {
+  /** Adds what is typed. From Enter or ✓ the field stays open for the next; from a click elsewhere it closes. */
+  async function add(close = false) {
     const typed = splitTags(text);
     if (!typed.length) {
       setAdding(false);
@@ -75,13 +78,15 @@ export function TagList({
     setNote(repeated.length ? `Already there: ${repeated.join(", ")}` : "");
     if (!fresh.length) {
       setText("");
+      if (close) setAdding(false);
       return;
     }
     if (await save([...items, ...fresh])) {
       setText("");
       setUndo(null);
-      // Stays open for the next one.
-      requestAnimationFrame(() => field.current?.focus());
+      if (close) setAdding(false);
+      // Otherwise it stays open for the next one.
+      else requestAnimationFrame(() => field.current?.focus());
     }
   }
 
@@ -127,8 +132,18 @@ export function TagList({
                   setText(event.target.value);
                   setNote("");
                 }}
+                onFocus={() => {
+                  cancelled.current = false;
+                }}
                 onBlur={() => {
-                  if (!text.trim()) setAdding(false);
+                  // A click elsewhere keeps what was typed: it is added, and the field closes.
+                  if (busy) return;
+                  if (cancelled.current) {
+                    cancelled.current = false;
+                    return;
+                  }
+                  if (text.trim()) void add(true);
+                  else setAdding(false);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -137,12 +152,25 @@ export function TagList({
                   } else if (event.key === "Escape") {
                     event.preventDefault();
                     event.stopPropagation();
+                    cancelled.current = true;
                     setText("");
                     setNote("");
                     setAdding(false);
                   }
                 }}
               />
+              <button
+                type="button"
+                className="tag-apply"
+                aria-label={`Apply ${label}`}
+                title="Add it (Enter)"
+                disabled={busy || !text.trim()}
+                // Keeps the field focused, so the click is the ✓ and not a click elsewhere.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void add()}
+              >
+                <Icon name="check" size={14} />
+              </button>
               {offered.length > 0 && (
                 <datalist id={listId}>
                   {offered.map((name) => (
@@ -159,7 +187,7 @@ export function TagList({
           )}
         </li>
       </ul>
-      {adding && !note && !error && <p className="tag-hint">Enter adds it. A list separated by commas adds them all. Esc to finish.</p>}
+      {adding && !note && !error && <p className="tag-hint">Enter or ✓ adds it, and so does clicking elsewhere. A list separated by commas adds them all. Esc cancels.</p>}
       {note && <p className="tag-hint">{note}</p>}
       {undo && (
         <p className="tag-undo" role="status">

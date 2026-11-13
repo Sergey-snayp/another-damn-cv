@@ -135,7 +135,23 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.keyboard.press('Enter');
     await waitWrites(6);
     assert.deepEqual(writes[5].skills, ['Node.js', 'TypeScript']);
+    // The green ✓ adds and stays open; a click elsewhere adds what was typed and closes; Escape adds nothing.
+    await page.waitForFunction(() => document.activeElement?.classList.contains('tag-add-input') && !document.activeElement.disabled);
+    await page.keyboard.type('Terraform');
+    await page.click('[aria-labelledby="profile-skills-heading"] .tag-apply');
+    await waitWrites(7);
+    assert.deepEqual(writes[6].skills, ['Node.js', 'TypeScript', 'Terraform']);
+    await page.waitForFunction(() => document.activeElement?.classList.contains('tag-add-input') && !document.activeElement.disabled);
+    await page.keyboard.type('Docker');
+    await page.mouse.click(5, 5);
+    await waitWrites(8);
+    assert.deepEqual(writes[7].skills, ['Node.js', 'TypeScript', 'Terraform', 'Docker'], 'a click elsewhere keeps it');
+    await page.waitForFunction(() => !document.querySelector('[aria-labelledby="profile-skills-heading"] .tag-add-input'));
+    await page.click('[aria-labelledby="profile-skills-heading"] .tag-add');
+    await page.keyboard.type('Helm');
     await page.keyboard.press('Escape');
+    await new Promise(r => setTimeout(r, 400));
+    assert.equal(writes.length, 8, 'Escape adds nothing');
 
     // Delete asks first, then saves the description empty.
     await page.hover('.inline-edit .profile-body');
@@ -143,8 +159,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.waitForSelector('.confirm-dialog');
     assert.match(await page.$eval('.confirm-dialog', node => node.textContent), /delete this description/);
     await button('Delete description').click();
-    await waitWrites(7);
-    assert.equal(writes[6].experiences[0].description, '');
+    await waitWrites(9);
+    assert.equal(writes[8].experiences[0].description, '');
     await page.waitForFunction(() => !document.body.textContent.includes('Payments platform for German retailers.'));
 
     // Write with AI for the description: it takes the editor's place, asks when the job's facts
@@ -166,8 +182,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.waitForSelector('[aria-label="Edit description"][contenteditable]');
     assert.equal(await page.$eval('[aria-label="Edit description"]', node => node.textContent), 'Invoice checkout used by German online retailers to let their shoppers pay after delivery.');
     await page.locator('.inline-edit.is-editing ::-p-text(Save)').click();
-    await waitWrites(8);
-    assert.equal(writes[7].experiences[0].description, 'Invoice checkout used by German online retailers to let their shoppers pay after delivery.');
+    await waitWrites(10);
+    assert.equal(writes[9].experiences[0].description, 'Invoice checkout used by German online retailers to let their shoppers pay after delivery.');
 
     assert.deepEqual(errors, []);
     console.log('PASS Write with AI for the description: in the editor\'s place, questions then versions; description in place; technologies and skills as chips: add with Enter or a list, no repeats, hover ×, Undo; Delete asks first');
