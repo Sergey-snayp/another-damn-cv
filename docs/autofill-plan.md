@@ -103,6 +103,23 @@ Order matters: phase 1 makes every later fix cheap to ship.
       control type and what we chose. Redact the value for personal fields.
 - [ ] A list of reports in the app, to turn into site-rule fixes (shipped via phase 1).
 
+### Phase 7 — when the panel opens by itself
+
+How each one decides (read from their code):
+
+| | Opens the panel by itself when | Otherwise | User controls |
+| --- | --- | --- | --- |
+| **Simplify** | The page matches a site rule (address, or a known form found inside the page) **and** the rules found fields to fill, or it read the job's title/company. Job boards (LinkedIn, Indeed) never open it: only the side button. | Side button only ("sticky"). | "Open the panel on job pages" on/off; hide on this site / everywhere; closing it is remembered for that address for the browser session. |
+| **Jobright** | The site is one it supports (built-in per-site code), and the user's "Default view" is "Expanded" (the default). | Floating button. | Default view Expanded/Minimized; hide on this site / everywhere. |
+| **Huntr** | Its site rules find the form fields, unless the user pressed "Set up later" (hidden until a reset date). | On a job posting (scored: schema.org JobPosting 40, Apply button 25, job-board domain 25, job sections 20…; 50+ = job) the button only animates. | "Set up later". |
+| **Careerflow** | The address matches a published form rule; for some sites only after a given element appears (the form after "Apply" is clicked), watched as the page changes. | Floating button. | Per-organization switch. |
+| **Ours** | Our check says it's an application form (CV upload + contact fields, or 3+ applicant fields on a job page, or 2+ fields on a known board) — on any site — or a LinkedIn posting is selected. Once per address. | D! button, or nothing. | Hide this visit / on this site / everywhere. No "button only" option. |
+
+- [ ] Setting "Open the panel automatically" (on / button only), separate from hiding the button.
+- [ ] Don't open by itself on job boards (LinkedIn, Indeed): button only, like Simplify.
+- [ ] Remember a closed panel for that address in `sessionStorage`, so a reload doesn't reopen it.
+- [ ] With site rules from the server (phase 1), a rule match opens it at once instead of waiting for the form check.
+
 ### Later
 
 - Per-site "application submitted" rules, to mark Applied more reliably.
