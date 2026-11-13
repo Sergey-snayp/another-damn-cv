@@ -750,24 +750,40 @@ function shown(element) {
   }
   return true;
 }
+/** Matches inside an element, its descendants and the shadow roots within, skipping our own elements. */
+function within(box, selector) {
+  const roots = [box, ...(box.shadowRoot ? [box.shadowRoot] : [])];
+  for (let i = 0; i < roots.length; i++)
+    for (const element of roots[i].querySelectorAll('*')) if (element.shadowRoot && !OWN_NODES.has(element.id)) roots.push(element.shadowRoot);
+  return roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+}
 /**
- * LinkedIn's Easy Apply dialog on screen, or null. LinkedIn draws it inside
- * #interop-outlet's shadow root (older pages: .jobs-easy-apply-modal). Other
- * LinkedIn dialogs (sign-in, job alerts, sharing) must not count, so the
- * dialog needs an Easy Apply sign: its "Apply to …" heading, its upload boxes,
- * or fields with a Next / Review / Submit button. A password field rules it out.
+ * Easy Apply in this box: its upload boxes or header ids, its "Apply to …"
+ * heading, or fields with a Next / Review / Submit button. Other LinkedIn
+ * windows (sign-in, job alerts, sharing) have none of these; a password field
+ * rules a box out.
  */
 const EASY_APPLY_BUTTON = /^(next|review|submit application|continue to next step|review your application)$/i;
+function looksLikeEasyApply(box) {
+  if (within(box, 'input[type="password"]').length) return false;
+  if (within(box, '[id^="easyApply"], .jobs-easy-apply-content, .jobs-easy-apply-modal, #jobs-apply-header').length) return true;
+  if (within(box, 'h1, h2, h3, [role="heading"]').some((heading) => /^apply to\b/i.test(heading.textContent.trim()))) return true;
+  return within(box, 'input:not([type="hidden"]), textarea, select').length > 0
+    && within(box, 'button').some((button) => EASY_APPLY_BUTTON.test(button.textContent.replace(/\s+/g, ' ').trim()));
+}
+/**
+ * LinkedIn's Easy Apply on screen, or null. LinkedIn shows it as a window in
+ * Chrome's top layer (a page-sized popover or a modal <dialog>, its form inside
+ * #interop-outlet's shadow root), so the open top-layer window is checked
+ * first; then any dialog drawn where Easy Apply is (older pages: .jobs-easy-apply-modal).
+ */
 function easyApplyDialog() {
+  const top = window.CVAutofillTopLayer?.window();
+  if (top && !OWN_NODES.has(top.id) && looksLikeEasyApply(top)) return top;
   return Fields.deepAll('[role="dialog"]').find((dialog) => {
-    if (dialog.querySelector('input[type="password"]')) return false;
     const root = dialog.getRootNode();
     if (!dialog.matches('.jobs-easy-apply-modal') && !(root instanceof ShadowRoot && root.host.id === 'interop-outlet')) return false;
-    if (!shown(dialog)) return false;
-    if (dialog.querySelector('[id^="easyApply"], .jobs-easy-apply-content, #jobs-apply-header')) return true;
-    if ([...dialog.querySelectorAll('h1, h2, h3')].some((heading) => /^apply to\b/i.test(heading.textContent.trim()))) return true;
-    return Boolean(dialog.querySelector('input:not([type="hidden"]), textarea, select'))
-      && [...dialog.querySelectorAll('button')].some((button) => EASY_APPLY_BUTTON.test(button.textContent.replace(/\s+/g, ' ').trim()));
+    return shown(dialog) && looksLikeEasyApply(dialog);
   }) ?? null;
 }
 function updateLauncher() {
@@ -786,7 +802,7 @@ function updateLauncher() {
     // Easy Apply, and closes again when Easy Apply goes away. Nothing else on
     // LinkedIn opens it: not its search boxes, not its iframes.
     const dialog = easyApplyDialog();
-    const heading = dialog?.querySelector('h1, h2, h3')?.textContent.replace(/\s+/g, ' ').trim();
+    const heading = dialog && within(dialog, 'h1, h2, h3')[0]?.textContent.replace(/\s+/g, ' ').trim();
     showLauncher({ show: Boolean(job || dialog), form: Boolean(dialog), frames: false, closeWhenGone: true,
       reason: `LinkedIn Easy Apply${heading ? ` ("${heading.slice(0, 60)}")` : ''}` });
     if (lastOwnForm) formChanged();
@@ -843,7 +859,7 @@ if (!TINY_FRAME) pageWatcher.observe(document, {
   attributes: true,
   characterData: Boolean(window.CVAutofillLinkedIn?.isPage()),
   // class/style change constantly on busy sites; job boards need them to spot step changes.
-  attributeFilter: window.CVAutofillLinkedIn?.isPage() ? ['hidden', 'disabled', 'type', 'class', 'style', 'data-job-id', 'href', 'aria-expanded']
+  attributeFilter: window.CVAutofillLinkedIn?.isPage() ? ['hidden', 'disabled', 'type', 'class', 'style', 'data-job-id', 'href', 'aria-expanded', 'open', 'popover']
     : KNOWN_BOARD ? ['hidden', 'disabled', 'readonly', 'type', 'class', 'style'] : ['hidden', 'disabled', 'type'],
 });
 
@@ -931,6 +947,9 @@ function watchShadowRoots() {
   }
 }
 addEventListener('resize', scheduleScan);
+// Opening a popover or a modal <dialog> (LinkedIn's Easy Apply) can change
+// nothing the watcher sees: catch their events on the way down.
+for (const type of ['toggle', 'close']) document.addEventListener(type, scheduleScan, true);
 addEventListener('popstate', scheduleScan);
 addEventListener('hashchange', scheduleScan);
 addEventListener('adcv-job-ready', scheduleScan);

@@ -193,6 +193,34 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
       { question: 'Years of Node.js', answer: '6' },
     ], 'every step of the form is kept, files by name, and sent with the submit');
     console.log('PASS clicking Submit application reports the LinkedIn job as applied, with every step\'s answers');
+
+    // Easy Apply as a top-layer window: drawn ahead of time in a closed popover
+    // (no role="dialog", form in a shadow root), then shown with showPopover(),
+    // which adds nothing to the page. And the same as a modal <dialog>.
+    await showStep('');
+    await page.waitForFunction(() => !CVAutofillPanel.isOpen(), { timeout: 5000 }).catch(() => {});
+    await page.evaluate(() => {
+      const form = '<h2>Apply to Conexiom</h2><label for="p-first">First name</label><input id="p-first"><button type="button">Next</button>';
+      const pop = document.createElement('div');
+      pop.id = 'ea-pop'; pop.setAttribute('popover', 'manual'); pop.style.cssText = 'width:80vw;height:80vh';
+      pop.attachShadow({ mode: 'open' }).innerHTML = `<div class="sheet">${form}</div>`;
+      const dialog = document.createElement('dialog');
+      dialog.id = 'ea-dialog'; dialog.style.cssText = 'width:600px;height:400px';
+      dialog.innerHTML = form.replaceAll('p-first', 'd-first');
+      document.body.append(pop, dialog);
+    });
+    await settle();
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'Easy Apply drawn ahead of time but closed does not open the panel');
+    await page.evaluate(() => document.getElementById('ea-pop').showPopover());
+    await page.waitForFunction(() => CVAutofillPanel.isOpen(), { timeout: 3000 }).catch(() => {});
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'Easy Apply shown as a popover opens the panel');
+    await page.evaluate(() => document.getElementById('ea-pop').hidePopover());
+    await page.waitForFunction(() => !CVAutofillPanel.isOpen(), { timeout: 5000 }).catch(() => {});
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'closing the popover closes the panel it opened');
+    await page.evaluate(() => document.getElementById('ea-dialog').showModal());
+    await page.waitForFunction(() => CVAutofillPanel.isOpen(), { timeout: 3000 }).catch(() => {});
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'Easy Apply shown as a modal dialog opens the panel');
+    console.log('PASS Easy Apply shown as a popover or a modal dialog opens the panel, and closing it closes the panel');
   } finally {
     await browser.close();
   }
