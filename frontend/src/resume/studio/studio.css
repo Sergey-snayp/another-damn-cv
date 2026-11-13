@@ -278,6 +278,12 @@
 .studio-body.left-closed .studio-fold.left { left: 6px; }
 .studio-body.right-closed .studio-fold.right { right: 6px; }
 .studio-fold:hover { color: var(--color-text); border-color: var(--color-text); }
+/* The right fold sits where a line's buttons appear: while the pointer is on the CV
+   it steps aside, so nothing covers those buttons; it is back once the pointer leaves. */
+.studio-fold { transition: opacity .15s ease, visibility 0s linear 0s; }
+.studio-preview:has(.studio-canvas :is([data-edit-item], [data-section], .doc-bulletmeta):hover) .studio-fold.right {
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .15s ease, visibility 0s linear .15s;
+}
 .studio-fold:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
 .studio-fold svg { display: block; }
 .studio-preview:fullscreen .studio-fold { display: none; }

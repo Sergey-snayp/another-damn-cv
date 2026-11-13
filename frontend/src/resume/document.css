@@ -578,3 +578,24 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 /* A section heading's tools (✦, delete) sit at its right end, over the rule. */
 .tpl-professional:not(.read-only) .doc-section > h2 { display: flex; align-items: center; gap: 4px; }
 .tpl-professional:not(.read-only) .doc-section > h2 > button:first-of-type { margin-left: auto; }
+
+/* One set of buttons at a time: the innermost part under the pointer. A line's
+   buttons (description, bullet, tech stack) hide its job's; a job's or a line's
+   hide its section's. A button reached with the keyboard still shows. */
+.tpl-professional:not(.read-only) :is(.pro-editable-role, .doc-education):has(:is([data-edit-item="bullet"], [data-edit-item="tech-stack"], .doc-role-desc):hover)
+  > .doc-roleline > :is(.ai, .doc-remove):not(:focus-visible) { opacity: 0 !important; pointer-events: none; }
+.tpl-professional:not(.read-only) .doc-section:has(:is(.pro-editable-role, .doc-education, [data-edit-item]):hover)
+  > h2 > :is(.ai, .pro-remove-section):not(:focus-visible) { opacity: 0 !important; pointer-events: none; }
+
+/* No room in the margin (zoomed in): a line's or a job's buttons float inside the page,
+   over the top-right corner of the line, above everything around them. */
+.tpl-professional:not(.read-only) [data-edit-item].tools-inside > .doc-bulletmeta {
+  left: auto; right: 0; top: auto; bottom: 100%; z-index: 30;
+}
+.tpl-professional:not(.read-only) [data-edit-item].tools-inside > .doc-roleline > .doc-remove { left: auto; right: 0; top: auto; bottom: 100%; z-index: 30; }
+.tpl-professional:not(.read-only) [data-edit-item].tools-inside > .doc-roleline > .pro-tailor-role { position: absolute; left: auto; right: 30px; top: auto; bottom: 100%; z-index: 30; }
+/* The strip that keeps the pointer on the line reaches down to it instead of left. */
+.tpl-professional:not(.read-only) [data-edit-item].tools-inside > .doc-bulletmeta::before,
+.tpl-professional:not(.read-only) [data-edit-item].tools-inside > .doc-roleline > :is(.pro-tailor-role, .doc-remove)::before {
+  top: 100%; bottom: auto; left: 0; right: 0; width: auto; height: 8px;
+}

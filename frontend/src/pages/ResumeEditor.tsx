@@ -271,6 +271,23 @@ export function ResumeEditor() {
     : zoom === 'fit-page'
       ? Math.max(0.3, Math.min((canvasSize.width - 108) / PAGE_WIDTH, (canvasSize.height - 48) / PAGE_HEIGHT))
       : zoom;
+  /**
+   * A line's buttons sit just past its end, in the page's margin. Zoomed in, the
+   * margin can run past the visible area, where the side panel would cover them:
+   * then they float inside the page, over the line's top-right corner.
+   */
+  function placeLineTools(event: React.PointerEvent<HTMLDivElement>) {
+    const item = (event.target as HTMLElement).closest<HTMLElement>('[data-edit-item]');
+    const area = canvas.current;
+    if (!item || !area) return;
+    const own = item.matches('[data-edit-item="role"], [data-edit-item="education"]')
+      ? item.querySelectorAll<HTMLElement>(':scope > .doc-roleline > :is(.ai, .doc-remove)')
+      : item.querySelectorAll<HTMLElement>(':scope > .doc-bulletmeta');
+    if (!own.length) return;
+    item.classList.remove('tools-inside');
+    const edge = area.getBoundingClientRect().left + area.clientWidth - 6;
+    if (Math.max(...[...own].map((tool) => tool.getBoundingClientRect().right)) > edge) item.classList.add('tools-inside');
+  }
   const zoomBy = (step: number) => setZoom(Math.round(Math.min(2, Math.max(0.3, scale + step)) * 10) / 10);
 
   async function rename() {
@@ -606,7 +623,7 @@ export function ResumeEditor() {
               <DashboardIcon name={rightOpen ? 'chevron' : 'chevronLeft'} size={16} />
             </button>
           )}
-          <div className="studio-canvas" ref={canvas}>
+          <div className="studio-canvas" ref={canvas} onPointerOver={placeLineTools}>
             <ScaledPage className="studio-zoom" scale={scale} onClick={openFromPreview}>
               {/* Drawn as the PDF's sheets, with the same page breaks. */}
               <PagedDocument watch={pagedWatch}>
