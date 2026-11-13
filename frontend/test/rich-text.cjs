@@ -98,6 +98,22 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForFunction(() => !document.querySelector('[aria-label="Edit achievement"]'));
     assert.equal(saves.at(-1).experiences[0].bullets[0], 'Built REST APIs for card payments.');
 
+    // Closing the editor takes the toolbar with it: Escape, and Cancel, with text still selected.
+    for (const close of ['Escape', 'Cancel']) {
+      // After a save the bullet's buttons wait for the Profile to come back.
+      await page.waitForFunction(() => !document.querySelector('[aria-label^="Edit: "]')?.disabled);
+      await page.evaluate(() => document.querySelector('[aria-label^="Edit: "]').click());
+      await page.waitForSelector('[aria-label="Edit achievement"]');
+      await pause(150);
+      await select('[aria-label="Edit achievement"]', 'REST');
+      await page.waitForSelector('.format-toolbar');
+      if (close === 'Escape') await page.keyboard.press('Escape');
+      else await page.evaluate(() => [...document.querySelectorAll('.ach-editor-actions button')].find(button => button.textContent === 'Cancel').click());
+      await page.waitForFunction(() => !document.querySelector('[aria-label="Edit achievement"]'));
+      await pause(100);
+      assert.equal(await page.$('.format-toolbar'), null, `${close} closes the editor and the format toolbar with it`);
+    }
+
     // The summary may hold a list.
     await page.click('[aria-label="Edit profile summary"]');
     await page.waitForSelector('[aria-label="Professional summary"]');

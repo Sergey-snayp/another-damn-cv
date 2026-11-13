@@ -7,6 +7,9 @@ import "./rich-text.css";
  * appears (bold, italic, underline, link, clear; a list where lines are allowed).
  * Its value is plain text with marks, as every field stores it.
  */
+/** Sent when a rich editor leaves the page, for the format toolbar. */
+export const EDITOR_CLOSED = "rich-editor-closed";
+
 export function RichEditor({
   value,
   onChange,
@@ -37,6 +40,18 @@ export function RichEditor({
     element.innerHTML = value ? marksToHtml(value) : "";
     sent.current = value;
   }, [value]);
+
+  // Closing the editor (Cancel, Save, Escape) removes it from the page, which browsers do not
+  // always report as a selection change: clear a selection inside it and tell the format
+  // toolbar, so the toolbar goes with it.
+  useEffect(() => {
+    const element = box.current;
+    return () => {
+      const selection = window.getSelection();
+      if (element && selection?.anchorNode && element.contains(selection.anchorNode)) selection.removeAllRanges();
+      document.dispatchEvent(new Event(EDITOR_CLOSED));
+    };
+  }, []);
 
   useEffect(() => {
     const element = box.current;

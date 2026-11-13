@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { DashboardIcon } from "../jobs/DashboardIcon";
+import { EDITOR_CLOSED } from "./RichEditor";
 import "./rich-text.css";
 
 /** Where the toolbar sits: above the selected text. */
@@ -26,7 +27,8 @@ export function FormatToolbar() {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || !selection.rangeCount) return setPlace(null);
       const editor = editorOf(selection.anchorNode);
-      if (!editor || editor !== editorOf(selection.focusNode) || editor.getAttribute("contenteditable") !== "true") return setPlace(null);
+      // Gone with its editor: closed, saved or cancelled.
+      if (!editor || !editor.isConnected || editor !== editorOf(selection.focusNode) || editor.getAttribute("contenteditable") !== "true") return setPlace(null);
       const rect = selection.getRangeAt(0).getBoundingClientRect();
       if (!rect.width && !rect.height) return setPlace(null);
       setPlace({
@@ -36,10 +38,12 @@ export function FormatToolbar() {
       });
     };
     document.addEventListener("selectionchange", update);
+    document.addEventListener(EDITOR_CLOSED, update);
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
     return () => {
       document.removeEventListener("selectionchange", update);
+      document.removeEventListener(EDITOR_CLOSED, update);
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
