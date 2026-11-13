@@ -130,7 +130,8 @@ async function panelFixture(browser, jobPage) {
     assert.equal(before.context.company, 'Acme');
     assert.equal(before.context.jobUrl, 'https://www.linkedin.com/jobs/view/111');
     assert.equal(before.fields.length, 0);
-    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'a posting opens the panel even without an application form');
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'a selected posting does not open the panel by itself');
+    assert.ok(await page.evaluate(() => Boolean(document.getElementById('adcv-autofill-launcher'))), 'a selected posting shows the D! button');
     const found = await capture(page);
     assert.equal(found.url, before.context.jobUrl);
     assert.match(found.text, /GraphQL APIs backed by PostgreSQL/);
@@ -152,7 +153,7 @@ async function panelFixture(browser, jobPage) {
     assert.equal(form.employmentType, 'Full-time');
     assert.equal(form.url, found.url);
     assert.match(form.description, /GraphQL/);
-    console.log('PASS: selected search result, expanded description, matching JSON-LD, job form and automatic opening');
+    console.log('PASS: selected search result, expanded description, matching JSON-LD, job form and the D! button without opening the panel');
 
     panel = await panelFixture(browser, page);
     await panel.waitForSelector('[data-tailor="quick"]');

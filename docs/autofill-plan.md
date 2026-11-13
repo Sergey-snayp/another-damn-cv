@@ -113,10 +113,12 @@ How each one decides (read from their code):
 | **Jobright** | The site is one it supports (built-in per-site code), and the user's "Default view" is "Expanded" (the default). | Floating button. | Default view Expanded/Minimized; hide on this site / everywhere. |
 | **Huntr** | Its site rules find the form fields, unless the user pressed "Set up later" (hidden until a reset date). | On a job posting (scored: schema.org JobPosting 40, Apply button 25, job-board domain 25, job sections 20…; 50+ = job) the button only animates. | "Set up later". |
 | **Careerflow** | The address matches a published form rule; for some sites only after a given element appears (the form after "Apply" is clicked), watched as the page changes. | Floating button. | Per-organization switch. |
-| **Ours** | Our check says it's an application form (CV upload + contact fields, or 3+ applicant fields on a job page, or 2+ fields on a known board) — on any site — or a LinkedIn posting is selected. Once per address. | D! button, or nothing. | Hide this visit / on this site / everywhere. No "button only" option. |
+| **Ours** | Our check says it's an application form (CV upload + contact fields, or 3+ applicant fields on a job page, or 2+ fields on a known board) — on any site — or LinkedIn's Easy Apply dialog appears (a selected posting only shows the button). Once per address. | D! button, or nothing. | Hide this visit / on this site / everywhere. No "button only" option. |
 
 - [ ] Setting "Open the panel automatically" (on / button only), separate from hiding the button.
-- [ ] Don't open by itself on job boards (LinkedIn, Indeed): button only, like Simplify.
+- [x] LinkedIn: a selected posting shows the D! button only; the panel opens by itself when
+      the Easy Apply dialog appears (2026-11-12).
+- [ ] The same for Indeed and other boards: button on a posting, panel on the application form.
 - [ ] Remember a closed panel for that address in `sessionStorage`, so a reload doesn't reopen it.
 - [ ] With site rules from the server (phase 1), a rule match opens it at once instead of waiting for the form check.
 

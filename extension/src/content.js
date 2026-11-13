@@ -723,6 +723,14 @@ if (IS_TOP) {
 }
 let lastOwnForm = false;
 let lastLinkedInContext;
+/**
+ * LinkedIn's Easy Apply dialog (now inside a shadow root) is on screen: a
+ * visible dialog with form fields, or with Easy Apply's own upload boxes.
+ */
+function easyApplyOpen() {
+  return Fields.deepAll('[role="dialog"]').some(dialog => dialog.getClientRects().length > 0
+    && Boolean(dialog.querySelector('input:not([type="hidden"]), textarea, select, [id^="easyApply"], .jobs-easy-apply-content')));
+}
 function updateLauncher() {
   if (TINY_FRAME) return;
   scheduleStep();
@@ -735,7 +743,9 @@ function updateLauncher() {
       lastLinkedInContext = context;
       try { void chrome.runtime.sendMessage({ type: 'job-context-changed' }).catch(() => {}); } catch { /* extension reloaded */ }
     }
-    if (job) { lastOwnForm = true; showLauncher(true); formChanged(); return; }
+    // A selected posting shows the button; the panel opens by itself only
+    // once Easy Apply's form is on screen.
+    if (job) { lastOwnForm = true; showLauncher(true, { form: easyApplyOpen() }); formChanged(); return; }
   }
   if (!Fields.deepOne('input, textarea, select')) {
     // A job page whose form is one click away (Ashby's Overview tab, Lever's posting):

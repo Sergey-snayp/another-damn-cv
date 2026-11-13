@@ -79,8 +79,11 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
     const formChanges = () => page.evaluate(() => window.__messages.filter(type => type === 'form-changed').length);
     const settle = () => new Promise(resolve => setTimeout(resolve, 900));
 
+    await settle();
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'the posting alone does not open the panel');
     await showStep(contactStep);
     await settle();
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'opening Easy Apply opens the panel');
     const afterContact = await formChanges();
     assert.ok(afterContact >= 1, 'opening Easy Apply tells the panel the form changed');
     assert.ok((await fieldsOnPage()).includes('firstName:text'), 'the contact step is found inside the shadow root');
@@ -97,7 +100,7 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
     }, answers: [] }), PDF);
     assert.equal(result?.filled, 2, `Autofill reports both uploads: ${JSON.stringify(result)}`);
     assert.deepEqual(await page.evaluate(() => window.__uploads), ['resume:Sergey_Proniuk_CV.pdf', 'letter:Sergey_Proniuk_Cover_Letter.pdf']);
-    console.log('PASS LinkedIn Easy Apply: step changes reach the panel, and Autofill uploads the CV and cover letter');
+    console.log('PASS LinkedIn Easy Apply: opening it opens the panel, step changes reach the panel, and Autofill uploads the CV and cover letter');
 
     // A field the Profile has no value for gets a gray "+" icon; its popover fills it
     // just this time (nothing saved) or saves it to the Profile.
