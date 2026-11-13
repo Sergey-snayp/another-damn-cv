@@ -53,15 +53,31 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     const card = name => page.locator(`.job-fact-card ::-p-text(${name})`);
     const saves = async count => { for (let i = 0; i < 100 && writes.length < count; i++) await new Promise(r => setTimeout(r, 50)); assert.equal(writes.length, count); };
 
-    assert.deepEqual(await pills(), ['for Paymorrow/Verifone', 'Remote', '+ Location', 'Oct 2024 – Present'], 'an older save\'s "Remote" shows as the work type; the missing location offers to add it');
+    // Only filled facts are pills; the round + at the end lists the missing ones.
+    const missing = async () => {
+      await page.waitForFunction(() => !document.querySelector('.job-fact-add')?.disabled);
+      await page.click('.job-fact-add');
+      await page.waitForSelector('.job-fact-menu');
+      const items = await page.$$eval('.job-fact-menu [role="menuitem"]', nodes => nodes.map(node => node.textContent));
+      return items;
+    };
+    const add = async label => {
+      if (!(await page.$('.job-fact-menu'))) await missing();
+      await page.locator(`.job-fact-menu ::-p-text(${label})`).click();
+      await page.waitForSelector('.job-fact-card');
+    };
+    assert.deepEqual(await pills(), ['for Paymorrow/Verifone', 'Remote', 'Oct 2024 – Present'], 'an older save\'s "Remote" shows as the work type');
+    assert.deepEqual(await missing(), ['Location'], 'the + offers what is missing');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.$('.job-fact-menu'), null, 'Escape closes the + menu');
 
     // Location: a country only, alongside Remote.
-    await pill('+ Location');
+    await add('Location');
     await page.waitForSelector('.job-fact-card input[name="country"]');
     await page.keyboard.press('Escape');
     assert.equal(await page.$('.job-fact-card'), null, 'Escape closes it');
     assert.equal(writes.length, 0, 'and saves nothing');
-    await pill('+ Location');
+    await add('Location');
     await page.type('.job-fact-card input[name="country"]', 'Canada');
     await page.keyboard.press('Enter');
     await saves(1);
@@ -69,6 +85,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(writes[0].workType, 'remote', 'the old "Remote" moves to its own field');
     await page.waitForFunction(() => [...document.querySelectorAll('.job-fact')].some(node => node.textContent === 'Canada'));
     assert.deepEqual(await pills(), ['for Paymorrow/Verifone', 'Remote', 'Canada', 'Oct 2024 – Present']);
+    assert.equal(await page.$('.job-fact-add'), null, 'all filled: no +');
 
     // Work type: one click on another choice saves it.
     await pill('Remote');
@@ -82,7 +99,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await card('Remove').click();
     await saves(3);
     assert.equal(writes[2].client, '');
-    await page.waitForFunction(() => [...document.querySelectorAll('.job-fact')].some(node => node.textContent === '+ Client'));
+    assert.deepEqual(await missing(), ['Client'], 'a removed fact moves to the + menu');
+    await page.keyboard.press('Escape');
 
     // Work type removed: the location stays.
     await pill('Hybrid');
@@ -90,7 +108,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await saves(4);
     assert.equal(writes[3].workType, undefined);
     assert.equal(writes[3].location, 'Canada');
-    await page.waitForFunction(() => [...document.querySelectorAll('.job-fact')].some(node => node.textContent === '+ Remote / on-site'));
+    assert.deepEqual(await missing(), ['Client', 'Remote / on-site']);
+    await page.keyboard.press('Escape');
 
     // Dates: no longer current, with an end date.
     await pill('Oct 2024 – Present');
@@ -123,10 +142,10 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.locator('.confirm-dialog ::-p-text(Remove)').click();
     await saves(6);
     assert.equal(writes[5].location, '');
-    await page.waitForFunction(() => [...document.querySelectorAll('.job-fact')].some(node => node.textContent === '+ Location'));
+    assert.deepEqual(await missing(), ['Client', 'Remote / on-site', 'Location']);
 
     assert.deepEqual(errors, []);
-    console.log('PASS job facts: pills for client, remote / on-site, location and dates; "+ …" when empty; edit, Remove, Escape, × with a question; older "Remote" kept');
+    console.log('PASS job facts: pills for client, remote / on-site, location and dates; missing ones under a round + at the end; edit, Remove, Escape, × with a question; older "Remote" kept');
   } finally {
     await browser.close();
   }
