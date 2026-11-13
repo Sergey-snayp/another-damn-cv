@@ -41,7 +41,7 @@ export function HeaderActions({
           panelClassName="header-action-panel"
           trigger={
             <span title={action.label}>
-              <DashboardIcon name={action.icon} size={23} />
+              <DashboardIcon name={action.icon} size={20} />
             </span>
           }
         >

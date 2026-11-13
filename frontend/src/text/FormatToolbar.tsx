@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { DashboardIcon } from "../jobs/DashboardIcon";
 import "./rich-text.css";
 
 /** Where the toolbar sits: above the selected text. */
@@ -80,29 +81,23 @@ export function FormatToolbar() {
   );
   return createPortal(
     <div className="format-toolbar" role="toolbar" aria-label="Format text" style={{ top: place.top, left: place.left }}>
-      {button("Bold", <b>B</b>, () => run("bold"))}
-      {button("Italic", <i className="format-italic">I</i>, () => run("italic"))}
-      {button("Underline", <u>U</u>, () => run("underline"))}
+      {button("Bold", <DashboardIcon name="bold" size={17} />, () => run("bold"))}
+      {button("Italic", <DashboardIcon name="italic" size={17} />, () => run("italic"))}
+      {button("Underline", <DashboardIcon name="underline" size={17} />, () => run("underline"))}
       {place.multiline &&
         button(
           "Bulleted list",
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
-          </svg>,
+          <DashboardIcon name="list" size={17} />,
           () => run("insertUnorderedList"),
         )}
       {button(
         "Link",
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="m10 14 4-4m-6.5 3.5-2 2a3.5 3.5 0 0 0 5 5l2-2m3-7 2-2a3.5 3.5 0 0 0-5-5l-2 2" />
-        </svg>,
+        <DashboardIcon name="link" size={17} />,
         link,
       )}
       {button(
         "Clear formatting",
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M5 5h12M11 5 8 19m6-4 5 5m0-5-5 5" />
-        </svg>,
+        <DashboardIcon name="clearFormat" size={17} />,
         clear,
       )}
     </div>,

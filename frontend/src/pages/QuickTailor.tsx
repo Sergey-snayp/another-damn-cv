@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { BulletMeter } from '../resume/BulletMeter';
+import { DashboardIcon } from '../jobs/DashboardIcon';
 import { MarkedLine } from '../text/Marked';
 import { boldOnly } from '../text/marks';
 import { withTechStacks } from '../resume/techStack';
@@ -1049,15 +1050,15 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
           <span className="qt-history" role="group" aria-label="Change history">
             <button type="button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" aria-keyshortcuts="Control+Z Meta+Z"
               disabled={saving || (!history.canUndo && !pendingEdit)} onClick={() => moveHistory(-1)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 4-5 5 5 5M4 9h9a7 7 0 0 1 7 7" /></svg><span className="qt-history-label">Undo</span>
+              <DashboardIcon name="undo" size={16} /><span className="qt-history-label">Undo</span>
             </button>
             <button type="button" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z or Ctrl Y)" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
               disabled={saving || pendingEdit || !history.canRedo} onClick={() => moveHistory(1)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 4 5 5-5 5M20 9h-9a7 7 0 0 0-7 7" /></svg><span className="qt-history-label">Redo</span>
+              <DashboardIcon name="redo" size={16} /><span className="qt-history-label">Redo</span>
             </button>
             <button type="button" aria-label="Reset changes" title="Reset all edits from this tailoring session"
               disabled={saving || (!history.canReset && !pendingEdit)} onClick={resetChanges}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7" /></svg><span className="qt-history-label">Reset</span>
+              <DashboardIcon name="reset" size={16} /><span className="qt-history-label">Reset</span>
             </button>
           </span>
           {!resumeId
