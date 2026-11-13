@@ -167,6 +167,12 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     // Custom Prompt.
     await clickText('.ai-tabs button', 'Custom Prompt');
+    assert.equal(await page.$eval('[aria-label="Custom prompt"]', field => field.tagName), 'TEXTAREA', 'a box that wraps, not a one-line field that cuts the text off');
+    const beforePrompt = asks.length;
+    await page.type('[aria-label="Custom prompt"]', 'Make it');
+    await page.keyboard.down('Shift'); await page.keyboard.press('Enter'); await page.keyboard.up('Shift');
+    assert.equal(asks.length, beforePrompt, 'Shift+Enter starts a new line, it does not send');
+    await page.$eval('[aria-label="Custom prompt"]', field => { field.select(); });
     await page.type('[aria-label="Custom prompt"]', 'Make it concise');
     await page.keyboard.press('Enter');
     await page.waitForSelector('.ai-option');

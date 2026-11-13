@@ -290,25 +290,30 @@ export function AiBox({
           Custom Prompt{" "}
           <span className="ai-help" title="Tell the AI what to change: shorter, lead with the result, stress the security work. It still uses only your facts."><Icon name="help" size={18} /></span>
         </p>
-        <div className="ai-choices">
-        <div className="ai-prompt">
-          <input
+        {/* Written like a bullet: the box grows with the text, and the send button sits inside it. */}
+        <div className="ai-prompt-box">
+          <textarea
             aria-label="Custom prompt"
-            placeholder={'Ex: "Make it concise" or "Focus on teamwork"'}
+            rows={2}
+            placeholder={'Ex: "Make it concise" or "Focus on teamwork". Enter sends, Shift+Enter starts a new line.'}
             value={prompt}
             maxLength={500}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && prompt.trim()) {
+              if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                void generate({ tab, keywords: [], instruction: prompt.trim() });
+                if (prompt.trim() && !working) void generate({ tab, keywords: [], instruction: prompt.trim() });
               }
             }}
           />
-          <button type="button" className="ai-send" aria-label="Generate" disabled={working || !prompt.trim()} onClick={() => void generate({ tab, keywords: [], instruction: prompt.trim() })}>
-            <Icon name="arrowUp" size={18} /> <AiBadge />
-          </button>
-        </div>
+          <div className="ai-prompt-foot">
+            <span className="ach-count">
+              C: <b>{prompt.length}</b> / 500
+            </span>
+            <button type="button" className="ai-send" aria-label="Generate" disabled={working || !prompt.trim()} onClick={() => void generate({ tab, keywords: [], instruction: prompt.trim() })}>
+              <Icon name="arrowUp" size={18} /> <AiBadge />
+            </button>
+          </div>
         </div>
       </div>
     );
