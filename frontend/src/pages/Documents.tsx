@@ -544,19 +544,12 @@ export function Documents() {
         })}
       </div>
 
-      {rows && visible.length === 0 && (
+      {/* Only for a search or filter that finds nothing: an empty library has its New Resume card. */}
+      {rows && visible.length === 0 && filtered && (
         <div className="documents-empty" role="status">
-          <h2>
-            {filtered
-              ? 'No matching resumes'
-              : 'A fresh page, a new opportunity.'}
-          </h2>
-          <p>
-            {filtered
-              ? 'Try another name or change your resume filters.'
-              : 'Create a resume or upload a CV to get started.'}
-          </p>
-          {filtered && (
+          <h2>No matching resumes</h2>
+          <p>Try another name or change your resume filters.</p>
+          {(
             <button
               type="button"
               className="documents-control"

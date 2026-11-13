@@ -384,19 +384,12 @@ export function CoverLetters() {
           );
         })}
       </div>
-      {rows && visible.length === 0 && (
+      {/* Only for a search that finds nothing: an empty library has its new cover letter card. */}
+      {rows && visible.length === 0 && query.trim() && (
         <div className="documents-empty" role="status">
-          <h2>
-            {query.trim()
-              ? 'No matching cover letters'
-              : 'A fresh page, a new opportunity.'}
-          </h2>
-          <p>
-            {query.trim()
-              ? 'Try another name or clear your search.'
-              : 'Create a cover letter for a saved job to get started.'}
-          </p>
-          {query.trim() && (
+          <h2>No matching cover letters</h2>
+          <p>Try another name or clear your search.</p>
+          {(
             <button
               type="button"
               className="documents-control"

@@ -1,4 +1,4 @@
-import type { MouseEventHandler, ReactNode } from 'react';
+import { useEffect, useState, type MouseEventHandler, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { DocumentIcon } from './DocumentIcon';
 import { DocumentKindSwitch } from './DocumentKindSwitch';
@@ -104,7 +104,16 @@ export function NewDocumentCard({
   );
 }
 
+/** How long a load may take before placeholders show: a quick load shows none, so nothing flashes. */
+const LOADING_DELAY_MS = 500;
+
 export function DocumentLibraryLoading() {
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLate(true), LOADING_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!late) return null;
   return (
     <>
       {Array.from({ length: 5 }, (_, index) => (

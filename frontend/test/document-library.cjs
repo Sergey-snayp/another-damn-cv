@@ -107,7 +107,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     empty = true;
     await go('Resumes'); await ready(); const emptyGeometry = await geometry();
     await go('Cover Letters'); await ready(); same(emptyGeometry, await geometry(), 'empty libraries');
-    assert.match(await page.$eval('.documents-empty', element => element.textContent), /Create a cover letter/);
+    assert.equal(await page.$('.documents-empty'), null, 'an empty library shows its new card, no panel under it');
     await page.screenshot({ path: '/private/tmp/job-agent-cover-letter-library-empty.png' });
     empty = false; await go('Resumes'); await ready(); await go('Cover Letters'); await ready();
     await page.screenshot({ path: '/private/tmp/job-agent-cover-letter-library.png' });
