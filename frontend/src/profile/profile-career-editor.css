@@ -32,20 +32,6 @@
 .profile-import-dialog .career-current { grid-column: 1 / -1; margin: 0; font-weight: 500; }
 
 /* Achievements: a list of growing boxes, each with small move and remove buttons. */
-.career-bullets { padding: 0; border: 0; min-width: 0; }
-.profile-import-dialog .career-form > .career-bullets { margin: 20px 0 0; }
-.career-bullets legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
-.career-bullets ol { display: grid; gap: 6px; margin: 0 0 6px; padding: 0; list-style: none; }
-.career-edit-bullet { display: flex; align-items: flex-start; gap: 8px; padding: 4px; margin: 0 -4px; border: 1px solid transparent; border-radius: 10px; }
-.career-bullet-mark { flex: none; width: 10px; padding-top: 12px; color: var(--color-muted); text-align: center; }
-.profile-import-dialog .career-edit-bullet textarea { flex: 1; margin: 0; font-size: 13px; }
-.career-bullet-tools { display: flex; flex: none; gap: 2px; padding-top: 6px; opacity: 0; transition: opacity .12s; }
-.career-edit-bullet:hover .career-bullet-tools, .career-edit-bullet:focus-within .career-bullet-tools { opacity: 1; }
-.career-bullet-tools button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--color-muted); font: inherit; font-size: 15px; cursor: pointer; }
-.career-bullet-tools button:hover:not(:disabled) { background: var(--color-background); color: var(--color-text); }
-.career-bullet-tools button:disabled { opacity: .3; cursor: default; }
-.career-bullet-tools .career-remove:hover { color: var(--color-error); }
-.career-edit-bullet:has(.career-remove:hover), .career-edit-bullet:has(.career-remove:focus-visible) { border-color: var(--color-error-border); background: var(--color-error-soft); }
 
 /* Footer: delete on the left, cancel and save on the right; a question takes its place. */
 .career-editor-footer { align-items: center; }
@@ -56,7 +42,6 @@
 
 @media (max-width: 550px) {
   .career-grid, .career-dates { grid-template-columns: minmax(0, 1fr); }
-  .career-bullet-tools { opacity: 1; }
   .profile-career-editor > form { max-height: calc(100dvh - 20px); }
 }
 
@@ -127,6 +112,3 @@
 .profile-import-dialog .add-bullet-button:disabled { opacity: .45; cursor: default; }
 
 /* Rich text fields in the job editor: the label above, a box like the other fields. */
-.profile-import-dialog .career-rich-field { display: block; font-size: 13px; font-weight: 600; color: var(--color-text); line-height: 1.5; }
-.profile-import-dialog .career-rich { min-height: 3.4em; margin: 6px 0 12px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font-size: 14px; font-weight: 400; line-height: 1.6; }
-.profile-import-dialog .career-rich:focus { border-color: var(--color-text); }

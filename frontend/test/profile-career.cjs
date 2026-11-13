@@ -59,31 +59,21 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     const input = (label, prefix = '.profile-career-editor') => page.locator(`${prefix} ::-p-aria([name="${label}"][role="textbox"])`);
     const closed = () => page.waitForFunction(() => !document.querySelector('.profile-career-editor'));
     const save = async () => { await button('Save to Profile').click(); await closed(); };
-    const focused = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
     await visit();
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Detailed responsibilities/);
     assert.equal(writes.length, 0, 'reading never copies a CV to Profile');
 
-    // One job: its fields, dates as month and year, and achievements as a list.
+    // One job: its fields and dates as month and year. Description, bullets and
+    // technologies are edited on the page itself, so the dialog has none of them.
     await button('Edit Engineer at Profile Only Inc in Profile').click();
     await page.waitForSelector('.profile-career-editor .career-edit-entry');
     assert.equal(await page.$eval('#career-editor-title', element => element.textContent), 'Edit experience');
     await input('Job title').fill('Senior Backend Engineer');
-    await input('Role description').fill('Complete role details and outcomes not constrained by a CV page.');
     await page.select('[aria-label="Start date year"]', '2019');
     await page.select('[aria-label="Start date month"]', '03');
     assert.match(await page.$eval('.career-date-fixed', element => element.textContent), /Present/, 'a current job ends at Present');
-    await button('Remove bullet 1 from experience 1').hover();
-    assert.notEqual(await page.$eval('.career-edit-bullet', element => getComputedStyle(element).borderColor), 'rgba(0, 0, 0, 0)', 'the removal target is highlighted');
-    await button('Remove bullet 1 from experience 1').click();
-    await button('Add Bullet').click();
-    assert.equal(await focused(), 'Bullet 2', 'a new bullet takes the cursor');
-    await input('Bullet 2').fill('Led Node.js services and mentored the delivery team.');
-    await page.keyboard.press('Enter');
-    assert.equal(await focused(), 'Bullet 3', 'Enter starts the next bullet');
-    await page.keyboard.press('Backspace');
-    assert.equal(await focused(), 'Bullet 2', 'Backspace in an empty bullet removes it');
-    assert.equal(await page.$$eval('.career-edit-bullet', rows => rows.length), 2);
+    assert.deepEqual(await page.$$eval('.profile-career-editor label, .profile-career-editor legend, .profile-career-editor .career-rich-field', nodes => nodes.map(node => node.textContent).filter(text => /description|achievement|bullet|tech stack/i.test(text))), [],
+      'no description, bullets or tech stack in the dialog');
     await page.screenshot({ path: '/private/tmp/job-agent-profile-career-editor.png' });
     await button('Save to Profile').click();
     await page.waitForSelector('.profile-career-editor [role="alert"]');
@@ -92,7 +82,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(await page.$eval('section[aria-label="Experience 1"] input', element => element.value), 'Senior Backend Engineer', 'failed saves preserve the draft');
     failSave = false;
     await save();
-    assert.deepEqual(state.data.experiences.value[0].bullets, ['Keep this achievement.', 'Led Node.js services and mentored the delivery team.']);
+    assert.deepEqual(state.data.experiences.value[0].bullets, ['Remove this bullet.', 'Keep this achievement.'], 'saving the dialog keeps the bullets');
+    assert.equal(state.data.experiences.value[0].description, 'Detailed responsibilities, independent of any CV.', 'and the description');
     assert.equal(state.data.experiences.value[0].from, '2019-03');
 
     // Add: a new job, on its own.
@@ -115,11 +106,16 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(await page.$eval('.career-editor-subtitle', element => element.textContent), 'Developer · Earlier Employer');
     assert.equal(await page.$$eval('.profile-career-editor .career-edit-entry', rows => rows.length), 1, 'only the job that was clicked');
     await input('Job title').fill('Backend Developer');
-    await input('Tech stack (optional)').fill('Go, Redis');
     const untouched = structuredClone(state.data.experiences.value[0]);
     await save();
     assert.deepEqual(state.data.experiences.value[0], untouched, 'the other job is saved as it was');
     assert.equal(state.data.experiences.value[1].title, 'Backend Developer');
+    // Technologies on the page: a job without them offers to add them.
+    await page.evaluate(() => [...document.querySelectorAll('.inline-edit-empty')].find(node => node.textContent === '+ Add technologies' && node.closest('.profile-entry').textContent.includes('Backend Developer')).click());
+    await page.waitForSelector('textarea[aria-label="Edit technologies"]');
+    await page.keyboard.type('Go, Redis');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => /Technologies: Go, Redis/.test(document.getElementById('profile-work-heading').closest('section').textContent));
     assert.equal(state.data.experiences.value[1].techStack, 'Go, Redis', 'the tech stack is saved with the job');
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Technologies: Go, Redis/);
 
@@ -218,11 +214,10 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await visit();
     assert.equal(await page.$eval('.profile-stack', element => element.textContent), 'Technologies: Kafka, Go');
     assert.deepEqual(await page.$$eval('.ach-text', rows => rows.map(row => row.textContent)), ['Shipped things.']);
-    await button('Edit Engineer at Old Co in Profile').click();
-    await page.waitForSelector('.profile-career-editor .career-edit-entry');
-    assert.equal(await page.$eval('.profile-career-editor ::-p-aria([name="Tech stack (optional)"][role="textbox"])', field => field.value), 'Kafka, Go');
-    await button('Cancel').click();
-    await page.waitForFunction(() => !document.querySelector('.profile-career-editor'));
+    await page.hover('.profile-stack');
+    await button('Edit technologies').click();
+    assert.equal(await page.$eval('textarea[aria-label="Edit technologies"]', field => field.value), 'Kafka, Go');
+    await page.keyboard.press('Escape');
     // The bin on a job deletes it, after asking; "Cancel" in that question keeps it.
     await button('Delete Engineer at Old Co').click();
     await page.waitForSelector('.confirm-dialog');
@@ -236,7 +231,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.match(await page.$eval('.profile-success', element => element.textContent), /Deleted Engineer at Old Co/);
     assert.deepEqual(unexpected, [], 'Profile editing never reads CV contents or writes CV/PDF endpoints');
     assert.deepEqual(errors, []);
-    console.log('PASS Profile career editing: roles, descriptions, bullet add/remove, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');
+    console.log('PASS Profile career editing: roles, a dialog without description/bullets/tech stack, technologies on the page, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');
     await page.close();
   } catch (error) {
     if (page && !page.isClosed()) {

@@ -289,3 +289,16 @@
 .summary-tools { display: flex; align-items: center; gap: 10px; min-height: 0; }
 .summary-tools:empty { display: none; }
 .summary-card .ai-box { margin-top: 8px; }
+/* A job's description and technologies, and the skills: edited in place, with the bullets' toolbar on hover. */
+.inline-edit { position: relative; margin: 6px -10px 0; padding: 5px 10px; border-radius: 8px; }
+.inline-edit:hover, .inline-edit:focus-within { background: var(--color-background); }
+.inline-edit:hover .ach-tools, .inline-edit:focus-within .ach-tools { opacity: 1; pointer-events: auto; }
+.inline-edit-text { cursor: text; }
+.inline-edit .profile-body, .profile-entry-main > .inline-edit .profile-body, .inline-edit .profile-stack { margin: 0; }
+.inline-edit.is-editing { display: grid; gap: 4px; padding: 8px 10px; background: var(--color-background); }
+.inline-edit .ach-editor-actions { margin-top: 4px; }
+@media (hover: none) {
+  .inline-edit .ach-tools { position: static; display: inline-flex; margin-top: 6px; opacity: 1; pointer-events: auto; }
+}
+.inline-edit-empty { margin: 0; color: var(--color-muted); font-size: 13px; }
+.inline-edit:hover .inline-edit-empty { color: #1e4d45; }

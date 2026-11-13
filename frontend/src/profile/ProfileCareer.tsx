@@ -1,6 +1,7 @@
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { CareerData, CareerExperience } from "./careerApi";
-import { AchievementList, type RolePatch } from "./AchievementList";
+import { AchievementList } from "./AchievementList";
+import { InlineEdit } from "./InlineEdit";
 import { SummaryEditor } from "./SummaryEditor";
 import { Marked } from "../text/Marked";
 import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
@@ -27,6 +28,7 @@ export function ProfileCareer({
   onDelete,
   onSaveRole,
   onSaveSummary,
+  onSaveSkills,
 }: {
   imported: CareerData;
   importDisabled: boolean;
@@ -38,8 +40,10 @@ export function ProfileCareer({
   onCollect?(): void;
   /** Deletes one job or education entry, after asking. */
   onDelete?(section: "experiences" | "educations", entry: number): void;
-  /** Saves one job's achievements (stars, edits, additions, deletions) on the latest Profile. */
-  onSaveRole(entry: number, patch: (current: CareerExperience) => Partial<RolePatch>): Promise<void>;
+  /** Saves one job's fields (achievements, description, technologies) on the latest Profile. */
+  onSaveRole(entry: number, patch: (current: CareerExperience) => Partial<CareerExperience>): Promise<void>;
+  /** Saves the Profile's skills list. */
+  onSaveSkills(skills: string[]): Promise<void>;
   /** With `entry`, only that job or education entry is edited, or a new one added. */
   onEditCareer(section: CareerSectionKey, entry?: CareerEntry): void;
 }) {
@@ -122,20 +126,40 @@ export function ProfileCareer({
                   </div>
                 </div>
                 {pills([role.client && `for ${role.client}`, role.location, dateRange(role.from, role.to, role.current)])}
-                {role.description && (
+                <InlineEdit
+                  label="description"
+                  value={role.description ?? ""}
+                  multiline
+                  rich
+                  placeholder="What the company or project does, and your part in it."
+                  disabled={importDisabled}
+                  empty={<p className="inline-edit-empty">+ Add description</p>}
+                  deleteTitle="Are you sure you want to delete this description?"
+                  deleteBody={<p>It will be removed from {role.title} at {role.company} in your Profile. Your saved CVs keep their own copy.</p>}
+                  onSave={(text) => onSaveRole(index, () => ({ description: text }))}
+                >
                   <div className="profile-body">
                     <Marked text={role.description} />
                   </div>
-                )}
+                </InlineEdit>
                 <AchievementList
                   role={role}
                   disabled={importDisabled}
                   onSave={(patch) => onSaveRole(index, patch)}
                   onWrite={(text) => onWrite(index, text)}
                 />
-                {role.techStack?.trim() && (
+                <InlineEdit
+                  label="technologies"
+                  value={role.techStack ?? ""}
+                  placeholder="Node.js, TypeScript, PostgreSQL, AWS"
+                  disabled={importDisabled}
+                  empty={<p className="inline-edit-empty">+ Add technologies</p>}
+                  deleteTitle="Are you sure you want to delete these technologies?"
+                  deleteBody={<p>The technologies line will be removed from {role.title} at {role.company} in your Profile. Your saved CVs keep their own copy.</p>}
+                  onSave={(text) => onSaveRole(index, () => ({ techStack: text }))}
+                >
                   <p className="profile-stack">Technologies: {role.techStack}</p>
-                )}
+                </InlineEdit>
               </div>
             </article>
           ))
@@ -178,13 +202,21 @@ export function ProfileCareer({
           <h2 id="profile-skills-heading">Skills</h2>
           {edit("skills", "Edit profile skills")}
         </div>
-        {skills.length ? (
+        <InlineEdit
+          label="skills"
+          value={skills.join(", ")}
+          multiline
+          placeholder="Comma-separated: TypeScript, Node.js, PostgreSQL"
+          disabled={importDisabled}
+          empty={<p className="profile-empty-line">No skills saved in Profile yet.</p>}
+          deleteTitle="Are you sure you want to delete all your skills?"
+          deleteBody={<p>Every skill will be removed from your Profile. Your saved CVs keep their own copy.</p>}
+          onSave={(text) => onSaveSkills([...new Set(text.split(/[,;\n]/).map((skill) => skill.trim()).filter(Boolean))])}
+        >
           <ul className="profile-chips">
             {skills.map((skill, index) => <li key={index}>{skill}</li>)}
           </ul>
-        ) : (
-          <p className="profile-empty-line">No skills saved in Profile yet.</p>
-        )}
+        </InlineEdit>
       </section>
     </>
   );

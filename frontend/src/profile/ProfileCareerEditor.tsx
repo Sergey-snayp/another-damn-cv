@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { careerApi, type CareerSections, type CareerState } from "./careerApi";
-import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
-import { RichEditor } from "../text/RichEditor";
 import { useConfirm } from "../components/ConfirmDialog";
 import "./profile-import.css";
 import "./profile-career-editor.css";
@@ -118,7 +116,6 @@ export function ProfileCareerEditor({
   const [error, setError] = useState("");
   // The footer asks before something is lost: closing with changes, or deleting the entry.
   const [confirm, setConfirm] = useState<null | "discard">(null);
-  const [focusBullet, setFocusBullet] = useState<number | null>(null);
   const entries = section === "experiences" || section === "educations";
   const isNew = entries && (entry === undefined || entry === "new");
 
@@ -163,12 +160,6 @@ export function ProfileCareerEditor({
     // The entry is fixed for the life of this editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
-  useEffect(() => {
-    if (focusBullet === null) return;
-    dialog.current?.querySelector<HTMLTextAreaElement>(`[aria-label="Bullet ${focusBullet + 1}"]`)?.focus();
-    setFocusBullet(null);
-  }, [focusBullet, draft]);
-
   const dirty = !loading && !!initial && JSON.stringify([draft, skills]) !== initial;
   const requestClose = () => {
     if (lock.current) return;
@@ -186,35 +177,6 @@ export function ProfileCareerEditor({
     if (index === null) return;
     setDraft((value) => ({ ...value, educations: value.educations.map((item, i) => (i === index ? { ...item, ...patch } : item)) }));
   }
-  const setBullets = (bullets: string[]) => updateRole({ bullets });
-
-  /** Achievements as a list: Enter starts the next one, Backspace in an empty one removes it. */
-  function bulletKey(event: KeyboardEvent<HTMLTextAreaElement>, at: number) {
-    if (!role || event.nativeEvent.isComposing) return;
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      if (role.bullets.length >= 100) return;
-      setBullets([...role.bullets.slice(0, at + 1), "", ...role.bullets.slice(at + 1)]);
-      setFocusBullet(at + 1);
-    } else if (event.key === "Backspace" && !event.currentTarget.value) {
-      event.preventDefault();
-      setBullets(role.bullets.filter((_, i) => i !== at));
-      if (at > 0 || role.bullets.length > 1) setFocusBullet(Math.max(0, at - 1));
-    } else if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-      event.preventDefault();
-      const to = event.key === "ArrowUp" ? at - 1 : at + 1;
-      if (to < 0 || to >= role.bullets.length) return;
-      move(at, to);
-    }
-  }
-  function move(from: number, to: number) {
-    if (!role) return;
-    const next = [...role.bullets];
-    [next[from], next[to]] = [next[to]!, next[from]!];
-    setBullets(next);
-    setFocusBullet(to);
-  }
-
   /** What Save sends: only the section edited, cleaned up. */
   function sectionsToSave(value: CareerSections): Partial<CareerSections> {
     if (section === "skills")
@@ -376,85 +338,7 @@ export function ProfileCareerEditor({
                   </label>
                 </div>
 
-                <div className="career-rich-field">
-                  <span>Role description</span>
-                  <RichEditor
-                    className="career-rich"
-                    label="Role description"
-                    multiline
-                    placeholder="What the role or project was: the product, the team, the scale."
-                    value={role.description}
-                    onChange={(description) => updateRole({ description })}
-                  />
-                </div>
-
-                <fieldset className="career-bullets">
-                  <legend>Achievements and responsibilities</legend>
-                  {role.bullets.length > 0 && (
-                    <ol>
-                      {role.bullets.map((bullet, at) => (
-                        <li className="career-edit-bullet" key={at}>
-                          <span className="career-bullet-mark" aria-hidden="true">•</span>
-                          <textarea
-                            className="career-grow"
-                            aria-label={`Bullet ${at + 1}`}
-                            rows={1}
-                            maxLength={4000}
-                            placeholder="What you did, and what it changed."
-                            value={bullet}
-                            onChange={(event) => setBullets(role.bullets.map((value, i) => (i === at ? event.target.value : value)))}
-                            onKeyDown={(event) => bulletKey(event, at)}
-                          />
-                          <span className="career-bullet-tools">
-                            <button type="button" aria-label={`Move bullet ${at + 1} up`} title="Move up (Alt ↑)" disabled={at === 0} onClick={() => move(at, at - 1)}>
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Move bullet ${at + 1} down`}
-                              title="Move down (Alt ↓)"
-                              disabled={at === role.bullets.length - 1}
-                              onClick={() => move(at, at + 1)}
-                            >
-                              ↓
-                            </button>
-                            <button
-                              type="button"
-                              className="career-remove"
-                              aria-label={`Remove bullet ${at + 1} from experience ${index + 1}`}
-                              title="Remove"
-                              onClick={() => setBullets(role.bullets.filter((_, i) => i !== at))}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                  <button
-                    type="button"
-                    className="add-bullet-button"
-                    disabled={role.bullets.length >= 100}
-                    onClick={() => {
-                      setBullets([...role.bullets, ""]);
-                      setFocusBullet(role.bullets.length);
-                    }}
-                  >
-                    <Icon name="plus" size={18} />
-                    Add Bullet
-                  </button>
-                </fieldset>
-
-                <label>
-                  Tech stack (optional)
-                  <input
-                    maxLength={2000}
-                    placeholder="Node.js, TypeScript, PostgreSQL"
-                    value={role.techStack}
-                    onChange={(event) => updateRole({ techStack: event.target.value })}
-                  />
-                </label>
+                {/* Description, achievements and technologies are edited on the Profile page itself. */}
               </section>
             )}
 
