@@ -155,6 +155,19 @@ export const summaryAssistSchema = z
   })
   .strict();
 
+/** "Write with AI" for a job's description: the job, the line as written, answers to earlier questions. */
+export const descriptionAssistSchema = z
+  .object({
+    source: achievementDraftSchema.extend({ notes: z.string().max(60000).default('') }),
+    text: z.string().trim().max(12000).default(''),
+    answers: z
+      .array(z.object({ question: z.string().trim().min(1).max(500), answer: z.string().trim().max(2000) }).strict())
+      .max(5)
+      .default([]),
+    instruction: z.string().trim().max(500).default(''),
+  })
+  .strict();
+
 /** Keywords and tasks to pick from for one job's bullets. */
 export const assistSuggestionsSchema = achievementDraftSchema.extend({
   notes: z.string().max(60000).default(''),

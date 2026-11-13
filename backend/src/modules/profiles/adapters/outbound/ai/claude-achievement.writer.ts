@@ -10,6 +10,7 @@ import type {
   AchievementWriter,
   AssistInput,
   DeepenInput,
+  DescribeInput,
   SummaryAssistInput,
 } from '../../../application/ports/achievement-writer';
 import {
@@ -224,6 +225,49 @@ ${HONESTY}
 Return ONLY JSON, no prose and no code fences:
 {"options": [{"angle": "Results", "text": "..."}, {"angle": "Technical", "text": "..."}, {"angle": "Domain", "text": "..."}]}`;
 
+const DESCRIBE_SYSTEM = `You write the description line of one job on a person's career profile: what the
+product or project they worked on is.
+
+ABSOLUTE RULES. Breaking any of these makes the output unusable:
+- Use ONLY facts written in <job>, <description>, <current_bullets>, <notes> or <answers>. Never
+  add a number, product name, customer, market, scale or purpose that is not written there.
+- Don't invent details. If the facts don't say what the product does or who uses it, do not
+  guess: ask instead (see below).
+
+The standard:
+- One sentence of 15 to 25 words.
+- Explain what the product does, who uses it, and its business purpose.
+- Keep it factual and specific.
+- Don't include the person's responsibilities, achievements, technologies, or generic claims
+  ("innovative", "cutting-edge", "leading", "robust"): those belong in other resume sections.
+- No "I", "we", "my" or "our", and don't start with what the person did ("Built", "Led").
+- Don't repeat information already clear from the title: not the company name, not the job title.
+- When the person worked for a client through an agency (<job> has a Client), describe the
+  client's product, not the agency.
+- Present tense if nothing says the product was closed.
+- "improve": <description> is the line as written; keep its facts and meet the standard.
+  "write": write it from the facts.
+- Follow <request> when there is one. <avoid> lists what an earlier try got wrong.
+
+The 3 versions, each from another angle:
+  1. "Product": lead with what it does.
+  2. "Users": lead with who uses it.
+  3. "Business": lead with why it exists for the business.
+
+If there isn't enough information to write an accurate description, return no options and ask
+for the missing details: up to 3 short, plain questions ("What does the product do?", "Who uses
+it: businesses, consumers, a team inside the company?").
+
+Return ONLY JSON, no prose and no code fences:
+{"options": [{"angle": "Product", "text": "..."}, {"angle": "Users", "text": "..."}, {"angle": "Business", "text": "..."}], "questions": []}
+or
+{"options": [], "questions": ["...", "..."]}`;
+
+const describeSchema = z.object({
+  options: z.array(z.object({ angle: z.string().catch(''), text: z.string().catch('') })).catch([]),
+  questions: z.array(z.string()).catch([]),
+});
+
 const SUGGEST_SYSTEM = `You list, for one job on a person's career profile, what its bullets could be about.
 
 - "keywords": about 12 short terms (1 to 3 words, Title Case) a recruiter for this kind of job
@@ -398,6 +442,41 @@ ${input.keywords.join(', ') || '(none)'}
       angle: option.angle,
       text: withoutDashPunctuation(withoutAddedPurpose(option.text, `${input.facts}\n${input.text}`)),
     }));
+  }
+
+  async describe(input: DescribeInput): Promise<{ options: { angle: string; text: string }[]; questions: string[] }> {
+    const { source } = input;
+    const answers = input.answers.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join('\n\n');
+    const prompt = `<mode>${input.text ? 'improve' : 'write'}</mode>
+
+<job>
+Title: ${source.title}
+Company: ${source.company}${source.client ? `\nClient: ${source.client}` : ''}
+</job>
+
+<description>
+${input.text || '(none)'}
+</description>
+
+<current_bullets>
+${source.bullets.map((bullet) => `- ${bullet}`).join('\n') || '(none)'}
+</current_bullets>
+
+<notes>
+${source.notes.slice(0, 20_000) || '(none)'}
+</notes>${answers ? `\n\n<answers>\n${answers}\n</answers>` : ''}${input.instruction ? `\n\n<request>\n${input.instruction}\n</request>` : ''}${input.avoid?.length ? `\n\n<avoid>\n${input.avoid.map((item) => `- ${item}`).join('\n')}\n</avoid>` : ''}`;
+    const raw = await this.llm.complete(prompt, DESCRIBE_SYSTEM, {
+      effort: 'medium',
+      timeoutMs: 120_000,
+      maxOutputChars: 10_000,
+    });
+    const json = firstJsonObject(raw);
+    if (!json) throw new AchievementError('The AI did not write a description. Try again.');
+    const parsed = describeSchema.parse(json);
+    return {
+      options: parsed.options.map((option) => ({ angle: option.angle, text: withoutDashPunctuation(option.text) })),
+      questions: parsed.questions.map((question) => question.trim()).filter(Boolean).slice(0, 3),
+    };
   }
 
   async suggest(source: AchievementSource): Promise<{ keywords: string[]; tasks: string[] }> {

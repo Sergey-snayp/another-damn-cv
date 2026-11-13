@@ -22,6 +22,17 @@ export interface SummaryAssistInput {
   instruction: string;
 }
 
+export interface DescribeInput {
+  source: AchievementSource;
+  /** The description as written now (improve it), or empty (write one). */
+  text: string;
+  /** Answers to the questions an earlier try asked. */
+  answers: { question: string; answer: string }[];
+  instruction: string;
+  /** What an earlier try broke, to avoid this time. */
+  avoid?: string[];
+}
+
 /** Per job: words worth working into its bullets, and the tasks such a job has, for the person to pick. */
 export interface AssistSuggestions {
   keywords: string[];
@@ -51,6 +62,11 @@ export interface AchievementWriter {
   assist(input: AssistInput): Promise<{ angle: string; text: string }[]>;
   /** 3 versions of the professional summary (improve the one written, or write one), from the Profile. */
   summary(input: SummaryAssistInput): Promise<{ angle: string; text: string }[]>;
+  /**
+   * 3 one-sentence descriptions of what a job's product is, or, when the facts are too thin to
+   * say it accurately, up to 3 questions for the person instead.
+   */
+  describe(input: DescribeInput): Promise<{ options: { angle: string; text: string }[]; questions: string[] }>;
   /** Keywords and tasks for one job, from its description, bullets and tech stack. */
   suggest(source: AchievementSource): Promise<AssistSuggestions>;
   /** One achievement too long for a CV line, as 2 to 4 shorter ones that each stand alone. */

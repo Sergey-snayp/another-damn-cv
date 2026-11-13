@@ -12,6 +12,7 @@ import { DeepenAchievement } from './application/use-cases/deepen-achievement';
 import { SplitAchievement } from './application/use-cases/split-achievement';
 import { AssistAchievement, SuggestForJob } from './application/use-cases/assist-achievement';
 import { AssistSummary } from './application/use-cases/assist-summary';
+import { AssistDescription } from './application/use-cases/assist-description';
 import { CollectFromCvs } from './application/use-cases/collect-from-cvs';
 import { ResumeJobsReader } from './adapters/outbound/resume-jobs.reader';
 import { RESUMES_API } from '../resumes/resumes.tokens';
@@ -70,6 +71,11 @@ import { PROFILE_API, PROFILE_CAREER_READER, PROFILE_DIRECTORY, PROFILE_REPOSITO
       inject: [PrismaCareerProfileRepository, ClaudeProcessRunner],
       useFactory: (repository: PrismaCareerProfileRepository, runner: ClaudeProcessRunner) =>
         new AssistSummary(repository, new ClaudeAchievementWriter(runner)),
+    },
+    {
+      provide: AssistDescription,
+      inject: [ClaudeProcessRunner],
+      useFactory: (runner: ClaudeProcessRunner) => new AssistDescription(new ClaudeAchievementWriter(runner)),
     },
     {
       provide: SuggestForJob,

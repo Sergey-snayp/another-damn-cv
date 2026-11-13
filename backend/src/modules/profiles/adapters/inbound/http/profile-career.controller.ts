@@ -24,6 +24,7 @@ import { DeepenAchievement } from '../../../application/use-cases/deepen-achieve
 import { SplitAchievement } from '../../../application/use-cases/split-achievement';
 import { AssistAchievement, SuggestForJob } from '../../../application/use-cases/assist-achievement';
 import { AssistSummary } from '../../../application/use-cases/assist-summary';
+import { AssistDescription, type AssistDescriptionInput } from '../../../application/use-cases/assist-description';
 import type { AssistInput } from '../../../application/ports/achievement-writer';
 import { CollectFromCvs } from '../../../application/use-cases/collect-from-cvs';
 import type { DeepenInput } from '../../../application/ports/achievement-writer';
@@ -37,6 +38,7 @@ import {
   assistAchievementSchema,
   assistSuggestionsSchema,
   summaryAssistSchema,
+  descriptionAssistSchema,
 } from '../../career.schemas';
 @Catch(AchievementError)
 class AchievementErrorFilter implements ExceptionFilter {
@@ -70,6 +72,7 @@ export class ProfileCareerController {
     @Inject(AssistAchievement) private readonly assistant: AssistAchievement,
     @Inject(SuggestForJob) private readonly suggestions: SuggestForJob,
     @Inject(AssistSummary) private readonly summaryAssistant: AssistSummary,
+    @Inject(AssistDescription) private readonly descriptionAssistant: AssistDescription,
   ) {}
   /** "Write with AI" / "Improve with AI" for the summary: 3 versions from the whole Profile. Nothing is saved. */
   @Post('summary/assist') @HttpCode(200) assistSummary(
@@ -78,6 +81,12 @@ export class ProfileCareerController {
     input: { mode: 'improve' | 'write'; text: string; keywords: string[]; instruction: string },
   ) {
     return this.summaryAssistant.execute(userId, input);
+  }
+  /** "Write with AI" for a job's description: 3 versions, or questions when the facts are too thin. Nothing is saved. */
+  @Post('description/assist') @HttpCode(200) assistDescription(
+    @Body(new ZodValidationPipe(descriptionAssistSchema)) input: AssistDescriptionInput,
+  ) {
+    return this.descriptionAssistant.execute(input);
   }
   /** Keywords and tasks to pick from in "Write with AI", for one job. Nothing is saved. */
   @Post('achievements/suggestions') @HttpCode(200) suggestForJob(
