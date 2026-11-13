@@ -327,8 +327,10 @@
 
   window.CVAutofillPanel = { open, close, reattach, toggle: () => (isOpen ? close() : open()), isOpen: () => isOpen };
 
-  // Reopen after a page load if this tab had the panel open.
+  // Reopen after a page load if this tab had the panel open. Not on LinkedIn:
+  // there it opens only for Easy Apply, which never needs a page load.
+  const linkedIn = /(^|\.)linkedin\.com$/i.test(location.hostname);
   try {
-    chrome.runtime.sendMessage({ type: 'panel-state' }).then(state => { if (state?.open && !isOpen) open(); }).catch(() => {});
+    if (!linkedIn) chrome.runtime.sendMessage({ type: 'panel-state' }).then(state => { if (state?.open && !isOpen) open(); }).catch(() => {});
   } catch { /* extension reloaded */ }
 })();

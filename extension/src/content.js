@@ -724,12 +724,24 @@ if (IS_TOP) {
 let lastOwnForm = false;
 let lastLinkedInContext;
 /**
- * LinkedIn's Easy Apply dialog (now inside a shadow root) is on screen: a
- * visible dialog with form fields, or with Easy Apply's own upload boxes.
+ * LinkedIn's Easy Apply dialog is on screen. LinkedIn draws it inside
+ * #interop-outlet's shadow root (older pages: .jobs-easy-apply-modal). Other
+ * LinkedIn dialogs (sign-in, job alerts, sharing) must not count, so the
+ * dialog needs an Easy Apply sign: its "Apply to …" heading, its upload boxes,
+ * or fields with a Next / Review / Submit button. A password field rules it out.
  */
+const EASY_APPLY_BUTTON = /^(next|review|submit application|continue to next step|review your application)$/i;
 function easyApplyOpen() {
-  return Fields.deepAll('[role="dialog"]').some(dialog => dialog.getClientRects().length > 0
-    && Boolean(dialog.querySelector('input:not([type="hidden"]), textarea, select, [id^="easyApply"], .jobs-easy-apply-content')));
+  return Fields.deepAll('[role="dialog"]').some((dialog) => {
+    if (!dialog.getClientRects().length || dialog.querySelector('input[type="password"]')) return false;
+    const root = dialog.getRootNode();
+    const easyApplyBox = dialog.matches('.jobs-easy-apply-modal') || (root instanceof ShadowRoot && root.host.id === 'interop-outlet');
+    if (!easyApplyBox) return false;
+    if (dialog.querySelector('[id^="easyApply"], .jobs-easy-apply-content, #jobs-apply-header')) return true;
+    if ([...dialog.querySelectorAll('h1, h2, h3')].some((heading) => /^apply to\b/i.test(heading.textContent.trim()))) return true;
+    return Boolean(dialog.querySelector('input:not([type="hidden"]), textarea, select'))
+      && [...dialog.querySelectorAll('button')].some((button) => EASY_APPLY_BUTTON.test(button.textContent.replace(/\s+/g, ' ').trim()));
+  });
 }
 function updateLauncher() {
   if (TINY_FRAME) return;
@@ -744,8 +756,13 @@ function updateLauncher() {
       try { void chrome.runtime.sendMessage({ type: 'job-context-changed' }).catch(() => {}); } catch { /* extension reloaded */ }
     }
     // A selected posting shows the button; the panel opens by itself only
-    // once Easy Apply's form is on screen.
-    if (job) { lastOwnForm = true; showLauncher(true, { form: easyApplyOpen() }); formChanged(); return; }
+    // once Easy Apply's form is on screen. Nothing else on LinkedIn opens it:
+    // its search boxes are no application form.
+    const applying = easyApplyOpen();
+    lastOwnForm = Boolean(job) || applying;
+    showLauncher(lastOwnForm, { form: applying });
+    if (lastOwnForm) formChanged();
+    return;
   }
   if (!Fields.deepOne('input, textarea, select')) {
     // A job page whose form is one click away (Ashby's Overview tab, Lever's posting):

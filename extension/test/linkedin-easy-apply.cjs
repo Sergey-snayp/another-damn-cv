@@ -43,7 +43,7 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
         runtime: {
           id: 'test', getURL: file => (file.endsWith('.html') ? 'data:text/html,<p>Panel</p>' : 'data:text/css,'),
           onMessage: { addListener: listener => window.__listeners.push(listener) },
-          sendMessage: async message => { window.__messages.push(message.type); if (message.type === 'application-submitted') { window.__submitted.push(message.jobUrl); window.__answers = message.answers; } return message.type === 'default-save' ? { ok: true } : {}; },
+          sendMessage: async message => { window.__messages.push(message.type); if (message.type === 'application-submitted') { window.__submitted.push(message.jobUrl); window.__answers = message.answers; } return message.type === 'default-save' ? { ok: true } : message.type === 'panel-state' ? { open: true } : {}; },
         },
         storage: { local: { get: async () => ({ fillMarks: true, animateFill: false, profile: { linkedin: 'linkedin.com/in/serhiiproniuk' } }), set: async () => {} }, onChanged: { addListener() {} } },
       };
@@ -80,7 +80,13 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
     const settle = () => new Promise(resolve => setTimeout(resolve, 900));
 
     await settle();
-    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'the posting alone does not open the panel');
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'the posting alone does not open the panel, even in a tab that had it open');
+    // LinkedIn's other dialogs: sign-in, and a job alert with a field, drawn where Easy Apply is.
+    await page.evaluate(() => document.body.insertAdjacentHTML('beforeend', '<div role="dialog" id="signin"><h2>Sign in</h2><input type="email"><input type="password"><button>Sign in</button></div>'));
+    await showStep('<div role="dialog"><h2>Create job alert</h2><label for="kw">Keywords</label><input id="kw"><button type="button">Save</button></div>');
+    await settle();
+    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'sign-in and job alert dialogs do not open the panel');
+    await page.evaluate(() => document.getElementById('signin').remove());
     await showStep(contactStep);
     await settle();
     assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'opening Easy Apply opens the panel');
