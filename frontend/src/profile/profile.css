@@ -329,9 +329,10 @@
 .inline-text-input { width: 100%; max-width: 480px; margin: 0 -7px; padding: 1px 6px; border: 1px solid #1e4d45; border-radius: 6px; background: var(--color-surface); color: var(--color-text); font: inherit; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); outline: none; }
 /* Pointing at a filled pill shows its ×: remove it, after asking. */
 .profile-pills li.has-remove { position: relative; }
-.job-fact-x { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: #1e4d45; color: #fff; font: inherit; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s; }
+.job-fact-x { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: #1e4d45; color: #fff; line-height: 0; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s; }
 .profile-pills li.has-remove:hover .job-fact-x, .job-fact-x:focus-visible { opacity: 1; pointer-events: auto; }
 .job-fact-x:hover { background: #a33; }
+.job-fact-x svg { display: block; }
 .job-fact-x:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
 .job-fact-x:disabled { display: none; }
 @media (hover: none) { .job-fact-x { opacity: 1; pointer-events: auto; } }

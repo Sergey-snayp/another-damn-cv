@@ -3,6 +3,7 @@ import type { CareerExperience, WorkType } from "./careerApi";
 import { WORK_TYPE_NAMES, workFacts } from "./workPlace";
 import { DateField } from "./ProfileCareerEditor";
 import { useConfirm } from "../components/ConfirmDialog";
+import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** "2024-10" → "Oct 2024"; a year or free text stays as written. */
@@ -92,7 +93,7 @@ export function JobFacts({
       </button>
       {shown && (
         <button type="button" className="job-fact-x" aria-label={`Remove ${label.toLowerCase()}: ${shown}`} title="Remove" disabled={disabled || busy} onClick={() => void askRemove(fact, label, shown)}>
-          ×
+          <Icon name="close" size={12} />
         </button>
       )}
     </li>
