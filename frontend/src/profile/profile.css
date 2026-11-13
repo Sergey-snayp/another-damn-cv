@@ -336,3 +336,21 @@
 .job-fact-x:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
 .job-fact-x:disabled { display: none; }
 @media (hover: none) { .job-fact-x { opacity: 1; pointer-events: auto; } }
+
+/*
+ * Hover-revealed controls (the bullets' and fields' toolbars, a pill's ×), timed
+ * as NN/g's "Timing Guidelines for Exposing Hidden Content" sets out: shown 0.1 s
+ * after the pointer arrives, kept until it has been away for 0.5 s (still
+ * clickable meanwhile), so a pointer that slips off for a moment finds them still
+ * there. Pointing at another row or pill hides the previous one's at once, so two
+ * never show together.
+ */
+.ach-tools, .job-fact-x { opacity: 0; visibility: hidden; pointer-events: auto; transition: opacity .15s ease .5s, visibility 0s linear .65s; }
+.ach-row:hover .ach-tools, .ach-row:focus-within .ach-tools,
+.inline-edit:hover .ach-tools, .inline-edit:focus-within .ach-tools,
+.profile-pills li.has-remove:hover .job-fact-x, .job-fact-x:focus-visible { opacity: 1; visibility: visible; transition: opacity .12s ease .1s, visibility 0s linear .1s; }
+.ach-list:has(.ach-row:hover) .ach-row:not(:hover):not(:focus-within) .ach-tools,
+.profile-pills:has(li:hover) li:not(:hover) .job-fact-x:not(:focus-visible) { transition: opacity .1s ease, visibility 0s linear .1s; }
+@media (hover: none) {
+  .ach-tools, .job-fact-x { opacity: 1; visibility: visible; transition: none; }
+}

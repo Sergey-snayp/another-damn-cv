@@ -51,6 +51,14 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.hover('.inline-edit .profile-body');
     await new Promise(r => setTimeout(r, 250));
     assert.equal(await toolbarShown('description'), '1', 'pointing at the description shows its toolbar');
+    // NN/g timing: it stays while the pointer is away for under 0.5 s, then goes.
+    await page.mouse.move(5, 5);
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(await toolbarShown('description'), '1', 'still there 0.3 s after the pointer leaves');
+    await new Promise(r => setTimeout(r, 700));
+    assert.equal(await toolbarShown('description'), '0', 'gone once the pointer has been away for over 0.5 s');
+    await page.hover('.inline-edit .profile-body');
+    await new Promise(r => setTimeout(r, 250));
     assert.ok(await page.$('[aria-label="Delete description"]'), 'with Delete');
     await button('Edit description').click();
     await page.waitForSelector('[aria-label="Edit description"][contenteditable]');
