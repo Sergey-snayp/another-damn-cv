@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import type { CareerExperience, WorkType } from "./careerApi";
 import { WORK_TYPE_NAMES, workFacts } from "./workPlace";
 import { DateField } from "./ProfileCareerEditor";
@@ -23,9 +23,8 @@ type Fact = "client" | "workType" | "location" | "dates";
 
 /**
  * The facts under a job's title as pills: client, remote / hybrid / on site,
- * location and dates. A pill opens its own small editor. Only filled facts
- * show; the round + at the end lists the missing ones to add. Remove (or a
- * pill's ×, after asking) empties one again.
+ * location and dates. A pill opens its own small editor; an empty one reads
+ * "+ Client", "+ Location"… to fill it in. Remove empties it again.
  */
 export function JobFacts({
   role,
@@ -38,15 +37,6 @@ export function JobFacts({
   onSave(patch: Partial<CareerExperience>): Promise<void>;
 }) {
   const [open, setOpen] = useState<Fact | null>(null);
-  /** The + menu of facts still missing. */
-  const [adding, setAdding] = useState(false);
-  const addRef = useRef<HTMLLIElement>(null);
-  useEffect(() => {
-    if (!adding) return;
-    const away = (event: PointerEvent) => { if (!addRef.current?.contains(event.target as Node)) setAdding(false); };
-    document.addEventListener("pointerdown", away);
-    return () => document.removeEventListener("pointerdown", away);
-  }, [adding]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const { workType, location } = workFacts(role);
@@ -86,87 +76,36 @@ export function JobFacts({
     if (yes) void save(removal(fact));
   }
 
-  const facts: { fact: Fact; label: string; shown: string }[] = [
-    { fact: "client", label: "Client", shown: role.client.trim() && `for ${role.client.trim()}` },
-    { fact: "workType", label: "Remote / on-site", shown: workType ? WORK_TYPE_NAMES[workType] : "" },
-    { fact: "location", label: "Location", shown: location },
-    { fact: "dates", label: "Dates", shown: dates },
-  ];
-  const missing = facts.filter((item) => !item.shown);
-  const pill = ({ fact, label, shown }: (typeof facts)[number]) => (
-    <li key={fact} className="has-remove">
+  const pill = (fact: Fact, label: string, shown: string) => (
+    <li key={fact} className={shown ? "has-remove" : undefined}>
       <button
         type="button"
-        className={`job-fact${open === fact ? " is-open" : ""}`}
+        className={`job-fact${shown ? "" : " is-empty"}${open === fact ? " is-open" : ""}`}
         aria-expanded={open === fact}
-        aria-label={`${label}: ${shown}. Edit`}
+        aria-label={shown ? `${label}: ${shown}. Edit` : `Add ${label.toLowerCase()}`}
         disabled={disabled || busy}
         onClick={() => {
           setError("");
-          setAdding(false);
           setOpen(open === fact ? null : fact);
         }}
       >
-        {shown}
+        {shown || `+ ${label}`}
       </button>
-      <button type="button" className="job-fact-x" aria-label={`Remove ${label.toLowerCase()}: ${shown}`} title="Remove" disabled={disabled || busy} onClick={() => void askRemove(fact, label, shown)}>
-        <Icon name="close" size={12} />
-      </button>
+      {shown && (
+        <button type="button" className="job-fact-x" aria-label={`Remove ${label.toLowerCase()}: ${shown}`} title="Remove" disabled={disabled || busy} onClick={() => void askRemove(fact, label, shown)}>
+          <Icon name="close" size={12} />
+        </button>
+      )}
     </li>
   );
 
   return (
     <div className="job-facts">
       <ul className="profile-pills">
-        {facts.filter((item) => item.shown).map(pill)}
-        {missing.length > 0 && (
-          <li ref={addRef} className="job-fact-add-wrap">
-            <button
-              type="button"
-              className="job-fact-add"
-              aria-label="Add details"
-              title={`Add ${missing.map((item) => item.label.toLowerCase()).join(", ")}`}
-              aria-haspopup="menu"
-              aria-expanded={adding}
-              disabled={disabled || busy}
-              onClick={() => setAdding(!adding)}
-            >
-              <Icon name="plus" size={16} />
-            </button>
-            {adding && (
-              <ul
-                className="job-fact-menu"
-                role="menu"
-                aria-label="Add details"
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    setAdding(false);
-                    addRef.current?.querySelector<HTMLButtonElement>(".job-fact-add")?.focus();
-                  }
-                }}
-              >
-                {missing.map((item, at) => (
-                  <li key={item.fact} role="none">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      autoFocus={at === 0}
-                      onClick={() => {
-                        setAdding(false);
-                        setError("");
-                        setOpen(item.fact);
-                      }}
-                    >
-                      <Icon name="plus" size={14} />
-                      {item.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
-        )}
+        {pill("client", "Client", role.client.trim() && `for ${role.client.trim()}`)}
+        {pill("workType", "Remote / on-site", workType ? WORK_TYPE_NAMES[workType] : "")}
+        {pill("location", "Location", location)}
+        {pill("dates", "Dates", dates)}
       </ul>
       {open === "client" && (
         <FactCard
