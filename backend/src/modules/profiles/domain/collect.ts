@@ -50,17 +50,44 @@ const titleKey = (name: string) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-/** The Profile job a CV job is: same company, then the same title or start year. */
+/** "2024-10" → 202410, "2024" → 202401; null when not a date. */
+const monthOf = (value: string) => {
+  const match = /^(\d{4})(?:-(\d{2}))?/.exec(value.trim());
+  return match ? Number(match[1]) * 100 + Number(match[2] ?? '1') : null;
+};
+/** The two jobs' dates overlap: a current job runs to now. */
+function overlaps(role: CareerExperience, job: CvJob): boolean {
+  const start = [monthOf(role.from), monthOf(job.from)];
+  if (start[0] === null || start[1] === null) return false;
+  const end = (to: string, current: boolean) => (current ? 999912 : (monthOf(to) ?? 999912));
+  return start[0] <= end(job.to, job.current) && start[1] <= end(role.to, role.current);
+}
+const clientKey = (name: string) => companyKey(name);
+
+/**
+ * The Profile job a CV job is: the same company, and when the Profile has more
+ * than one job there (projects for different clients), the one with the same
+ * client, then with overlapping dates, then with the same title or start year.
+ * A job for another client is never the match.
+ */
 export function matchJob(roles: CareerExperience[], job: CvJob): number | null {
   const same = roles
     .map((role, index) => ({ role, index }))
     .filter(({ role }) => companyKey(role.company) && companyKey(role.company) === companyKey(job.company));
   if (!same.length) return null;
-  const hit =
-    same.find(({ role }) => titleKey(role.title) === titleKey(job.title)) ??
-    same.find(({ role }) => role.from.slice(0, 4) && role.from.slice(0, 4) === job.from.slice(0, 4)) ??
-    (same.length === 1 ? same[0] : undefined);
-  return hit ? hit.index : null;
+  const client = clientKey(job.client);
+  const fits = same.filter(({ role }) => !client || !clientKey(role.client) || clientKey(role.client) === client);
+  if (!fits.length) return null;
+  if (fits.length === 1) return fits[0]!.index;
+  const score = ({ role }: { role: CareerExperience }) =>
+    (client && clientKey(role.client) === client ? 8 : 0) +
+    (overlaps(role, job) ? 4 : 0) +
+    (titleKey(role.title) === titleKey(job.title) ? 2 : 0) +
+    (role.from.slice(0, 4) && role.from.slice(0, 4) === job.from.slice(0, 4) ? 1 : 0);
+  const ranked = fits.map((item) => ({ ...item, score: score(item) })).sort((a, b) => b.score - a.score);
+  // Nothing tells two jobs at one company apart: offer it as its own job rather than guess.
+  if (ranked[0]!.score === 0 || ranked[0]!.score === ranked[1]!.score) return null;
+  return ranked[0]!.index;
 }
 
 const STOP = new Set(
@@ -155,11 +182,13 @@ export function collectFromCvs(roles: CareerExperience[], jobs: CvJob[]): Collec
       found.set(key, entry);
     }
     const mine = role?.bullets ?? [];
+    // Already somewhere in the Profile, under any job (two projects at one company share a lot).
+    const anywhere = roles.flatMap((item) => item.bullets);
     const offered = () => [...entry!.bullets, ...entry!.similar.map((item) => item.line)];
     let added = false;
     for (const bullet of job.bullets.map((line) => line.trim()).filter(Boolean)) {
       // Already in the Profile, or already offered from another CV.
-      if (mine.some((line) => sameLine(line, bullet)) || offered().some((line) => sameAchievement(line, bullet))) continue;
+      if (anywhere.some((line) => sameLine(line, bullet)) || offered().some((line) => sameAchievement(line, bullet))) continue;
       const closest = mine
         .map((line) => ({ line, score: closeness(line, bullet) }))
         .sort((a, b) => b.score - a.score)[0];

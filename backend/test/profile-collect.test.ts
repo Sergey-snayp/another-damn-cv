@@ -39,6 +39,28 @@ test('a CV job is found in the Profile by company, then title or start year', ()
   assert.equal(matchJob(roles, job({ company: 'Waivio' })), null);
 });
 
+test('two projects at one company: the client, then the dates, decide which job a CV job is', () => {
+  const roles = [
+    role({ client: 'Paymorrow', from: '2024-10', current: true, bullets: ['Built the TLS certificate service with ACME and Route53.'] }),
+    role({ client: 'Verifone', from: '2022-01', to: '2024-09', current: false, bullets: ['Built the terminal fleet dashboard.'] }),
+  ];
+  assert.equal(matchJob(roles, job({ client: 'Verifone' })), 1, 'by client, though the title and the dates say the other');
+  assert.equal(matchJob(roles, job({ client: '', from: '2023-03', to: '2024-01', current: false })), 1, 'no client: by dates');
+  assert.equal(matchJob(roles, job({ client: 'Paymorrow' })), 0);
+  assert.equal(matchJob(roles, job({ client: 'Adyen' })), null, 'another client is another job');
+  assert.equal(matchJob(roles, job({ client: '', from: '', to: '', current: false })), null, 'nothing to tell them apart: not guessed');
+
+  const found = collectFromCvs(roles, [
+    job({ cv: 'Main CV', client: 'Verifone', from: '2022-01', to: '2024-09', current: false,
+      bullets: ['Built the terminal fleet dashboard.', 'Built the TLS certificate service with ACME and Route 53.', 'Cut terminal update failures by 40%.'] }),
+    job({ cv: 'Main CV', client: 'Paymorrow', bullets: ['Wrote the merchant onboarding runbook.'] }),
+  ]);
+  const verifone = found.find((entry) => entry.index === 1)!;
+  const paymorrow = found.find((entry) => entry.index === 0)!;
+  assert.deepEqual(verifone.bullets, ['Cut terminal update failures by 40%.'], "each job gets its own CV lines; one already under the other job isn't offered");
+  assert.deepEqual(paymorrow.bullets, ['Wrote the merchant onboarding runbook.']);
+});
+
 test('only what the Profile lacks is offered: no repeats, from every CV, new jobs separately', () => {
   const roles = [role({ bullets: ['Built the TLS certificate service with ACME and Route53.'] })];
   const found = collectFromCvs(roles, [
