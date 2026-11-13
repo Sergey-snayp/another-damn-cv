@@ -105,6 +105,15 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     await page.waitForSelector('.ach-row .ai-box');
     assert.equal(await page.$('[aria-label="Edit achievement"]'), null, 'only AI: no editor');
     assert.equal(await page.$('.ach-editor-actions'), null, 'and no Cancel / Save of its own');
+    // Custom Prompt on a bullet being edited: it shows the bullet as it is and changes that bullet.
+    await clickText('.ai-tabs button', 'Custom Prompt');
+    await page.waitForSelector('.ai-current');
+    assert.deepEqual(await page.$eval('.ai-current', node => [node.querySelector('small').textContent, node.querySelector('p').textContent]),
+      ['Your bullet now', 'Cut card tokenization latency by 30% with REST APIs.']);
+    await page.type('[aria-label="Custom prompt"]', 'Mention PCI DSS');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.ach-row .ai-box .ai-option');
+    assert.deepEqual([asks.at(-1).mode, asks.at(-1).text, asks.at(-1).instruction], ['improve', 'Cut card tokenization latency by 30% with REST APIs.', 'Mention PCI DSS'], 'the bullet as it is, with the prompt');
     await page.click('.ach-row .ai-box .ai-close');
     await page.waitForSelector('[aria-label="Edit achievement"]');
     assert.equal(await page.$eval('[aria-label="Edit achievement"]', box => box.textContent), 'Cut card tokenization latency by 30% with REST APIs.', 'the editor comes back as it was');

@@ -79,3 +79,7 @@
 /* Under the versions: what to change in the chosen one, sent with it by Regenerate. */
 .ai-comment { padding: 8px 12px; }
 .ai-comment textarea { min-height: 1.6em; }
+/* Custom Prompt: the bullet (or summary) the prompt changes, as it is now. */
+.ai-current { padding: 10px 14px; border: 1px dashed #c9c9c5; border-radius: 9px; background: #fbfbfa; }
+.ai-current small { display: block; margin-bottom: 4px; color: var(--color-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.profile-panel .ai-current p, .ai-current p { margin: 0; color: #1f1f1f; font-size: 14px; line-height: 1.6; }

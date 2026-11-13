@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { careerApi, type AssistOption, type CareerExperience } from "./careerApi";
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
+import { MarkedLine } from "../text/Marked";
 import "./ai-box.css";
 
 /** The wand badge on AI buttons, as Teal shows its credits (here: no limit, so just the wand). */
@@ -301,6 +302,15 @@ export function AiBox({
           Custom Prompt{" "}
           <span className="ai-help" title="Tell the AI what to change: shorter, lead with the result, stress the security work. It still uses only your facts."><Icon name="help" size={18} /></span>
         </p>
+        {/* What the prompt changes: the bullet (or summary) as it is now, sent with the prompt. */}
+        {text.trim() && (
+          <div className="ai-current">
+            <small>{mode === "improve" ? (subject === "summary" ? "Your summary now" : "Your bullet now") : "What you typed"}</small>
+            <p>
+              <MarkedLine text={text.trim()} linkAsText />
+            </p>
+          </div>
+        )}
         {/* Written like a bullet: the box grows with the text, and the send button sits inside it. */}
         <div className="ai-prompt-box">
           <textarea
