@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jobName, jobsApi, type JobSummary } from '../../jobsApi';
 import {
@@ -13,6 +13,8 @@ import type { RenderedResume } from '../../resumeApi';
 import { useSkillCard } from '../SkillInfo';
 import { DashboardIcon } from '../../jobs/DashboardIcon';
 
+type IconName = Parameters<typeof DashboardIcon>[0]['name'];
+
 const SECTION_NAMES: Record<IssueSection, string> = {
   header: 'Header',
   summary: 'Summary',
@@ -23,14 +25,17 @@ const SECTION_NAMES: Record<IssueSection, string> = {
   skills: 'Skills',
 };
 
+/** How a score reads: 75 and up is a good match, 50 and up fair, below that low. */
+export const scoreTone = (score: number) => (score >= 75 ? 'good' : score >= 50 ? 'fair' : 'low');
+const TONE_NAMES = { good: 'Good match', fair: 'Fair match', low: 'Low match' } as const;
+
 /** A half-circle gauge: 0–100. */
 export function Gauge({ score }: { score: number }) {
   const angle = Math.PI * (1 - score / 100);
   const x = 60 + 48 * Math.cos(angle);
   const y = 60 - 48 * Math.sin(angle);
-  const tone = score >= 75 ? 'good' : score >= 50 ? 'fair' : 'low';
   return (
-    <svg className={`ra-gauge ${tone}`} viewBox="0 0 120 68" role="img" aria-label={`Resume score ${score} out of 100`}>
+    <svg className={`ra-gauge ${scoreTone(score)}`} viewBox="0 0 120 68" role="img" aria-label={`Resume score ${score} out of 100`}>
       <path className="track" d="M12 60 A48 48 0 0 1 108 60" />
       {score > 0 && <path className="value" d={`M12 60 A48 48 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)}`} />}
       <text x="60" y="56" textAnchor="middle">{score}</text>
@@ -42,12 +47,16 @@ interface ChatEntry extends ChatMessage {
   suggestions?: ChatSuggestion[];
 }
 
+/** Issues shown before "Show all". */
+const FIRST_ISSUES = 4;
+
 /**
- * The right column, two tabs. Resume Score: the CV's score for a job with what
- * to fix, and a button that tailors a copy for that job. Chat: "Tailoring for
- * <job>" with its score, then a conversation about the CV whose suggestions
- * are applied one by one; quick actions as chips when it is empty, and from
- * "+" or "/" in the box.
+ * The right column, two tabs. Resume Score: the job it is scored for, the
+ * score in words, the job's keywords and what to fix (each opens its
+ * section), and a tailored copy for that job. Chat: "Tailoring for <job>"
+ * with its score, then a conversation about the CV whose suggestions are
+ * applied one by one; quick actions as chips when it is empty, and from "+"
+ * or "/" in the box.
  */
 export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIssues, onApply, onOpenSection, onExport }: {
   resumeId: string;
@@ -77,14 +86,13 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
   const [choice, setChoice] = useState<JobChoice | null>(defaultJobId ? { jobId: defaultJobId } : null);
   const [picking, setPicking] = useState(!defaultJobId);
   const [mode, setMode] = useState<'tracker' | 'paste'>('tracker');
-  const [pickedJob, setPickedJob] = useState(defaultJobId ?? '');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
   const [score, setScore] = useState<ResumeScore | null>(null);
   const [scoring, setScoring] = useState(false);
   const [scoreError, setScoreError] = useState<string | null>(null);
-  const [showIssues, setShowIssues] = useState(false);
+  const [allIssues, setAllIssues] = useState(false);
 
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -96,6 +104,7 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
   const [applied, setApplied] = useState<Set<string>>(new Set());
   const chatEnd = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const tabs = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<'score' | 'chat'>('score');
   /** The quick actions' menu, from "+" or a "/" typed first; the highlighted one. */
   const [menu, setMenu] = useState(false);
@@ -111,22 +120,36 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
   // Scored again for the job chosen, and after each save of the CV.
   useEffect(() => {
     if (!choice) { setScore(null); onIssues(null); return; }
-    let active = true;
+    let current = true;
     setScoring(true);
     setScoreError(null);
     assistantApi.score(resumeId, choice).then(
-      (next) => { if (active) { setScore(next); onIssues(next); } },
-      (error: Error) => { if (active) { setScoreError(error.message); setScore(null); onIssues(null); } },
-    ).finally(() => { if (active) setScoring(false); });
-    return () => { active = false; };
+      (next) => { if (current) { setScore(next); onIssues(next); } },
+      (error: Error) => { if (current) { setScoreError(error.message); setScore(null); onIssues(null); } },
+    ).finally(() => { if (current) setScoring(false); });
+    return () => { current = false; };
   }, [resumeId, snapshot, choice]);
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest' }); }, [chat, asking]);
 
-  function done() {
-    if (mode === 'tracker' && pickedJob) setChoice({ jobId: pickedJob });
-    else if (mode === 'paste' && description.trim().length >= 30) setChoice({ title: title.trim() || undefined, description });
-    else return;
+  // The box grows with what is typed, up to its limit.
+  useLayoutEffect(() => {
+    const node = box.current;
+    if (!node) return;
+    node.style.height = 'auto';
+    node.style.height = `${Math.min(node.scrollHeight, 160)}px`;
+  }, [typed, view]);
+
+  /** A job from the tracker is used as soon as it is picked. */
+  function pickTracked(jobId: string) {
+    if (!jobId) return;
+    setChoice({ jobId });
+    setPicking(false);
+  }
+
+  function applyPasted() {
+    if (description.trim().length < 30) return;
+    setChoice({ title: title.trim() || undefined, description });
     setPicking(false);
   }
 
@@ -166,13 +189,21 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
     }
   }
 
+  function newChat() {
+    setChat([]);
+    setApplied(new Set());
+    setChatError(null);
+    setTyped('');
+    box.current?.focus();
+  }
+
   /** Choosing a job happens on the score tab, where the job picker is. */
   function chooseJob() {
     setView('score');
     setPicking(true);
   }
 
-  const quick: { label: string; icon: Parameters<typeof DashboardIcon>[0]['name']; run(): void }[] = [
+  const quick: { label: string; icon: IconName; run(): void }[] = [
     { label: 'Fit to one page', icon: 'file', run: () => void ask('Fit my resume to one page: what should I shorten or cut, without losing the strongest points?') },
     { label: 'Tailor to job', icon: 'briefcase', run: () => (choice ? void ask('Tailor my resume to this job: which lines should change first, and how?') : chooseJob()) },
     { label: 'Review my resume', icon: 'search', run: () => void ask('Review my resume. What are the most important things to fix first?') },
@@ -190,118 +221,173 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
     item.run();
   }
 
-  const chosenName = choice && ('jobId' in choice
-    ? (() => { const job = jobs?.find((item) => item.id === choice.jobId); return job ? `${jobName(job)}${job.company ? ` · ${job.company}` : ''}` : score?.job.title ?? 'Job'; })()
-    : choice.title || 'Pasted job');
-  const bySection = new Map<IssueSection, number>();
-  for (const issue of score?.issues ?? []) bySection.set(issue.section, (bySection.get(issue.section) ?? 0) + 1);
+  // The job as two parts: its title, and its company.
+  const tracked = choice && 'jobId' in choice ? jobs?.find((item) => item.id === choice.jobId) : null;
+  const jobTitle = !choice ? '' : tracked ? jobName(tracked) : 'jobId' in choice ? score?.job.title ?? 'Job' : choice.title || 'Pasted job';
+  const jobCompany = tracked ? tracked.company ?? '' : choice && 'jobId' in choice ? score?.job.company ?? '' : '';
+  const issues = score?.issues ?? [];
+  const shownIssues = allIssues ? issues : issues.slice(0, FIRST_ISSUES);
+  const keywords = score?.keywords;
+  const scored = score && score.score !== null ? score.score : null;
+
+  function tabKeys(event: React.KeyboardEvent) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const next = view === 'score' ? 'chat' : 'score';
+    setView(next);
+    tabs.current?.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();
+  }
+
+  const jobLine = (compact: boolean) => (
+    <button type="button" className={`ra-jobline${compact ? ' compact' : ''}`} onClick={chooseJob} title={`${jobTitle}${jobCompany ? ` · ${jobCompany}` : ''}. Choose another job`}>
+      {!compact && <span className="ra-jobicon" aria-hidden="true"><DashboardIcon name="briefcase" size={16} /></span>}
+      <span className="ra-jobtext">
+        {compact && <span className="ra-eyebrow">Tailoring for</span>}
+        <b>{jobTitle}</b>
+        {jobCompany && <span className="ra-company">{jobCompany}</span>}
+      </span>
+      {!compact && <span className="ra-change">Change</span>}
+    </button>
+  );
 
   return (
     <div className={`ra is-${view}`}>
-      <div className="ra-tabs" role="tablist" aria-label="Resume Score and Chat">
-        <button type="button" role="tab" aria-selected={view === 'score'} className={view === 'score' ? 'on' : ''} onClick={() => setView('score')}>Resume Score</button>
-        <button type="button" role="tab" aria-selected={view === 'chat'} className={view === 'chat' ? 'on' : ''} onClick={() => setView('chat')}>
+      <div className="ra-tabs" role="tablist" aria-label="Resume Score and Chat" ref={tabs} onKeyDown={tabKeys}>
+        <button type="button" role="tab" data-tab="score" aria-selected={view === 'score'} tabIndex={view === 'score' ? 0 : -1}
+          className={view === 'score' ? 'on' : ''} onClick={() => setView('score')}>Resume Score</button>
+        <button type="button" role="tab" data-tab="chat" aria-selected={view === 'chat'} tabIndex={view === 'chat' ? 0 : -1}
+          className={view === 'chat' ? 'on' : ''} onClick={() => setView('chat')}>
           Chat <span className="ra-beta">Beta</span>
         </button>
       </div>
-      {view === 'score' && <div className="ra-pane">
-      {/* The tab names it: no heading of its own. */}
-      <section className="ra-card" aria-label="Resume Score">
-        {picking ? (
-          <div className="ra-pick">
-            <div className="studio-tabs small">
-              <button className={mode === 'tracker' ? 'on' : ''} onClick={() => setMode('tracker')}>From tracker</button>
-              <button className={mode === 'paste' ? 'on' : ''} onClick={() => setMode('paste')}>Enter a job</button>
-            </div>
-            {mode === 'tracker' ? (
-              <select value={pickedJob} onChange={(e) => setPickedJob(e.target.value)}>
-                <option value="">{jobs === null ? 'Loading jobs…' : jobs.length ? 'Choose a job' : 'No jobs in the tracker yet'}</option>
-                {(jobs ?? []).map((job) => (
-                  <option key={job.id} value={job.id}>{jobName(job)}{job.company ? ` · ${job.company}` : ''}</option>
-                ))}
-              </select>
+
+      {view === 'score' && (
+        <div className="ra-pane" role="tabpanel" aria-label="Resume Score">
+          <section className="ra-card" aria-label="Resume Score">
+            {picking ? (
+              <div className="ra-pick">
+                {!choice && (
+                  <div className="ra-intro">
+                    <h4>Score this resume for a job</h4>
+                    <p>See how well it matches, which of the job's keywords it misses, and what to fix first.</p>
+                  </div>
+                )}
+                <div className="ra-segmented" role="radiogroup" aria-label="Where the job comes from">
+                  <button type="button" role="radio" aria-checked={mode === 'tracker'} className={mode === 'tracker' ? 'on' : ''} onClick={() => setMode('tracker')}>From my jobs</button>
+                  <button type="button" role="radio" aria-checked={mode === 'paste'} className={mode === 'paste' ? 'on' : ''} onClick={() => setMode('paste')}>Paste a job</button>
+                </div>
+                {mode === 'tracker' ? (
+                  <select aria-label="Job" value={choice && 'jobId' in choice ? choice.jobId : ''} onChange={(event) => pickTracked(event.target.value)} disabled={jobs !== null && !jobs.length}>
+                    <option value="">{jobs === null ? 'Loading your jobs…' : jobs.length ? 'Choose a job' : 'No jobs saved yet'}</option>
+                    {(jobs ?? []).map((job) => (
+                      <option key={job.id} value={job.id}>{jobName(job)}{job.company ? ` · ${job.company}` : ''}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <>
+                    <input aria-label="Job title" value={title} placeholder="Job title (optional)" onChange={(e) => setTitle(e.target.value)} />
+                    <textarea aria-label="Job description" rows={6} value={description} placeholder="Paste the job description" onChange={(e) => setDescription(e.target.value)} />
+                    <button type="button" className="primary ra-wide" disabled={description.trim().length < 30} onClick={applyPasted}>Score for this job</button>
+                  </>
+                )}
+                {choice && <button type="button" className="ra-link" onClick={() => setPicking(false)}>Cancel</button>}
+              </div>
             ) : (
               <>
-                <input value={title} placeholder="Job title" onChange={(e) => setTitle(e.target.value)} />
-                <textarea rows={6} value={description} placeholder="Paste the job description" onChange={(e) => setDescription(e.target.value)} />
-              </>
-            )}
-            <div className="ra-row">
-              <button className="primary"
-                disabled={mode === 'tracker' ? !pickedJob : description.trim().length < 30}
-                onClick={done}>Done</button>
-              {choice && <button className="ghost" onClick={() => setPicking(false)}>Cancel</button>}
-            </div>
-          </div>
-        ) : (
-          <>
-            <button className="ra-job" title="Choose another job" onClick={() => setPicking(true)}>
-              <span>For</span> <b>{chosenName}</b> <span className="pen" aria-hidden="true"><DashboardIcon name="edit" size={14} /></span>
-            </button>
-            {scoreError && <p className="ra-error">{scoreError}</p>}
-            {scoring && !score && <p className="ra-muted">Scoring…</p>}
-            {score && score.score !== null && (
-              <>
-                <div className={`ra-score${scoring ? ' busy' : ''}`}><Gauge score={score.score} /></div>
-                {score.keywords && (
-                  <p className="ra-muted center">
-                    Mentions {score.keywords.matched.length} of {score.keywords.matched.length + score.keywords.missing.length} keywords from the job
-                  </p>
+                {jobLine(false)}
+                {scoreError && <p className="ra-error" role="alert">{scoreError}</p>}
+                {scoring && !score && <p className="ra-muted center" role="status">Scoring your resume…</p>}
+                {scored !== null && (
+                  <div className={`ra-score${scoring ? ' busy' : ''}`}>
+                    <Gauge score={scored} />
+                    <p className={`ra-verdict ${scoreTone(scored)}`}>{TONE_NAMES[scoreTone(scored)]}</p>
+                    <p className="ra-muted center">Out of 100, for this job. It updates as you edit.</p>
+                  </div>
                 )}
-                <button className="ra-issues-toggle" onClick={() => setShowIssues(!showIssues)}>
-                  {score.issues.length ? `${score.issues.length} issue${score.issues.length === 1 ? '' : 's'} found` : 'No issues found'}
-                  {score.issues.length > 0 && <span>{showIssues ? '▴' : '▾'}</span>}
-                </button>
-                {showIssues && (
-                  <ul className="ra-issues">
-                    {[...bySection.keys()].map((section) => (
-                      <li key={section}>
-                        <button className="ra-issue-head" onClick={() => onOpenSection(section)}>
-                          {SECTION_NAMES[section]} <span className="ra-badge">{bySection.get(section)}</span>
-                        </button>
-                        <ul>
-                          {score.issues.filter((issue) => issue.section === section).map((issue, index) => (
-                            <li key={index} className={`ra-issue kind-${issue.kind}`}>{issue.message}</li>
-                          ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
+                {score && score.score === null && <p className="ra-muted">The job names none of the skills we look for, so there is no keyword score.</p>}
+
+                {keywords && keywords.matched.length + keywords.missing.length > 0 && (
+                  <div className="ra-block">
+                    <div className="ra-block-head">
+                      <h4>Keywords</h4>
+                      <span className="ra-count">{keywords.matched.length} of {keywords.matched.length + keywords.missing.length}</span>
+                    </div>
+                    <div className="ra-keywords">
+                      {keywords.missing.map((name) => (
+                        <span key={name} className="ra-kw miss" tabIndex={0} title="In the job, not in your resume yet" {...keywordCard(name)}>{name}</span>
+                      ))}
+                      {keywords.matched.map((name) => (
+                        <span key={name} className="ra-kw have" tabIndex={0} title="In your resume" {...keywordCard(name)}>
+                          <DashboardIcon name="check" size={11} />{name}
+                        </span>
+                      ))}
+                    </div>
+                    {keywords.missing.length > 0 && <p className="ra-muted tiny">Dashed: in the job, not in your resume yet. Add only what you have done.</p>}
+                  </div>
                 )}
-                {score.keywords && score.keywords.matched.length > 0 && (
-                  <div className="ra-keywords">
-                    {score.keywords.matched.map((name) => <span key={name} className="ra-kw have" tabIndex={0} {...keywordCard(name)}>✓ {name}</span>)}
-                    {score.keywords.missing.map((name) => <span key={name} className="ra-kw miss" tabIndex={0} {...keywordCard(name)}>{name}</span>)}
+
+                {score && (
+                  <div className="ra-block">
+                    <div className="ra-block-head">
+                      <h4>To fix</h4>
+                      {issues.length > 0 && <span className="ra-count">{issues.length}</span>}
+                    </div>
+                    {issues.length === 0 ? (
+                      <p className="ra-clear"><DashboardIcon name="check" size={14} /> Nothing to fix for this job.</p>
+                    ) : (
+                      <ul className="ra-fixes">
+                        {shownIssues.map((issue, index) => (
+                          <li key={index}>
+                            <button type="button" className={`kind-${issue.kind}`} onClick={() => onOpenSection(issue.section)} title={`Open ${SECTION_NAMES[issue.section]}`}>
+                              <span className="ra-fix-where">{SECTION_NAMES[issue.section]}</span>
+                              <span className="ra-fix-text">{issue.message}</span>
+                              <DashboardIcon name="chevron" size={14} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {issues.length > FIRST_ISSUES && (
+                      <button type="button" className="ra-link" onClick={() => setAllIssues(!allIssues)}>
+                        {allIssues ? 'Show fewer' : `Show all ${issues.length}`}
+                      </button>
+                    )}
                   </div>
                 )}
               </>
             )}
-            {score && score.score === null && <p className="ra-muted">The job names none of the skills we look for, so there is no keyword score.</p>}
-          </>
-        )}
-      </section>
+          </section>
 
-      <section className="ra-card">
-        <h3>AI Generate Resume</h3>
-        <p className="ra-muted">
-          Makes a copy of this CV tailored for {choice ? 'the job above' : 'a job you choose above'}. You review every change before it is kept. Takes 1–3 minutes.
-        </p>
-        <button className="primary ra-wide" disabled={!choice || generating} onClick={() => void generate()}>
-          {generating ? 'Generating… 1–3 minutes' : '✦ Generate for this job'}
-        </button>
-        {generateError && <p className="ra-error">{generateError}</p>}
-      </section>
-      </div>}
+          {choice && !picking && (
+            <section className="ra-card ra-generate">
+              <h3><DashboardIcon name="sparkle" size={15} /> Tailor a copy for this job</h3>
+              <p className="ra-muted">AI rewrites a copy of this resume for the job. You review every change before it is kept. Takes 1–3 minutes.</p>
+              <button type="button" className="primary ra-wide" disabled={generating} onClick={() => void generate()}>
+                <DashboardIcon name="sparkle" size={15} />
+                {generating ? 'Generating… 1–3 minutes' : 'Generate tailored copy'}
+              </button>
+              {generateError && <p className="ra-error" role="alert">{generateError}</p>}
+            </section>
+          )}
+        </div>
+      )}
 
       {view === 'chat' && (
         <div className="ra-chat-pane" role="tabpanel" aria-label="Chat">
           <div className="ra-chat-head">
-            <button type="button" className="ra-tailoring" title="Choose another job" onClick={chooseJob}>
-              {choice ? <><span>Tailoring for</span> <b>{chosenName}</b></> : <><span>Not tailored for a job yet.</span> <b>Choose a job</b></>}
-            </button>
-            {score && score.score !== null && <div className={`ra-mini-score${scoring ? ' busy' : ''}`}><Gauge score={score.score} /></div>}
+            {choice ? jobLine(true) : (
+              <button type="button" className="ra-jobline compact" onClick={chooseJob}>
+                <span className="ra-jobtext"><span className="ra-eyebrow">Not tailored for a job yet</span><b className="ra-choose">Choose a job</b></span>
+              </button>
+            )}
+            {scored !== null && <div className={`ra-mini-score${scoring ? ' busy' : ''}`} title={`${TONE_NAMES[scoreTone(scored)]}: ${scored} out of 100`}><Gauge score={scored} /></div>}
+            {chat.length > 0 && (
+              <button type="button" className="ra-icon-button" aria-label="New chat" title="New chat" onClick={newChat} disabled={asking}>
+                <DashboardIcon name="reset" size={15} />
+              </button>
+            )}
           </div>
-          <div className="ra-messages">
+          <div className="ra-messages" aria-live="polite">
             {chat.length === 0 && !asking ? (
               <div className="ra-empty">
                 <span className="ra-empty-icon" aria-hidden="true"><DashboardIcon name="wand" size={22} /></span>
@@ -310,7 +396,7 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
                 <div className="ra-chips">
                   {quick.map((item) => (
                     <button key={item.label} type="button" onClick={item.run}>
-                      <DashboardIcon name={item.icon} size={14} />
+                      <DashboardIcon name={item.icon} size={15} />
                       {item.label}
                     </button>
                   ))}
@@ -322,42 +408,54 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
                   <p>{entry.text}</p>
                   {entry.suggestions?.map((suggestion, j) => {
                     const key = `${index}:${j}`;
+                    const done = applied.has(key);
                     return (
-                      <div key={key} className="ra-suggestion">
+                      <div key={key} className={`ra-suggestion${done ? ' is-applied' : ''}`}>
                         <span className="ra-where">{suggestion.where}</span>
-                        {suggestion.before && <p className="before">{suggestion.before}</p>}
-                        <p className="after">{suggestion.target === 'add-skill' ? `Add skill: ${suggestion.after}` : suggestion.after}</p>
-                        {suggestion.reason && <p className="ra-muted">{suggestion.reason}</p>}
-                        <button className="ghost small" disabled={applied.has(key)}
-                          onClick={() => { if (onApply(suggestion)) setApplied(new Set(applied).add(key)); }}>
-                          {applied.has(key) ? 'Applied' : 'Apply'}
-                        </button>
+                        {suggestion.before && <p className="before"><span className="ra-sr">Now: </span>{suggestion.before}</p>}
+                        <p className="after"><span className="ra-sr">Suggested: </span>{suggestion.target === 'add-skill' ? `Add skill: ${suggestion.after}` : suggestion.after}</p>
+                        {suggestion.reason && <p className="ra-reason">{suggestion.reason}</p>}
+                        {done ? (
+                          <p className="ra-applied" role="status"><DashboardIcon name="check" size={14} /> Applied to your resume</p>
+                        ) : (
+                          <button type="button" className="primary small ra-apply"
+                            onClick={() => { if (onApply(suggestion)) setApplied(new Set(applied).add(key)); }}>
+                            <DashboardIcon name="check" size={14} /> Apply
+                          </button>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               ))
             )}
-            {asking && <div className="ra-msg assistant"><p className="ra-muted">Thinking…</p></div>}
+            {asking && (
+              <div className="ra-msg assistant ra-typing" role="status" aria-label="AI is writing">
+                <span /><span /><span />
+              </div>
+            )}
             <div ref={chatEnd} />
           </div>
-          {chatError && <p className="ra-error">{chatError}</p>}
+          {chatError && <p className="ra-error" role="alert">{chatError}</p>}
           <form className="ra-compose" onSubmit={(event) => { event.preventDefault(); void ask(typed); }}>
             {menuOpen && (
-              <ul className="ra-quick-menu" role="listbox" aria-label="Quick actions">
-                {offered.map((item, at) => (
-                  <li key={item.label} role="option" aria-selected={at === active}>
-                    <button type="button" className={at === active ? 'on' : ''} onMouseEnter={() => setActive(at)}
-                      // Keeps the box focused, so the click picks and the menu does not close first.
-                      onMouseDown={(event) => event.preventDefault()} onClick={() => pick(at)}>
-                      <DashboardIcon name={item.icon} size={14} />
-                      {item.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="ra-quick-menu">
+                <p className="ra-quick-head">Quick actions <span>↑↓ to choose · Enter to run</span></p>
+                <ul role="listbox" aria-label="Quick actions">
+                  {offered.map((item, at) => (
+                    <li key={item.label} role="option" aria-selected={at === active}>
+                      <button type="button" className={at === active ? 'on' : ''} onMouseEnter={() => setActive(at)}
+                        // Keeps the box focused, so the click picks and the menu does not close first.
+                        onMouseDown={(event) => event.preventDefault()} onClick={() => pick(at)}>
+                        <DashboardIcon name={item.icon} size={15} />
+                        {item.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-            <textarea ref={box} rows={2} value={typed} aria-label="Ask AI to edit your resume"
+            <textarea ref={box} rows={1} value={typed} aria-label="Ask AI to edit your resume"
               placeholder="Ask AI to edit your resume, or type / for quick actions"
               onChange={(event) => { setTyped(event.target.value); setActive(0); }}
               onBlur={() => setMenu(false)}
@@ -387,7 +485,7 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
               </button>
             </div>
           </form>
-          <p className="ra-muted tiny">It only rewords what your CV says. Nothing changes until you click Apply.</p>
+          <p className="ra-muted tiny center">AI only rewords what your resume says. Nothing changes until you Apply.</p>
         </div>
       )}
       {keywordCards.card}

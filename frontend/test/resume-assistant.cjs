@@ -38,11 +38,15 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.waitForSelector('.ra-tabs');
     assert.deepEqual(await page.$$eval('.ra-tabs button', nodes => nodes.map(node => node.textContent.replace(/\s+/g, ' ').trim())), ['Resume Score', 'Chat Beta']);
     await page.waitForSelector('.ra-score .ra-gauge');
+    // The score in words, the keywords (missing first), and fixes that open their section.
+    assert.equal(await page.$eval('.ra-verdict', node => node.textContent), 'Fair match', '72 is a fair match');
+    assert.deepEqual(await page.$$eval('.ra-kw', nodes => nodes.map(node => `${node.className.split(' ').at(-1)}:${node.textContent}`)), ['miss:Go', 'have:Node.js']);
+    assert.match(await page.$eval('.ra-jobline', node => node.textContent), /Backend Engineer\s*Acme\s*Change/);
 
     // Chat: the job and its score, then the empty state with its quick actions.
     await page.click('.ra-tabs button:nth-child(2)');
     await page.waitForSelector('.ra-chat-pane');
-    assert.match(await page.$eval('.ra-tailoring', node => node.textContent), /Tailoring for\s*Backend Engineer · Acme/);
+    assert.match(await page.$eval('.ra-chat-head .ra-jobline', node => node.textContent), /Tailoring for\s*Backend Engineer\s*Acme/);
     assert.equal(await page.$eval('.ra-mini-score .ra-gauge', node => node.getAttribute('aria-label')), 'Resume score 72 out of 100');
     assert.equal(await page.$eval('.ra-empty h4', node => node.textContent), 'Edit your resume with AI');
     assert.deepEqual(await page.$$eval('.ra-chips button', nodes => nodes.map(node => node.textContent.trim())), ['Fit to one page', 'Tailor to job', 'Review my resume', 'Export to PDF']);
@@ -77,6 +81,16 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelectorAll('.ra-msg.assistant').length === 3);
     assert.equal(asked[2], 'Make my summary shorter');
+
+    // New chat starts over.
+    await page.click('[aria-label="New chat"]');
+    await page.waitForSelector('.ra-empty');
+
+    // Arrow keys move between the tabs.
+    await page.focus('.ra-tabs [data-tab="chat"]');
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForSelector('.ra-pane');
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.tab), 'score');
 
     // The folds: halfway down each panel's edge; each folds its panel away and back.
     const fold = await page.$eval('.studio-fold.left', node => { const box = node.getBoundingClientRect(); const left = document.querySelector('.studio-left').getBoundingClientRect(); return { centre: box.x + box.width / 2 - left.right, middle: box.y + box.height / 2 - (left.y + left.height / 2) }; });
