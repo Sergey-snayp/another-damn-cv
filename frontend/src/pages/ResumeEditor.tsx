@@ -3,6 +3,7 @@ import { withTechStacks } from '../resume/techStack';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { careerApi } from '../profile/careerApi';
+import { groupLikeProfile } from '../profile/skillGroups';
 import { resumeApi, type RenderedResume } from '../resumeApi';
 import { notifyResumesChanged } from '../extensionBridge';
 import { ResumeDocument } from '../resume/ResumeDocument';
@@ -173,6 +174,18 @@ export function ResumeEditor() {
       } else {
         // A "Tech stack:" bullet becomes the job's tech stack; the next save keeps it.
         setDraft(withTechStacks(structuredClone(resume)));
+        // Skills all on one line take the Profile's groups ("Core: TypeScript, Node.js").
+        if (resume.skills.length && resume.skills.every((skill) => !(skill.category ?? '').trim()))
+          void careerApi.read().then((career) => {
+            const types = career.data.skillTypes?.value;
+            if (!types) return;
+            setDraft((current) => {
+              const grouped = current && groupLikeProfile(current.skills, career.data.skills?.value ?? [], types);
+              if (!current || !grouped) return current;
+              message.current = 'skills grouped as on the Profile';
+              return { ...current, skills: grouped };
+            });
+          }).catch(() => undefined);
       }
     } catch (err) {
       setError((err as Error).message);

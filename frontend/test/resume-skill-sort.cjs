@@ -2,8 +2,8 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(__dirname, '../../backend')] }));
 
-// A CV's flat skills list, sorted into groups from the Skills heading:
-// one line per group ("Core: TypeScript, Node.js"), then saved. Synthetic data.
+// A CV's flat skills list takes the Profile's groups when it opens: one line
+// per group ("Core: TypeScript, Node.js"), then saved. Synthetic data.
 (async () => {
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
   try {
@@ -24,10 +24,14 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
       if (p === '/api/resumes') return reply([{ id: 'r1', name: 'CV', updatedAt: '2026-11-13T00:00:00Z' }]);
       if (p === '/api/resumes/r1') return reply(resume);
       if (p.endsWith('/theme')) return reply({ theme: null });
-      if (p === '/api/profile/career/skills/group') {
-        sorts.push(JSON.parse(request.postData()).skills);
-        return reply({ groups: [{ name: 'Core', skills: ['TypeScript', 'Node.js', 'Docker'] }, { name: 'AI', skills: ['Claude'] }, { name: 'Other', skills: ['Postman'] }] });
+      if (p === '/api/profile/career') {
+        const source = { kind: 'profile' }, importedAt = '2026-11-13T00:00:00Z';
+        return reply({ revision: 3, data: {
+          skills: { value: ['TypeScript', 'Node.js', 'Docker', 'Claude', 'Go'], source, importedAt },
+          skillTypes: { value: { TypeScript: 'Core', 'Node.js': 'Core', Docker: 'Core', Claude: 'AI' }, source, importedAt },
+        } });
       }
+      if (p === '/api/profile/career/skills/group') sorts.push(p);
       if (p === '/api/resumes/r1/save') { const body = JSON.parse(request.postData()); saves.push(body); return reply(body); }
       return reply([]);
     });
@@ -35,10 +39,9 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     const section = '.studio-zoom [data-section="skills"]';
     await page.waitForSelector(section);
     const lines = () => page.$$eval(`${section} li[data-edit-item="skill-group"]`, nodes => nodes.map(node => node.textContent.replace(/\s+/g, ' ').trim()));
-    await page.hover(`${section} h2`);
-    await page.click(`${section} .pro-sort-skills`);
+    assert.equal(await page.$(`${section} .pro-sort-skills`), null, 'no button to press');
     await page.waitForFunction(selector => document.querySelectorAll(`${selector} li[data-edit-item="skill-group"]`).length === 3, {}, section);
-    assert.deepEqual(sorts[0], ['Docker', 'TypeScript', 'Claude', 'Node.js', 'Postman']);
+    assert.equal(sorts.length, 0, 'the Profile\'s groups, no AI call');
     const shown = await lines();
     assert.match(shown[0], /^Core:\s*TypeScript.*Node\.js.*Docker/);
     assert.match(shown[1], /^AI:\s*Claude/);
@@ -49,7 +52,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     const saved = saves.at(-1);
     assert.deepEqual(saved.skills.map(item => `${item.category}:${item.name}`), ['Core:TypeScript', 'Core:Node.js', 'Core:Docker', 'AI:Claude', ':Postman'], 'saved with the groups');
     assert.deepEqual(errors, []);
-    console.log('PASS CV skills: Sort into groups writes one line per group and saves it');
+    console.log('PASS CV skills: a flat list takes the Profile\'s groups on opening, one line per group, saved');
   } finally {
     await browser.close();
   }

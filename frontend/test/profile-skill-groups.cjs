@@ -106,23 +106,29 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await waitWrites(5);
     assert.deepEqual(writes[4].skills, ['TypeScript', 'Node.js', 'Docker', 'Claude', 'MCP']);
 
-    // "Regroup with AI": the groups are shown first; nothing is saved until Keep.
-    await page.click(`${panel} .skill-group-add:nth-child(2)`);
-    await page.waitForSelector(`${panel} .skill-proposal`);
-    assert.deepEqual(sorts[0], ['TypeScript', 'Node.js', 'Docker', 'Claude', 'MCP']);
-    assert.equal(writes.length, 5, 'a suggestion saves nothing');
-    await page.screenshot({ path: '/private/tmp/job-agent-skill-proposal.png', clip: await page.$eval(panel, node => { const box = node.getBoundingClientRect(); return { x: box.x, y: box.y + window.scrollY, width: box.width, height: box.height }; }) });
-    await page.locator(`${panel} ::-p-text(Discard)`).click();
-    await page.waitForSelector(`${panel} .skill-proposal`, { hidden: true });
-    assert.equal(writes.length, 5, 'Discard saves nothing');
-    await page.click(`${panel} .skill-group-add:nth-child(2)`);
-    await page.locator(`${panel} ::-p-text(Keep these groups)`).click();
+    assert.equal(sorts.length, 0, 'a grouped list is never sorted by itself');
+
+    // A list that never had groups is sorted once, by itself, with Undo.
+    state = { revision: state.revision + 1, data: { ...state.data, skills: { value: ['TypeScript', 'Node.js', 'Claude', 'MCP', 'Docker'], source, importedAt } } };
+    delete state.data.skillTypes;
+    await page.reload();
+    await page.waitForSelector(`${panel} .tag-undo`);
+    assert.deepEqual(sorts[0], ['TypeScript', 'Node.js', 'Claude', 'MCP', 'Docker']);
     await waitWrites(6);
     assert.deepEqual(writes[5].skills, ['TypeScript', 'Node.js', 'Claude', 'MCP', 'Docker']);
     assert.deepEqual(writes[5].skillTypes, { TypeScript: 'Core', 'Node.js': 'Core', Claude: 'AI', MCP: 'AI' }, '"Other" is the row without a group');
+    assert.deepEqual(await rows(), ['Core: TypeScript, Node.js', 'AI: Claude, MCP', 'Other: Docker']);
+    assert.equal(await page.$(`${panel} .skill-group-add[title], ${panel} ::-p-text(Sort into groups)`), null, 'no button to press');
+    await page.locator(`${panel} .tag-undo ::-p-text(Undo)`).click();
+    await waitWrites(7);
+    assert.deepEqual(writes[6].skillTypes, {}, 'Undo keeps the plain list');
+    await page.reload();
+    await page.waitForSelector(`${panel} .skill-group`);
+    await new Promise(r => setTimeout(r, 500));
+    assert.equal(sorts.length, 1, 'and it is not sorted again');
 
     assert.deepEqual(errors, []);
-    console.log('PASS Profile skills in groups: rows, add, move, rename, new group, remove with a question; AI groups shown first, kept or discarded');
+    console.log('PASS Profile skills in groups: rows, add, move, rename, new group, remove with a question; a list without groups sorted once by itself, with Undo');
   } finally {
     await browser.close();
   }

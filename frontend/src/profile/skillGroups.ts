@@ -64,3 +64,30 @@ export function parseGroupLines(text: string): SkillGroup[] {
   }
   return groups;
 }
+
+/**
+ * A CV's skills, all on one line, put under the Profile's groups: each skill
+ * gets the group its name has on the Profile, groups in the Profile's order,
+ * skills in the Profile's order inside a group, the rest last. Null when the
+ * CV already has groups or the Profile has none that fit.
+ */
+export function groupLikeProfile<T extends { name: string; category?: string | null; position?: number }>(
+  skills: T[],
+  profileSkills: string[],
+  types: Record<string, string>,
+): T[] | null {
+  if (!skills.length || skills.some((skill) => (skill.category ?? '').trim())) return null;
+  const typeOf = new Map(Object.entries(types).map(([name, type]) => [name.trim().toLowerCase(), type.trim()]));
+  const placed = skills.map((skill) => ({ ...skill, category: typeOf.get(skill.name.trim().toLowerCase()) ?? '' }));
+  if (!placed.some((skill) => skill.category)) return null;
+  const order = groupSkills(profileSkills, types).map((group) => group.name).filter(Boolean);
+  const rank = (category: string) => (category ? (order.findIndex((name) => same(name, category)) + 1 || order.length + 1) : order.length + 2);
+  const place = (name: string) => {
+    const at = profileSkills.findIndex((skill) => same(skill, name));
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  return placed
+    .map((skill, at) => ({ skill, at }))
+    .sort((a, b) => rank(a.skill.category) - rank(b.skill.category) || place(a.skill.name) - place(b.skill.name) || a.at - b.at)
+    .map(({ skill }, position) => ({ ...skill, position }));
+}

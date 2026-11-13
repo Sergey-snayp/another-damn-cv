@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { flattenGroups, groupLines, groupSkills, parseGroupLines } from '../src/profile/skillGroups.ts';
+import { flattenGroups, groupLikeProfile, groupLines, groupSkills, parseGroupLines } from '../src/profile/skillGroups.ts';
 
 const types = { TypeScript: 'Core', 'Node.js': 'Core', Claude: 'AI' };
 
@@ -30,3 +30,12 @@ test('the import review writes and reads one group per line', () => {
   ]);
 });
 
+
+test('a flat CV list takes the Profile\'s groups, in the Profile\'s order; a grouped CV is left alone', () => {
+  const cv = ['Docker', 'Claude', 'node.js', 'TypeScript', 'Go'].map((name, position) => ({ name, category: '', position }));
+  const profile = ['TypeScript', 'Node.js', 'Claude'];
+  assert.deepEqual(groupLikeProfile(cv, profile, types)?.map((skill) => `${skill.category}:${skill.name}:${skill.position}`),
+    ['Core:TypeScript:0', 'Core:node.js:1', 'AI:Claude:2', ':Docker:3', ':Go:4']);
+  assert.equal(groupLikeProfile([{ name: 'Go', category: 'Core' }], profile, types), null);
+  assert.equal(groupLikeProfile([{ name: 'Go', category: '' }], profile, types), null, 'nothing fits');
+});
