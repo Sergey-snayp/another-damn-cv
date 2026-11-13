@@ -20,6 +20,7 @@ import { AiSettingsForm } from '../resume/studio/AiSettingsForm';
 import type { ChatSuggestion, IssueSection, ResumeScore } from '../resume/studio/assistantApi';
 import '../resume/document.css';
 import '../resume/studio/studio.css';
+import { DashboardIcon } from '../jobs/DashboardIcon';
 
 type Section = 'header' | SectionKey;
 
@@ -429,7 +430,7 @@ export function ResumeEditor() {
                   if (e.key === 'Escape') setRenaming(null);
                 }} />
             : <button className="studio-name" title="Rename" onClick={() => setRenaming(name)}>
-                <b>{name}</b> <span className="pen">✎</span>
+                <b>{name}</b> <span className="pen" aria-hidden="true"><DashboardIcon name="edit" size={14} /></span>
               </button>}
         </nav>
         <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined}>{status}</span>
@@ -548,12 +549,12 @@ export function ResumeEditor() {
                           const next = [...order];
                           [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
                           setOrder(next);
-                        }}>↑</button>
+                        }}><DashboardIcon name="arrowUp" size={14} /></button>
                         <button title="Move down" disabled={index === order.length - 1} onClick={() => {
                           const next = [...order];
                           [next[index + 1], next[index]] = [next[index]!, next[index + 1]!];
                           setOrder(next);
-                        }}>↓</button>
+                        }}><DashboardIcon name="arrowDown" size={14} /></button>
                       </span>
                     </div>
                   ))}
@@ -570,11 +571,11 @@ export function ResumeEditor() {
             </button>
             <span className="spacer" />
             <button className={zoom === 'fit-page' ? 'on' : ''} onClick={() => setZoom('fit-page')}>Fit to Page</button>
-            <button title="Zoom out" onClick={() => zoomBy(-0.1)}>−</button>
+            <button title="Zoom out" onClick={() => zoomBy(-0.1)}><DashboardIcon name="minus" size={16} /></button>
             <button className={zoom === 'fit-width' ? 'pct on' : 'pct'} title="Fit to width" onClick={() => setZoom('fit-width')}>
               {Math.round(scale * 100)}%
             </button>
-            <button title="Zoom in" onClick={() => zoomBy(0.1)}>+</button>
+            <button title="Zoom in" onClick={() => zoomBy(0.1)}><DashboardIcon name="plus" size={16} /></button>
             <button title="Full screen" onClick={() => {
               if (document.fullscreenElement) void document.exitFullscreen();
               else void preview.current?.requestFullscreen();

@@ -267,8 +267,18 @@ function FactCard({
       const target = event.target as Node;
       if (!panel.current?.contains(target) && !anchor?.contains(target)) onCancel(false);
     };
+    // Escape closes it wherever the keyboard is, also on its pill after a click.
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      onCancel(true);
+    };
     document.addEventListener("pointerdown", away);
-    return () => document.removeEventListener("pointerdown", away);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", escape);
+    };
   }, [anchor, onCancel]);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -281,13 +291,6 @@ function FactCard({
       style={place}
       aria-label={title}
       onSubmit={submit}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          event.stopPropagation();
-          onCancel(true);
-        }
-      }}
     >
       <div className="job-fact-head">
         <p className="job-fact-title">{title}</p>

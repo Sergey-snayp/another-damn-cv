@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BULLET_WORDS, checkBullet } from "../resume/bulletCheck";
 import type { ActiveBullet } from "./bulletFocus";
 import { DESCRIPTION_WORDS, descriptionChecks } from "./descriptionCheck";
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 /** Characters a bullet of 20 to 40 words takes, about. */
 const CHARACTERS = { min: 100, max: 220 } as const;
@@ -169,7 +170,7 @@ function SummaryPanel({ active }: { active: ActiveBullet }) {
               <li key={item.key}>
                 {item.label}
                 <span className={`bp-dot ${item.ok ? "is-ok" : "is-missing"}`} aria-label={item.ok ? "met" : "missing"}>
-                  {item.ok ? "✓" : "✕"}
+                  {item.ok ? <DashboardIcon name="check" size={12} /> : <DashboardIcon name="close" size={12} />}
                 </span>
               </li>
             ))}
@@ -259,7 +260,7 @@ function DescriptionPanel({ active }: { active: ActiveBullet }) {
               <li key={item.key}>
                 {item.label}
                 <span className={`bp-dot ${item.ok ? "is-ok" : "is-missing"}`} aria-label={item.ok ? "met" : "missing"}>
-                  {item.ok ? "✓" : "✕"}
+                  {item.ok ? <DashboardIcon name="check" size={12} /> : <DashboardIcon name="close" size={12} />}
                 </span>
               </li>
             ))}
@@ -352,7 +353,7 @@ function BulletChecks({ active }: { active: ActiveBullet | null }) {
               <li key={item.key}>
                 {item.label}
                 <span className={`bp-dot ${item.ok ? "is-ok" : "is-missing"}`} aria-label={item.ok ? "met" : "missing"}>
-                  {item.ok ? "✓" : "✕"}
+                  {item.ok ? <DashboardIcon name="check" size={12} /> : <DashboardIcon name="close" size={12} />}
                 </span>
               </li>
             ))}

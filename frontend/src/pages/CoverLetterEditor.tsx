@@ -6,6 +6,7 @@ import { DocumentIcon } from '../documents/DocumentIcon';
 import { LETTER_WIDTH, LetterPage } from '../documents/LetterPage';
 import { useSeconds, writingStep } from '../documents/NewCoverLetterDialog';
 import '../documents/documents.css';
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 /**
  * One cover letter: edited on its page as it prints, written again from a
@@ -102,7 +103,7 @@ export function CoverLetterEditor() {
     <section className="letter-editor" aria-label={`Cover letter for ${title}`}
       onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 's') { event.preventDefault(); void save(); } }}>
       <header className="letter-editor-bar">
-        <Link to="/documents/cover-letters" className="letter-back"><span aria-hidden="true">←</span> Cover Letters</Link>
+        <Link to="/documents/cover-letters" className="letter-back"><DashboardIcon name="arrowLeft" size={16} /> Cover Letters</Link>
         <h1 title={title}>{title}</h1>
         <span className="letter-state" role="status">{busy === 'save' ? 'Saving…' : saved ? 'Saved' : dirty ? 'Unsaved changes' : ''}</span>
         <button type="button" className="documents-control documents-control-primary" disabled={!dirty || busy !== null} onClick={() => void save()}>Save</button>

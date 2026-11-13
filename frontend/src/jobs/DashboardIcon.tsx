@@ -1,7 +1,10 @@
 import {
   Archive,
   ArchiveRestore,
+  ArrowDown,
+  ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Bold,
   Bell,
   Bookmark,
@@ -126,6 +129,10 @@ const icons = {
   italic: Italic,
   underline: Underline,
   clearFormat: RemoveFormatting,
+  minus: Minus,
+  arrowUp: ArrowUp,
+  arrowDown: ArrowDown,
+  arrowLeft: ArrowLeft,
 } satisfies Record<string, LucideIcon>;
 export type DashboardIconName = keyof typeof icons;
 

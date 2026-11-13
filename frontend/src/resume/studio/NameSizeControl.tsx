@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { DEFAULT_THEME, NAME_SIZES, type ResumeTheme } from '../theme';
+import { DashboardIcon } from '../../jobs/DashboardIcon';
 
 const DEFAULT_SIZE = DEFAULT_THEME.nameSize ?? 30;
 const clamp = (value: number) => Math.min(NAME_SIZES.max, Math.max(NAME_SIZES.min, Math.round(value)));
@@ -28,7 +29,7 @@ export function NameSizeControl({ theme, onChange }: { theme: ResumeTheme; onCha
       <label className="name-size-label" id={`${id}-label`} htmlFor={`${id}-value`}>Name size</label>
       <div className="name-size-row">
         <div className="name-size-stepper">
-          <button type="button" aria-label="Smaller name" title="Smaller name" disabled={size <= NAME_SIZES.min} onClick={() => set(size - NAME_SIZES.step)}>−</button>
+          <button type="button" aria-label="Smaller name" title="Smaller name" disabled={size <= NAME_SIZES.min} onClick={() => set(size - NAME_SIZES.step)}><DashboardIcon name="minus" size={14} /></button>
           <input
             id={`${id}-value`}
             inputMode="numeric"
@@ -48,7 +49,7 @@ export function NameSizeControl({ theme, onChange }: { theme: ResumeTheme; onCha
             }}
           />
           <span className="name-size-unit" aria-hidden>pt</span>
-          <button type="button" aria-label="Bigger name" title="Bigger name" disabled={size >= NAME_SIZES.max} onClick={() => set(size + NAME_SIZES.step)}>+</button>
+          <button type="button" aria-label="Bigger name" title="Bigger name" disabled={size >= NAME_SIZES.max} onClick={() => set(size + NAME_SIZES.step)}><DashboardIcon name="plus" size={14} /></button>
         </div>
         <input
           className="name-size-slider"

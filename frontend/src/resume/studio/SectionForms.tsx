@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { Contact, RenderedResume } from '../../resumeApi';
 import { RewritePopover } from '../RewritePopover';
+import { DashboardIcon } from '../../jobs/DashboardIcon';
 
 export type Change = (mutate: (draft: RenderedResume) => void) => void;
 
@@ -42,9 +43,9 @@ function RowTools({ index, count, onMove, onRemove, removeLabel }: {
 }) {
   return (
     <span className="sf-tools">
-      <button type="button" title="Move up" disabled={index === 0} onClick={() => onMove(-1)}>↑</button>
-      <button type="button" title="Move down" disabled={index === count - 1} onClick={() => onMove(1)}>↓</button>
-      <button type="button" className="danger" title={removeLabel} onClick={onRemove}>×</button>
+      <button type="button" title="Move up" disabled={index === 0} onClick={() => onMove(-1)}><DashboardIcon name="arrowUp" size={14} /></button>
+      <button type="button" title="Move down" disabled={index === count - 1} onClick={() => onMove(1)}><DashboardIcon name="arrowDown" size={14} /></button>
+      <button type="button" className="danger" title={removeLabel} onClick={onRemove}><DashboardIcon name="close" size={14} /></button>
     </span>
   );
 }
@@ -190,13 +191,13 @@ export function ExperienceForm({ resume, resumeId, onChange }: { resume: Rendere
                           context: `${role.title} at ${role.company}`,
                           kind: 'bullet',
                           apply: (next, d) => { d.experiences[i]!.achievements[j]!.bullet = next; },
-                        })}>✦</button>
+                        })}><DashboardIcon name="sparkle" size={14} /></button>
                       <button type="button" title="Move up" disabled={j === 0}
-                        onClick={() => onChange((d) => move(d.experiences[i]!.achievements, j, -1))}>↑</button>
+                        onClick={() => onChange((d) => move(d.experiences[i]!.achievements, j, -1))}><DashboardIcon name="arrowUp" size={14} /></button>
                       <button type="button" title="Move down" disabled={j === role.achievements.length - 1}
-                        onClick={() => onChange((d) => move(d.experiences[i]!.achievements, j, 1))}>↓</button>
+                        onClick={() => onChange((d) => move(d.experiences[i]!.achievements, j, 1))}><DashboardIcon name="arrowDown" size={14} /></button>
                       <button type="button" className="danger" title="Remove bullet"
-                        onClick={() => onChange((d) => { d.experiences[i]!.achievements.splice(j, 1); })}>×</button>
+                        onClick={() => onChange((d) => { d.experiences[i]!.achievements.splice(j, 1); })}><DashboardIcon name="close" size={14} /></button>
                     </span>
                   </div>
                 ))}
@@ -372,9 +373,9 @@ export function SkillsForm({ resume, onChange }: { resume: RenderedResume; onCha
                   if (e.key === 'Escape') { setNaming((all) => { const { [category]: _x, ...rest } = all; return rest; }); }
                 }} />
               <span className="sf-tools">
-                <button type="button" title="Move category up" disabled={index === 0 || isPending} onClick={() => moveGroup(category, -1)}>↑</button>
-                <button type="button" title="Move category down" disabled={index >= existing.length - 1 || isPending} onClick={() => moveGroup(category, 1)}>↓</button>
-                <button type="button" className="danger" title="Delete category" onClick={() => removeGroup(category, skills.length)}>×</button>
+                <button type="button" title="Move category up" disabled={index === 0 || isPending} onClick={() => moveGroup(category, -1)}><DashboardIcon name="arrowUp" size={14} /></button>
+                <button type="button" title="Move category down" disabled={index >= existing.length - 1 || isPending} onClick={() => moveGroup(category, 1)}><DashboardIcon name="arrowDown" size={14} /></button>
+                <button type="button" className="danger" title="Delete category" onClick={() => removeGroup(category, skills.length)}><DashboardIcon name="close" size={14} /></button>
               </span>
             </div>
             <div className="sf-chips">
@@ -388,7 +389,7 @@ export function SkillsForm({ resume, onChange }: { resume: RenderedResume; onCha
                   title="Drag to another category or place">
                   {skill.name || '—'}
                   <button type="button" title={`Remove ${skill.name}`}
-                    onClick={() => onChange((d) => { d.skills = d.skills.filter((s) => s.lineageId !== skill.lineageId); })}>×</button>
+                    onClick={() => onChange((d) => { d.skills = d.skills.filter((s) => s.lineageId !== skill.lineageId); })}><DashboardIcon name="close" size={14} /></button>
                 </span>
               ))}
             </div>
@@ -442,9 +443,9 @@ function BulletList({ bullets, onChange, placeholder }: {
           <textarea rows={2} value={bullet} placeholder={placeholder}
             onChange={(e) => set((list) => { list[j] = e.target.value; })} />
           <span className="sf-tools vertical">
-            <button type="button" title="Move up" disabled={j === 0} onClick={() => set((list) => move(list, j, -1))}>↑</button>
-            <button type="button" title="Move down" disabled={j === bullets.length - 1} onClick={() => set((list) => move(list, j, 1))}>↓</button>
-            <button type="button" className="danger" title="Remove bullet" onClick={() => set((list) => { list.splice(j, 1); })}>×</button>
+            <button type="button" title="Move up" disabled={j === 0} onClick={() => set((list) => move(list, j, -1))}><DashboardIcon name="arrowUp" size={14} /></button>
+            <button type="button" title="Move down" disabled={j === bullets.length - 1} onClick={() => set((list) => move(list, j, 1))}><DashboardIcon name="arrowDown" size={14} /></button>
+            <button type="button" className="danger" title="Remove bullet" onClick={() => set((list) => { list.splice(j, 1); })}><DashboardIcon name="close" size={14} /></button>
           </span>
         </div>
       ))}

@@ -11,6 +11,7 @@ import {
 } from './assistantApi';
 import type { RenderedResume } from '../../resumeApi';
 import { useSkillCard } from '../SkillInfo';
+import { DashboardIcon } from '../../jobs/DashboardIcon';
 
 const SECTION_NAMES: Record<IssueSection, string> = {
   header: 'Header',
@@ -195,7 +196,7 @@ export function AssistantPanel({ resumeId, resume, snapshot, defaultJobId, onIss
         ) : (
           <>
             <button className="ra-job" title="Choose another job" onClick={() => setPicking(true)}>
-              <span>For</span> <b>{chosenName}</b> <span className="pen">✎</span>
+              <span>For</span> <b>{chosenName}</b> <span className="pen" aria-hidden="true"><DashboardIcon name="edit" size={14} /></span>
             </button>
             {scoreError && <p className="ra-error">{scoreError}</p>}
             {scoring && !score && <p className="ra-muted">Scoring…</p>}

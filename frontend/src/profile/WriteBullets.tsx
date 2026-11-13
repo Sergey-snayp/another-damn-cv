@@ -5,6 +5,7 @@ import { BulletMeter } from "../resume/BulletMeter";
 import { QUESTIONS } from "../resume/bulletCheck";
 import "./profile-import.css";
 import "./profile-career-editor.css";
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 /** Questions that help you remember; each adds itself to what you write. */
 const IDEAS = [
@@ -258,7 +259,7 @@ export function WriteBullets({
             </p>
           </div>
           <button type="button" className="career-close" aria-label="Close" disabled={saving || stage === "working"} onClick={requestClose}>
-            ×
+            <DashboardIcon name="close" size={18} />
           </button>
         </header>
 

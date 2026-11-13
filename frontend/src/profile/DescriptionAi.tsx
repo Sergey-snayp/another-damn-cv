@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { careerApi, type AssistOption, type CareerExperience } from "./careerApi";
 import { AiBadge } from "./AiBox";
 import "./ai-box.css";
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 /**
  * Write with AI for a job's description, in the editor's place: 3 one-sentence
@@ -76,7 +77,7 @@ export function DescriptionAi({
           {title} <AiBadge />
         </p>
         <button type="button" className="ai-close" aria-label="Close" onClick={onClose}>
-          ×
+          <DashboardIcon name="close" size={18} />
         </button>
       </header>
       {working ? (

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { careerApi, type CareerExperience, type CareerState, type CollectedJob } from "./careerApi";
 import "./profile-import.css";
 import "./profile-career-editor.css";
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 /** "Node.js, TypeScript" + ["Kafka"], in the list's own separator. */
 const withTools = (stack: string, tools: string[]) =>
@@ -128,7 +129,7 @@ export function CollectFromCvs({
             </p>
           </div>
           <button type="button" className="career-close" aria-label="Close" disabled={saving} onClick={onClose}>
-            ×
+            <DashboardIcon name="close" size={18} />
           </button>
         </header>
         <div className="profile-import-body">

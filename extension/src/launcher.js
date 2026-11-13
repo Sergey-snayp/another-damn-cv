@@ -76,7 +76,7 @@
   shadow.innerHTML = `<div class="launcher" role="group" aria-label="Another Damn CV launcher">
     <button class="open" title="Open Autofill" aria-label="Open Autofill"><img alt="D!" src="${chrome.runtime.getURL('assets/brand/d-stamp-logo.png')}"></button>
     <button class="grip" title="Drag to move · Arrow keys move up or down" aria-label="Move Autofill button"><span class="dots" aria-hidden="true">${'<i></i>'.repeat(6)}</span></button>
-    <button class="dismiss" title="Hide options" aria-label="Hide Autofill button" aria-haspopup="menu" aria-expanded="false">×</button>
+    <button class="dismiss" title="Hide options" aria-label="Hide Autofill button" aria-haspopup="menu" aria-expanded="false"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
   </div><ul class="menu" role="menu" aria-label="Hide Autofill button" hidden>
     <li role="none"><button role="menuitem" data-hide="visit">Hide until next visit</button></li>
     <li role="none"><button role="menuitem" data-hide="domain">Disable on this domain</button></li>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { DashboardIcon } from '../jobs/DashboardIcon';
 
 interface RewriteResult {
   original: string;
@@ -76,7 +77,7 @@ export function RewritePopover({ resumeId, text, context, kind, onAccept, onClos
       <div className="rewrite" ref={boxRef} onClick={(e) => e.stopPropagation()}>
         <div className="rewrite-head">
           <span>Rewrite with AI</span>
-          <button className="doc-remove" style={{ opacity: 1 }} onClick={onClose}>×</button>
+          <button className="doc-remove" style={{ opacity: 1 }} onClick={onClose} aria-label="Close"><DashboardIcon name="close" size={14} /></button>
         </div>
 
         {!result && (

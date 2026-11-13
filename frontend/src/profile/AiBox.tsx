@@ -84,7 +84,9 @@ export function AiBox({
   const [byTab, setByTab] = useState<Partial<Record<Tab, { options: AssistOption[]; request: Request; selected: number }>>>({});
   /** Which tabs show their results (rather than their choices). */
   const [showing, setShowing] = useState<Partial<Record<Tab, boolean>>>({});
-  const [working, setWorking] = useState(false);
+  /** The tabs writing right now: each tab's request runs on while another tab is open. */
+  const [busyTabs, setBusyTabs] = useState<Tab[]>([]);
+  const working = busyTabs.includes(tab);
   const current = byTab[tab];
   const stage: "input" | "working" | "results" = working ? "working" : showing[tab] && current ? "results" : "input";
   const options = current?.options ?? [];
@@ -123,7 +125,7 @@ export function AiBox({
   }, []);
 
   async function generate(request: Request) {
-    setWorking(true);
+    setBusyTabs((all) => [...all.filter((item) => item !== request.tab), request.tab]);
     setError("");
     try {
       const result = run
@@ -134,7 +136,7 @@ export function AiBox({
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The AI did not write a bullet. Try again.");
     } finally {
-      setWorking(false);
+      setBusyTabs((all) => all.filter((item) => item !== request.tab));
     }
   }
 
@@ -208,7 +210,7 @@ export function AiBox({
                   }
                 }}
               />
-              <button type="button" aria-label="Add keyword" disabled={!ownKeyword.trim() || picked.length >= 3} onClick={addOwnKeyword}>+</button>
+              <button type="button" aria-label="Add keyword" disabled={!ownKeyword.trim() || picked.length >= 3} onClick={addOwnKeyword}><Icon name="plus" size={16} /></button>
             </div>
           </div>
           <div className="ai-actions">
@@ -286,7 +288,7 @@ export function AiBox({
       <div className="ai-pane">
         <p className="ai-question ai-prompt-title">
           Custom Prompt{" "}
-          <span className="ai-help" title="Tell the AI what to change: shorter, lead with the result, stress the security work. It still uses only your facts.">?</span>
+          <span className="ai-help" title="Tell the AI what to change: shorter, lead with the result, stress the security work. It still uses only your facts."><Icon name="help" size={18} /></span>
         </p>
         <div className="ai-choices">
         <div className="ai-prompt">
@@ -304,7 +306,7 @@ export function AiBox({
             }}
           />
           <button type="button" className="ai-send" aria-label="Generate" disabled={working || !prompt.trim()} onClick={() => void generate({ tab, keywords: [], instruction: prompt.trim() })}>
-            <span aria-hidden="true">{working ? "…" : "↑"}</span> <AiBadge />
+            <Icon name="arrowUp" size={18} /> <AiBadge />
           </button>
         </div>
         </div>
@@ -353,7 +355,6 @@ export function AiBox({
               role="tab"
               aria-selected={tab === item.key}
               className={tab === item.key ? "is-on" : ""}
-              disabled={working}
               onClick={() => {
                 // Its own results, if it has any, or its choices.
                 setTab(item.key);
@@ -364,7 +365,7 @@ export function AiBox({
             </button>
           ))}
         </div>
-        <button type="button" className="ai-close" aria-label="Close" onClick={onClose}>×</button>
+        <button type="button" className="ai-close" aria-label="Close" onClick={onClose}><Icon name="close" size={18} /></button>
       </header>
       {stage === "working" ? (
         <p className="ai-working" role="status">

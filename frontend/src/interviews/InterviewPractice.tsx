@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { practiceApi, type PracticeKind, type PracticeQuestion, type PracticeResult, type PracticeState } from './practiceApi';
 import './interview-practice.css';
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 const kinds = [
   { kind: 'hr' as const, title: 'HR questions & answers', text: 'Practise your introduction, motivation, STAR stories and recruiter questions.' },
@@ -81,7 +82,7 @@ export function InterviewPractice({ jobId, sourceVersion, unsaved }: { jobId: st
 function Question({ question, result, index }: { question: PracticeQuestion; result: PracticeResult; index: number }) {
   const evidence = result.evidence.filter(row => question.evidenceIds.includes(row.id));
   return <details className="interview-practice-question">
-    <summary><span className="interview-practice-number">{index + 1}</span><span>{question.question}</span><span className="interview-practice-expand" aria-hidden="true">+</span></summary>
+    <summary><span className="interview-practice-number">{index + 1}</span><span>{question.question}</span><span className="interview-practice-expand" aria-hidden="true"><DashboardIcon name="plus" size={18} /></span></summary>
     <div className="interview-practice-answer"><p className="interview-practice-why">{question.why}</p><h4>{question.answerKind === 'personal' ? 'Personal answer draft — check your facts' : 'Technical explanation — adapt in your own words'}</h4><p className="interview-practice-answer-text">{question.answer}</p>
       <h4>Talking points</h4><ul>{question.talkingPoints.map((text, i) => <li key={i}>{text}</li>)}</ul>
       {!!question.followUps.length && <><h4>Possible follow-up questions</h4><ul>{question.followUps.map((text, i) => <li key={i}>{text}</li>)}</ul></>}

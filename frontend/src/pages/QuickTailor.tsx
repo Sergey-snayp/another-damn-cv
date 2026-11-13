@@ -983,7 +983,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       }} />
   ) : (
     <button type="button" className="studio-name qt-name-button" title="Rename" aria-label={`Rename: ${name}`} disabled={saving} onClick={() => setRenaming(name)}>
-      <b className="qt-name">{name}</b> <span className="pen" aria-hidden="true">✎</span>
+      <b className="qt-name">{name}</b> <span className="pen" aria-hidden="true"><DashboardIcon name="edit" size={14} /></span>
     </button>
   );
   const pdfReady = !dirty && !pendingEdit && !layoutChanged && pdfSnapshot === draft.snapshot;
@@ -1108,11 +1108,11 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             </div>
           )}
           <div className="qt-zoom-bar" role="group" aria-label="Zoom">
-            <button type="button" aria-label="Zoom out" title="Zoom out" disabled={scale <= ZOOM_MIN} onClick={() => setZoom((Math.ceil(scale * 10 - 1e-6) - 1) / 10)}>−</button>
+            <button type="button" aria-label="Zoom out" title="Zoom out" disabled={scale <= ZOOM_MIN} onClick={() => setZoom((Math.ceil(scale * 10 - 1e-6) - 1) / 10)}><DashboardIcon name="minus" size={16} /></button>
             <button type="button" className="qt-zoom-value" title="Fit to the window" aria-label={`Zoom ${Math.round(scale * 100)}%: fit to the window`} onClick={() => setZoom(null)}>
               {Math.round(scale * 100)}%
             </button>
-            <button type="button" aria-label="Zoom in" title="Zoom in" disabled={scale >= ZOOM_MAX} onClick={() => setZoom((Math.floor(scale * 10 + 1e-6) + 1) / 10)}>+</button>
+            <button type="button" aria-label="Zoom in" title="Zoom in" disabled={scale >= ZOOM_MAX} onClick={() => setZoom((Math.floor(scale * 10 + 1e-6) + 1) / 10)}><DashboardIcon name="plus" size={16} /></button>
             {zoom !== null && (
               <button type="button" className="qt-zoom-fit" onClick={() => setZoom(null)}>Fit</button>
             )}
@@ -1145,7 +1145,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                     <span className={`qt-dot${waiting > 0 ? ' busy' : ''}`} aria-hidden="true" />
                     <span className="qt-screen-title">{title}</span>
                     {waiting > 0 && <span className="qt-elapsed">{elapsed}s</span>}
-                    <button className="qt-close" title="Close" aria-label="Close" onClick={() => setTailoring(null)}>×</button>
+                    <button className="qt-close" title="Close" aria-label="Close" onClick={() => setTailoring(null)}><DashboardIcon name="close" size={16} /></button>
                   </div>
                   {/* A job or a section keeps one frame from the start: first a window onto the CV, then
                       the same frame with the new versions, which scroll inside it while it holds still. */}

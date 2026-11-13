@@ -1,5 +1,6 @@
 import { BULLET_WORDS, checkBullet } from "./bulletCheck";
 import "./bullet-meter.css";
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 /** The bar runs 0 to this many words; the target band is BULLET_WORDS. */
 const SCALE = 60;
@@ -26,13 +27,13 @@ export function BulletMeter({
   const item = (ok: boolean, label: string, title: string, ask?: "metric" | "time") =>
     !ok && ask && onAsk ? (
       <button type="button" className="bm-check is-missing is-ask" title={`${title} Click to add it.`} onClick={() => onAsk(ask)}>
-        <span aria-hidden="true">✕</span>
+        <span aria-hidden="true"><DashboardIcon name="close" size={11} /></span>
         {label}
         <span className="bm-add">+ add</span>
       </button>
     ) : (
       <span className={`bm-check ${ok ? "is-ok" : "is-missing"}`} title={title}>
-        <span aria-hidden="true">{ok ? "✓" : "✕"}</span>
+        <span aria-hidden="true">{ok ? <DashboardIcon name="check" size={11} /> : <DashboardIcon name="close" size={11} />}</span>
         {label}
       </span>
     );

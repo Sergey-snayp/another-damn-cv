@@ -3,6 +3,7 @@ import { careerApi, type CareerSections, type CareerState } from "./careerApi";
 import { useConfirm } from "../components/ConfirmDialog";
 import "./profile-import.css";
 import "./profile-career-editor.css";
+import { DashboardIcon } from "../jobs/DashboardIcon";
 
 export type CareerSectionKey = keyof CareerSections;
 /** One job or school by its place in the list, or a new one. */
@@ -257,7 +258,7 @@ export function ProfileCareerEditor({
             {entries && <p className="career-editor-subtitle">{subtitle || `New ${noun}`}</p>}
           </div>
           <button type="button" className="career-close" aria-label="Close career editor" disabled={saving} onClick={requestClose}>
-            ×
+            <DashboardIcon name="close" size={18} />
           </button>
         </header>
         <div className="profile-import-body">

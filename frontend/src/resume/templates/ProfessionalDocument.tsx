@@ -9,6 +9,7 @@ import { useSkillCard } from '../SkillInfo';
 import { MONTHS, monthYear, range } from '../dates';
 import { htmlToMarks, spanHtml, spansOf } from '../../text/marks';
 import { SpanView } from '../../text/Marked';
+import { DashboardIcon } from '../../jobs/DashboardIcon';
 
 
 /** Keep dates typed as "Sep 2020" usable by the editor and education autofill. */
@@ -217,7 +218,7 @@ function BulletControls({ text, context, onAdd, onRemove, onRewrite, rewriteLabe
   rewriteLabel?: string;
 }) {
   return <span className="doc-bulletmeta">
-    {onRewrite && <button type="button" className="ai" title={rewriteLabel} onClick={onRewrite}>✦</button>}
+    {onRewrite && <button type="button" className="ai" title={rewriteLabel} onClick={onRewrite}><DashboardIcon name="sparkle" size={13} /></button>}
     <DocumentControl action="add" compact label="Add bullet below" className="inline pro-insert"
       description={`Add a bullet below this one in ${context}`} onClick={onAdd} />
     <DocumentControl action="remove" compact label="Remove bullet" description={`Remove bullet: ${text || 'empty bullet'} — ${context}`} onClick={onRemove} />
@@ -340,7 +341,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
         description={`Remove the ${title} section from this CV`} onClick={() => onHideSection(key)} />
     : null;
   const tailorButton = (title: string, onClick: (event: React.MouseEvent<HTMLButtonElement>) => void, className = '') =>
-    onTailor && !readOnly ? <button type="button" className={`ai pro-tailor ${className}`} title={title} aria-label={title} onClick={onClick}>✦</button> : null;
+    onTailor && !readOnly ? <button type="button" className={`ai pro-tailor ${className}`} title={title} aria-label={title} onClick={onClick}><DashboardIcon name="sparkle" size={13} /></button> : null;
   const bold = useMemo(() => boldPattern(resume), [given]);
 
   const changeFor = new Map((changes ?? []).map((change) => [change.lineageId, change]));
@@ -413,7 +414,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                 text: resume.summaries.default ?? '',
                 kind: 'summary',
                 apply: (next, d) => { d.summaries = { ...d.summaries, default: next }; },
-              }, event)}>✦</button>
+              }, event)}><DashboardIcon name="sparkle" size={13} /></button>
           )}
           {removeSection('summary', 'Professional Summary')}
         </h2>
@@ -740,7 +741,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                   text: contact.headline ?? '',
                   kind: 'headline',
                   apply: (next, d) => { d.contact = { ...(d.contact ?? contact), headline: next }; },
-                }, event)}>✦</button>
+                }, event)}><DashboardIcon name="sparkle" size={13} /></button>
             )}
           </div>
         )}

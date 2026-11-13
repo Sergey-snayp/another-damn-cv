@@ -28,6 +28,8 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
       if (request.method() !== 'GET') writes.push(`${request.method()} ${pathname}`);
       if (pathname === '/api/auth/me') return reply({ id: 'library-test', name: 'Sam Lee', email: 'sam@example.com' });
       if (pathname === '/api/profile') return reply({ firstName: 'Sam', lastName: 'Lee', fullName: 'Sam Lee', email: 'sam@example.com', phone: '', location: '', country: '', workArrangements: '' });
+      // The Profile page counts what the saved CVs could add, a read that saves nothing.
+      if (pathname === '/api/profile/career/collect') return reply({ revision: 0, jobs: [] });
       if (pathname === '/api/profile/career') return reply({ revision: 0, data: {} });
       if (pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
       if (pathname === '/api/resumes') { await pause(180); return reply(empty ? [] : cvs); }
