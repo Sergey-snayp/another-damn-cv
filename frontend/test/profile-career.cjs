@@ -143,11 +143,12 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.keyboard.press('Escape');
     assert.equal(state.data.experiences.value[1].company, 'Earlier Employer', 'Escape saves nothing');
     // Technologies on the page: a job without them offers to add them.
-    await page.evaluate(() => [...document.querySelectorAll('.inline-edit-empty')].find(node => node.textContent === '+ Add technologies' && node.closest('.profile-entry').textContent.includes('Backend Developer')).click());
-    await page.waitForSelector('textarea[aria-label="Edit technologies"]');
+    await page.evaluate(() => [...document.querySelectorAll('.profile-entry')].find(node => node.textContent.includes('Backend Developer')).querySelector('.tag-add').click());
+    await page.waitForSelector('.tag-add-input');
     await page.keyboard.type('Go, Redis');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => /Technologies: Go, Redis/.test(document.getElementById('profile-work-heading').closest('section').textContent));
+    await page.waitForFunction(() => [...document.querySelectorAll('.profile-entry')].find(node => node.textContent.includes('Backend Developer')).querySelectorAll('.tag-chip').length === 2);
+    await page.keyboard.press('Escape');
     assert.equal(state.data.experiences.value[1].techStack, 'Go, Redis', 'the tech stack is saved with the job');
 
     // Delete asks first; Cancel keeps it.
@@ -182,11 +183,13 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.match(await page.$eval('#profile-summary-heading', element => element.closest('section').textContent), /7 years of experience/);
     assert.equal(await page.$('.bullet-panel'), null, 'the panel closes with the editor');
     state = { revision: state.revision + 1, data: { ...state.data, summary: { value: 'Updated in another session.', source: { kind: 'profile' }, importedAt } } };
-    await button('Edit profile skills').click();
-    await input('Skills — one per line').fill('Node.js\nTypeScript\nNode.js\n');
-    await save();
-    assert.deepEqual(state.data.skills.value, ['Node.js', 'TypeScript']);
-    assert.equal(state.data.summary.value, 'Updated in another session.', 'opening an editor reads the latest revision and preserves another session’s changes');
+    await page.click('[aria-labelledby="profile-skills-heading"] .tag-add');
+    await page.keyboard.type('TypeScript, Node.js');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelectorAll('[aria-labelledby="profile-skills-heading"] .tag-chip').length === 2);
+    await page.keyboard.press('Escape');
+    assert.deepEqual(state.data.skills.value, ['Node.js', 'TypeScript'], 'a skill already there is not added twice');
+    assert.equal(state.data.summary.value, 'Updated in another session.', 'saving reads the latest revision and preserves another session’s changes');
     await button('Edit Training Provider in Profile').click();
     await input('Field of study or course').fill('Advanced distributed systems');
     await save();
@@ -229,12 +232,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     // An older save kept the tech stack as a bullet: it shows, and is edited, as the job's tech stack.
     state = { revision: state.revision + 1, data: { ...state.data, experiences: { value: [{ title: 'Engineer', company: 'Old Co', client: '', location: '', from: '2019', to: '2020', current: false, description: '', bullets: ['Shipped things.', 'Tech stack: Kafka, Go'] }], source, importedAt } } };
     await visit();
-    assert.equal(await page.$eval('.profile-stack', element => element.textContent), 'Technologies: Kafka, Go');
+    assert.deepEqual(await page.$$eval('.profile-entry .tag-chip span', nodes => nodes.map(node => node.textContent)), ['Kafka', 'Go']);
     assert.deepEqual(await page.$$eval('.ach-text', rows => rows.map(row => row.textContent)), ['Shipped things.']);
-    await page.hover('.profile-stack');
-    await button('Edit technologies').click();
-    assert.equal(await page.$eval('textarea[aria-label="Edit technologies"]', field => field.value), 'Kafka, Go');
-    await page.keyboard.press('Escape');
     // The bin on a job deletes it, after asking; "Cancel" in that question keeps it.
     await button('Delete Engineer at Old Co').click();
     await page.waitForSelector('.confirm-dialog');
@@ -248,7 +247,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.match(await page.$eval('.profile-success', element => element.textContent), /Deleted Engineer at Old Co/);
     assert.deepEqual(unexpected, [], 'Profile editing never reads CV contents or writes CV/PDF endpoints');
     assert.deepEqual(errors, []);
-    console.log('PASS Profile career editing: no Edit button on a job, title, company, dates and technologies on the card, Add dialog without description/bullets/tech stack, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');
+    console.log('PASS Profile career editing: no Edit button on a job, title, company, dates and technologies as chips on the card, Add dialog without description/bullets/tech stack, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');
     await page.close();
   } catch (error) {
     if (page && !page.isClosed()) {

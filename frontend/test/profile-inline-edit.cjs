@@ -76,26 +76,48 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.deepEqual(writes[0].experiences[0].bullets, ['Built a certificate service.'], 'the rest of the job is kept');
     await page.waitForFunction(() => document.body.textContent.includes('I owned its certificates.'));
 
-    // Technologies: one line, Enter saves.
-    await page.hover('.profile-stack');
-    await button('Edit technologies').click();
-    await page.waitForSelector('textarea[aria-label="Edit technologies"]');
-    await page.keyboard.press('End');
-    await page.keyboard.type(', PostgreSQL');
+    // Technologies: chips, never a text box. "+ Add technology" types new ones: Enter adds and
+    // stays open; a pasted list adds them all, skipping what is there; Escape finishes.
+    const chips = scope => page.$$eval(`${scope} .tag-chip span`, nodes => nodes.map(node => node.textContent));
+    assert.deepEqual(await chips('.profile-entry'), ['Node.js', 'AWS']);
+    assert.equal(await page.$('[aria-label="Edit technologies"]'), null, 'no text editing of the list');
+    await page.click('.profile-entry .tag-add');
+    await page.waitForSelector('.profile-entry .tag-add-input');
+    await page.keyboard.type('PostgreSQL');
     await page.keyboard.press('Enter');
     await waitWrites(2);
     assert.equal(writes[1].experiences[0].techStack, 'Node.js, AWS, PostgreSQL');
-
-    // Skills: the list as comma-separated text; repeats and blanks dropped.
-    await page.hover('.profile-chips');
-    await button('Edit skills').click();
-    await page.waitForSelector('textarea[aria-label="Edit skills"]');
-    await page.keyboard.press('End');
-    await page.keyboard.type(', TypeScript, node.js , , Node.js');
-    await button('Save').click();
+    await page.waitForFunction(() => document.activeElement?.classList.contains('tag-add-input') && !document.activeElement.disabled);
+    await page.keyboard.type('Kafka, aws, Redis');
+    await page.keyboard.press('Enter');
     await waitWrites(3);
-    assert.deepEqual(writes[2].skills, ['Node.js', 'TypeScript', 'node.js']);
-    await page.waitForFunction(() => [...document.querySelectorAll('.profile-chips li')].map(li => li.textContent).join('|') === 'Node.js|TypeScript|node.js');
+    assert.equal(writes[2].experiences[0].techStack, 'Node.js, AWS, PostgreSQL, Kafka, Redis', 'a list adds them all, once');
+    assert.match(await page.$eval('.profile-entry .tag-hint', node => node.textContent), /Already there: aws/);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.$('.profile-entry .tag-add-input'), null, 'Escape finishes');
+    // Pointing at a chip shows its ×; it removes at once, with Undo.
+    const x = '[aria-label="Remove technology: AWS"]';
+    assert.equal(await page.$eval(x, node => getComputedStyle(node).opacity), '0', 'hidden until pointed at');
+    await page.hover('.profile-entry .tag-chip:nth-child(2)');
+    await new Promise(r => setTimeout(r, 250));
+    assert.equal(await page.$eval(x, node => getComputedStyle(node).opacity), '1');
+    await page.click(x);
+    await waitWrites(4);
+    assert.equal(writes[3].experiences[0].techStack, 'Node.js, PostgreSQL, Kafka, Redis');
+    await page.waitForSelector('.profile-entry .tag-undo');
+    assert.match(await page.$eval('.profile-entry .tag-undo', node => node.textContent), /Removed “AWS”/);
+    await page.click('.profile-entry .tag-undo button');
+    await waitWrites(5);
+    assert.equal(writes[4].experiences[0].techStack, 'Node.js, AWS, PostgreSQL, Kafka, Redis', 'Undo puts it back where it was');
+
+    // Skills: the same chips; no pencil or text box.
+    assert.equal(await page.$('[aria-label="Edit profile skills"]'), null);
+    await page.click('[aria-labelledby="profile-skills-heading"] .tag-add');
+    await page.keyboard.type('TypeScript');
+    await page.keyboard.press('Enter');
+    await waitWrites(6);
+    assert.deepEqual(writes[5].skills, ['Node.js', 'TypeScript']);
+    await page.keyboard.press('Escape');
 
     // Delete asks first, then saves the description empty.
     await page.hover('.inline-edit .profile-body');
@@ -103,12 +125,12 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.waitForSelector('.confirm-dialog');
     assert.match(await page.$eval('.confirm-dialog', node => node.textContent), /delete this description/);
     await button('Delete description').click();
-    await waitWrites(4);
-    assert.equal(writes[3].experiences[0].description, '');
+    await waitWrites(7);
+    assert.equal(writes[6].experiences[0].description, '');
     await page.waitForFunction(() => !document.body.textContent.includes('Payments platform for German retailers.'));
 
     assert.deepEqual(errors, []);
-    console.log('PASS description, technologies and skills: hover toolbar, edit in place, Escape, Enter / Save, and Delete');
+    console.log('PASS description in place; technologies and skills as chips: add with Enter or a list, no repeats, hover ×, Undo; Delete asks first');
   } finally {
     await browser.close();
   }

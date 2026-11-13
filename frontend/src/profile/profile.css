@@ -419,3 +419,31 @@
 }
 /* The Country field suggests names as you type, without Chrome's dropdown arrow. */
 .job-fact-card input[list]::-webkit-calendar-picker-indicator { display: none !important; }
+
+/*
+ * Skills and a job's technologies as chips: "+ Add" types new ones, pointing at
+ * a chip shows its × (shown and hidden on the same timing as the pills' ×).
+ */
+.profile-tags { margin-top: 12px; }
+.profile-panel .profile-tags-label { margin: 0 0 6px; color: var(--color-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.tag-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tag-chip { position: relative; display: inline-flex; align-items: center; padding: 4px 11px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-background); color: var(--color-text); font-size: 13px; line-height: 1.45; }
+.tag-chip-x { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: #1e4d45; color: #fff; line-height: 0; cursor: pointer; opacity: 0; visibility: hidden; transition: opacity .15s ease .5s, visibility 0s linear .65s; }
+.tag-chip-x svg { display: block; }
+.tag-chip:hover .tag-chip-x, .tag-chip-x:focus-visible { opacity: 1; visibility: visible; transition: opacity .12s ease .1s, visibility 0s linear .1s; }
+.tag-chips:has(.tag-chip:hover) .tag-chip:not(:hover) .tag-chip-x:not(:focus-visible) { transition: opacity .1s ease, visibility 0s linear .1s; }
+.tag-chip-x:hover { background: #a33; }
+.tag-chip-x:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.tag-chip-x:disabled { display: none; }
+.tag-add { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px 4px 9px; border: 1px dashed #9db3ad; border-radius: 999px; background: none; color: #1e4d45; font: inherit; font-size: 13px; font-weight: 600; line-height: 1.45; cursor: pointer; }
+.tag-add:hover { border-style: solid; border-color: #1e4d45; background: #eef5f3; }
+.tag-add:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.tag-add:disabled { opacity: .5; cursor: default; }
+.tag-add-input { box-sizing: border-box; width: 220px; height: 29px; padding: 0 12px; border: 1px solid #1e4d45; border-radius: 999px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 13px; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); outline: none; }
+.tag-add-input::-webkit-calendar-picker-indicator { display: none !important; }
+.profile-panel .tag-hint { margin: 6px 0 0; color: var(--color-muted); font-size: 12px; }
+.profile-panel .tag-undo { display: inline-flex; align-items: center; gap: 10px; margin: 8px 0 0; padding: 5px 6px 5px 12px; border-radius: 8px; background: #1f2421; color: #fff; font-size: 13px; }
+.tag-undo button { padding: 3px 9px; border: 0; border-radius: 6px; background: rgba(255, 255, 255, .14); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tag-undo button:hover { background: rgba(255, 255, 255, .24); }
+@media (hover: none) { .tag-chip-x { opacity: 1; visibility: visible; transition: none; } }
+.tag-chips .tag-add-input:focus, .tag-chips .tag-add-input:focus-visible { outline: none; }

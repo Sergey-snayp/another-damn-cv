@@ -2,6 +2,7 @@ import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { CareerData, CareerExperience, CollectedJob } from "./careerApi";
 import { AchievementList } from "./AchievementList";
 import { InlineEdit, InlineText } from "./InlineEdit";
+import { TagList, splitTags } from "./TagList";
 import { JobFacts } from "./JobFacts";
 import { SummaryEditor } from "./SummaryEditor";
 import { Marked } from "../text/Marked";
@@ -182,18 +183,17 @@ export function ProfileCareer({
                     {forJob(index)} <Icon name="arrow" size={14} />
                   </button>
                 )}
-                <InlineEdit
-                  label="technologies"
-                  value={role.techStack ?? ""}
-                  placeholder="Node.js, TypeScript, PostgreSQL, AWS"
-                  disabled={importDisabled}
-                  empty={<p className="inline-edit-empty">+ Add technologies</p>}
-                  deleteTitle="Are you sure you want to delete these technologies?"
-                  deleteBody={<p>The technologies line will be removed from {role.title} at {role.company} in your Profile. Your saved CVs keep their own copy.</p>}
-                  onSave={(text) => onSaveRole(index, () => ({ techStack: text }))}
-                >
-                  <p className="profile-stack">Technologies: {role.techStack}</p>
-                </InlineEdit>
+                <div className="profile-tags" role="group" aria-label={`Technologies at ${role.company}`}>
+                  <p className="profile-tags-label">Technologies</p>
+                  <TagList
+                    label="technology"
+                    items={splitTags(role.techStack ?? "")}
+                    suggestions={keywords}
+                    addLabel="Add technology"
+                    disabled={importDisabled}
+                    onChange={(items) => onSaveRole(index, () => ({ techStack: items.join(", ") }))}
+                  />
+                </div>
               </div>
             </article>
           ))
@@ -239,23 +239,8 @@ export function ProfileCareer({
       <section className="profile-panel" aria-labelledby="profile-skills-heading">
         <div className="profile-panel-heading">
           <h2 id="profile-skills-heading">Skills</h2>
-          {edit("skills", "Edit profile skills")}
         </div>
-        <InlineEdit
-          label="skills"
-          value={skills.join(", ")}
-          multiline
-          placeholder="Comma-separated: TypeScript, Node.js, PostgreSQL"
-          disabled={importDisabled}
-          empty={<p className="profile-empty-line">No skills saved in Profile yet.</p>}
-          deleteTitle="Are you sure you want to delete all your skills?"
-          deleteBody={<p>Every skill will be removed from your Profile. Your saved CVs keep their own copy.</p>}
-          onSave={(text) => onSaveSkills([...new Set(text.split(/[,;\n]/).map((skill) => skill.trim()).filter(Boolean))])}
-        >
-          <ul className="profile-chips">
-            {skills.map((skill, index) => <li key={index}>{skill}</li>)}
-          </ul>
-        </InlineEdit>
+        <TagList label="skill" items={skills} suggestions={keywords} addLabel="Add skill" disabled={importDisabled} onChange={onSaveSkills} />
       </section>
     </>
   );
