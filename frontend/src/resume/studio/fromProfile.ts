@@ -1,5 +1,6 @@
 import type { ContactFields } from '../../api';
 import type { CareerData } from '../../profile/careerApi';
+import { jobPlace } from '../../profile/workPlace';
 import type { RenderedResume } from '../../resumeApi';
 
 const newId = () => crypto.randomUUID();
@@ -30,7 +31,7 @@ export function resumeFromProfile(current: RenderedResume, profile: ContactField
         company: role.company,
         client: role.client || null,
         title: role.title,
-        location: role.location || null,
+        location: jobPlace(role) || null,
         from: role.from,
         to: role.current ? '' : role.to,
         current: role.current,

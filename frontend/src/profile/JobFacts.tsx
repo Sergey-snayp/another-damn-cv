@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import type { CareerExperience, WorkType } from "./careerApi";
+import { WORK_TYPE_NAMES, workFacts } from "./workPlace";
 import { DateField } from "./ProfileCareerEditor";
 import { useConfirm } from "../components/ConfirmDialog";
 
@@ -10,17 +11,6 @@ const shortDate = (value: string) => {
   const month = match ? MONTHS[Number(match[2]) - 1] : undefined;
   return month ? `${month} ${match![1]}` : value.trim();
 };
-
-export const WORK_TYPE_NAMES: Record<WorkType, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "On-site" };
-/** Older saves put "Remote" (or "Hybrid", "On-site") in the location itself. */
-const WORK_WORDS: Record<string, WorkType> = { remote: "remote", hybrid: "hybrid", onsite: "onsite", "on-site": "onsite", "on site": "onsite" };
-
-/** How and where, read the same from new and older saves. */
-export function workFacts(role: CareerExperience): { workType: WorkType | null; location: string } {
-  const word = WORK_WORDS[role.location.trim().toLowerCase()];
-  if (role.workType) return { workType: role.workType, location: word ? "" : role.location.trim() };
-  return word ? { workType: word, location: "" } : { workType: null, location: role.location.trim() };
-}
 
 /** "Vancouver, BC, Canada" → city "Vancouver, BC", country "Canada"; "Canada" → country only. */
 function splitPlace(location: string) {
