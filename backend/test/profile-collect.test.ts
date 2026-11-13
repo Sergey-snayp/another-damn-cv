@@ -81,6 +81,27 @@ test('only what the Profile lacks is offered: no repeats, from every CV, new job
   assert.deepEqual(epam.bullets, ['Built Lambda services.'], 'the same line from two CVs once');
 });
 
+test('a CV line like one the Profile has is offered to compare, with that line; the same line is not', () => {
+  const mine = 'Built a TLS certificate service with ACME and Route53, replacing manual renewals.';
+  const roles = [role({ bullets: [mine] })];
+  const [found] = collectFromCvs(roles, [
+    job({
+      cv: 'Main CV',
+      bullets: [
+        'Built a TLS certificate service with ACME and Route 53, replacing manual renewals.',
+        'Built a TLS certificate service on AWS Step Functions with ACME and Route53 for 300 merchants.',
+        'Cut CI time from 40 to 12 minutes by caching dependencies.',
+      ],
+    }),
+    job({ cv: 'Fintech CV', bullets: ['Built a TLS certificate service on AWS Step Functions with ACME and Route53 for 300 merchants.'] }),
+  ]);
+  assert.deepEqual(found.bullets, ['Cut CI time from 40 to 12 minutes by caching dependencies.'], 'new lines, ticked');
+  assert.deepEqual(found.similar, [
+    { line: 'Built a TLS certificate service on AWS Step Functions with ACME and Route53 for 300 merchants.', mine },
+  ], 'a close line comes with the Profile line it is like, once, and the same line (but for a space) not at all');
+  assert.deepEqual(found.from, ['Main CV']);
+});
+
 test('collect reads the Profile and every CV, and returns the revision to save on', async () => {
   const collect = new CollectFromCvs(
     {

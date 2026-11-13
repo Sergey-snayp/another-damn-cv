@@ -29,7 +29,10 @@ export interface CollectedJob {
   title: string;
   /** The new job itself, when `index` is null. */
   job: CareerExperience | null;
+  /** Lines the Profile has nothing like: offered ticked. */
   bullets: string[];
+  /** Lines close to one the Profile has (`mine`): offered to compare, unticked. */
+  similar: { line: string; mine: string }[];
   tools: string[];
   /** The CVs these came from, by name. */
   from: string[];
@@ -72,15 +75,36 @@ const words = (text: string) =>
       .map((word) => word.replace(/^[.-]+|[.-]+$/g, ''))
       .filter((word) => word.length > 2 && !STOP.has(word)),
   );
-/** Two lines say the same thing: most of their words are shared. */
-export function sameAchievement(a: string, b: string): boolean {
+/** How much two lines share, 0 to 1: their common words over all their words. */
+export function likeness(a: string, b: string): number {
   const left = words(a);
   const right = words(b);
-  if (!left.size || !right.size) return a.trim().toLowerCase() === b.trim().toLowerCase();
+  if (!left.size || !right.size) return a.trim().toLowerCase() === b.trim().toLowerCase() ? 1 : 0;
   let shared = 0;
   for (const word of left) if (right.has(word)) shared++;
-  return shared / (left.size + right.size - shared) >= 0.6;
+  return shared / (left.size + right.size - shared);
 }
+/** Two lines say the same thing: most of their words are shared. */
+export function sameAchievement(a: string, b: string): boolean {
+  return likeness(a, b) >= 0.6;
+}
+const letters = (text: string) => withoutMarks(text).toLowerCase().replace(/[^a-z0-9]+/g, '');
+/** The same line, but for spaces, case or punctuation ("Route53" / "Route 53"), or nearly every word shared. */
+export const sameLine = (a: string, b: string) => letters(a) === letters(b) || likeness(a, b) >= 0.9;
+/**
+ * Close enough to compare side by side: half their words shared, or most of the
+ * shorter line's (at least 4 words) found in the other, as when a CV line says
+ * the same thing with more detail.
+ */
+export function closeness(a: string, b: string): number {
+  const left = words(a);
+  const right = words(b);
+  let shared = 0;
+  for (const word of left) if (right.has(word)) shared++;
+  const contained = shared >= 4 ? shared / Math.min(left.size, right.size) : 0;
+  return Math.max(likeness(a, b), contained >= 0.6 ? contained * 0.8 : 0);
+}
+const SIMILAR = 0.5;
 
 const tools = (stack: string) =>
   stack
@@ -124,17 +148,25 @@ export function collectFromCvs(roles: CareerExperience[], jobs: CvJob[]): Collec
               }
             : null,
         bullets: [],
+        similar: [],
         tools: [],
         from: [],
       };
       found.set(key, entry);
     }
-    const have = [...(role?.bullets ?? []), ...entry.bullets];
-    const fresh = job.bullets
-      .map((bullet) => bullet.trim())
-      .filter((bullet) => bullet && !have.some((line) => sameAchievement(line, bullet)));
-    for (const bullet of fresh)
-      if (!entry.bullets.some((line) => sameAchievement(line, bullet))) entry.bullets.push(bullet);
+    const mine = role?.bullets ?? [];
+    const offered = () => [...entry!.bullets, ...entry!.similar.map((item) => item.line)];
+    let added = false;
+    for (const bullet of job.bullets.map((line) => line.trim()).filter(Boolean)) {
+      // Already in the Profile, or already offered from another CV.
+      if (mine.some((line) => sameLine(line, bullet)) || offered().some((line) => sameAchievement(line, bullet))) continue;
+      const closest = mine
+        .map((line) => ({ line, score: closeness(line, bullet) }))
+        .sort((a, b) => b.score - a.score)[0];
+      if (closest && closest.score >= SIMILAR) entry.similar.push({ line: bullet, mine: closest.line });
+      else entry.bullets.push(bullet);
+      added = true;
+    }
     const known = [...tools(role?.techStack ?? ''), ...entry.tools].map((tool) => tool.toLowerCase());
     for (const tool of tools(job.techStack))
       if (!known.includes(tool.toLowerCase())) {
@@ -142,7 +174,7 @@ export function collectFromCvs(roles: CareerExperience[], jobs: CvJob[]): Collec
         known.push(tool.toLowerCase());
       }
     if (entry.job && !entry.job.description && job.description) entry.job.description = job.description;
-    if ((fresh.length || entry.job) && !entry.from.includes(job.cv)) entry.from.push(job.cv);
+    if ((added || entry.job) && !entry.from.includes(job.cv)) entry.from.push(job.cv);
   }
-  return [...found.values()].filter((entry) => entry.bullets.length || entry.tools.length || entry.job);
+  return [...found.values()].filter((entry) => entry.bullets.length || entry.similar.length || entry.tools.length || entry.job);
 }

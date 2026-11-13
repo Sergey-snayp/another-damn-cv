@@ -360,3 +360,12 @@
 .profile-add-entry:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
 .profile-add-entry:disabled { opacity: .5; cursor: default; }
 .profile-add-entry-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #1e4d45; color: #fff; }
+/* "From my CVs": what is waiting, on the section's button and under each job. */
+.collect-cta { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border: 1px solid #1e4d45; border-radius: 999px; background: #eef5f3; color: #1e4d45; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.collect-cta:hover { background: #1e4d45; color: #fff; }
+.collect-cta:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.collect-cta:disabled { opacity: .5; cursor: default; }
+.collect-job-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 0; border: 0; background: none; color: #1e4d45; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.collect-job-link:hover { text-decoration: underline; }
+.collect-job-link:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; border-radius: 4px; }
+.collect-job-link:disabled { opacity: .5; cursor: default; }

@@ -8,7 +8,7 @@ import { ProfileCareer } from "../profile/ProfileCareer";
 import { SavedAnswers } from "../profile/SavedAnswers";
 import { DefaultAnswers } from "../profile/DefaultAnswers";
 import { ImportProfileDialog } from "../profile/ImportProfileDialog";
-import { careerApi, type CareerExperience, type CareerState } from "../profile/careerApi";
+import { careerApi, type CareerExperience, type CareerState, type CollectedJob } from "../profile/careerApi";
 import { ProfileCareerEditor, type CareerEntry, type CareerSectionKey } from "../profile/ProfileCareerEditor";
 import { WriteBullets } from "../profile/WriteBullets";
 import { BulletPanel } from "../profile/BulletPanel";
@@ -72,7 +72,22 @@ export function Profile() {
   // The bullet being edited or added: the panel on the right checks it as it is written.
   const [activeBullet, setActiveBullet] = useState<ActiveBullet | null>(null);
   const confirm = useConfirm();
-  const [collecting, setCollecting] = useState(false);
+  /** "From my CVs": open for every job, or for one job by its place in the list. */
+  const [collecting, setCollecting] = useState<false | { job?: number }>(false);
+  /** What the saved CVs have that the Profile doesn't, checked quietly after every Profile change. */
+  const [collected, setCollected] = useState<CollectedJob[] | null>(null);
+  const careerRevision = careerState?.revision;
+  useEffect(() => {
+    if (careerRevision === undefined) return;
+    let alive = true;
+    careerApi.collectFromCvs().then(
+      (result) => alive && setCollected(result.jobs),
+      () => alive && setCollected(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [careerRevision]);
 
   useEffect(() => {
     let current = true;
@@ -316,9 +331,10 @@ export function Profile() {
                   setWriting({ index, text });
                 }}
                 onDelete={(section, entry) => void deleteEntry(section, entry)}
-                onCollect={() => {
+                collected={collected}
+                onCollect={(job) => {
                   setNotice("");
-                  setCollecting(true);
+                  setCollecting({ job });
                 }}
                 onSaveRole={saveRole}
               onSaveSummary={async (text) => {
@@ -443,6 +459,7 @@ export function Profile() {
       )}
       {collecting && (
         <CollectFromCvs
+          only={collecting.job}
           onClose={() => setCollecting(false)}
           onSaved={(state, added) => {
             setCareerState(state);

@@ -20,6 +20,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
         if (request.method() === 'PUT') { if (fail) return reply({ message: 'Temporary save failure' }, 503); const body = JSON.parse(request.postData()); writes.push(body); profile = { ...profile, ...body }; }
         return reply(profile);
       }
+      // The page counts what the saved CVs could add, a read that saves nothing.
+      if (pathname === '/api/profile/career/collect') return reply({ revision: 1, jobs: [] });
       if (pathname === '/api/profile/career') return reply({ revision: 0, data: {} });
       if (['/api/resumes', '/api/answers'].includes(pathname)) return reply([]);
       if (pathname === '/api/defaults') {

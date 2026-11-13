@@ -2,7 +2,9 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(__dirname, '../../backend')] }));
 
-// Collect from my CVs → untick what you don't want → added to the Profile.
+// From my CVs: the button says what is waiting and hides when nothing is; each
+// job links to what the CVs add to it; new lines start ticked; a line like one
+// you have is shown next to yours (Keep mine / Use this one / Keep both).
 // Isolated browser and synthetic API data: no account or real document is changed.
 (async () => {
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
@@ -13,9 +15,35 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     const errors = [], saves = [];
     const source = { kind: 'profile' }, importedAt = '2026-11-08T12:00:00Z';
     let state = { revision: 3, data: { experiences: { value: [
-      { title: 'Senior Software Engineer', company: 'Ciklum', client: 'Verifone', location: '', from: '2024-10', to: '', current: true, description: '', techStack: 'Node.js, TypeScript', bullets: ['Built REST APIs for card tokenization.'] },
+      { title: 'Senior Software Engineer', company: 'Ciklum', client: 'Verifone', location: '', from: '2024-10', to: '', current: true, description: '', techStack: 'Node.js, TypeScript',
+        bullets: ['Built REST APIs for card tokenization.', 'Reduced p99 latency by 30%.'], starred: ['Built REST APIs for card tokenization.'] },
     ], source, importedAt } } };
     const epam = { title: 'Software Engineer', company: 'EPAM', client: '', location: '', from: '2021', to: '2024', current: false, description: 'Bank AML platform.', techStack: '', bullets: [] };
+    // What the CVs say, as the server compares it with the Profile: only what is still missing.
+    const cv = {
+      fresh: ['Cut deploy time from 40 to 8 minutes with GitHub Actions.', 'Wrote the on-call runbook.'],
+      similar: [
+        { line: 'Built REST APIs for card tokenization and 3-D Secure payments.', mine: 'Built REST APIs for card tokenization.' },
+        { line: 'Reduced p99 latency by 30% with Redis caching.', mine: 'Reduced p99 latency by 30%.' },
+      ],
+      tools: ['Kafka', 'Redis'],
+    };
+    const collect = () => {
+      const roles = state.data.experiences.value;
+      const ciklum = roles.find(role => role.company === 'Ciklum');
+      const stack = ciklum.techStack.split(',').map(tool => tool.trim());
+      const jobs = [];
+      const entry = {
+        index: 0, company: 'Ciklum', title: 'Senior Software Engineer', job: null, from: ['Backend CV', 'Fintech CV'],
+        bullets: cv.fresh.filter(line => !ciklum.bullets.includes(line)),
+        similar: cv.similar.filter(item => ciklum.bullets.includes(item.mine) && !ciklum.bullets.includes(item.line)),
+        tools: cv.tools.filter(tool => !stack.includes(tool)),
+      };
+      if (entry.bullets.length || entry.similar.length || entry.tools.length) jobs.push(entry);
+      if (!roles.some(role => role.company === 'EPAM'))
+        jobs.push({ index: null, company: 'EPAM', title: 'Software Engineer', job: epam, from: ['Backend CV'], bullets: ['Built the AML alert pipeline.'], similar: [], tools: ['Java'] });
+      return jobs;
+    };
     page.on('pageerror', error => errors.push(error.message));
     await page.setRequestInterception(true);
     page.on('request', request => {
@@ -28,11 +56,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
         if (pathname === '/api/resumes' || pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
         if (pathname === '/api/profile/career/collect') {
           assert.equal(request.method(), 'POST');
-          return reply({ revision: state.revision, jobs: [
-            { index: 0, company: 'Ciklum', title: 'Senior Software Engineer', job: null, from: ['Backend CV', 'Fintech CV'],
-              bullets: ['Cut deploy time from 40 to 8 minutes with GitHub Actions.', 'Wrote the on-call runbook.'], tools: ['Kafka', 'Redis'] },
-            { index: null, company: 'EPAM', title: 'Software Engineer', job: epam, from: ['Backend CV'], bullets: ['Built the AML alert pipeline.'], tools: ['Java'] },
-          ] });
+          return reply({ revision: state.revision, jobs: collect() });
         }
         if (pathname === '/api/profile/career') {
           if (request.method() === 'GET') return reply(state);
@@ -45,39 +69,72 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
         return reply({});
       })().catch(error => { errors.push(error.stack); void request.abort().catch(() => {}); });
     });
-    const button = name => page.locator(`::-p-aria(${name})`);
     await page.goto(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`);
     await page.waitForSelector('.profile-entry');
+    const submit = () => page.$eval('.collect-cvs button[type=submit]', element => element.textContent);
+    const cta = () => page.$eval('.collect-cta', element => element.textContent).catch(() => null);
+    const jobLink = () => page.$eval('.collect-job-link', element => element.textContent).catch(() => null);
+    const choose = (mine, label) => page.evaluate((m, l) => {
+      const group = [...document.querySelectorAll('.collect-similar')].find(node => node.textContent.includes(m));
+      [...group.querySelectorAll('.collect-choice label')].find(node => node.textContent === l).querySelector('input').click();
+    }, mine, label);
 
-    await button('Collect from my CVs').click();
+    // 1. Before clicking: what is waiting, on the button and under the job.
+    await page.waitForSelector('.collect-cta');
+    assert.equal(await cta(), '1 new job · 3 new bullets · 2 similar bullets in your CVs');
+    assert.equal(await jobLink(), '2 more bullets from your CVs ', 'the job says what the CVs add to it');
+
+    // 2. One job: new lines ticked, similar ones next to yours, kept as yours unless chosen.
+    await page.click('.collect-job-link');
     await page.waitForSelector('.collect-job');
-    const text = await page.$eval('.collect-cvs', element => element.textContent);
-    assert.match(text, /From Backend CV, Fintech CV/);
-    assert.match(text, /New job/);
-    assert.equal(await page.$eval('.collect-cvs button[type=submit]', element => element.textContent), 'Add 3 to Profile');
-
-    // Untick one achievement and one tool.
+    assert.equal(await page.$$eval('.collect-job', items => items.length), 1, 'only this job');
+    assert.match(await page.$eval('.collect-cvs .career-editor-subtitle', node => node.textContent), /Senior Software Engineer at Ciklum/);
+    assert.doesNotMatch(await page.$eval('.collect-cvs', node => node.textContent), /EPAM|New job/);
+    assert.equal(await page.$$eval('.collect-similar', items => items.length), 2);
+    assert.deepEqual(await page.$$eval('.collect-choice label.is-on', items => items.map(item => item.textContent)), ['Keep mine', 'Keep mine'], 'similar lines stay yours by default');
+    assert.equal(await submit(), 'Add 2 to Profile', 'the two new lines, ticked');
+    await choose('Built REST APIs for card tokenization.', 'Use this one');
+    await choose('Reduced p99 latency by 30%.', 'Keep both');
     await page.evaluate(() => {
-      const label = [...document.querySelectorAll('.collect-line')].find(item => item.textContent.includes('runbook'));
-      label.querySelector('input').click();
-      const tool = [...document.querySelectorAll('.collect-tools label')].find(item => item.textContent.includes('Redis'));
-      tool.querySelector('input').click();
+      [...document.querySelectorAll('.collect-line')].find(item => item.textContent.includes('runbook')).querySelector('input').click();
+      [...document.querySelectorAll('.collect-tools label')].find(item => item.textContent.includes('Redis')).querySelector('input').click();
     });
-    assert.equal(await page.$eval('.collect-cvs button[type=submit]', element => element.textContent), 'Add 2 to Profile');
+    assert.equal(await submit(), 'Add 3 to Profile');
     await page.click('.collect-cvs button[type=submit]');
     await page.waitForFunction(() => !document.querySelector('.collect-cvs'));
-
-    assert.equal(saves.length, 1);
-    const [ciklum, added] = saves[0].sections.experiences;
-    assert.deepEqual(ciklum.bullets, ['Built REST APIs for card tokenization.', 'Cut deploy time from 40 to 8 minutes with GitHub Actions.']);
+    const [ciklum] = saves[0].sections.experiences;
+    assert.deepEqual(ciklum.bullets, [
+      'Built REST APIs for card tokenization and 3-D Secure payments.',
+      'Reduced p99 latency by 30%.',
+      'Cut deploy time from 40 to 8 minutes with GitHub Actions.',
+      'Reduced p99 latency by 30% with Redis caching.',
+    ], '"Use this one" takes your line\'s place; "Keep both" adds it');
+    assert.deepEqual(ciklum.starred, ['Built REST APIs for card tokenization and 3-D Secure payments.'], 'the star moves with it');
     assert.equal(ciklum.techStack, 'Node.js, TypeScript, Kafka');
+    assert.equal(saves[0].sections.experiences.length, 1, 'the other job was not part of this');
+    assert.match(await page.$eval('.profile-success', element => element.textContent), /Added 3 achievements from your CVs/);
+
+    // 3. The counts follow the Profile: what is left.
+    await page.waitForFunction(() => document.querySelector('.collect-cta')?.textContent === '1 new job · 2 new bullets in your CVs');
+    assert.equal(await jobLink(), '1 more bullet from your CVs ');
+
+    // 4. Everything at once; then nothing is left, and the button and link go.
+    await page.click('.collect-cta');
+    await page.waitForSelector('.collect-job');
+    assert.equal(await page.$$eval('.collect-job', items => items.length), 2);
+    assert.equal(await submit(), 'Add 2 to Profile');
+    await page.click('.collect-cvs button[type=submit]');
+    await page.waitForFunction(() => !document.querySelector('.collect-cvs'));
+    const [after, added] = saves[1].sections.experiences;
+    assert.ok(after.bullets.includes('Wrote the on-call runbook.'));
+    assert.equal(after.techStack, 'Node.js, TypeScript, Kafka, Redis');
     assert.equal(added.company, 'EPAM');
     assert.deepEqual(added.bullets, ['Built the AML alert pipeline.']);
     assert.equal(added.techStack, 'Java');
-    assert.match(await page.$eval('.profile-success', element => element.textContent), /Added 2 achievements from your CVs/);
+    await page.waitForFunction(() => !document.querySelector('.collect-cta') && !document.querySelector('.collect-job-link'));
     assert.equal(await page.$$eval('.profile-entry', items => items.length), 2);
     assert.deepEqual(errors, []);
-    console.log('PASS Collect from my CVs: review, untick, add to existing and new jobs');
+    console.log('PASS From my CVs: counts on the button and per job, one job or all, new lines ticked, similar ones compared (Keep mine / Use this one / Keep both), hidden when nothing is left');
   } finally {
     await browser.close();
   }

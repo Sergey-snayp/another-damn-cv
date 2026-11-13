@@ -37,6 +37,8 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
         }
         if (pathname === '/api/resumes') return reply([{ id: 'source', name: 'Short CV', isPrimary: true, currentSnapshotId: 'snapshot-1', updatedAt: importedAt }]);
         if (pathname === '/api/answers' || pathname === '/api/defaults') return reply([]);
+        // The page counts what the saved CVs could add, a read that saves nothing.
+        if (pathname === '/api/profile/career/collect') return reply({ revision: 1, jobs: [] });
         if (pathname === '/api/profile/career') {
           if (request.method() === 'GET') return reply(state);
           assert.equal(request.method(), 'PUT');

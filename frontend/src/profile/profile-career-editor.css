@@ -112,3 +112,16 @@
 .profile-import-dialog .add-bullet-button:disabled { opacity: .45; cursor: default; }
 
 /* Rich text fields in the job editor: the label above, a box like the other fields. */
+/* From my CVs: a line like one you have, next to yours, and which to keep. */
+.collect-group { margin: 12px 0 4px; color: var(--color-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.collect-similar { display: grid; gap: 8px; margin: 6px 0 10px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background); }
+.collect-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.collect-compare small { display: block; margin-bottom: 2px; color: var(--color-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.collect-compare p { margin: 0; font-size: 13px; line-height: 1.5; }
+.collect-compare .is-dropped p { color: var(--color-muted); text-decoration: line-through; text-decoration-color: rgba(0, 0, 0, .25); }
+.collect-choice { display: flex; flex-wrap: wrap; gap: 6px; }
+.collect-choice label { display: inline-flex; align-items: center; padding: 4px 12px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); font-size: 13px; cursor: pointer; }
+.collect-choice label.is-on { border-color: #1e4d45; background: #eef5f3; color: #1e4d45; font-weight: 600; }
+.collect-choice label:focus-within { outline: 2px solid #1e4d45; outline-offset: 2px; }
+.collect-choice input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+@media (max-width: 640px) { .collect-compare { grid-template-columns: 1fr; } }

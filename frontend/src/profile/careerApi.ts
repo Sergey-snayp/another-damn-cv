@@ -68,7 +68,10 @@ export interface CollectedJob {
   company: string;
   title: string;
   job: CareerExperience | null;
+  /** Lines the Profile has nothing like: offered ticked. */
   bullets: string[];
+  /** Lines close to one the Profile has (`mine`): shown side by side to choose. */
+  similar: { line: string; mine: string }[];
   tools: string[];
   from: string[];
 }

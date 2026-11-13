@@ -1,5 +1,5 @@
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
-import type { CareerData, CareerExperience } from "./careerApi";
+import type { CareerData, CareerExperience, CollectedJob } from "./careerApi";
 import { AchievementList } from "./AchievementList";
 import { InlineEdit, InlineText } from "./InlineEdit";
 import { JobFacts } from "./JobFacts";
@@ -30,6 +30,7 @@ export function ProfileCareer({
   onSaveRole,
   onSaveSummary,
   onSaveSkills,
+  collected,
 }: {
   imported: CareerData;
   importDisabled: boolean;
@@ -37,8 +38,10 @@ export function ProfileCareer({
   onWrite(entry: number, text: string): void;
   /** Saves the professional summary on the latest Profile. */
   onSaveSummary(text: string): Promise<void>;
-  /** Opens "Collect from my CVs". */
-  onCollect?(): void;
+  /** Opens "From my CVs": for every job, or for one job by its place in the list. */
+  onCollect?(job?: number): void;
+  /** What the saved CVs have that the Profile doesn't; null while unknown. */
+  collected?: CollectedJob[] | null;
   /** Deletes one job or education entry, after asking. */
   onDelete?(section: "experiences" | "educations", entry: number): void;
   /** Saves one job's fields (achievements, description, technologies) on the latest Profile. */
@@ -58,6 +61,32 @@ export function ProfileCareer({
       [...experiences.flatMap((role) => (role.techStack ?? "").split(/[,|;\n]/)), ...skills].map((item) => item.trim()).filter(Boolean),
     ),
   ];
+  // "From my CVs": the button says what is waiting, and hides when nothing is.
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  const totals = (collected ?? []).reduce(
+    (sum, item) => ({
+      bullets: sum.bullets + item.bullets.length,
+      similar: sum.similar + item.similar.length,
+      tools: sum.tools + item.tools.length,
+      jobs: sum.jobs + (item.job ? 1 : 0),
+    }),
+    { bullets: 0, similar: 0, tools: 0, jobs: 0 },
+  );
+  const waiting = [
+    totals.jobs && plural(totals.jobs, "new job"),
+    totals.bullets && plural(totals.bullets, "new bullet"),
+    totals.similar && plural(totals.similar, "similar bullet"),
+    !totals.jobs && !totals.bullets && !totals.similar && totals.tools && plural(totals.tools, "new tool"),
+  ].filter(Boolean) as string[];
+  /** What the CVs add to one Profile job, as the link under its bullets says it. */
+  const forJob = (index: number) => {
+    const item = collected?.find((entry) => entry.index === index);
+    if (!item) return "";
+    if (item.bullets.length) return `${plural(item.bullets.length, "more bullet")} from your CVs`;
+    if (item.similar.length) return `${plural(item.similar.length, "similar bullet")} in your CVs`;
+    if (item.tools.length) return `${plural(item.tools.length, "new tool")} from your CVs`;
+    return "";
+  };
   const add = (section: CareerSectionKey, label: string) => (
     <button className="profile-add-button" aria-label={label} onClick={() => onEditCareer(section, "new")} disabled={importDisabled}>
       <Icon name="plus" size={15} />
@@ -97,15 +126,16 @@ export function ProfileCareer({
         <div className="profile-panel-heading">
           <h2 id="profile-work-heading">Experience</h2>
           <div className="profile-heading-actions">
-            {onCollect && (
+            {onCollect && waiting.length > 0 && (
               <button
                 type="button"
-                className="profile-text-button"
+                className="collect-cta"
                 disabled={importDisabled}
-                title="Add the achievements and jobs your saved CVs have that this Profile doesn't"
-                onClick={onCollect}
+                title="Review what your saved CVs have that this Profile doesn't, and add what you want"
+                onClick={() => onCollect()}
               >
-                Collect from my CVs
+                <Icon name="download" size={16} />
+                {waiting.join(" · ")} in your CVs
               </button>
             )}
           </div>
@@ -147,6 +177,11 @@ export function ProfileCareer({
                   onSave={(patch) => onSaveRole(index, patch)}
                   onWrite={(text) => onWrite(index, text)}
                 />
+                {onCollect && forJob(index) && (
+                  <button type="button" className="collect-job-link" disabled={importDisabled} onClick={() => onCollect(index)}>
+                    {forJob(index)} <Icon name="arrow" size={14} />
+                  </button>
+                )}
                 <InlineEdit
                   label="technologies"
                   value={role.techStack ?? ""}
