@@ -148,6 +148,27 @@ after(async () => {
   await prisma.$disconnect();
 });
 
+test('a job keeps how it was worked (remote, hybrid, on site) apart from where; other values are refused', async () => {
+  const fresh = await createUser('Work type');
+  const state = await json<CareerState>(
+    '/profile/career',
+    'PUT',
+    { expectedRevision: 0, sections: { experiences: [{ ...role, location: 'Canada', workType: 'remote' }] } },
+    fresh.user.id,
+  );
+  const loaded = await json<CareerState>('/profile/career', 'GET', undefined, fresh.user.id);
+  assert.equal(loaded.data.experiences!.value[0].workType, 'remote');
+  assert.equal(loaded.data.experiences!.value[0].location, 'Canada');
+  const refused = await request(
+    '/profile/career',
+    'PUT',
+    { expectedRevision: state.revision, sections: { experiences: [{ ...role, workType: 'sometimes' }] } },
+    fresh.user.id,
+  );
+  assert.equal(refused.status, 400);
+  assert.equal((await json<CareerState>('/profile/career', 'GET', undefined, fresh.user.id)).data.experiences!.value[0].workType, 'remote');
+});
+
 test('a first file import fills a profile without creating or requiring a CV in Documents', async () => {
   const fresh = await createUser('First File Import');
   const source = { kind: 'file', name: 'first-cv.txt' };

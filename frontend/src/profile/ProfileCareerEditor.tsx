@@ -38,7 +38,7 @@ function sectionsOf(career: CareerState): CareerSections {
  * A date as a month and a year ("2024-10", or just "2024"). A date saved in
  * other words ("Spring 2019") stays editable as text.
  */
-function DateField({
+export function DateField({
   label,
   value,
   disabled,

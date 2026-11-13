@@ -20,11 +20,15 @@ export const IMPORT_CONTACT_LABELS = {
   website: "Website",
 } as const;
 export type ImportContactKey = keyof typeof IMPORT_CONTACT_LABELS;
+export type WorkType = "remote" | "hybrid" | "onsite";
 export interface CareerExperience {
   company: string;
   title: string;
   client: string;
+  /** Where: "Vancouver, Canada", or just "Canada". */
   location: string;
+  /** How: remote, hybrid or on site. Older saves may say "Remote" in `location` instead. */
+  workType?: WorkType;
   from: string;
   to: string;
   current: boolean;

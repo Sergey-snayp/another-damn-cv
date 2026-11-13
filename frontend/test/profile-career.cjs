@@ -63,71 +63,45 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Detailed responsibilities/);
     assert.equal(writes.length, 0, 'reading never copies a CV to Profile');
 
-    // One job: its fields and dates as month and year. Description, bullets and
-    // technologies are edited on the page itself, so the dialog has none of them.
-    await button('Edit Engineer at Profile Only Inc in Profile').click();
-    await page.waitForSelector('.profile-career-editor .career-edit-entry');
-    assert.equal(await page.$eval('#career-editor-title', element => element.textContent), 'Edit experience');
-    await input('Job title').fill('Senior Backend Engineer');
-    await page.select('[aria-label="Start date year"]', '2019');
-    await page.select('[aria-label="Start date month"]', '03');
-    assert.match(await page.$eval('.career-date-fixed', element => element.textContent), /Present/, 'a current job ends at Present');
-    assert.deepEqual(await page.$$eval('.profile-career-editor label, .profile-career-editor legend, .profile-career-editor .career-rich-field', nodes => nodes.map(node => node.textContent).filter(text => /description|achievement|bullet|tech stack/i.test(text))), [],
-      'no description, bullets or tech stack in the dialog');
-    await page.screenshot({ path: '/private/tmp/job-agent-profile-career-editor.png' });
-    await button('Save to Profile').click();
-    await page.waitForSelector('.profile-career-editor [role="alert"]');
-    assert.match(await page.$eval('.profile-career-editor [role="alert"]', element => element.textContent), /Test profile save unavailable/);
+    // No Edit button on a job: everything is edited on its card.
+    assert.equal(await page.$('[aria-label="Edit Engineer at Profile Only Inc in Profile"]'), null, 'a job has no Edit button');
+    // The title in place; a failed save keeps what was typed.
+    await page.click('[aria-label="Edit job title: Engineer"]');
+    await page.waitForSelector('input[aria-label="Edit job title"]');
+    await page.$eval('input[aria-label="Edit job title"]', field => field.select());
+    await page.keyboard.type('Senior Backend Engineer');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.profile-entry [role="alert"]');
+    assert.match(await page.$eval('.profile-entry [role="alert"]', element => element.textContent), /Test profile save unavailable/);
     assert.deepEqual(state, original, 'a failed save changes no saved Profile data');
-    assert.equal(await page.$eval('section[aria-label="Experience 1"] input', element => element.value), 'Senior Backend Engineer', 'failed saves preserve the draft');
+    assert.equal(await page.$eval('input[aria-label="Edit job title"]', field => field.value), 'Senior Backend Engineer', 'a failed save keeps what was typed');
     failSave = false;
-    await save();
-    assert.deepEqual(state.data.experiences.value[0].bullets, ['Remove this bullet.', 'Keep this achievement.'], 'saving the dialog keeps the bullets');
+    await page.focus('input[aria-label="Edit job title"]');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.querySelector('input[aria-label="Edit job title"]'));
+    assert.equal(state.data.experiences.value[0].title, 'Senior Backend Engineer');
+    assert.deepEqual(state.data.experiences.value[0].bullets, ['Remove this bullet.', 'Keep this achievement.'], 'the bullets are kept');
     assert.equal(state.data.experiences.value[0].description, 'Detailed responsibilities, independent of any CV.', 'and the description');
+    // Dates as month and year, from the card's dates pill.
+    await page.waitForFunction(() => [...document.querySelectorAll('.job-fact')].some(node => node.textContent === 'Mar 2020 – Present' && !node.disabled));
+    await page.evaluate(() => [...document.querySelectorAll('.job-fact')].find(node => node.textContent === 'Mar 2020 – Present').click());
+    await page.waitForSelector('.job-fact-card');
+    assert.match(await page.$eval('.job-fact-card .career-date-fixed', element => element.textContent), /Present/, 'a current job ends at Present');
+    await page.select('.job-fact-card [aria-label="Start date year"]', '2019');
+    await page.select('.job-fact-card [aria-label="Start date month"]', '03');
+    await page.locator('.job-fact-card ::-p-text(Save)').click();
+    await page.waitForFunction(() => [...document.querySelectorAll('.job-fact')].some(node => node.textContent === 'Mar 2019 – Present'));
     assert.equal(state.data.experiences.value[0].from, '2019-03');
 
-    // Add: a new job, on its own.
+    // Add: a new job, on its own. Closing with changes asks first: Keep editing, then Discard.
     await button('Add work experience').click();
     await page.waitForSelector('.profile-career-editor .career-edit-entry');
     assert.equal(await page.$eval('#career-editor-title', element => element.textContent), 'Add experience');
     assert.equal(await page.$('.career-delete'), null, 'nothing to delete yet');
-    await input('Job title').fill('Developer');
-    await input('Company').fill('Earlier Employer');
-    await save();
-    assert.equal(state.data.experiences.value.length, 2);
-    assert.equal(state.data.experiences.value[0].title, 'Senior Backend Engineer', 'adding keeps the other jobs');
-    assert.deepEqual(state.data.educations, original.data.educations, 'editing experience preserves education');
-    await visit();
-    assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Senior Backend Engineer/);
-
-    // A job's own edit button edits that job only; Save keeps the other jobs as they are.
-    await button('Edit Developer at Earlier Employer in Profile').click();
-    await page.waitForSelector('.profile-career-editor .career-edit-entry');
-    assert.equal(await page.$eval('.career-editor-subtitle', element => element.textContent), 'Developer · Earlier Employer');
-    assert.equal(await page.$$eval('.profile-career-editor .career-edit-entry', rows => rows.length), 1, 'only the job that was clicked');
-    await input('Job title').fill('Backend Developer');
-    const untouched = structuredClone(state.data.experiences.value[0]);
-    await save();
-    assert.deepEqual(state.data.experiences.value[0], untouched, 'the other job is saved as it was');
-    assert.equal(state.data.experiences.value[1].title, 'Backend Developer');
-    // Technologies on the page: a job without them offers to add them.
-    await page.evaluate(() => [...document.querySelectorAll('.inline-edit-empty')].find(node => node.textContent === '+ Add technologies' && node.closest('.profile-entry').textContent.includes('Backend Developer')).click());
-    await page.waitForSelector('textarea[aria-label="Edit technologies"]');
-    await page.keyboard.type('Go, Redis');
-    await page.keyboard.press('Enter');
-    await page.waitForFunction(() => /Technologies: Go, Redis/.test(document.getElementById('profile-work-heading').closest('section').textContent));
-    assert.equal(state.data.experiences.value[1].techStack, 'Go, Redis', 'the tech stack is saved with the job');
-    assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Technologies: Go, Redis/);
-
-    // Delete asks first; Keep keeps it.
-    await button('Edit Backend Developer at Earlier Employer in Profile').click();
-    await button('Remove experience 2').click();
-    await page.waitForSelector('.confirm-dialog');
-    assert.match(await page.$eval('.confirm-dialog', element => element.textContent), /Are you sure you want to remove this position\?/);
-    await page.click('.confirm-dialog .confirm-cancel');
-    await page.waitForFunction(() => !document.querySelector('.confirm-dialog'));
-    assert.ok(await page.$('.profile-career-editor'), 'Cancel keeps it, and the editor stays open');
-    // Closing with changes asks too: Escape, then Keep editing, then Discard.
+    assert.deepEqual(await page.$$eval('.profile-career-editor label, .profile-career-editor legend', nodes => nodes.map(node => node.textContent).filter(text => /description|achievement|bullet|tech stack/i.test(text))), [],
+      'no description, bullets or tech stack in the dialog');
+    await page.screenshot({ path: '/private/tmp/job-agent-profile-career-editor.png' });
+    const before = writes.length;
     await input('Job title').fill('Unsaved title');
     await page.keyboard.press('Escape');
     await page.waitForSelector('.career-confirm');
@@ -137,7 +111,50 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await button('Cancel').click();
     await button('Discard').click();
     await closed();
+    assert.equal(writes.length, before, 'Discard saves nothing');
+    await button('Add work experience').click();
+    await page.waitForSelector('.profile-career-editor .career-edit-entry');
+    await input('Job title').fill('Developer');
+    await input('Company').fill('Earlier Employer');
+    await save();
+    assert.equal(state.data.experiences.value.length, 2);
+    assert.equal(state.data.experiences.value[0].title, 'Senior Backend Engineer', 'adding keeps the other jobs');
+    assert.deepEqual(state.data.educations, original.data.educations, 'editing experience preserves education');
+    await visit();
+    assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /Senior Backend Engineer/);
+
+    // Editing one job's title saves that job only; the other is kept as it was.
+    const untouched = structuredClone(state.data.experiences.value[0]);
+    await page.click('[aria-label="Edit job title: Developer"]');
+    await page.waitForSelector('input[aria-label="Edit job title"]');
+    await page.$eval('input[aria-label="Edit job title"]', field => field.select());
+    await page.keyboard.type('Backend Developer');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.querySelector('input[aria-label="Edit job title"]'));
+    assert.deepEqual(state.data.experiences.value[0], untouched, 'the other job is saved as it was');
     assert.equal(state.data.experiences.value[1].title, 'Backend Developer');
+    // The company the same way; Escape leaves it as it was.
+    await page.waitForSelector('[aria-label="Edit company: Earlier Employer"]:not([disabled])');
+    await page.click('[aria-label="Edit company: Earlier Employer"]');
+    await page.waitForSelector('input[aria-label="Edit company"]');
+    await page.keyboard.type(' Ltd');
+    await page.keyboard.press('Escape');
+    assert.equal(state.data.experiences.value[1].company, 'Earlier Employer', 'Escape saves nothing');
+    // Technologies on the page: a job without them offers to add them.
+    await page.evaluate(() => [...document.querySelectorAll('.inline-edit-empty')].find(node => node.textContent === '+ Add technologies' && node.closest('.profile-entry').textContent.includes('Backend Developer')).click());
+    await page.waitForSelector('textarea[aria-label="Edit technologies"]');
+    await page.keyboard.type('Go, Redis');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => /Technologies: Go, Redis/.test(document.getElementById('profile-work-heading').closest('section').textContent));
+    assert.equal(state.data.experiences.value[1].techStack, 'Go, Redis', 'the tech stack is saved with the job');
+
+    // Delete asks first; Cancel keeps it.
+    await button('Delete Backend Developer at Earlier Employer').click();
+    await page.waitForSelector('.confirm-dialog');
+    assert.match(await page.$eval('.confirm-dialog', element => element.textContent), /Are you sure you want to remove this position\?/);
+    await page.click('.confirm-dialog .confirm-cancel');
+    await page.waitForFunction(() => !document.querySelector('.confirm-dialog'));
+    assert.equal(state.data.experiences.value.length, 2, 'Cancel keeps it');
 
     // One education entry, the same way.
     await button('Edit Training Provider in Profile').click();
@@ -174,17 +191,15 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.equal(state.data.educations.value[0].degree, '', 'training needs no degree');
     assert.equal(state.data.educations.value[0].field, 'Advanced distributed systems');
     // Deleting a job removes only that job, at once.
-    await button('Edit Backend Developer at Earlier Employer in Profile').click();
-    await button('Remove experience 2').click();
+    await button('Delete Backend Developer at Earlier Employer').click();
     await page.waitForSelector('.confirm-dialog');
     assert.match(await page.$eval('.confirm-dialog', element => element.textContent), /Are you sure you want to remove this position\?.*delete all of the bullets associated with it/s);
     await button('Delete position').click();
-    await closed();
+    await page.waitForFunction(() => !/Backend Developer/.test(document.getElementById('profile-work-heading').closest('section').textContent));
     assert.deepEqual(state.data.experiences.value.map(role => role.title), ['Senior Backend Engineer']);
-    await button('Edit Senior Backend Engineer at Profile Only Inc in Profile').click();
-    await button('Remove experience 1').click();
+    await button('Delete Senior Backend Engineer at Profile Only Inc').click();
     await button('Delete position').click();
-    await closed();
+    await page.waitForFunction(() => /No work experience saved in Profile/.test(document.getElementById('profile-work-heading').closest('section').textContent));
     assert.deepEqual(state.data.experiences.value, []);
     assert.match(await page.$eval('#profile-work-heading', element => element.closest('section').textContent), /No work experience saved in Profile/);
     // The page itself: only real content, tabs, and what is still missing.
@@ -231,7 +246,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.match(await page.$eval('.profile-success', element => element.textContent), /Deleted Engineer at Old Co/);
     assert.deepEqual(unexpected, [], 'Profile editing never reads CV contents or writes CV/PDF endpoints');
     assert.deepEqual(errors, []);
-    console.log('PASS Profile career editing: roles, a dialog without description/bullets/tech stack, technologies on the page, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');
+    console.log('PASS Profile career editing: no Edit button on a job, title, company, dates and technologies on the card, Add dialog without description/bullets/tech stack, optional degree, skills, Cancel, retry, persistence, no CV fallback or writes');
     await page.close();
   } catch (error) {
     if (page && !page.isClosed()) {

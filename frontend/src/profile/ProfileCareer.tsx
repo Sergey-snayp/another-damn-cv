@@ -1,7 +1,8 @@
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
 import type { CareerData, CareerExperience } from "./careerApi";
 import { AchievementList } from "./AchievementList";
-import { InlineEdit } from "./InlineEdit";
+import { InlineEdit, InlineText } from "./InlineEdit";
+import { JobFacts } from "./JobFacts";
 import { SummaryEditor } from "./SummaryEditor";
 import { Marked } from "../text/Marked";
 import type { CareerEntry, CareerSectionKey } from "./ProfileCareerEditor";
@@ -117,15 +118,14 @@ export function ProfileCareer({
               <div className="profile-entry-main">
                 <div className="profile-entry-heading">
                   <div className="profile-entry-title">
-                    <h3>{role.title}</h3>
-                    <p>{role.company}</p>
+                    <InlineText as="h3" label="job title" value={role.title} disabled={importDisabled} onSave={(title) => onSaveRole(index, () => ({ title }))} />
+                    <InlineText label="company" value={role.company} disabled={importDisabled} onSave={(company) => onSaveRole(index, () => ({ company }))} />
                   </div>
                   <div className="profile-entry-tools">
-                    {edit("experiences", `Edit ${role.title} at ${role.company} in Profile`, index)}
                     {remove("experiences", `Delete ${role.title} at ${role.company}`, index)}
                   </div>
                 </div>
-                {pills([role.client && `for ${role.client}`, role.location, dateRange(role.from, role.to, role.current)])}
+                <JobFacts role={role} disabled={importDisabled} onSave={(patch) => onSaveRole(index, () => patch)} />
                 <InlineEdit
                   label="description"
                   value={role.description ?? ""}

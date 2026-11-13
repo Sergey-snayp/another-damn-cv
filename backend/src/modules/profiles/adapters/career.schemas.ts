@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IMPORT_CONTACT_KEYS } from '../domain/career-profile';
+import { IMPORT_CONTACT_KEYS, WORK_TYPES } from '../domain/career-profile';
 const text = z.string().trim().max(2000);
 const date = z.string().trim().max(80);
 export const sourceSchema = z.discriminatedUnion('kind', [
@@ -24,6 +24,7 @@ const sectionsSchema = z
             title: text.min(1),
             client: text,
             location: text,
+            workType: z.enum(WORK_TYPES).optional(),
             from: date,
             to: date,
             current: z.boolean(),

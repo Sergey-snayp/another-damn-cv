@@ -131,3 +131,88 @@ export function InlineEdit({
     </div>
   );
 }
+
+/**
+ * One short required text edited where it is, as a job's title or company:
+ * click it, type, Enter (or click away) saves, Escape cancels. It cannot be
+ * left empty.
+ */
+export function InlineText({
+  label,
+  value,
+  as: Tag = "p",
+  disabled,
+  onSave,
+}: {
+  /** What it is: "job title", "company". */
+  label: string;
+  value: string;
+  /** The element it shows in: the title's h3, the company's p. */
+  as?: "h3" | "p";
+  disabled: boolean;
+  /** Saves the text; rejects with a message when it cannot. */
+  onSave(text: string): Promise<void>;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function finish() {
+    if (editing === null || busy) return;
+    const text = editing.trim();
+    if (!text) {
+      setError(`A job needs a ${label}.`);
+      return;
+    }
+    if (text === value.trim()) {
+      setEditing(null);
+      setError("");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onSave(text);
+      setEditing(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <Tag className="inline-text-line">
+      {editing !== null ? (
+        <input
+          className="inline-text-input"
+          aria-label={`Edit ${label}`}
+          autoFocus
+          maxLength={2000}
+          value={editing}
+          disabled={busy}
+          onChange={(event) => setEditing(event.target.value)}
+          onBlur={() => void finish()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void finish();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              setEditing(null);
+              setError("");
+            }
+          }}
+        />
+      ) : (
+        <button type="button" className="inline-text" title="Click to edit" aria-label={`Edit ${label}: ${value}`} disabled={disabled} onClick={() => setEditing(value)}>
+          {value}
+        </button>
+      )}
+      </Tag>
+      {error && <p className="profile-error" role="alert">{error}</p>}
+    </>
+  );
+}
