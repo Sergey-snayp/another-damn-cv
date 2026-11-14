@@ -47,10 +47,23 @@ const JOB = 'https://jobs.jobvite.com/careers/varonis/job/oitNzfwR';
     assert.match(apply.description, /Secure AI Platform/, 'the description, read from the job page');
     assert.doesNotMatch(apply.description, /Thank you for considering/, 'not the form\'s welcome text');
 
+    const badge = 'https://app.jobvite.com/logo/VaronisBadge150dpiBlack_1709482410534.png';
+    const scanned = await page.evaluate(() => new Promise(resolve => { for (const listener of window.__listeners) if (listener({ type: 'scan' }, { url: chrome.runtime.getURL('src/sidepanel.html'), id: 'test' }, resolve) === false) {} }));
+    assert.equal(scanned.context.logo, badge, "the apply page's logo: Jobvite's badge for Varonis, from the job page");
+    assert.equal(scanned.context.company, 'Varonis');
+    // The header's own logo is white for Varonis's dark header: on a dark background a logo is never taken.
+    const onDark = await page.evaluate(() => {
+      document.querySelector('.jv-page-header').style.background = 'rgb(18, 4, 52)';
+      return window.CVAutofillLogo.find('Varonis').logo;
+    });
+    assert.equal(onDark, null, 'a logo on a dark header is drawn light: it would not show on the white card');
+
     const job = await open(JOB);
     assert.deepEqual([job.title, job.company, job.location, job.url], ['Senior Software Engineer (Python)', 'Varonis', 'Vancouver, Canada', JOB]);
     assert.match(job.description, /Secure AI Platform/);
-    console.log('PASS Jobvite (Varonis): title, company, location and description, on the apply page and the job page');
+    const jobScan = await page.evaluate(() => new Promise(resolve => { for (const listener of window.__listeners) if (listener({ type: 'scan' }, { url: chrome.runtime.getURL('src/sidepanel.html'), id: 'test' }, resolve) === false) {} }));
+    assert.equal(jobScan.context.logo, badge, 'the job page: its own badge');
+    console.log('PASS Jobvite (Varonis): title, company, location, description and logo (the badge, never the white header logo), on the apply page and the job page');
   } finally {
     await browser.close();
   }

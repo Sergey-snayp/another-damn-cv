@@ -59,6 +59,9 @@
       || tabParts()?.company
       || slugName(location.pathname.match(/^\/(?:careers\/)?([^/]+)\/(?:job|jobs|search)\b/)?.[1]),
     description: '.jv-job-detail-description',
+    // The company's badge Jobvite gives for link previews (app.jobvite.com/logo/…); the
+    // header's logo is drawn white for a dark header, invisible on a white card.
+    logo: (page) => page.querySelector('meta[property="og:image"]')?.content || null,
     jobUrl: () => {
       const found = location.pathname.match(/^\/((?:careers\/)?[^/]+\/job\/[^/]+)/);
       return found ? `${location.origin}/${found[1]}` : null;
@@ -227,24 +230,45 @@
   }
 
   /**
-   * read(), and on an apply page without the description, the description from
-   * the job page (same site, so the page's own fetch can read it).
+   * The job page as a document: this page when it is the job page, else the
+   * job page fetched once (same site, so the page's own fetch can read it).
    */
+  let fetched = null;
+  function jobPage() {
+    const url = board()?.jobUrl?.();
+    if (!url || url === location.origin + location.pathname) return Promise.resolve(document);
+    if (fetched?.url !== url) {
+      fetched = {
+        url,
+        page: fetch(url, { credentials: 'include' })
+          .then((response) => (response.ok ? response.text() : ''))
+          .then((text) => (text ? new DOMParser().parseFromString(text, 'text/html') : null))
+          .catch(() => null),
+      };
+    }
+    return fetched.page;
+  }
+
+  /** read(), and on an apply page without the description, the description from the job page. */
   async function readAsync() {
     const details = read();
     const own = board();
-    const url = own?.jobUrl?.();
-    if (details.description || !own?.description || !url || url === location.origin + location.pathname) return details;
-    try {
-      const response = await fetch(url, { credentials: 'include' });
-      if (!response.ok) return details;
-      const page = new DOMParser().parseFromString(await response.text(), 'text/html');
-      const node = page.querySelector(own.description);
-      if (node) details.description = htmlText(node.innerHTML).slice(0, 20000);
-      if (!details.employmentType && details.description) details.employmentType = typeOf(details.description.slice(0, 3000));
-    } catch { /* the form opens without it; the person can paste it */ }
+    if (details.description || !own?.description) return details;
+    const page = await jobPage();
+    const node = page && page !== document ? page.querySelector(own.description) : null;
+    if (node) details.description = htmlText(node.innerHTML).slice(0, 20000);
+    if (!details.employmentType && details.description) details.employmentType = typeOf(details.description.slice(0, 3000));
     return details;
   }
 
-  window.CVAutofillJobDetails = { read, readAsync, title, company, jobUrl, postedAt, salaryInText, typeOf };
+  /** The board's own logo for the company, from the job page; null when the board has none. */
+  async function logo() {
+    const own = board();
+    if (!own?.logo) return null;
+    const page = await jobPage();
+    const found = page ? own.logo(page) : null;
+    try { return found && /^https?:$/.test(new URL(found, location.href).protocol) ? new URL(found, location.href).href : null; } catch { return null; }
+  }
+
+  window.CVAutofillJobDetails = { read, readAsync, logo, title, company, jobUrl, postedAt, salaryInText, typeOf };
 })();

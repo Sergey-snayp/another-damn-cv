@@ -1,4 +1,5 @@
 import { matchAnswers, saveAnswers } from './answers.js';
+import { LINKEDIN_PAIRING_MS, tabOpenedBy } from './linkedin-handoff.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
 import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
 
@@ -97,9 +98,45 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
+/**
+ * Apply on LinkedIn opens the company's page in a new tab. The LinkedIn job
+ * (title, company, location, description, logo) is kept for that tab, so the
+ * panel can fill what the company's page does not say. The click and the new
+ * tab may arrive in either order: each waits a few seconds for the other.
+ * Kept for this browser session only, and dropped with its tab.
+ */
+const fromLinkedInKey = (tabId) => `fromLinkedIn:${tabId}`;
+async function pairLinkedInApply() {
+  const { linkedinApply: clicked, linkedinOpened: opened = [] } = await chrome.storage.session.get(['linkedinApply', 'linkedinOpened']);
+  const now = Date.now();
+  const recent = opened.filter((entry) => now - entry.at < LINKEDIN_PAIRING_MS);
+  {
+    const tab = tabOpenedBy(clicked, recent, now);
+    if (tab) {
+      await chrome.storage.session.set({ [fromLinkedInKey(tab.tabId)]: { job: clicked.job, at: now, host: null } });
+      await chrome.storage.session.set({ linkedinOpened: recent.filter((entry) => entry !== tab) });
+      await chrome.storage.session.remove('linkedinApply');
+      return;
+    }
+  }
+  await chrome.storage.session.set({ linkedinOpened: recent });
+}
+chrome.tabs.onCreated?.addListener((tab) => {
+  if (!Number.isInteger(tab.openerTabId) || !Number.isInteger(tab.id)) return;
+  void (async () => {
+    const { linkedinOpened = [] } = await chrome.storage.session.get('linkedinOpened');
+    await chrome.storage.session.set({ linkedinOpened: [...linkedinOpened.slice(-20), { tabId: tab.id, opener: tab.openerTabId, at: Date.now() }] });
+    await pairLinkedInApply();
+  })().catch(() => {});
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !Number.isInteger(sender.tab?.id)) return false;
   const tabId = sender.tab.id;
+  if (message?.type === 'linkedin-apply' && /^https:\/\/([a-z0-9-]+\.)*linkedin\.com\//i.test(sender.url ?? '') && message.job?.title) {
+    void chrome.storage.session.set({ linkedinApply: { tabId, job: message.job, at: Date.now() } }).then(pairLinkedInApply).catch(() => {});
+    return false;
+  }
   const fromPage = sender.frameId === 0 && !sender.url?.startsWith('chrome-extension:');
   // The page scripts in any frame of the tab (forms can be embedded in iframes).
   const fromContent = !sender.url?.startsWith('chrome-extension:');
@@ -235,6 +272,7 @@ async function changeDefault({ type, target = {}, value }) {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void setTabOpen(tabId, false);
+  void chrome.storage.session.remove(fromLinkedInKey(tabId)).catch(() => {});
   void chrome.storage.session.remove(stepKey(tabId)).catch(() => {});
 });
 

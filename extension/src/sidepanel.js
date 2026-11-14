@@ -320,7 +320,7 @@ function jobFormHtml() {
   const currencies = [...new Set([currency, ...CURRENCIES])].map(code => [code, code]);
   const toggle = (part, label, has) => `<button type="button" class="job-form-toggle" data-job-toggle="${part}" aria-expanded="${form.open[part]}">${label} <span>— ${form.open[part] ? 'Click to collapse' : has ? 'Click to edit' : 'Click to add'}</span></button>`;
   return `<form class="job-form" id="job-form" aria-labelledby="job-form-heading" novalidate>
-    <div class="job-form-head"><p>${form.id ? 'Review and update your saved job details.' : 'Review the details from this page before saving.'}</p></div>
+    <div class="job-form-head"><p>${form.id ? 'Review and update your saved job details.' : 'Review the details from this page before saving.'}</p>${form.fromLinkedIn?.length ? `<p class="job-form-source">${icon('link', 14)}From the LinkedIn posting you applied from: ${esc(form.fromLinkedIn.map(name => ({ title: 'title', company: 'company', location: 'location', description: 'description' })[name]).join(', '))}.</p>` : ''}</div>
     <fieldset class="job-form-fields" ${jobBusy ? 'disabled' : ''}>
     ${field('company', 'Company', form.company, 'placeholder="Company" autocomplete="off"')}
     ${field('title', 'Position Title', form.title, 'placeholder="Title" autocomplete="off"')}
@@ -377,6 +377,46 @@ function postingDate(value) {
   // Simplify's wording: "Posted on 10/30/2026" (the day the board gives, not shifted to another time zone).
   return { day, label: `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}` };
 }
+/**
+ * The LinkedIn job this tab was opened for by Apply on LinkedIn (src/background.js),
+ * or null. It belongs to the first site the tab shows after LinkedIn: another site
+ * later in the same tab is another job.
+ */
+let linkedInJob = null;
+async function linkedInJobFor(tab) {
+  if (!tab?.id) return null;
+  let host;
+  try { host = new URL(tab.url).hostname; } catch { return null; }
+  if (/(^|\.)linkedin\.com$/i.test(host)) return null;
+  const key = `fromLinkedIn:${tab.id}`;
+  const session = chrome.storage.session;
+  if (!session) return null;
+  const { [key]: carried } = await session.get(key).catch(() => ({}));
+  if (!carried?.job || Date.now() - carried.at > 12 * 3600_000) return null;
+  if (!carried.host) { await session.set({ [key]: { ...carried, host } }).catch(() => {}); return carried.job; }
+  return carried.host === host ? carried.job : null;
+}
+/**
+ * A page's capture for the app, with the LinkedIn posting this tab came from added
+ * when the page itself lacks its description: the app reads the job from this text.
+ */
+function withLinkedInText(capture) {
+  const job = linkedInJob;
+  if (!job?.description || !capture?.text) return capture;
+  const sample = job.description.replace(/\s+/g, ' ').slice(0, 120);
+  if (capture.text.replace(/\s+/g, ' ').includes(sample)) return capture;
+  const posting = [job.title, job.company, job.location, job.description].filter(Boolean).join('\n\n');
+  return { ...capture, text: `${capture.text}\n\nThe job's posting on LinkedIn (this page was opened from it):\n\n${posting}` };
+}
+/** What the page does not say, from the LinkedIn job: the names of the fields filled. */
+function fillFromLinkedIn(details, job) {
+  const filled = [];
+  if (!job) return filled;
+  if ((!details.title || details.title === 'Application form') && job.title) { details.title = job.title; filled.push('title'); }
+  for (const name of ['company', 'location', 'description']) if (!String(details[name] ?? '').trim() && job[name]) { details[name] = job[name]; filled.push(name); }
+  return filled;
+}
+
 /** One form for adding a page's job or editing its backend record. Opening only reads. */
 async function openJobForm() {
   if (jobFormLoading || jobBusy) return;
@@ -389,6 +429,8 @@ async function openJobForm() {
   try {
     const found = editing ? await getSavedJob(editing.id) : (await askPage({ type: 'job-details' }, tab).catch(() => null)) ?? {};
     if (tab?.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) return;
+    // The page's own details first; the LinkedIn posting this tab came from fills the rest.
+    const fromLinkedIn = editing ? [] : fillFromLinkedIn(found, linkedInJob);
     if (editing) savedJob = { url: jobAddress(tab), job: found, checkedAt: Date.now() };
     jobForm = {
       id: editing ? found.id : null,
@@ -403,6 +445,7 @@ async function openJobForm() {
       notes: editing ? found.notes ?? '' : '',
       status: editing ? found.status : 'saved',
       url: editing ? found.url ?? '' : found.url || jobAddress(tab) || '',
+      fromLinkedIn,
       salaryEdited: false, statusEdited: false, fieldsEdited: new Set(),
       open: { description: false, notes: false },
       error: '',
@@ -461,7 +504,7 @@ function saveJob(payload = {}) {
       if (!await access) { jobProblem = 'Access to this site was not allowed.'; return; }
       const logo = jobLogo();
       const job = editId ? await updateSavedJob(editId, payload.details)
-        : (await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...payload })).job;
+        : (await sendCapture({ ...withLinkedInText(await captureTab(tab.id)), ...(logo && { companyLogo: logo }), ...payload })).job;
       if (tab?.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) return;
       savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() }; jobForm = null; jobFormDirty = false;
       if (!editId) await recordOnSavedJob(jobAddress(tab), await answersOnPage(tab));
@@ -587,7 +630,7 @@ async function generateLetter(access) {
       if (reason) throw new Error(reason);
       if (!await access) throw new Error('Access to this site was not allowed.');
       const logo = jobLogo();
-      job = (await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) })).job;
+      job = (await sendCapture({ ...withLinkedInText(await captureTab(tab.id)), ...(logo && { companyLogo: logo }) })).job;
       if (jobAddress(tab) === jobAddress()) savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() };
     }
     letter.jobId = job.id;
@@ -1356,7 +1399,7 @@ function improveMatch(mode) {
     try {
       if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
       const logo = jobLogo();
-      const { job } = await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }) });
+      const { job } = await sendCapture({ ...withLinkedInText(await captureTab(tab.id)), ...(logo && { companyLogo: logo }) });
       savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() };
       if (mode === 'quick') await openQuickTailor(`${APP_URL}/popup/jobs/${encodeURIComponent(job.id)}/quick-tailor?from=${encodeURIComponent(chosen.id)}`);
       else await chrome.tabs.create({ url: `${APP_URL}/documents/${encodeURIComponent(chosen.id)}?job=${encodeURIComponent(job.id)}` });
@@ -1411,6 +1454,14 @@ async function refresh() {
     if (jobAddress() !== jobAddress(tab) || resumes.chosen?.id !== nextResumes.chosen?.id) cvStatus('');
     void checkSaved(jobAddress(tab));
     fillGroups = stored.autofillGroups ?? {};
+    // A company page opened by Apply on LinkedIn: the posting fills the card's gaps (company, logo, title).
+    linkedInJob = await linkedInJobFor(pageTab);
+    if (nextScan?.context && linkedInJob) {
+      const context = nextScan.context;
+      if (!context.company && linkedInJob.company) context.company = linkedInJob.company;
+      if (!context.logo && linkedInJob.logo) context.logo = linkedInJob.logo;
+      if ((!context.title || context.title === 'Application form') && linkedInJob.title) context.title = linkedInJob.title;
+    }
     profile = stored.profile || {}; resumes = nextResumes; currentTab = tab || null; scan = nextScan;
     diversityAnswers = stored.diversityAnswers ?? {};
     continueSteps = stored.continueSteps === true;

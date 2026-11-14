@@ -623,8 +623,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // The logo only for the panel: finding it reads the page's images, too much for every page change.
     const result = scan();
     const { logo, domain } = window.CVAutofillLogo?.find(result.context.company) ?? {};
-    sendResponse({ ...result, context: { ...result.context, postedAt: window.CVAutofillJobDetails?.postedAt?.() ?? null, logo: logo ?? null, logoDomain: domain ?? null } });
-    return false;
+    const reply = (own) => sendResponse({ ...result, context: { ...result.context, postedAt: window.CVAutofillJobDetails?.postedAt?.() ?? null, logo: own || logo || null, logoDomain: domain ?? null } });
+    // A job board's own logo for the company (Jobvite's badge) comes first; it may need the job page.
+    const boardLogo = window.CVAutofillJobDetails?.logo?.();
+    if (!boardLogo) { reply(null); return false; }
+    boardLogo.then(reply, () => reply(null));
+    return true;
   }
 
   // Filling happens only when the person presses "Autofill This Page" in the
@@ -973,3 +977,24 @@ updateLauncher();
 try {
   chrome.runtime.sendMessage({ type: 'steps-state' }).then((state) => { if (state?.armed) { stepsArmed = true; scheduleStep(); } }).catch(() => {});
 } catch { /* extension reloaded */ }
+
+// Apply on LinkedIn (not Easy Apply): the job goes with the company page LinkedIn opens, so a
+// page without the description, company or logo can take them from it (src/background.js).
+if (window.CVAutofillLinkedIn?.isPage()) {
+  document.addEventListener('click', (event) => {
+    const button = event.target?.closest?.('button, a');
+    if (!button) return;
+    const label = `${button.getAttribute('aria-label') ?? ''} ${button.textContent ?? ''}`.replace(/\s+/g, ' ').trim();
+    if (!/\bapply\b/i.test(label) || /\beasy apply\b/i.test(label)) return;
+    let job = null;
+    try { job = window.CVAutofillLinkedIn.read(); } catch { /* not a job's details */ }
+    if (!job?.title) return;
+    const text = (value, max) => String(value ?? '').trim().slice(0, max);
+    try {
+      void chrome.runtime.sendMessage({ type: 'linkedin-apply', job: {
+        title: text(job.title, 300), company: text(job.company, 200), location: text(job.location, 200),
+        description: text(job.description, 20000), logo: /^https:\/\//.test(job.logo ?? '') ? job.logo : null, url: text(job.url, 500),
+      } }).catch(() => {});
+    } catch { /* extension reloaded */ }
+  }, true);
+}

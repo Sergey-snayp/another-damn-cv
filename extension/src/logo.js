@@ -63,6 +63,24 @@
     return false;
   }
 
+  /**
+   * Whether the image sits on a dark background (Varonis's purple header on
+   * Jobvite): such a logo is drawn light, often white on transparent, and on
+   * the panel's white card it would not show at all.
+   */
+  function onDarkBackground(image) {
+    for (let node = image.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      const color = style.backgroundColor.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      if (color && (color[4] === undefined || Number(color[4]) > 0.5)) {
+        const [r, g, b] = color.slice(1, 4).map((value) => Number(value) / 255);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.4;
+      }
+      if (style.backgroundImage && style.backgroundImage !== 'none') return false;
+    }
+    return false;
+  }
+
   /** A score for one image as the company's logo, or 0 when it cannot be. */
   function score(image, company, index) {
     const src = url(image.currentSrc || image.getAttribute('src') || image.getAttribute('data-src') || image.getAttribute('data-lazy-src'));
@@ -74,6 +92,7 @@
     const file = decodeURIComponent(src.pathname.split('/').pop() || '');
     if (/powered/i.test(label) || namesBoard(label, company) || namesBoard(file, company)) return { score: 0 };
     if (image.closest('footer, [role="contentinfo"]') || near(image, /footer|powered/i, 5)) return { score: 0 };
+    if (onDarkBackground(image)) return { score: 0 };
     let points = 0;
     const alt = key(label.replace(/\blogo(type)?\b|\bimage\b|\bicon\b/gi, ' '));
     if (company && alt && (alt === company || alt === company.slice(0, alt.length) && alt.length >= 3)) points += 6;
