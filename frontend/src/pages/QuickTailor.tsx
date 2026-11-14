@@ -235,7 +235,7 @@ function copyOfRegion(region: HTMLElement, scale: number, live = false): HTMLEle
   if (live) {
     // Its height follows what is written into it: zoomed rather than transformed.
     zoom.className = 'qt-copy is-live';
-    zoom.style.cssText = `width:${region.offsetWidth}px;zoom:${scale};`;
+    zoom.style.cssText = `width:${region.offsetWidth}px;zoom:${scale};--qt-zoom:${scale};`;
     zoom.append(copy);
     return zoom;
   }
@@ -594,6 +594,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         '--qt-column': `${Math.round(line.width)}px`,
         '--qt-indent': `${indent}px`,
         '--qt-mark': `${mark}px`,
+        '--qt-font': `${parseFloat(style.fontSize) * scale}px`,
       } as React.CSSProperties;
       const key = JSON.stringify([top, left, width, font, windowHeight]);
       if (key === placed.current) return;
@@ -1014,6 +1015,12 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const many = (tailoring?.items.length ?? 0) > 1;
   /** Asked for (or queued) and not back yet. */
   const pending = (item: Suggestion) => !item.decided && item.after === undefined && !item.error;
+  /** Where a line comes from, as quiet text at the end of its buttons: new, or taken from the Profile or a saved CV. */
+  const sourceTag = (item: Suggestion) => {
+    const from = item.fromProfile ? 'from your Profile' : item.fromSavedCv ? 'from your saved CVs' : '';
+    const text = isAddition(item) ? (from ? `New bullet, ${from}` : 'New bullet') : from ? from[0]!.toUpperCase() + from.slice(1) : '';
+    return text ? <span className="qt-tag">{text}</span> : null;
+  };
   /** Use / Skip / Try again for one suggestion (the window's × closes it): shown from Generate on, usable once it is back. */
   const itemActions = (item: Suggestion, extra?: ReactNode) => {
     if (item.decided) return extra ? <div className="ra-row qt-actions">{extra}</div> : null;
@@ -1160,16 +1167,14 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
                             {back && !unchanged(item) ? <DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /> : withBold(item.before.trim())}
-                            {back && isRemoval(item) && <span className="qt-slot-note qt-cut">Not needed for this job: Remove takes it off, Swap puts another achievement here.</span>}
-                            {back && isAddition(item) && <span className="qt-slot-note qt-from">New bullet for this job</span>}
-                            {back && (item.fromProfile || item.fromSavedCv) && <span className="qt-slot-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</span>}
+                            {back && isRemoval(item) && <span className="qt-slot-note qt-cut">Not needed for this job.</span>}
                             {back && READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after!, cvText).map((note, index) => (
                               <span key={`r${index}`} className="qt-slot-note qt-hint">{note}</span>
                             ))}
                             {item.error && !item.busy && <span className="qt-slot-note ra-error">{item.error}</span>}
                             {item.decided
                               ? <span className="qt-slot-note">{item.decided === 'used' ? '✓ Used' : 'Skipped'}</span>
-                              : itemActions(item)}
+                              : itemActions(item, back ? sourceTag(item) : null)}
                             {back && item.cannotDo?.map((note, index) => <span key={index} className="qt-slot-note">⚠ {note}</span>)}
                           </span>,
                           slot,
@@ -1188,11 +1193,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                           : item.busy && item.streaming ? <div className="qt-screen-text qt-streaming" aria-live="polite">{withBold(closedMarks(item.streaming))}<span className="qt-caret" aria-hidden="true" /></div>
                           : <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>}
                         {item.error && !item.busy && <p className="ra-error">{item.error}</p>}
-                        {many && itemActions(item)}
+                        {many && !item.busy && item.after !== undefined && isRemoval(item) && <p className="qt-note qt-cut">Not needed for this job.</p>}
+                        {many && itemActions(item, !item.busy && item.after !== undefined ? sourceTag(item) : null)}
                         {many && !item.busy && item.after !== undefined && (
                           <>
-                            {isRemoval(item) && <p className="qt-note qt-cut">Not needed for this job: Remove takes it off, Swap puts another achievement here.</p>}
-                            {item.fromProfile || item.fromSavedCv ? <p className="qt-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</p> : null}
                             {READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after, cvText).map((note, index) => (
                               <p key={`r${index}`} className="qt-note qt-hint">{note}</p>
                             ))}
@@ -1223,29 +1227,34 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {status}{close}
                       </div>
                     );
+                    // Taking the results first; "Generate again" sits with the request it uses, below.
                     if (many) return (
                       <div className="ra-row qt-actions">
                         <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>Use all{ready.length ? ` ${ready.length}` : ''}</button>
-                        <button className="qt-ai-button" disabled={waiting > 0 || saving} onClick={() => void generate()}>Generate again <AiBadge /></button>
                         {status}{close}
                       </div>
                     );
-                    return itemActions(solo!, <>{status}{close}</>);
+                    return itemActions(solo!, <>{solo!.after !== undefined && !solo!.busy ? sourceTag(solo!) : null}{status}{close}</>);
                   })()}
                   {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
                   {solo && !solo.busy && solo.after !== undefined && (
                     <>
-                      {solo.fromProfile || solo.fromSavedCv ? <p className="qt-note qt-from">{solo.fromProfile ? 'From your Profile' : 'From your saved CVs'}</p> : null}
                       {solo.report && <SummaryReportView report={solo.report} />}
                       {solo.added?.length ? <p className="qt-note">+ From your CV: {solo.added.join(', ')}</p> : null}
                       {solo.dropped?.length ? <p className="qt-note">− Left out for this job: {solo.dropped.join(', ')}</p> : null}
                       {solo.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
                     </>
                   )}
-                  <label className="qt-request">
-                    <span>What should change? <small>{composing || many ? '(optional)' : '(optional, then Try again)'}</small></span>
+                  <div className="qt-request">
+                    {/* The request and the button that uses it, on one row. */}
+                    <div className="qt-request-head">
+                      <label htmlFor="qt-request-text">What should change? <small>{composing || many ? '(optional)' : '(optional, then Try again)'}</small></label>
+                      {many && !composing && (
+                        <button type="button" className="qt-ai-button qt-again" disabled={waiting > 0 || saving} onClick={() => void generate()}>Generate again <AiBadge /></button>
+                      )}
+                    </div>
                     {/* Once the lines are back the box is one line, so they get the room. */}
-                    <textarea rows={many && !composing ? 1 : 2} maxLength={500} value={tailoring.request}
+                    <textarea id="qt-request-text" rows={many && !composing ? 1 : 2} maxLength={500} value={tailoring.request}
                       placeholder="e.g. shorter, lead with the payments work"
                       onChange={(e) => { const request = e.target.value; setTailoring((t) => t && { ...t, request }); }}
                       onKeyDown={(e) => {
@@ -1253,7 +1262,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         e.preventDefault();
                         if (composing || many) void generate(); else retry(solo!);
                       }} />
-                  </label>
+                  </div>
                   <div className="chips">
                     {REQUESTS.map((request) => (
                       <button key={request} type="button" onClick={() => setTailoring((t) => t && { ...t, request: t.request.trim() ? `${t.request.trim()}; ${request.toLowerCase()}` : request })}>{request}</button>

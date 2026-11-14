@@ -190,6 +190,29 @@
   /* The scrollbar's room is kept from the start: the CV's zoom is fitted once, not refitted
      a scrollbar narrower (which left the page wider than the window). */
   html:has(.studio.qt) { scrollbar-gutter: stable; }
-  .qt .qt-canvas { overflow: visible; }
   .qt .qt-zoom-bar { position: static; margin: 0 0 10px auto; }
 }
+
+/* The card's lines, once back, read at 14px at least (the CV's zoom can make them ~11px):
+   they are what the person decides on. Before that the card is a window onto the CV. */
+.qt .qt-card.qt-unit:not(.is-windowed) > .qt-screen { font-size: max(14px, var(--qt-font, 14px)) !important; line-height: 1.5 !important; }
+.qt .qt-card.qt-unit:not(.is-windowed) > .qt-screen :is(.qt-slot-line, .qt-screen-line, .pro-text, li, p, span) { font-size: inherit; line-height: inherit; }
+/* One solid button per line (Use, Add, Remove); Skip, Swap and Try again as quiet text. */
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions { align-items: center; gap: 2px 4px; }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .primary { padding: 3px 11px; font-size: 12px; border-radius: 6px; }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost { padding: 3px 6px; border: 0; background: none; color: var(--color-muted); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost:hover:not(:disabled) { background: none; color: var(--color-text); }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost:focus-visible { outline: 2px solid var(--qt-green); outline-offset: 1px; border-radius: 4px; }
+/* Where a line comes from: quiet text after its buttons, not a pill on the sentence. */
+.qt .qt-tag { margin-left: 6px; color: var(--color-muted); font-size: 12px; font-weight: 500; }
+/* The results' lines in the job's own layout read at 14px at least: the copy is zoomed to
+   the CV's zoom, so its base size is lifted by the inverse of that zoom. */
+.qt .qt-copy.is-live .page { font-size: max(var(--r-size), calc(14px / var(--qt-zoom, 1))) !important; }
+/* A line's buttons and notes inside the copy at their real size, whatever the CV's zoom. */
+.qt .qt-copy.is-live .qt-slot .qt-actions { zoom: calc(1 / var(--qt-zoom, 1)); }
+.qt .qt-copy.is-live .qt-slot .qt-slot-note { font-size: calc(13px / var(--qt-zoom, 1)); line-height: 1.4; }
+/* "What should change?" and the button that uses it, on one row. */
+.qt .qt-request-head { display: flex; align-items: center; gap: 10px; }
+.qt .qt-request-head label { flex: 1 1 auto; font-size: 13px; font-weight: 700; color: var(--color-text); }
+.qt .qt-request-head label small { font-weight: 400; color: var(--color-muted); }
+.qt .qt-request-head .qt-again { flex: none; }

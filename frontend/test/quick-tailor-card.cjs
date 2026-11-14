@@ -311,7 +311,7 @@ async function check(browser) {
       assert.equal(roleRequests.at(-1).position, 0, 'the whole job says where it is on the CV');
       await typedIn();
       const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
-      assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet for this job/);
+      assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet, from your Profile/);
       assert.doesNotMatch(more.join(' '), /\d+ words|Action verb|Metric|Keywords/, 'no score chips under the bullets: the review asks for decisions');
       assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[2].querySelectorAll('button')].some(button => button.textContent === 'Add')));
       for (const index of [0, 1]) {

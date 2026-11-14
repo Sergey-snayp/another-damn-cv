@@ -713,7 +713,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await pause(1500);
         const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
         await page.screenshot({ path: '/private/tmp/job-agent-qt-job-lines.png' });
-        assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet for this job/);
+        assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet, from your Profile/);
         assert.doesNotMatch(more.join(' '), /\d+ words|Action verb|Metric|Keywords/, 'no score chips under the bullets: the review asks for decisions');
         assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[2].querySelectorAll('button')].some(button => button.textContent === 'Add')));
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all')).click());
