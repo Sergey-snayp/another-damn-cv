@@ -185,6 +185,9 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
   let assessedOnOpen = 0;
   let fail = failure, cvSaved = false;
   const renames = [];
+  // While set, the mocked CV save waits for this promise, so a check can see the page mid-save.
+  let saveHeld = null;
+  const holdSave = () => { let release; saveHeld = new Promise(resolve => { release = resolve; }); return () => { saveHeld = null; release(); }; };
   // When set, the Profile has more achievements for Acme Labs (see tailor-role).
   let profileChoice = false;
   // How many bullets the posting gives Acme Labs when the whole job is tailored.
@@ -244,6 +247,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       if (pathname === '/api/jobs/job-1/quick-tailor' && request.method() === 'POST') {
         events.push('save');
         await pause(100);
+        if (saveHeld) await saveHeld;
         if (fail === 'cv') return reply({ message: 'Test save failure' }, 503);
         const body = JSON.parse(request.postData());
         assert.equal(body.resumeId, savedId, 'a retry must reuse the document already created by Save');
@@ -342,6 +346,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       if (pathname.endsWith('/save')) {
         events.push('save');
         await pause(100);
+        if (saveHeld) await saveHeld;
         if (fail === 'cv') return reply({ message: 'Test save failure' }, 503);
         const body = JSON.parse(request.postData());
         const { message, ...changes } = body;
@@ -469,7 +474,15 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.equal(assessmentRequests.length, beforeProfileSave, 'a Profile edit clears the old advice without running it again');
     }
     assessedOnOpen = assessmentRequests.length;
-    assert.ok(!events.includes('save') && !events.includes('pdf'), 'opening Quick Tailor does not save or generate a PDF');
+    if (fullEditor) {
+      // Not Quick Tailor: the full editor moves the old "Tech stack:" bullet into the job's
+      // tech stack and autosaves that, as it autosaves every change. Wait for it, so it does
+      // not land in the middle of the edits below; it never makes a PDF.
+      for (let waited = 0; !cvSaved && waited < 8000; waited += 100) await pause(100);
+      assert.deepEqual(events, ['save'], 'opening the full editor autosaves only the moved tech stack, with no PDF');
+      assert.equal(resume.experiences[1].techStack, 'Go | Redis');
+      assert.ok(!resume.experiences[1].achievements.some(item => /Tech stack/.test(item.bullet)), 'the tech stack is no longer a bullet');
+    } else assert.ok(!events.includes('save') && !events.includes('pdf'), 'opening Quick Tailor does not save or generate a PDF');
     assert.equal(await page.evaluate(() => window.testMessages.some(message => message.type === 'CV_PLATFORM_USE_RESUME')), false);
     if (historyMode) {
       const undo = '.qt-history button[aria-label="Undo"]', redo = '.qt-history button[aria-label="Redo"]';
@@ -564,13 +577,13 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       const report = await page.$eval('.qt-unit', element => element.innerText);
       for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'Gaps'])
         assert.ok(report.toLowerCase().includes(part.toLowerCase()), `the summary card shows: ${part}`);
-      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent)), ['Use this', 'Try again', 'Dismiss']);
+      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent || button.getAttribute('aria-label'))), ['Use this', 'Try again', 'Close'], 'no Dismiss: the × at the row\'s end closes it');
       await page.$eval('.qt-card', card => { card.scrollTop = card.scrollHeight; });
       await pause(50);
       assert.ok(await page.$eval('.qt-card', card => {
         const bar = card.querySelector('.qt-menu > .qt-actions').getBoundingClientRect(), box = card.getBoundingClientRect();
         return bar.top >= box.top - 1 && bar.bottom <= box.bottom;
-      }), 'Use this, Try again and Dismiss stay at the top of the card while it scrolls');
+      }), 'Use this and Try again stay at the top of the card while it scrolls');
       await page.$eval('.qt-card', card => { card.scrollTop = 0; });
       await page.screenshot({ path: '/private/tmp/job-agent-qt-card.png' });
       {
@@ -632,7 +645,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         assert.match(await page.$$eval('.qt-unit .qt-slot', slots => slots[1].textContent), /✓ Used/);
         await page.click(undo);
         assert.ok(moves <= lineCount, `the menu moves at most once per line as it arrives (${moves} moves, ${lineCount} lines), never while text types in`);
-        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close')?.click());
+        await page.evaluate(() => document.querySelector('.qt-unit .qt-close')?.click());
       }
 
       // With more achievements for the job in the Profile: the bullets are chosen from them.
@@ -678,13 +691,30 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         roleCount = 3;
         await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
         await page.waitForSelector('.qt-unit .qt-generate');
+        // Before Generate: one button, no Dismiss, and no empty band before "What should change?".
+        assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent.trim() || button.getAttribute('aria-label'))), ['Generate', 'Close']);
+        assert.ok(await page.evaluate(() => {
+          const actions = document.querySelector('.qt-unit .qt-menu > .qt-actions').getBoundingClientRect();
+          const request = document.querySelector('.qt-unit .qt-request').getBoundingClientRect();
+          return request.top - actions.bottom <= 16;
+        }), 'the request follows the buttons with no empty band');
+        // No line of its own for the title or the ×: the × ends the buttons' row. Icons are centred.
+        assert.equal(await page.$('.qt-unit .qt-screen-label'), null, 'no "N lines · for …" line above the lines');
+        assert.equal(await page.$eval('.qt-unit .qt-menu > .qt-actions', row => row.lastElementChild?.getAttribute('aria-label')), 'Close');
+        const offCentre = await page.evaluate(() => ['.qt-unit .qt-close', '.qt-unit .qt-generate .ai-badge'].map(selector => {
+          const box = document.querySelector(selector).getBoundingClientRect(), icon = document.querySelector(`${selector} svg`).getBoundingClientRect();
+          return Math.max(Math.abs(box.left + box.width / 2 - (icon.left + icon.width / 2)), Math.abs(box.top + box.height / 2 - (icon.top + icon.height / 2)));
+        }));
+        assert.ok(offCentre.every(gap => gap <= 1), `the × and the wand sit in the middle of their buttons (off by ${offCentre.join(', ')}px)`);
+        await page.screenshot({ path: '/private/tmp/job-agent-qt-compose.png', clip: await page.$eval('.qt-unit', node => { const box = node.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; }) });
         await page.click('.qt-unit .qt-generate');
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 3);
         assert.equal(roleRequests.at(-1).position, 0, 'the whole job says where it is on the CV');
         await pause(1500);
         const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
+        await page.screenshot({ path: '/private/tmp/job-agent-qt-job-lines.png' });
         assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet for this job/);
-        assert.match(more[2], /8 words.*short.*Action verb.*Metric.*Time.*Keywords/, 'each bullet shows its check');
+        assert.doesNotMatch(more.join(' '), /\d+ words|Action verb|Metric|Keywords/, 'no score chips under the bullets: the review asks for decisions');
         assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[2].querySelectorAll('button')].some(button => button.textContent === 'Add')));
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all')).click());
         assert.deepEqual(await listed(), ['Built Node.js payment APIs.', 'Cut checkout latency by 30% with Redis caching.', 'Ran the payments on-call rotation for 2 years.'], 'the new bullet goes after the job\'s last one');
@@ -714,7 +744,11 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.click('.qt-unit .qt-generate');
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
         assert.deepEqual(await page.$$eval('.qt-unit .qt-slot .qt-actions .primary', buttons => buttons.map(button => button.textContent)), ['Remove', 'Remove']);
-        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close').click());
+        // "Use all" never removes a bullet: each removal is its own click.
+        const before = await listed();
+        assert.equal(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all'))?.disabled), true, 'with only removals, Use all has nothing to use');
+        assert.deepEqual(await listed(), before);
+        await page.evaluate(() => document.querySelector('.qt-unit .qt-close').click());
         roleCount = 2;
         profileChoice = false;
       }
@@ -768,7 +802,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         assert.ok(slots.some(text => text.includes('Redis operational') && text.includes('From your saved CVs')));
         assert.ok(slots.some(text => text.includes('30%')));
         assert.ok(!slots.some(text => text.includes('Mentored two engineers')), 'Swap never borrows another role’s alternatives');
-        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close').click());
+        await page.evaluate(() => document.querySelector('.qt-unit .qt-close').click());
         profileChoice = false;
       }
 
@@ -781,7 +815,6 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.hover(`${other} .doc-role-stack`);
         await page.click(`${other} .doc-role-stack [title="Tailor the tech stack for the job"]`);
         await page.waitForSelector('.qt-unit .qt-generate');
-        assert.match(await page.$eval('.qt-unit .qt-screen-title', element => element.textContent), /Tech stack/);
         await page.click('.qt-unit .qt-generate');
         await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
         const sent = aiRequests.at(-1);
@@ -806,7 +839,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await pause(500);
       assert.match(await page.$eval('.qt-unit .qt-screen', element => element.innerText), /Kubernetes/);
       await page.screenshot({ path: '/private/tmp/job-agent-qt-skills.png' });
-      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Close').click());
+      await page.evaluate(() => document.querySelector('.qt-unit .qt-close').click());
       assert.equal(await page.$('.qt-card'), null);
 
       await page.click('[title="Tailor the summary for the job"]');
@@ -841,10 +874,12 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.setViewport({ width: 680, height: 880 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'history controls fit a narrow popup');
       await page.setViewport({ width: 1180, height: 880 });
+      const releaseSave = holdSave();
       await page.click('.studio-actions button.primary');
       assert.equal(await disabled(undo), true, 'history is locked while saving');
       assert.equal(await disabled(redo), true);
       assert.equal(await disabled(reset), true, 'Reset is locked while saving');
+      releaseSave();
       await page.waitForFunction(() => document.querySelector('.studio-status')?.textContent === 'CV and PDF saved');
       const savedEvents = [...events];
       await page.click(undo);

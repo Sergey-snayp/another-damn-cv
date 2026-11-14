@@ -48,6 +48,7 @@
 .ai-generate:disabled, .ai-regenerate:disabled, .ai-write:disabled, .ai-send:disabled { background: #f0d690; color: #8d7a4c; cursor: default; }
 .ai-send { padding: 6px 6px 6px 12px; font-size: 16px; }
 .ai-badge { display: inline-grid; place-items: center; min-width: 30px; height: 26px; padding: 0 6px; border-radius: 5px; background: #f3dc8c; color: #3a3220; }
+.ai-badge svg { display: block; }
 .ai-generate:disabled .ai-badge, .ai-regenerate:disabled .ai-badge, .ai-write:disabled .ai-badge, .ai-send:disabled .ai-badge { background: #f6e6b4; }
 /* The 3 versions: a white list, the chosen one tinted, keywords underlined, placeholders marked. */
 .ai-options { display: grid; border: 1px solid #d9d9d6; border-radius: 10px; overflow: hidden; background: #fff; }

@@ -576,7 +576,11 @@
 .doc-section:is(:hover, :focus-within) > h2 .pro-tailor { opacity: 1; }
 @media print { .pro-tailor { display: none !important; } }
 .qt-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
-.qt-close { width: 24px; height: 24px; padding: 0; font: inherit; font-size: 16px; color: var(--color-muted); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.qt-close { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; font: inherit; font-size: 16px; line-height: 0; color: var(--color-muted); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.qt-close svg { display: block; }
+/* The × ends the buttons' row: on the right, after the progress line. */
+.qt-menu > .qt-actions > .qt-close { margin-left: auto; flex: none; }
+.qt-menu > .qt-actions > .qt-working-status + .qt-close { margin-left: 4px; }
 .qt-close:hover { background: var(--color-background); color: var(--color-text); }
 
 /* ── AI Settings tab ─────────────────────────────────────────────────────── */
@@ -735,6 +739,11 @@
 /* Use this, Try again and Dismiss stay in view while the menu scrolls. */
 .qt-menu > .qt-actions { position: sticky; top: 0; z-index: 2; margin: 0 -15px; padding: 12px 15px 8px; background: var(--color-surface); }
 .qt-menu .qt-request { margin: 0; }
+/* The progress line in the buttons' row, on the right. */
+.qt-menu > .qt-actions { align-items: center; }
+.qt-menu > .qt-actions > .qt-working-status { flex: 1 1 auto; justify-content: flex-end; min-width: 0; margin: 0; }
+.qt-menu > .qt-actions > .qt-working-status > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qt-menu > .qt-actions > .qt-working-status .qt-elapsed { margin-left: 0; }
 .qt-menu .chips { margin: 0; }
 /* Several lines at once keep the list card, in the same frame. */
 .qt-card:not(.qt-unit) { border-width: 1.5px; }
@@ -744,6 +753,8 @@
 /* Several lines in one screen: each line, its new version and its own buttons. The lines
    scroll inside the screen and the menu stays put under them while they are written. */
 .qt-card.qt-unit.is-many { display: flex; flex-direction: column; overflow: hidden; }
+/* A job or section: the window takes the screen's height (minus the page's bars), not a small box. */
+.qt-card.qt-unit.is-many { max-height: calc(100vh - 150px); }
 /* A job or section: one frame, the job's own height, from opening to the end. The window shows
    the CV through it; then the new versions fill the same frame and scroll inside it. */
 .qt-unit.is-many > .qt-screen { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; padding: 0; overflow: hidden; }

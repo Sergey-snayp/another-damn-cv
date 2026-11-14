@@ -157,3 +157,17 @@
 .qt .qt-name-button:hover, .qt .qt-name-button:focus-visible { background: var(--qt-grey-strong); }
 .qt .qt-name-button:hover .pen, .qt .qt-name-button:focus-visible .pen { opacity: 1; }
 .qt .qt-rename { min-width: 220px; width: min(520px, 40vw); padding: 5px 9px; border: 1px solid var(--qt-green); border-radius: 7px; font: inherit; font-size: 14px; font-weight: 700; outline: none; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
+
+/* The bar as a quiet strip: history as icons, the CV's state as text with an icon, × to close. */
+.qt .qt-history { gap: 2px; border: 0; background: none; }
+.qt .qt-history button, .qt .qt-history button + button { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; color: var(--color-text); }
+.qt .qt-history button svg { display: block; }
+.qt .qt-history .qt-history-label { display: none; }
+.qt .studio-status { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 4px; border-radius: 0; background: none; color: var(--color-muted); font-size: 13px; font-weight: 600; }
+.qt .studio-status svg { display: block; flex: none; }
+.qt .studio-status.bad { background: none; color: var(--color-error); }
+.qt .qt-bar-close { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--color-text); cursor: pointer; }
+.qt .qt-bar-close svg { display: block; }
+.qt .qt-bar-close:hover:not(:disabled) { background: var(--qt-grey-strong); }
+.qt .qt-bar-close:focus-visible { outline: 2px solid var(--qt-green); outline-offset: 2px; }
+.qt .qt-bar-close:disabled { opacity: .45; cursor: default; }

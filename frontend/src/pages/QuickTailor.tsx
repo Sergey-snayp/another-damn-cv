@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { BulletMeter } from '../resume/BulletMeter';
 import { DashboardIcon } from '../jobs/DashboardIcon';
 import { MarkedLine } from '../text/Marked';
 import { boldOnly } from '../text/marks';
@@ -261,7 +260,6 @@ const WINDOW_PAD = 4;
 const READ_AS_PROSE = new Set(['bullet', 'blurb']);
 
 /** What the line is, for the screen's label. */
-const KIND_NAMES: Record<string, string> = { summary: 'Summary', bullet: 'Bullet', blurb: 'Job description', headline: 'Headline', skills: 'Skills', techStack: 'Tech stack' };
 
 /** The card under the part being tailored: one line, or every line of a job or section. */
 interface Tailoring {
@@ -283,8 +281,15 @@ const REQUESTS = ["Use the job's keywords", 'Shorter', 'Lead with the result', '
 
 /** Lines the CV shows as a list item, with its "-" marker and hanging indent. */
 const LISTED = new Set(['bullet', 'skills']);
+/**
+ * The same words: a change of punctuation, case, bold or "/" for "and" only
+ * ("DynamoDB/PostgreSQL" → "DynamoDB and PostgreSQL"). Not worth a decision.
+ */
+const sameWords = (text: string) => text.replace(/\*\*|__/g, '').replace(/\s*\/\s*/g, ' and ').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+/** Back with nothing worth changing: the line already fits. */
+const unchanged = (item: Suggestion) => item.after !== undefined && sameWords(item.after) === sameWords(item.before) && !isRemoval(item);
 const isReady = (item: Suggestion) => !item.busy && !item.error && !item.decided && item.value !== undefined
-  && item.after?.trim() !== item.before.trim();
+  && item.after?.trim() !== item.before.trim() && !unchanged(item);
 
 /**
  * Quick tailoring: an unsaved draft for the job, drawn exactly as its PDF prints
@@ -887,7 +892,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       if (!current) return current;
       const items = current.items.map((item) => keys.includes(item.key) ? { ...item, decided: decision } : item);
       // A line still showing an error keeps the card open, so it can be tried again.
-      return items.every((item) => item.decided || (!item.busy && !item.error && item.after?.trim() === item.before.trim())) ? null : { ...current, items };
+      return items.every((item) => item.decided || (!item.busy && !item.error && (item.after?.trim() === item.before.trim() || unchanged(item)))) ? null : { ...current, items };
     });
   }
 
@@ -1002,17 +1007,17 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const skillsOnly = new Set(score?.keywords?.skillsOnly ?? []);
   const missing = score?.keywords?.missing ?? [];
   // The posting's keywords: what a bullet's "Keywords" check looks for.
-  const jobKeywords = [...matched, ...missing];
   const skills = new Set(draft.skills.map((skill) => skill.name.toLowerCase()));
   const waiting = tailoring?.items.filter((item) => item.busy).length ?? 0;
-  const ready = tailoring?.items.filter(isReady) ?? [];
+  // "Use all" takes the changes; removing a bullet is always its own click.
+  const ready = tailoring?.items.filter((item) => isReady(item) && !isRemoval(item)) ?? [];
   const many = (tailoring?.items.length ?? 0) > 1;
   /** Asked for (or queued) and not back yet. */
   const pending = (item: Suggestion) => !item.decided && item.after === undefined && !item.error;
-  /** Use / Skip / Try again / Dismiss for one suggestion: shown from Generate on, usable once it is back. */
-  const itemActions = (item: Suggestion) => {
-    if (item.decided) return null;
-    const same = item.after !== undefined && item.after.trim() === item.before.trim();
+  /** Use / Skip / Try again for one suggestion (the window's × closes it): shown from Generate on, usable once it is back. */
+  const itemActions = (item: Suggestion, extra?: ReactNode) => {
+    if (item.decided) return extra ? <div className="ra-row qt-actions">{extra}</div> : null;
+    const same = item.after !== undefined && (item.after.trim() === item.before.trim() || unchanged(item));
     const waits = item.busy || pending(item);
     return (
       <div className="ra-row qt-actions">
@@ -1024,7 +1029,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
           <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
         )}
         {!isAddition(item) && <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Try again</button>}
-        {!many && <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>}
+        {extra}
       </div>
     );
   };
@@ -1045,7 +1050,6 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             {nameControl}
           </nav>
         )}
-        <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined}>{status}</span>
         <span className="studio-actions">
           <span className="qt-history" role="group" aria-label="Change history">
             <button type="button" aria-label="Undo" title="Undo (Ctrl/⌘ Z)" aria-keyshortcuts="Control+Z Meta+Z"
@@ -1060,6 +1064,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
               disabled={saving || (!history.canReset && !pendingEdit)} onClick={resetChanges}>
               <DashboardIcon name="reset" size={16} /><span className="qt-history-label">Reset</span>
             </button>
+          </span>
+          {/* Where the CV stands, quietly, beside its history: "Unsaved changes", "CV and PDF saved". */}
+          <span className={`studio-status${saveError ? ' bad' : ''}`} title={saveError ?? undefined} role="status">
+            <DashboardIcon name="file" size={15} />{status}
           </span>
           {!resumeId
             ? <button className="ghost" disabled title="Save this CV before opening the full editor.">Open full editor</button>
@@ -1085,8 +1093,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
               <button className="ghost" autoFocus onClick={() => setClosing(false)}>Keep editing</button>
             </span>
           ) : (
-            <button className="ghost" disabled={saving} title="Close this window"
-              onClick={() => { if (dirty || pendingEdit) setClosing(true); else closeWindow(); }}>Close</button>
+            <button className="qt-bar-close" disabled={saving} title="Close this window" aria-label="Close"
+              onClick={() => { if (dirty || pendingEdit) setClosing(true); else closeWindow(); }}><DashboardIcon name="close" size={18} /></button>
           ))}
         </span>
       </header>
@@ -1131,26 +1139,19 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             // Until a new version (or an error) is back, the screen shows the CV through it.
             const windowed = windowedNow;
             const solo = many ? null : tailoring.items[0]!;
-            const company = job?.company || (job ? jobName(job) : 'the job');
-            const forJob = job ? jobName(job) : 'the job';
-            const title = waiting > 0 ? `Writing for ${company}…`
-              : many ? `${tailoring.items.length} lines · ${composing ? 'for' : 'tailored for'} ${forJob}`
-                : `${KIND_NAMES[solo!.target.kind] ?? 'Line'} · ${composing ? 'for' : 'tailored for'} ${forJob}`;
-            const wrapLines = (lines: ReactNode) => many ? <div key="lines" className="qt-screen-body" style={{ height: cardBox?.window }}>{lines}</div> : lines;
+            // While the lines are written the frame keeps the job's height (nothing jumps); once they
+            // are all back it grows with them, up to the screen's height, and scrolls beyond that.
+            const wrapLines = (lines: ReactNode) => many
+              ? <div key="lines" className="qt-screen-body" style={waiting > 0 || composing ? { height: cardBox?.window } : { minHeight: Math.min(cardBox?.window ?? 0, 240) }}>{lines}</div>
+              : lines;
             return (
               <div className={`qt-card qt-unit${many ? ' is-many' : ''}${windowed ? ' is-windowed' : ''}`} ref={cardRef} role="dialog" aria-label={many ? 'AI versions of these lines' : 'AI version of this line'}
                 style={{ top: cardTop, ...(cardBox && { left: cardBox.left, width: cardBox.width }) }}>
                 <div className={`qt-screen${waiting > 0 ? ' is-busy' : ''}${windowed ? ' is-window' : ''}`} style={cardBox?.font}>
-                  <div className="qt-screen-label">
-                    <span className={`qt-dot${waiting > 0 ? ' busy' : ''}`} aria-hidden="true" />
-                    <span className="qt-screen-title">{title}</span>
-                    {waiting > 0 && <span className="qt-elapsed">{elapsed}s</span>}
-                    <button className="qt-close" title="Close" aria-label="Close" onClick={() => setTailoring(null)}><DashboardIcon name="close" size={16} /></button>
-                  </div>
                   {/* A job or a section keeps one frame from the start: first a window onto the CV, then
                       the same frame with the new versions, which scroll inside it while it holds still. */}
                   {windowed ? <div key="window" className="qt-window" ref={paneRef} style={{ height: cardBox?.window }} aria-hidden="true" /> : inJob ? (
-                    <div key="job" className="qt-screen-body" style={{ height: cardBox?.window }}>
+                    <div key="job" className="qt-screen-body" style={waiting > 0 || composing ? { height: cardBox?.window } : { minHeight: Math.min(cardBox?.window ?? 0, 240) }}>
                       <div ref={jobRef} />
                       {slots?.run === tailoring.run && tailoring.items.map((item) => {
                         const slot = slots.at[item.key];
@@ -1158,10 +1159,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         const back = item.after !== undefined && !item.busy;
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
-                            {back ? <DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /> : withBold(item.before.trim())}
-                            {back && item.target.kind === 'bullet' && item.after!.trim() && (
-                              <BulletMeter text={item.after!} keywords={jobKeywords} compact />
-                            )}
+                            {back && !unchanged(item) ? <DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /> : withBold(item.before.trim())}
                             {back && isRemoval(item) && <span className="qt-slot-note qt-cut">Not needed for this job: Remove takes it off, Swap puts another achievement here.</span>}
                             {back && isAddition(item) && <span className="qt-slot-note qt-from">New bullet for this job</span>}
                             {back && (item.fromProfile || item.fromSavedCv) && <span className="qt-slot-note qt-from">{item.fromProfile ? 'From your Profile' : 'From your saved CVs'}</span>}
@@ -1185,12 +1183,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                       <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}${LISTED.has(item.target.kind) ? ' is-listed' : ''}`}>
                         {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
                         {/* Back: the change, red out and green in. Still waiting: the line as it is. */}
-                        {back ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} instant={item.streamed} /></div>
+                        {back && !unchanged(item) ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} instant={item.streamed} /></div>
+                          : back ? <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>
                           : item.busy && item.streaming ? <div className="qt-screen-text qt-streaming" aria-live="polite">{withBold(closedMarks(item.streaming))}<span className="qt-caret" aria-hidden="true" /></div>
                           : <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>}
-                        {back && item.target.kind === 'bullet' && item.after!.trim() && (
-                          <BulletMeter text={item.after!} keywords={jobKeywords} compact />
-                        )}
                         {item.error && !item.busy && <p className="ra-error">{item.error}</p>}
                         {many && itemActions(item)}
                         {many && !item.busy && item.after !== undefined && (
@@ -1210,30 +1206,32 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   }))}
                 </div>
                 <div className="qt-menu">
-                  {composing ? (
-                    <div className="ra-row qt-actions">
-                      <button className="qt-ai-button qt-generate" disabled={saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">Generate <AiBadge /></button>
-                      <button className="ghost" onClick={() => setTailoring(null)}>Dismiss</button>
-                    </div>
-                  ) : many ? (
-                    <div className="ra-row qt-actions">
-                      <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>Use all{ready.length ? ` ${ready.length}` : ''}</button>
-                      <button className="qt-ai-button" disabled={waiting > 0 || saving} onClick={() => void generate()}>Generate again <AiBadge /></button>
-                      <button className="ghost" onClick={() => setTailoring(null)}>Close</button>
-                    </div>
-                  ) : itemActions(solo!)}
-                  {waiting > 0 && (many || (solo!.target.kind !== 'bullet' && solo!.target.kind !== 'blurb' && solo!.target.kind !== 'headline')) && (
-                    <WorkingStatus seconds={elapsed}
-                      summary={tailoring.items.find((item) => item.busy && item.target.kind === 'summary') ?? null}
-                      skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
-                      progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
-                  )}
-                  {/* Several lines: the progress line's place is kept before Generate and after the
-                      lines are back, so the menu never moves. */}
-                  {many && composing && <p className="qt-working-status qt-screen-room" aria-hidden="true"><span>&nbsp;</span></p>}
-                  {waiting === 0 && many && !composing && (
-                    <p className="qt-working-status qt-screen-room" aria-hidden="true"><span>&nbsp;</span></p>
-                  )}
+                  {(() => {
+                    // Progress sits in the buttons' row, on the right: it takes no room of its own,
+                    // and the menu does not move when it comes and goes. The window's × closes.
+                    const status = waiting > 0 && (many || (solo!.target.kind !== 'bullet' && solo!.target.kind !== 'blurb' && solo!.target.kind !== 'headline')) ? (
+                      <WorkingStatus seconds={elapsed}
+                        summary={tailoring.items.find((item) => item.busy && item.target.kind === 'summary') ?? null}
+                        skills={tailoring.items.some((item) => item.busy && item.target.kind === 'skills')}
+                        progress={many ? `Tailoring… ${tailoring.items.length - waiting} of ${tailoring.items.length} ready.` : null} />
+                    ) : null;
+                    // The card's only close: the × at the end of its buttons' row (no line of its own).
+                    const close = <button className="qt-close" title="Close" aria-label="Close" onClick={() => setTailoring(null)}><DashboardIcon name="close" size={16} /></button>;
+                    if (composing) return (
+                      <div className="ra-row qt-actions">
+                        <button className="qt-ai-button qt-generate" disabled={saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">Generate <AiBadge /></button>
+                        {status}{close}
+                      </div>
+                    );
+                    if (many) return (
+                      <div className="ra-row qt-actions">
+                        <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>Use all{ready.length ? ` ${ready.length}` : ''}</button>
+                        <button className="qt-ai-button" disabled={waiting > 0 || saving} onClick={() => void generate()}>Generate again <AiBadge /></button>
+                        {status}{close}
+                      </div>
+                    );
+                    return itemActions(solo!, <>{status}{close}</>);
+                  })()}
                   {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
                   {solo && !solo.busy && solo.after !== undefined && (
                     <>
@@ -1246,7 +1244,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   )}
                   <label className="qt-request">
                     <span>What should change? <small>{composing || many ? '(optional)' : '(optional, then Try again)'}</small></span>
-                    <textarea rows={2} maxLength={500} value={tailoring.request}
+                    {/* Once the lines are back the box is one line, so they get the room. */}
+                    <textarea rows={many && !composing ? 1 : 2} maxLength={500} value={tailoring.request}
                       placeholder="e.g. shorter, lead with the payments work"
                       onChange={(e) => { const request = e.target.value; setTailoring((t) => t && { ...t, request }); }}
                       onKeyDown={(e) => {
