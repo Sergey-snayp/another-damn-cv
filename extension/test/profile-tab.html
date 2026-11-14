@@ -38,7 +38,7 @@
   const LINKEDIN_MODE = location.search.includes('linkedin');
   const LINKEDIN_LOGO = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="black"/></svg>');
   const FORM_MODE = location.search.includes('form') || LINKEDIN_MODE;
-  const session = LINKEDIN_MODE ? { 'fromLinkedIn:1': { at: Date.now(), host: null, job: { title: 'Senior Software Engineer (Python)', company: 'Varonis', location: 'Vancouver, BC (On-site)', description: 'Varonis is a leader in data security. Build the Secure AI Platform in Python on AWS.', logo: LINKEDIN_LOGO, url: 'https://www.linkedin.com/jobs/view/111' } } } : {};
+  const session = LINKEDIN_MODE ? { 'fromLinkedIn:1': { at: Date.now(), host: null, job: { title: 'Senior Software Engineer (Python)', company: 'Varonis', location: 'Vancouver, BC (On-site)', description: 'Varonis is a leader in data security. Build the Secure AI Platform in Python on AWS. Responsibilities: design services in Python and TypeScript, run them on AWS with Docker and Kubernetes, store data in PostgreSQL. Requirements: 5 years of backend experience with Node.js, REST APIs and CI/CD.', logo: LINKEDIN_LOGO, url: 'https://www.linkedin.com/jobs/view/111' } } } : {};
   // ?cvs: three CVs and a job posting; the Resume tab's CV dropdown, and switching after Autofill uploaded a CV.
   const CVS_MODE = location.search.includes('cvs');
   const SYNC_MODE = location.search.includes('sync');
@@ -345,6 +345,11 @@
       expect(/Secure AI Platform/.test(document.querySelector('#job-form [name="description"]')?.value ?? ''), 'and the description');
       expect(/From the LinkedIn posting you applied from: company, location, description\./.test(document.querySelector('.job-form-source')?.textContent ?? ''), 'the form says what came from LinkedIn');
       expect(session['fromLinkedIn:1'].host === 'jobs.example.com', 'the LinkedIn job belongs to the first site the tab showed');
+      // The keyword match: the apply page has no description, the LinkedIn posting has.
+      document.getElementById('job-form-back')?.click();
+      await wait(1500);
+      const matchText = document.getElementById('panel-autofill').textContent;
+      expect(/Matches \d+ out of \d+ keywords/.test(matchText) && !/Open a job description/.test(matchText), `the CV's keyword match uses the LinkedIn description (got "${document.querySelector('.resume-match, .resume-match-empty')?.textContent?.trim()}")`);
       throw Object.assign(new Error('done'), { done: true });
     }
     if (FORM_MODE) {

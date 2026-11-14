@@ -1305,7 +1305,15 @@ async function updateMatch({ force = false } = {}) {
       matchCapture = { promise: (async () => {
         try {
           const capture = await captureTab(tab.id), job = jobFromCapture(capture), keywords = findKeywords(job.text);
-          return { keywords: looksLikeJobPosting(capture, job, keywords) ? keywords : null, error: '' };
+          if (looksLikeJobPosting(capture, job, keywords)) return { keywords, error: '' };
+          // An apply page without the description: the job's own, from its job page (Jobvite) or
+          // from the LinkedIn posting this tab came from.
+          const details = await askPage({ type: 'job-details' }, tab).catch(() => null);
+          const description = String(details?.description || linkedInJob?.description || '').trim();
+          if (description.length < 200) return { keywords: null, error: '' };
+          const fuller = { ...capture, text: `${details?.title ?? ''}\n${description}`, matched: 'job description' };
+          const found = findKeywords(jobFromCapture(fuller).text);
+          return { keywords: looksLikeJobPosting(fuller, jobFromCapture(fuller), found) ? found : null, error: '' };
         } catch (error) { return { keywords: null, error: error.message || 'The job description is not ready.' }; }
       })() };
       if (!filling) renderAutofill();
