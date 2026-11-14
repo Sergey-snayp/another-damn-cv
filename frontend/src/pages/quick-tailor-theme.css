@@ -148,7 +148,10 @@
    buttons, and the CV's column no wider than a full-size page needs (the rest goes right). */
 .qt .qt-canvas { padding-right: 48px; }
 .qt .qt-zoom-bar { margin-right: -36px; }
-.qt .qt-body { grid-template-columns: minmax(0, 890px) minmax(380px, 1fr); }
+/* Side by side only where both fit; below that the page stacks (studio.css: max-width 1000px). */
+@media (min-width: 1001px) {
+  .qt .qt-body { grid-template-columns: minmax(0, 890px) minmax(380px, 1fr); }
+}
 
 /* The CV's name: click to rename, as in the full editor. */
 .qt .qt-name-button { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: 7px; background: none; color: var(--color-text); font: inherit; cursor: text; }
@@ -171,3 +174,22 @@
 .qt .qt-bar-close:hover:not(:disabled) { background: var(--qt-grey-strong); }
 .qt .qt-bar-close:focus-visible { outline: 2px solid var(--qt-green); outline-offset: 2px; }
 .qt .qt-bar-close:disabled { opacity: .45; cursor: default; }
+
+/* A narrow popup (the job page's window): the bar takes two rows, so the CV's name keeps its
+   room (name and status first, the buttons under them), and the zoom control takes its own
+   row above the CV instead of covering its header. */
+@media (max-width: 900px) {
+  .qt .studio-bar { flex-wrap: wrap; row-gap: 6px; }
+  .qt .studio-crumb { flex: 1 1 100%; }
+  .qt .studio-actions { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; row-gap: 6px; }
+}
+@media (max-width: 1000px) {
+  /* The whole page scrolls (the CV, then the job): not two half-height boxes. The popup's
+     own rule (.popup-frame .studio: the window's height) is more specific, hence the match. */
+  .popup-frame .studio.qt, .studio.qt { height: auto; min-height: 100vh; }
+  /* The scrollbar's room is kept from the start: the CV's zoom is fitted once, not refitted
+     a scrollbar narrower (which left the page wider than the window). */
+  html:has(.studio.qt) { scrollbar-gutter: stable; }
+  .qt .qt-canvas { overflow: visible; }
+  .qt .qt-zoom-bar { position: static; margin: 0 0 10px auto; }
+}
