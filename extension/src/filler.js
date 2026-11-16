@@ -184,29 +184,55 @@ function optionsFor(element) {
 
 /**
  * Workday's dropdown, as Simplify fills it: press the button, wait for the list
- * it opens (Workday's active popup), and press the option that matches the
- * first of `wanted` it has: the same text, else one starting with it.
+ * it opens (Workday's active popup: plain options, or "prompt" items that may
+ * open a second list), and press an option. `choose(texts)` picks the index.
  */
 const PLACEHOLDER_CHOICE = /^\s*(select one|select|choose( one)?|please select|--+)\s*$/i;
+const POPUP_OPTIONS = '[data-automation-activepopup="true"] [data-automation-id="promptOption"], [data-automation-activepopup="true"] [role="option"], [visibility="opened"] [role="option"], [role="listbox"] [role="option"]';
+const listboxText = (option) => normal(option.getAttribute('data-automation-label') || option.textContent);
+async function listboxOptions(button, previous = '') {
+  for (let waited = 0; waited < 3000; waited += 150) {
+    await wait(150);
+    const owned = optionsFor(button).filter((option) => !button.contains(option));
+    const options = (owned.length ? owned : [...document.querySelectorAll(POPUP_OPTIONS)].filter(visible))
+      .filter((option, index, all) => !all.some((other) => other !== option && other.contains(option)));
+    if (options.length && options.map(listboxText).join('|') !== previous) return options;
+  }
+  return [];
+}
+async function chooseInListbox(button, choose) {
+  press(button);
+  let options = await listboxOptions(button), path = [];
+  // Up to three lists deep: "Job Board", then "LinkedIn".
+  for (let level = 0; level < 3 && options.length; level++) {
+    const index = choose(options.map(listboxText));
+    if (index === null || index < 0) break;
+    const option = options[index];
+    path.push((option.getAttribute('data-automation-label') || option.textContent).trim());
+    option.scrollIntoView?.({ block: 'nearest' });
+    press(option.closest('[data-automation-id="promptLeafNode"]') ?? option);
+    for (let waited = 0; waited < 1500 && PLACEHOLDER_CHOICE.test(button.textContent); waited += 100) await wait(100);
+    if (!PLACEHOLDER_CHOICE.test(button.textContent)) return { text: path.at(-1), path, options: options.length };
+    options = await listboxOptions(button, options.map(listboxText).join('|'));
+  }
+  button.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+  return { text: null, path, options: options.length || path.length };
+}
 async function fillListbox(button, wanted) {
   const choices = wanted.map(normal).filter(Boolean);
   if (choices.includes(normal(button.textContent))) return { filled: true };
-  press(button);
-  let options = [];
-  for (let waited = 0; waited < 3000 && !options.length; waited += 150) {
-    await wait(150);
-    const owned = optionsFor(button).filter((option) => !button.contains(option));
-    options = owned.length ? owned : [...document.querySelectorAll('[data-automation-activepopup="true"] [role="option"], [role="listbox"] [role="option"]')].filter(visible);
-  }
-  const pick = choices.map((choice) => options.find((option) => optionText(option) === choice) ?? options.find((option) => optionText(option).startsWith(choice))).find(Boolean);
-  if (!pick) {
-    button.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
-    return { filled: false, note: options.length ? `"${wanted[0]}" is not one of its options. Choose one.` : 'Its list did not open. Choose one.' };
-  }
-  pick.scrollIntoView?.({ block: 'nearest' });
-  press(pick);
-  for (let waited = 0; waited < 1500 && PLACEHOLDER_CHOICE.test(button.textContent); waited += 100) await wait(100);
-  return { filled: !PLACEHOLDER_CHOICE.test(button.textContent) };
+  const best = (texts) => {
+    for (const choice of choices) {
+      const index = texts.findIndex((text) => text === choice);
+      if (index >= 0) return index;
+      const starts = texts.findIndex((text) => text.startsWith(choice));
+      if (starts >= 0) return starts;
+    }
+    return null;
+  };
+  const result = await chooseInListbox(button, best);
+  if (result?.text) return { filled: true };
+  return { filled: false, note: result?.options ? `"${wanted[0]}" is not one of its options. Choose one.` : 'Its list did not open. Choose one.' };
 }
 
 function press(element) {
@@ -601,6 +627,20 @@ function detailsBoxAfter(element) {
   return boxes.find((box) => DETAILS_LABEL.test(window.CVAutofillFields.labelOf(box)) && window.CVAutofillFields.isEmpty(box)) ?? null;
 }
 
+/**
+ * Where this job came from, then Simplify's order for a list without a box for
+ * the link: a job board before "Other". The page's own ?source= (LinkedIn) first.
+ */
+const SOURCE_ORDER = ['linkedin', 'indeed', 'glassdoor', 'job boards', 'job board', 'job sites', 'job site', 'job posting', 'online advertisement', 'online job', 'internet', 'website', 'career site', 'career websites', 'careers page', 'company website', 'social media', 'external', 'other', 'not listed'];
+function sourceOption(texts) {
+  const came = normal(new URLSearchParams(location.search).get('source') || new URLSearchParams(location.search).get('utm_source') || '');
+  for (const wanted of [came, ...SOURCE_ORDER].filter(Boolean)) {
+    const index = texts.findIndex((text) => text === wanted || text.startsWith(wanted) || text.split(/[^a-z0-9]+/).includes(wanted));
+    if (index >= 0) return index;
+  }
+  return null;
+}
+
 /** The option to choose among `texts`: "Other" first, else the closest source. */
 function heardAboutOption(texts) {
   const other = texts.findIndex((text) => OTHER_OPTION.test(text));
@@ -638,6 +678,11 @@ async function fillHeardAbout(field, link, state = {}) {
       if (!chosenElement.checked) chosenElement.click();
       chosen = { text: radioText(chosenElement), other: pick.other };
     }
+  } else if (kind === 'listbox') {
+    // Workday's menu has no box for a link: the place this job came from, then Simplify's order.
+    const result = await chooseInListbox(element, (texts) => sourceOption(texts));
+    if (result?.text) return done('check', `Chose "${result.path.join(' → ')}". Check it.`);
+    return done('missing', 'None of its options is a job board or "Other". Choose one yourself.');
   } else if (kind === 'combobox') {
     element.focus({ preventScroll: true });
     element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
