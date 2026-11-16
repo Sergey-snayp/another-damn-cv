@@ -66,7 +66,26 @@
       const found = location.pathname.match(/^\/((?:careers\/)?[^/]+\/job\/[^/]+)/);
       return found ? `${location.origin}/${found[1]}` : null;
     },
+  }, {
+    // Workday, read as Simplify reads it (its ResumeScores rules): the title is
+    // the jobPostingHeader, the details sit under "Job Posting Description",
+    // and the company's logo is the header's data-automation-id="logo" image,
+    // served from the Workday site itself.
+    host: /(^|\.)myworkday(?:jobs|site)\.com$/i,
+    title: () => clean(document.querySelector('[data-automation-id="jobPostingHeader"]')?.textContent),
+    location: () => [...document.querySelectorAll('[data-automation-id="locations"] dd')].map((node) => clean(node.textContent)).filter(Boolean).join(' · '),
+    // The posting's own name for the employer; else the Workday tenant ("ubc" → "UBC").
+    company: () => hiringOrganization() || tenantName(location.hostname.split('.')[0]),
+    description: '[data-automation-id="jobPostingDescription"]',
+    logo: (page) => page.querySelector('img[data-automation-id="logo"]')?.getAttribute('src') || null,
+    // An apply page (…/job/<place>/<name>/apply/applyManually) is its job page.
+    jobUrl: () => {
+      const found = location.pathname.match(/^(.*?\/(?:job|details)\/.+?)\/apply(?:\/|$)/);
+      return found ? `${location.origin}${found[1]}` : null;
+    },
   }];
+  /** "ubc" → "UBC" (a short tenant is an acronym); "salesforce" → "Salesforce". */
+  const tenantName = (slug) => (slug && slug.length <= 4 ? slug.toUpperCase() : slugName(slug));
   const board = () => BOARDS.find((item) => item.host.test(location.hostname)) ?? null;
   /** "varonis" → "Varonis"; "acme-corp" → "Acme Corp". */
   function slugName(slug) {
@@ -83,9 +102,17 @@
   function title() {
     return board()?.title() || clean(document.querySelector('h1')?.innerText) || tabParts()?.title || clean(document.title);
   }
-  /** The company, when the board says it in its own place or the tab title does ("Varonis Careers - …"). */
+  /**
+   * The company: the board's own place for it, else the posting's structured
+   * data (JobPosting.hiringOrganization.name, which most job boards include).
+   */
   function company() {
-    return board()?.company() || '';
+    return board()?.company() || hiringOrganization();
+  }
+  /** The employer the posting's structured data names. */
+  function hiringOrganization() {
+    const organization = posting()?.hiringOrganization;
+    return clean(typeof organization === 'string' ? organization : organization?.name).slice(0, 100);
   }
   /** The job's own address: an apply page's job page. */
   function jobUrl() {
@@ -217,7 +244,9 @@
     const selected = linkedin ? window.CVAutofillLinkedIn.read() : null;
     const job = posting();
     const bodyText = clean(linkedin ? selected?.text ?? '' : document.body?.innerText ?? '').slice(0, 80000);
-    const description = linkedin ? selected?.description ?? '' : job?.description ? htmlText(job.description).slice(0, 20000) : descriptionOnPage();
+    // A board's own place for the description first (Workday's keeps its headings and lists), then the structured data's.
+    const own = !linkedin && board()?.description ? descriptionOnPage() : '';
+    const description = linkedin ? selected?.description ?? '' : own || (job?.description ? htmlText(job.description).slice(0, 20000) : descriptionOnPage());
     const salary = salaryFrom(job) ?? salaryInText(bodyText) ?? { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null };
     const types = [].concat(job?.employmentType ?? []).join(' ');
     return {

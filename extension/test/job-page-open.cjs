@@ -12,9 +12,12 @@ const WORKDAY = 'https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/job/UBC-Vancouv
 const PLAIN = 'https://blog.example.com/posts/hiring-tips';
 const pages = {
   [WORKDAY]: `<!doctype html><title>Programmer Analyst I</title>
-    <main><h2 data-automation-id="jobPostingHeader">Programmer Analyst I</h2>
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"JobPosting","title":"Programmer Analyst I","datePosted":"2026-11-13","description":"Flat copy without its lists.","hiringOrganization":{"@type":"Organization","name":"University of British Columbia"}}</script>
+    <header><img data-automation-id="logo" src="https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/assets/logo" alt=""></header>
+    <main aria-label="Job Posting Description"><h2 data-automation-id="jobPostingHeader">Programmer Analyst I</h2>
+    <div data-automation-id="locations"><dl><dt>locations</dt><dd>UBC Vancouver Campus - Vancouver, BC Canada</dd></dl></div>
     <a role="button" data-automation-id="adventureButton" href="#" onclick="event.preventDefault(); document.body.insertAdjacentHTML('beforeend', '<div data-automation-id=wd-popup-frame><a data-automation-id=applyManually href=# onclick=&quot;event.preventDefault(); window.manual = true&quot;>Apply Manually</a></div>'); window.applied = true">Apply</a>
-    <div data-automation-id="jobPostingDescription"><p>Build and support university systems.</p></div></main>`,
+    <div data-automation-id="jobPostingDescription"><p>Build and support university systems.</p><h3>What you bring</h3><ul><li>Two years of web development</li><li>SQL and REST APIs</li></ul></div></main>`,
   [PLAIN]: '<!doctype html><title>Hiring tips</title><h1>Hiring tips</h1><p>How to read a job posting.</p>',
 };
 
@@ -89,6 +92,17 @@ async function panelFixture(browser, jobPage, { silentFor = 0 } = {}) {
     await page.waitForFunction(() => window.CVAutofillPanel?.isOpen(), { timeout: 5000 });
     const scan = await page.evaluate(() => window.__ask({ type: 'scan' }));
     assert.equal(scan.canOpenForm, true, 'the panel offers Start Application');
+    // The job card, read as Simplify reads Workday: the employer and its logo, never the web address.
+    assert.equal(scan.context.title, 'Programmer Analyst I');
+    assert.equal(scan.context.company, 'University of British Columbia', "the posting's own name for the employer");
+    assert.equal(scan.context.logo, 'https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/assets/logo', "Workday's header logo, though it is on Workday's site");
+    const details = await page.evaluate(() => window.__ask({ type: 'job-details' }));
+    assert.equal(details.location, 'UBC Vancouver Campus - Vancouver, BC Canada');
+    assert.match(details.description, /Build and support university systems\.\s+What you bring\s+Two years of web development\s+SQL and REST APIs/, 'the page\'s own description, its heading and list kept, not the flat copy');
+    // Without the structured data: the Workday tenant's name.
+    const tenant = await page.evaluate(() => { document.querySelector('script[type="application/ld+json"]').remove(); return window.CVAutofillJobDetails.company(); });
+    assert.equal(tenant, 'UBC');
+    console.log('PASS Workday job card: title, employer, logo, location and the description with its lists');
     assert.equal(await page.evaluate(() => Boolean(window.applied)), false, 'opening the panel clicks nothing');
     // The real panel, as Simplify's shows a job page: the job, then Start Application. No warning.
     const panel = await panelFixture(browser, page, { silentFor: 2500 });
