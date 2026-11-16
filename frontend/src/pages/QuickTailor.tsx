@@ -16,7 +16,7 @@ import { PagedDocument, ScaledPage } from '../resume/PagedDocument';
 import { designOf } from '../resume/theme';
 import { DraftHistory } from '../resume/draftHistory';
 import { assistantApi, type ResumeScore } from '../resume/studio/assistantApi';
-import { Gauge } from '../resume/studio/AssistantPanel';
+import { liveKeywords } from '../resume/liveKeywords';
 import { JobAssessment } from '../resume/studio/JobAssessment';
 import { useSkillCard } from '../resume/SkillInfo';
 import { notifyResumesChanged, useResumeInExtension } from '../extensionBridge';
@@ -25,12 +25,13 @@ import '../resume/studio/studio.css';
 import './quick-tailor-theme.css';
 import { AiBadge } from '../profile/AiBox';
 
-const PAGE_WIDTH = 794;
+/** The page's width in CSS pixels: A4, or Letter (8.5in) when the design says so. */
+const pageWidth = (size?: string) => (size === 'letter' ? 816 : 794);
 /** The canvas's padding, left and right (see .qt-canvas): the right one holds the lines' buttons. */
 const CANVAS_GUTTERS = 24 + 48;
 const newId = () => crypto.randomUUID();
 
-/** Marks the job's keywords in its description: found on the CV, or not yet. */
+/** Marks the job's keywords in its description as the keyword chips do: in this CV, or not yet. */
 function highlight(text: string, matched: string[], missing: string[]): ReactNode {
   const names = [...matched, ...missing].sort((a, b) => b.length - a.length);
   if (!names.length) return text;
@@ -111,9 +112,9 @@ function SummaryReportView({ report }: { report: SummaryReport }) {
           <ul>{report.failedChecks.map((check) => <li key={check.id}><b>{check.name}</b>{check.detail ? `: ${check.detail}` : ''}</li>)}</ul>
         </div>
       ) : (
-        <p className="qt-report-passed">✓ Passes all 10 checks · {report.wordCount} words{report.attempts > 1 ? ` · fixed in ${report.attempts} attempts` : ''}</p>
+        <p className="qt-report-passed">✓ Passes all 10 checks ({report.wordCount} words{report.attempts > 1 ? `, after ${report.attempts} tries` : ''}).</p>
       )}
-      {report.decidingGap && <p className="qt-report-deciding"><b>Deciding gap:</b> {report.decidingGap}</p>}
+      {report.decidingGap && <p className="qt-report-deciding"><b>Biggest gap for this job:</b> {report.decidingGap}</p>}
       {report.gaps.length > 0 && (
         <div className="qt-report-gaps">
           <p className="qt-report-label">Gaps</p>
@@ -325,7 +326,11 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const [layoutChanged, setLayoutChanged] = useState(false);
   const [name, setName] = useState('');
   const [job, setJob] = useState<JobDetail | null>(null);
-  const [score, setScore] = useState<ResumeScore | null>(null);
+  /** The job's keywords as the server matched them, and the CV it matched them against. */
+  const [score, setScore] = useState<{ result: ResumeScore; scored: RenderedResume } | null>(null);
+  /** The draft the keyword status follows: a short pause after the last change. */
+  const [keywordDraft, setKeywordDraft] = useState<RenderedResume | null>(null);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -371,13 +376,26 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return () => { active = false; };
   }, [jobId, sourceId, history]);
 
-  // The score for the job, again after each save.
+  // The job's keywords, matched by the server against the saved CV, again after each save.
   useEffect(() => {
     if (!jobId || !loaded || !contextId) return;
     let active = true;
-    assistantApi.score(contextId, { jobId }).then((next) => active && setScore(next), () => active && setScore(null));
+    const scored = loaded;
+    assistantApi.score(contextId, { jobId }).then((next) => active && setScore({ result: next, scored }), () => active && setScore(null));
     return () => { active = false; };
   }, [contextId, jobId, loaded?.snapshot]);
+  // Between saves the keywords follow the draft, 300 ms after the last change.
+  useEffect(() => {
+    const timer = setTimeout(() => setKeywordDraft(draft), 300);
+    return () => clearTimeout(timer);
+  }, [draft]);
+  const keywordStatus = useMemo(() => {
+    const keywords = score?.result.keywords;
+    if (!keywords) return null;
+    return keywordDraft
+      ? liveKeywords(keywords, score.scored, keywordDraft)
+      : { matched: keywords.matched, missing: keywords.missing, skillsOnly: keywords.skillsOnly ?? [] };
+  }, [score, keywordDraft]);
 
   // The page is as wide as the column allows, up to its real size.
   useLayoutEffect(() => {
@@ -388,7 +406,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return () => observer.disconnect();
   }, [draft !== null]);
   // The canvas keeps 24px on the left and 48px on the right, where the lines' buttons sit.
-  const fitScale = canvasWidth ? Math.min(1, Math.max(0.5, (canvasWidth - CANVAS_GUTTERS) / PAGE_WIDTH)) : 1;
+  const fitScale = canvasWidth ? Math.min(1, Math.max(0.5, (canvasWidth - CANVAS_GUTTERS) / pageWidth(theme.pageSize))) : 1;
   // Zoom: "fit" follows the window; a chosen size (50% to 200%) stays, in this browser.
   const [zoom, setZoomState] = useState<number | null>(() => {
     try {
@@ -480,7 +498,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       await renameSaved(workspace.resumeId, next);
     } catch {
       setName(before);
-      setSaveError('Could not rename the CV.');
+      setSaveError("The name didn't save. Try renaming it again.");
     }
   }
 
@@ -994,7 +1012,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   );
   const pdfReady = !dirty && !pendingEdit && !layoutChanged && pdfSnapshot === draft.snapshot;
   const status = saving ? creatingPdf ? 'Creating PDF…' : 'Saving CV…'
-    : saveError ? 'Save failed' : !resumeId ? 'Unsaved CV draft' : dirty || pendingEdit || layoutChanged ? 'Unsaved changes' : pdfReady ? 'CV and PDF saved' : 'Click Save to create the PDF';
+    : saveError ? 'Save failed' : !resumeId ? 'Unsaved CV draft' : dirty || pendingEdit || layoutChanged ? 'Unsaved changes' : pdfReady ? 'CV and PDF saved' : 'Saved, no PDF yet';
   // A section's delete takes it off this CV; it comes back with "Show". Saved with the CV.
   const hidden = theme.hiddenSections ?? [];
   const setHidden = (next: string[]) => {
@@ -1004,10 +1022,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const sectionName = (key: string) => key.startsWith('custom:')
     ? draft.customSections?.find((section) => `custom:${section.lineageId}` === key)?.title || 'Section'
     : ({ summary: 'Professional Summary', experience: 'Professional Experience', projects: 'Projects', skills: 'Skills', education: 'Education', certifications: 'Certifications' } as Record<string, string>)[key] ?? key;
-  const matched = score?.keywords?.matched ?? [];
-  const skillsOnly = new Set(score?.keywords?.skillsOnly ?? []);
-  const missing = score?.keywords?.missing ?? [];
-  // The posting's keywords: what a bullet's "Keywords" check looks for.
+  const matched = keywordStatus?.matched ?? [];
+  const skillsOnly = keywordStatus?.skillsOnly ?? [];
+  const missing = keywordStatus?.missing ?? [];
+  // Keywords already in Skills get no "+ Add" button.
   const skills = new Set(draft.skills.map((skill) => skill.name.toLowerCase()));
   const waiting = tailoring?.items.filter((item) => item.busy).length ?? 0;
   // "Use all" takes the changes; removing a bullet is always its own click.
@@ -1021,21 +1039,23 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     const text = isAddition(item) ? (from ? `New bullet, ${from}` : 'New bullet') : from ? from[0]!.toUpperCase() + from.slice(1) : '';
     return text ? <span className="qt-tag">{text}</span> : null;
   };
-  /** Use / Skip / Try again for one suggestion (the window's × closes it): shown from Generate on, usable once it is back. */
+  /** Use / Skip / Tailor again for one suggestion (the window's × closes it): shown from Tailor on, usable once it is back. */
   const itemActions = (item: Suggestion, extra?: ReactNode) => {
     if (item.decided) return extra ? <div className="ra-row qt-actions">{extra}</div> : null;
     const same = item.after !== undefined && (item.after.trim() === item.before.trim() || unchanged(item));
     const waits = item.busy || pending(item);
     return (
       <div className="ra-row qt-actions">
-        {(item.after !== undefined || waits) && (
-          <button className="primary" disabled={same || saving || waits} onClick={() => use([item])}>{same ? (item.target.kind === 'skills' ? 'Nothing new to add' : 'Already fits') : isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : many ? 'Use' : 'Use this'}</button>
-        )}
+        {/* Nothing to change is said, not offered as a button. */}
+        {same ? <span className="qt-fits">{item.target.kind === 'skills' ? 'Nothing new to add' : 'No change needed'}</span>
+          : (item.after !== undefined || waits) && (
+            <button className="primary" disabled={saving || waits} onClick={() => use([item])}>{isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : 'Use'}</button>
+          )}
         {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
         {(item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
           <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
         )}
-        {!isAddition(item) && <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Try again</button>}
+        {!isAddition(item) && <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Tailor again</button>}
         {extra}
       </div>
     );
@@ -1052,7 +1072,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
           </nav>
         ) : (
           <nav className="studio-crumb">
-            <Link to="/documents" onClick={(event) => { if (dirty && !confirm('Discard your unsaved changes?')) event.preventDefault(); }}>Documents</Link>
+            <Link to="/documents" onClick={(event) => { if (dirty && !confirm('You have unsaved changes. Discard them?')) event.preventDefault(); }}>Documents</Link>
             <span className="sep">›</span>
             {nameControl}
           </nav>
@@ -1081,7 +1101,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             : popup
               ? <a className="ghost" href={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`} target="_blank" rel="noreferrer">Open full editor</a>
               : <Link className="ghost" to={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`}
-                  onClick={(event) => { if (dirty && !confirm('Discard your unsaved changes?')) event.preventDefault(); }}>Open full editor</Link>}
+                  onClick={(event) => { if (dirty && !confirm('You have unsaved changes. Discard them?')) event.preventDefault(); }}>Open full editor</Link>}
           <button className="primary" disabled={saving} onClick={() => void save()}>
             {saving ? creatingPdf ? 'Creating PDF…' : 'Saving…' : 'Save'}
           </button>
@@ -1092,11 +1112,11 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   event.preventDefault();
                   downloadFromApi(event.currentTarget.href, `${name || 'CV'}.pdf`).catch((err: Error) => setSaveError(err.message));
                 } : undefined}>Export PDF</a>
-            : <button className="ghost" disabled title="Click Save to create the PDF first.">Export PDF</button>}
+            : <button className="ghost" disabled title="Save to create the PDF">Export PDF</button>}
           {popup && (closing ? (
             <span className="qt-close-confirm" role="alert">
-              Unsaved changes.
-              <button className="ghost" onClick={closeWindow}>Close anyway</button>
+              You have unsaved changes.
+              <button className="ghost" onClick={closeWindow}>Discard changes</button>
               <button className="ghost" autoFocus onClick={() => setClosing(false)}>Keep editing</button>
             </span>
           ) : (
@@ -1113,7 +1133,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         <main className="qt-canvas" ref={canvas}>
           {hidden.length > 0 && (
             <div className="qt-hidden" role="status">
-              <span>Hidden from this CV:</span>
+              <span>Hidden:</span>
               {hidden.map((key) => (
                 <span key={key} className="qt-hidden-item">
                   {sectionName(key)}
@@ -1200,8 +1220,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                             {READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after, cvText).map((note, index) => (
                               <p key={`r${index}`} className="qt-note qt-hint">{note}</p>
                             ))}
-                            {item.added?.length ? <p className="qt-note">+ From your CV: {item.added.join(', ')}</p> : null}
-                            {item.dropped?.length ? <p className="qt-note">− Left out for this job: {item.dropped.join(', ')}</p> : null}
+                            {item.added?.length ? <p className="qt-note">Added from your CV: {item.added.join(', ')}</p> : null}
+                            {item.dropped?.length ? <p className="qt-note">Left out for this job: {item.dropped.join(', ')}</p> : null}
                             {item.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
                           </>
                         )}
@@ -1223,11 +1243,11 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                     const close = <button className="qt-close" title="Close" aria-label="Close" onClick={() => setTailoring(null)}><DashboardIcon name="close" size={16} /></button>;
                     if (composing) return (
                       <div className="ra-row qt-actions">
-                        <button className="qt-ai-button qt-generate" disabled={saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">Generate <AiBadge /></button>
+                        <button className="qt-ai-button qt-generate" disabled={saving} onClick={() => void generate()} title="Ctrl/⌘ Enter">Tailor <AiBadge /></button>
                         {status}{close}
                       </div>
                     );
-                    // Taking the results first; "Generate again" sits with the request it uses, below.
+                    // Taking the results first; "Tailor again" sits with the request it uses, below.
                     if (many) return (
                       <div className="ra-row qt-actions">
                         <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>Use all{ready.length ? ` ${ready.length}` : ''}</button>
@@ -1236,21 +1256,21 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                     );
                     return itemActions(solo!, <>{solo!.after !== undefined && !solo!.busy ? sourceTag(solo!) : null}{status}{close}</>);
                   })()}
-                  {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">⚠ Not added: {note}</p>)}
+                  {tailoring.notes?.map((note, index) => <p key={index} className="qt-note">Not on your CV, so not added: {note}</p>)}
                   {solo && !solo.busy && solo.after !== undefined && (
                     <>
                       {solo.report && <SummaryReportView report={solo.report} />}
-                      {solo.added?.length ? <p className="qt-note">+ From your CV: {solo.added.join(', ')}</p> : null}
-                      {solo.dropped?.length ? <p className="qt-note">− Left out for this job: {solo.dropped.join(', ')}</p> : null}
+                      {solo.added?.length ? <p className="qt-note">Added from your CV: {solo.added.join(', ')}</p> : null}
+                      {solo.dropped?.length ? <p className="qt-note">Left out for this job: {solo.dropped.join(', ')}</p> : null}
                       {solo.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
                     </>
                   )}
                   <div className="qt-request">
                     {/* The request and the button that uses it, on one row. */}
                     <div className="qt-request-head">
-                      <label htmlFor="qt-request-text">What should change? <small>{composing || many ? '(optional)' : '(optional, then Try again)'}</small></label>
+                      <label htmlFor="qt-request-text">What should change? <small>{composing || many ? '(optional)' : '(optional, then Tailor again)'}</small></label>
                       {many && !composing && (
-                        <button type="button" className="qt-ai-button qt-again" disabled={waiting > 0 || saving} onClick={() => void generate()}>Generate again <AiBadge /></button>
+                        <button type="button" className="qt-ai-button qt-again" disabled={waiting > 0 || saving} onClick={() => void generate()}>Tailor again <AiBadge /></button>
                       )}
                     </div>
                     {/* Once the lines are back the box is one line, so they get the room. */}
@@ -1275,22 +1295,38 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         </main>
 
         <aside className="qt-job">
-          <JobAssessment jobId={jobId} />
-          <section className="ra-card">
-            <h3>Resume Score</h3>
-            {score?.score !== null && score?.score !== undefined ? (
+          <header className="qt-job-head">
+            <h2 className="qt-job-title">{job ? jobName(job) : 'The job'}</h2>
+            {job?.company && <p className="qt-job-company">{job.company}</p>}
+            {job && (job.description ? (
+              <details className="qt-description-toggle" open={descriptionOpen} onToggle={(event) => setDescriptionOpen(event.currentTarget.open)}>
+                <summary>{descriptionOpen ? 'Hide the job description' : 'Show the job description'}</summary>
+                <div className="qt-description">{highlight(job.description, matched, missing)}</div>
+              </details>
+            ) : <p className="qt-job-none">This job has no description yet.</p>)}
+          </header>
+          <JobAssessment jobId={jobId} job={job} />
+          <section className="ra-card qt-keywords" aria-labelledby="qt-keywords-heading">
+            <h3 id="qt-keywords-heading">
+              <span>Job keywords in this CV</span>
+              {keywordStatus && <span className="qt-keywords-count">{matched.length} of {matched.length + missing.length}</span>}
+            </h3>
+            {keywordStatus ? (
               <>
-                <div className="ra-score"><Gauge score={score.score} /></div>
-                <p className="ra-muted center">Mentions {matched.length} of {matched.length + missing.length} keywords from the job</p>
                 <div className="ra-keywords">
-                  {matched.map((kw) => skillsOnly.has(kw)
-                    ? <span key={kw} className="ra-kw have only" tabIndex={0} title={`${kw} is only in your skills list. Add it to a bullet or tech stack where you used it.`} {...keywordCard(kw)}>✓ {kw} · skills only</span>
+                  {matched.map((kw) => skillsOnly.includes(kw)
+                    ? <span key={kw} className="ra-kw have only" tabIndex={0} {...keywordCard(kw)}>{kw}</span>
                     : <span key={kw} className="ra-kw have" tabIndex={0} {...keywordCard(kw)}>✓ {kw}</span>)}
                   {missing.map((kw) => <span key={kw} className="ra-kw miss" tabIndex={0} {...keywordCard(kw)}>{kw}</span>)}
                 </div>
+                {skillsOnly.length > 0 && (
+                  <p className="qt-skills-only">
+                    Only in Skills: {skillsOnly.join(', ')}. Add {skillsOnly.length === 1 ? 'it' : 'them'} to a bullet where you used {skillsOnly.length === 1 ? 'it' : 'them'}.
+                  </p>
+                )}
                 {missing.some((kw) => !skills.has(kw.toLowerCase())) && (
                   <div className="qt-missing">
-                    <p className="ra-muted">Add to Skills only the ones you have used:</p>
+                    <p>Add to Skills the ones you have used:</p>
                     <div className="sf-chips">
                       {missing.filter((kw) => !skills.has(kw.toLowerCase())).map((kw) => (
                         <button key={kw} className="qt-add-skill" disabled={saving}
@@ -1302,14 +1338,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   </div>
                 )}
               </>
-            ) : <p className="ra-muted">{score ? 'This job names none of the skills we look for.' : 'Scoring…'}</p>}
-          </section>
-          <section className="ra-card">
-            <h3>{job ? jobName(job) : 'The job'}</h3>
-            {job?.company && <p className="ra-muted">{job.company}</p>}
-            <div className="qt-description">
-              {job?.description ? highlight(job.description, matched, missing) : <span className="ra-muted">This job has no description yet.</span>}
-            </div>
+            ) : <p className="qt-keywords-empty">{score ? 'The job names no skills this check knows.' : 'Checking the job’s keywords…'}</p>}
           </section>
           {keywordCards.card}
         </aside>

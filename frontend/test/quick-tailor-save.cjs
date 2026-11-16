@@ -6,6 +6,10 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
 // checks never sign in to an account, save real documents or print real PDFs.
 const appUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+/** The fake API answers fast, in the same order a real one would. */
+const fake = ms => pause(ms / 5);
+/** Until no line is still typing itself in. */
+const typed = page => page.waitForFunction(() => !document.querySelector('.qt-typing'));
 
 async function editText(page, selector, value, key = 'Enter') {
   await page.click(selector);
@@ -182,6 +186,9 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
   await page.setViewport({ width: 1180, height: 880 });
   const events = [], errors = [], aiRequests = [], assessmentRequests = [];
   let assessmentUnavailable = historyMode;
+  // The second run of "Should you apply?" answers with a dealbreaker; Dismiss job edits the job.
+  let blocked = false;
+  const jobEdits = [];
   let assessedOnOpen = 0;
   let fail = failure, cvSaved = false;
   const renames = [];
@@ -246,7 +253,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       if (pathname === '/api/jobs/job-1/quick-tailor' && request.method() === 'GET') { events.push('preview'); return reply(prepared()); }
       if (pathname === '/api/jobs/job-1/quick-tailor' && request.method() === 'POST') {
         events.push('save');
-        await pause(100);
+        await fake(100);
         if (saveHeld) await saveHeld;
         if (fail === 'cv') return reply({ message: 'Test save failure' }, 503);
         const body = JSON.parse(request.postData());
@@ -268,20 +275,34 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         return reply({ theme: null });
       }
       if (pathname === '/api/jobs') return reply([]);
-      if (pathname === '/api/jobs/job-1') return reply({ id: 'job-1', title: 'Engineer', company: 'Acme', description: 'Build Node.js services.' });
+      if (pathname === '/api/jobs/job-1' && request.method() === 'PATCH') { jobEdits.push(JSON.parse(request.postData())); return reply({ id: 'job-1', history: [] }); }
+      if (pathname === '/api/jobs/job-1') return reply({ id: 'job-1', title: 'Engineer', company: 'Acme', description: 'Build Node.js services.', url: 'https://jobs.example.com/acme/engineer', location: 'Toronto', remote: true, salary: null, status: 'saved' });
       if (pathname.endsWith('/score')) return reply({ score: historyMode ? 50 : null, keywords: historyMode ? { matched: ['Node.js', 'TypeScript'], missing: ['Docker'], skillsOnly: ['TypeScript'] } : null, issues: [], job: { id: 'job-1', title: 'Engineer', company: 'Acme' } });
       if (pathname.endsWith('/job-assessment')) {
         assessmentRequests.push({ path: pathname, body: JSON.parse(request.postData() || '{}') });
-        await pause(200);
+        await fake(200);
         if (assessmentUnavailable) return reply({ message: 'Test assessment unavailable' }, 503);
+        if (blocked) return reply({ verdict: 'skip', score: 3, technologies: [], headline: 'German is required.', summary: 'German at C1 is required and your Profile does not show it.',
+          strengths: [], gaps: [], questions: [], advice: 'Not used with a dealbreaker.',
+          requirements: [{ name: 'German C1', tier: 'must', status: 'missing', from: null, jobQuote: 'German at C1' }, { name: 'Node.js', tier: 'must', status: 'have', from: null, jobQuote: 'Build Node.js services.' }],
+          dealbreaker: { point: 'The posting requires it, and it isn’t in your Profile.', jobQuote: 'German at C1' },
+          facts: { workMode: null, location: null, salary: null, applyBy: null }, basis: { source: 'profile', profileRevision: 3, jobId: 'job-1' } });
         return reply({ verdict: 'apply', score: 8, technologies: [{ name: 'Node.js', inProfile: true }, { name: 'Docker', inProfile: false }],
+          headline: 'Your Node.js API work fits. Docker would be new to you.',
+          requirements: [
+            { name: 'Node.js', tier: 'must', status: 'have', from: null, jobQuote: 'Build Node.js services.' },
+            { name: 'Service ownership', tier: 'must', status: 'close', from: 'Payments', jobQuote: 'Build Node.js services.' },
+            { name: 'Docker', tier: 'nice', status: 'missing', from: null, jobQuote: 'Build Node.js services.' },
+          ],
+          advice: 'Lead with the payment APIs you built.', dealbreaker: null,
+          facts: { workMode: null, location: null, salary: 'CAD 150,000', applyBy: null },
           summary: 'I would apply. Your payment API work in Node.js fits the central backend responsibilities; confirm how much Docker the role expects.',
           strengths: [{ point: 'Your API delivery is relevant to this role.', jobQuote: 'Build Node.js services.', profileQuote: 'Led payment API delivery, including details omitted from this CV.' }],
           gaps: [{ point: 'The Profile does not yet show container operations experience.', jobQuote: 'Build Node.js services.', importance: 'preferred' }],
           questions: ['How much infrastructure ownership is expected?'], basis: { source: 'profile', profileRevision: 3, jobId: 'job-1' } });
       }
       if (pathname.endsWith('/tailor-summary/stream')) {
-        aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(150);
+        aiRequests.push(JSON.parse(request.postData() || '{}')); await fake(150);
         // The summary as it is written, the fix announced, then the checked result: one JSON object per line.
         const lines = [
           { type: 'draft', summary: 'Built services for **Ac' },
@@ -293,13 +314,13 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       }
       if (pathname.endsWith('/tailor-skills')) {
         const body = JSON.parse(request.postData() || '{}');
-        await pause(150);
+        await fake(150);
         return reply({ groups: body.groups.map(group => ({ category: group.category, skills: [...new Set([...group.skills, 'Kubernetes'])], added: ['Kubernetes'], dropped: [] })), cannotDo: [] });
       }
       if (pathname.endsWith('/tailor-role')) {
         const body = JSON.parse(request.postData() || '{}');
         roleRequests.push(body);
-        await pause(200);
+        await fake(200);
         if (!profileChoice) return reply({ matched: false, profileRole: null, chosen: [], alternates: [] });
         if (body.role.bullets.length === 1) {
           const other = body.role.company === 'Other Co';
@@ -333,19 +354,19 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         }
         // Bullets of a job arrive one by one and are long, as the real AI's are.
         if (body.kind === 'techStack') {
-          await pause(150);
+          await fake(150);
           return reply({ original: body.text, suggestion: 'Redis, Go', cannotDo: [] });
         }
         if (body.kind === 'bullet' && /Acme Labs/.test(body.context || '')) {
-          await pause(300 + 500 * aiRequests.length % 1200);
+          await fake(300 + 500 * aiRequests.length % 1200);
           return reply({ suggestion: `${body.text} Rewritten for the job with reliable services, observability and clear ownership from design through production support for the team.`, cannotDo: [] });
         }
-        await pause(150);
+        await fake(150);
         return reply({ suggestion: 'Built services for Acme.', cannotDo: [] });
       }
       if (pathname.endsWith('/save')) {
         events.push('save');
-        await pause(100);
+        await fake(100);
         if (saveHeld) await saveHeld;
         if (fail === 'cv') return reply({ message: 'Test save failure' }, 503);
         const body = JSON.parse(request.postData());
@@ -357,7 +378,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       if (pathname.endsWith('/pdf') && request.method() === 'POST') {
         assert.ok(cvSaved, 'PDF generation must follow a successful CV save');
         events.push('pdf');
-        await pause(100);
+        await fake(100);
         return fail === 'pdf' ? reply({ message: 'Test PDF failure' }, 503) : reply({ fileName: 'Sam_Lee_Resume.pdf', version: `${resume.snapshot}:design:3` });
       }
       if (pathname.endsWith('/pdf')) { events.push('download'); return request.respond({ status: 204 }); }
@@ -445,7 +466,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.equal(createdDocuments, 0, 'opening Quick Tailor creates no document');
       assert.equal(await page.evaluate(() => window.testMessages.some(message => message.type === 'CV_PLATFORM_RESUMES_CHANGED')), false, 'opening does not publish a new document to the extension');
       await page.waitForSelector('.qt-assessment-start button');
-      await pause(400);
+      await pause(150);
       assert.equal(assessmentRequests.length, 0, 'opening Quick Tailor does not run "Should you apply?"');
       await page.click('.qt-assessment-start button');
       if (historyMode) {
@@ -455,10 +476,27 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.click('.qt-assessment button');
       }
       await page.waitForSelector('.qt-assessment-verdict');
-      assert.match(await page.$eval('.qt-assessment', element => element.textContent), /I’d apply/);
-      assert.match(await page.$eval('.qt-assessment', element => element.textContent), /payment API work/);
-      assert.equal(await page.$eval('.qt-assessment-score', element => element.getAttribute('aria-label')), '8 out of 10');
-      assert.equal(await page.$$eval('.qt-assessment-meter i.on', bars => bars.length), 8);
+      // At a glance: the verdict, the score with its bar, one sentence, the checklist, advice, facts.
+      assert.equal(await page.$eval('.qt-assessment-verdict', element => element.textContent), 'Strong fit');
+      assert.equal(await page.$eval('.qt-assessment-value', element => element.textContent), 'Fit 8/10');
+      assert.equal(await page.$eval('.qt-fit-bar', bar => `${bar.getAttribute('aria-label')}: ${bar.querySelectorAll('.on').length} on`), 'Score 8 out of 10: 8 on');
+      assert.equal(await page.$$eval('.qt-assessment-meter, .ra-score', found => found.length), 0, 'no meter and no second score');
+      assert.equal(await page.$eval('.qt-fit-headline', element => element.textContent), 'Your Node.js API work fits. Docker would be new to you.');
+      assert.deepEqual(await page.$$eval('.qt-fit-group', groups => groups.map(group => `${group.querySelector('h4').textContent} ${group.querySelector('.qt-fit-group-head span').textContent}: ${[...group.querySelectorAll('.qt-fit-chip')].map(chip => `${chip.className.replace('qt-fit-chip is-', '')} ${chip.textContent}`).join(' | ')}`)), [
+        'Must-have 1 of 2: have You have it: Node.js | close Close equivalent: Service ownership· from Payments',
+        'Nice to have 0 of 1: missing Missing: Docker',
+      ], 'must-haves and nice-to-haves, each marked have, close (with what instead) or missing');
+      assert.equal(await page.$eval('.qt-fit-note', note => note.textContent), 'If you applyLead with the payment APIs you built.');
+      assert.deepEqual(await page.$$eval('.qt-fit-facts > div', facts => facts.map(fact => fact.textContent)),
+        ['Work modeRemote', 'LocationToronto', 'SalaryCAD 150,000', 'Apply byNot stated'], 'the job\'s own details first, then the posting\'s, else "Not stated"');
+      assert.deepEqual(await page.$$eval('.qt-fit-actions > *', items => items.map(item => item.textContent)), ['Why this score'], 'no link to the posting: you are already on it');
+      assert.equal(await page.$('.qt a[href*="jobs.example.com"]'), null, 'no "Open the job posting" either');
+      assert.equal(await page.$('.qt-fit-why'), null, 'the reasons wait behind "Why this score"');
+      await page.click('.qt-fit-actions button');
+      await page.waitForSelector('.qt-fit-why');
+      assert.match(await page.$eval('.qt-assessment-summary', element => element.textContent), /^Your payment API work/);
+      assert.match(await page.$eval('.qt-assessment', element => element.textContent), /Preferred: Your Profile doesn’t show container operations experience\./);
+      assert.match(await page.$eval('.qt-assessment', element => element.textContent), /Check before applying/);
       assert.deepEqual(await page.$$eval('.qt-assessment-summary .qt-tech', marks => marks.map(mark => `${mark.textContent}:${mark.className}`)),
         ['Node.js:qt-tech has', 'Docker:qt-tech missing'], 'technologies are bold, green when the Profile shows them and red when not');
       assert.ok(assessmentRequests.every(request => request.path === '/api/profile/job-assessment' && JSON.stringify(request.body) === JSON.stringify({ jobId: 'job-1' })), 'only the job is sent; the assessment reads the saved Profile independently of the CV');
@@ -470,8 +508,25 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       const beforeProfileSave = assessmentRequests.length;
       await page.evaluate(() => window.dispatchEvent(new StorageEvent('storage', { key: 'cv-platform:profile-career-changed', newValue: 'updated-profile' })));
       await page.waitForSelector('.qt-assessment-start button');
-      await pause(400);
+      await pause(150);
       assert.equal(assessmentRequests.length, beforeProfileSave, 'a Profile edit clears the old advice without running it again');
+      // A dealbreaker: the warning instead of the sentence, no advice, only "Dismiss job".
+      blocked = true;
+      await page.click('.qt-assessment-start button');
+      await page.waitForSelector('.qt-fit-note.is-blocked');
+      assert.equal(await page.$eval('.qt-assessment-verdict', element => element.textContent), 'Not this one');
+      assert.equal(await page.$eval('.qt-fit-note', note => note.textContent), 'Dealbreaker: German C1The posting requires it, and it isn’t in your Profile.');
+      assert.equal(await page.$('.qt-fit-headline'), null);
+      assert.deepEqual(await page.$$eval('.qt-fit-actions > *', items => items.map(item => item.textContent)), ['Dismiss job']);
+      await page.click('.qt-fit-actions button');
+      await page.waitForSelector('.qt-fit-status');
+      assert.deepEqual(jobEdits, [{ status: 'dismissed' }]);
+      await page.click('.qt-fit-actions button');
+      await page.waitForFunction(() => !document.querySelector('.qt-fit-status'));
+      assert.deepEqual(jobEdits, [{ status: 'dismissed' }, { status: 'saved' }], 'Undo puts the job back where it was');
+      await page.click('.qt-fit-more');
+      await page.waitForSelector('.qt-fit-why');
+      await page.screenshot({ path: '/private/tmp/job-agent-quick-tailor-dealbreaker.png', fullPage: true });
     }
     assessedOnOpen = assessmentRequests.length;
     if (fullEditor) {
@@ -538,8 +593,13 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.equal(await page.$eval(school, element => element.textContent), 'History University');
       await editBulletControls(page, true);
       await page.waitForSelector('.qt-add-skill');
+      const keywordCount = () => page.$eval('.qt-keywords-count', element => element.textContent);
+      const countBefore = await keywordCount();
       await page.click('.qt-add-skill');
       assert.ok((await page.$eval('[data-section="skills"]', element => element.textContent)).includes('Docker'));
+      // The keywords follow the draft, not the last save: Docker is in this CV now, in Skills only.
+      await page.waitForFunction(() => /Docker/.test(document.querySelector('.qt-skills-only')?.textContent ?? ''));
+      assert.notEqual(await keywordCount(), countBefore);
       await page.click(undo);
       assert.ok(!(await page.$eval('[data-section="skills"]', element => element.textContent)).includes('Docker'));
       await page.click(redo);
@@ -565,7 +625,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(aiRequests.length, asked + 1);
       assert.equal(aiRequests.at(-1).instruction, 'Make it shorter', 'the request typed under the screen goes to the AI');
-      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Try again').click());
+      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Tailor again').click());
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(aiRequests.length, asked + 2, 'Try again writes another version');
       await pause(100); // Shown as it was written: the change is drawn at once, not typed in again.
@@ -575,15 +635,15 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       assert.equal(await page.$eval('.qt-unit .qt-change', element => element.textContent), 'First edit Built services for Acme.');
       assert.equal(await page.$eval('.qt-unit .qt-change b', element => element.textContent.trim()), 'Acme', 'with its bold');
       const report = await page.$eval('.qt-unit', element => element.innerText);
-      for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'Gaps'])
+      for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Biggest gap for this job: Node.js', 'Gaps'])
         assert.ok(report.toLowerCase().includes(part.toLowerCase()), `the summary card shows: ${part}`);
-      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent || button.getAttribute('aria-label'))), ['Use this', 'Try again', 'Close'], 'no Dismiss: the × at the row\'s end closes it');
+      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent || button.getAttribute('aria-label'))), ['Use', 'Tailor again', 'Close'], 'no Dismiss: the × at the row\'s end closes it');
       await page.$eval('.qt-card', card => { card.scrollTop = card.scrollHeight; });
       await pause(50);
       assert.ok(await page.$eval('.qt-card', card => {
         const bar = card.querySelector('.qt-menu > .qt-actions').getBoundingClientRect(), box = card.getBoundingClientRect();
         return bar.top >= box.top - 1 && bar.bottom <= box.bottom;
-      }), 'Use this and Try again stay at the top of the card while it scrolls');
+      }), 'Use and Tailor again stay at the top of the card while it scrolls');
       await page.$eval('.qt-card', card => { card.scrollTop = 0; });
       await page.screenshot({ path: '/private/tmp/job-agent-qt-card.png' });
       {
@@ -634,7 +694,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         assert.equal(lineCount, 2, 'both bullets are shown in the job');
         assert.match(await page.$eval('.qt-unit .qt-screen-body', body => body.textContent), /Acme Labs/, 'with the job\'s own title line');
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
-        await pause(1500); // The changes type themselves in.
+        await typed(page); // The changes type themselves in.
         assert.match(await page.$eval('.qt-unit .qt-slot', slot => slot.textContent), /Rewritten for the job/);
         assert.ok(await page.$('.qt-unit .qt-slot .qt-add'), 'what was put in is marked');
         const bulletsBefore = await page.$$eval('.qt-zoom [data-section="experience"] article:first-of-type li .pro-text', rows => rows.map(row => row.textContent));
@@ -661,7 +721,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.waitForSelector('.qt-unit .qt-generate');
         await page.click('.qt-unit .qt-generate');
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
-        await pause(1500); // The lines type themselves in.
+        await typed(page); // The lines type themselves in.
         assert.equal(bulletLines(), linesBefore, 'no bullet is tailored line by line');
         assert.equal(roleRequests.length, choicesBefore + 1);
         const slots = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
@@ -670,14 +730,16 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         assert.match(slots[1], /Cut checkout latency by 30% with Redis caching\./);
         assert.match(slots[1], /From your Profile/);
         assert.doesNotMatch(slots[1], /For recruiters/, 'a plain line has no recruiter note');
-        // A keyword only in the skills list is marked as such.
+        // A keyword only in the skills list is in this CV, without the check mark, and says so on its own line.
+        // Docker too: "+ Docker" put it in Skills above, unsaved, and the keywords follow the draft.
         assert.deepEqual(
           await page.$$eval('.ra-kw.have', chips => chips.map(chip => chip.textContent)),
-          ['✓ Node.js', '✓ TypeScript · skills only'],
+          ['✓ Node.js', 'TypeScript', 'Docker'],
         );
+        assert.equal(await page.$eval('.qt-skills-only', line => line.textContent.trim()), 'Only in Skills: TypeScript, Docker. Add them to a bullet where you used them.');
         await page.screenshot({ path: '/private/tmp/job-agent-qt-profile-choice.png' });
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Swap').click());
-        await pause(1500);
+        await page.waitForFunction(() => /Mentored two engineers/.test(document.querySelectorAll('.qt-unit .qt-slot')[1]?.textContent)); await typed(page);
         assert.match(await page.$$eval('.qt-unit .qt-slot', rows => rows[1].textContent), /Mentored two engineers on code review\./, 'Swap brings the next best');
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all')).click());
         const roleBullets = await page.$$eval('.qt-zoom [data-section="experience"] article:first-of-type li .pro-text', rows => rows.map(row => row.textContent));
@@ -692,7 +754,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
         await page.waitForSelector('.qt-unit .qt-generate');
         // Before Generate: one button, no Dismiss, and no empty band before "What should change?".
-        assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent.trim() || button.getAttribute('aria-label'))), ['Generate', 'Close']);
+        assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent.trim() || button.getAttribute('aria-label'))), ['Tailor', 'Close']);
         assert.ok(await page.evaluate(() => {
           const actions = document.querySelector('.qt-unit .qt-menu > .qt-actions').getBoundingClientRect();
           const request = document.querySelector('.qt-unit .qt-request').getBoundingClientRect();
@@ -710,7 +772,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.click('.qt-unit .qt-generate');
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 3);
         assert.equal(roleRequests.at(-1).position, 0, 'the whole job says where it is on the CV');
-        await pause(1500);
+        await typed(page);
         const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
         await page.screenshot({ path: '/private/tmp/job-agent-qt-job-lines.png' });
         assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet, from your Profile/);
@@ -726,7 +788,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.waitForSelector('.qt-unit .qt-generate');
         await page.click('.qt-unit .qt-generate');
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
-        await pause(1500);
+        await typed(page);
         const fewer = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
         assert.match(fewer[1], /Not needed for this job/);
         assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].some(button => button.textContent === 'Swap')), 'Swap keeps a bullet in its place');
@@ -769,7 +831,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         assert.equal(roleRequests.at(-1).role.client, 'SymphonyAI');
         assert.deepEqual(roleRequests.at(-1).role.bullets, [bulletsBefore[0]]);
         assert.match(await page.$eval('.qt-unit', card => card.textContent), /From your Profile/);
-        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Try again').click());
+        await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Tailor again').click());
         await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
         assert.equal(roleRequests.length, before + 2, 'Try again also reads Profile and CV evidence');
         assert.equal(aiRequests.length, linesBefore, 'neither request falls back to the CV-only line rewriter');
@@ -784,7 +846,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
 
         // A section request keeps each role and its Swap alternatives separate.
         const groupedBefore = roleRequests.length;
-        await page.click('[title="Tailor every job for this job posting"]');
+        await page.click('[title="Tailor every role for this job"]');
         await page.waitForSelector('.qt-unit .qt-generate');
         await page.click('.qt-unit .qt-generate');
         // A whole section is shown in the CV's own text too, each line's change in its own place.
@@ -797,7 +859,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
           const slot = [...document.querySelectorAll('.qt-unit .qt-slot')].find(slot => /Go tooling\./.test(slot.textContent));
           [...slot.querySelectorAll('button')].find(button => button.textContent === 'Swap').click();
         });
-        await pause(1500);
+        await page.waitForFunction(() => [...document.querySelectorAll('.qt-unit .qt-slot')].some(slot => /Redis operational/.test(slot.textContent))); await typed(page);
         const slots = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
         assert.ok(slots.some(text => text.includes('Redis operational') && text.includes('From your saved CVs')));
         assert.ok(slots.some(text => text.includes('30%')));
@@ -836,7 +898,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       await page.click('.qt-unit .qt-generate');
       await page.waitForSelector('.qt-unit .qt-screen-line .qt-actions .primary');
       assert.ok((await page.$$('.qt-unit .qt-screen-line')).length >= 2, 'each skills line is a row of the screen');
-      await pause(500);
+      await page.waitForFunction(() => /Kubernetes/.test(document.querySelector('.qt-unit .qt-screen')?.innerText)); await typed(page);
       assert.match(await page.$eval('.qt-unit .qt-screen', element => element.innerText), /Kubernetes/);
       await page.screenshot({ path: '/private/tmp/job-agent-qt-skills.png' });
       await page.evaluate(() => document.querySelector('.qt-unit .qt-close').click());
@@ -915,7 +977,8 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
     }
     await page.$eval(summary, element => { element.focus(); element.textContent = 'Edited for Acme.'; element.blur(); });
     if (!failure) { await editBulletControls(page, !fullEditor); await editInlineSections(page); }
-    await pause(fullEditor ? 2300 : 1800);
+    if (fullEditor) { const saves = events.filter(event => event === 'save').length; await pause(1900); for (let waited = 0; waited < 3000 && events.filter(event => event === 'save').length === saves; waited += 50) await pause(50); await pause(100); }
+    else await pause(300);
     if (fullEditor) {
       assert.ok(!events.includes('pdf'), 'full-editor autosaves do not create PDFs');
       await page.click('.studio-export');
@@ -936,7 +999,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
       console.log('PASS closing Quick Tailor without Save creates nothing');
       return;
     }
-    assert.equal(await page.$eval('.studio-actions button[title="Click Save to create the PDF first."]', button => button.disabled), true, 'Export is disabled before Save');
+    assert.equal(await page.$eval('.studio-actions button[title="Save to create the PDF"]', button => button.disabled), true, 'Export is disabled before Save');
     await page.click('.studio-actions button.primary');
 
     if (failure) {
@@ -981,12 +1044,18 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
     headless: true,
   });
   try {
-    if (process.argv.includes('--history')) await check(browser, null, false, true);
-    else {
-      for (const failure of ['close', null, 'cv', 'pdf']) await check(browser, failure);
-      await check(browser, null, false, true);
-      await check(browser, null, true);
-    }
+    // One scenario with --only=<name> (test/run.cjs runs them in parallel), else all in turn.
+    const scenarios = {
+      close: () => check(browser, 'close'),
+      save: () => check(browser, null),
+      cv: () => check(browser, 'cv'),
+      pdf: () => check(browser, 'pdf'),
+      history: () => check(browser, null, false, true),
+      editor: () => check(browser, null, true),
+    };
+    const only = process.argv.includes('--history') ? 'history' : process.argv.find((arg) => arg.startsWith('--only='))?.slice(7);
+    if (only && !scenarios[only]) throw new Error(`No scenario ${only}: ${Object.keys(scenarios).join(', ')}`);
+    for (const [name, run] of Object.entries(scenarios)) if (!only || name === only) await run();
   } finally {
     await browser.close();
   }

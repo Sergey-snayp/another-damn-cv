@@ -3,10 +3,10 @@ import { roleLines, stackLine } from '../techStack';
 import type { RenderedResume } from '../../resumeApi';
 import { RewritePopover } from '../RewritePopover';
 import { DiffText } from '../DiffText';
-import { sectionOrder, themeVars, type BuiltInSection } from '../theme';
+import { loadFont, sectionOrder, themeVars, type BuiltInSection } from '../theme';
 import type { ResumeDocumentProps, RewriteTarget } from '../ResumeDocument';
 import { useSkillCard } from '../SkillInfo';
-import { MONTHS, monthYear, range } from '../dates';
+import { MONTHS, formatDate, range, withoutCountry } from '../dates';
 import { htmlToMarks, spanHtml, spansOf } from '../../text/marks';
 import { SpanView } from '../../text/Marked';
 import { DashboardIcon } from '../../jobs/DashboardIcon';
@@ -21,6 +21,10 @@ function dateForSave(value: string): string {
   const numeric = text.match(/^(\d{4})[-/](\d{1,2})$/);
   if (numeric && Number(numeric[2]) >= 1 && Number(numeric[2]) <= 12)
     return `${numeric[1]}-${numeric[2]!.padStart(2, '0')}`;
+  // "01/2024", as the numeric date format shows it.
+  const monthFirst = text.match(/^(\d{1,2})\/(\d{4})$/);
+  if (monthFirst && Number(monthFirst[1]) >= 1 && Number(monthFirst[1]) <= 12)
+    return `${monthFirst[2]}-${monthFirst[1]!.padStart(2, '0')}`;
   return text;
 }
 
@@ -197,16 +201,18 @@ function EducationDegree({ value, hasField, readOnly, onChange }: {
   </>;
 }
 
-function DocumentControl({ action, label, title = label, description = label, onClick, className = '', compact = action === 'remove', controlKey }: {
+function DocumentControl({ action, label, title = label, description = label, onClick, className = '', compact = action === 'remove', controlKey, hides = false }: {
   action: 'add' | 'remove'; label: string; title?: string; description?: string;
   onClick(): void; className?: string; compact?: boolean; controlKey?: string;
+  /** Takes it off this CV without deleting it (a section): an eye, not a bin. */
+  hides?: boolean;
 }) {
   // A remove shows no text on hover: the red outline already shows what it takes away.
   const quiet = action === 'remove';
   return <button type="button" className={`doc-${action}${action === 'add' ? ' pro-add' : ''} ${className}`}
     title={quiet ? undefined : title} aria-label={description} data-control-label={compact && !quiet ? label : undefined} data-control-key={controlKey} onClick={onClick}>
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={action === 'add' ? 'M12 5v14M5 12h14' : 'M3 6h18M8 6V3h8v3M6 6l1 15h10l1-15M10 11v6M14 11v6'} />
+      <path d={action === 'add' ? 'M12 5v14M5 12h14' : hides ? 'M10.7 5.1A10.7 10.7 0 0 1 21.9 11.7a1 1 0 0 1 0 .7 10.7 10.7 0 0 1-1.4 2.5M14.1 14.2a3 3 0 0 1-4.2-4.2M17.5 17.5A10.8 10.8 0 0 1 2.1 12.3a1 1 0 0 1 0-.7 10.8 10.8 0 0 1 4.4-5.1M2 2l20 20' : 'M3 6h18M8 6V3h8v3M6 6l1 15h10l1-15M10 11v6M14 11v6'} />
     </svg>
     {!compact && label}
   </button>;
@@ -243,6 +249,8 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   };
   const [rewritingOwn, setRewriting] = useState<RewriteTarget | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  // The design's font, from Google Fonts when it isn't on every computer; page breaks are worked out again once it arrives.
+  useEffect(() => { void loadFont(theme.fontFamily); }, [theme.fontFamily]);
   const [added, setAdded] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ key: string } | null>(null);
   /** A skill just added on a line of its own, so its type can be written first (optional). */
@@ -305,15 +313,15 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     const role = resume.experiences[i]!;
     const context = `${role.title} at ${role.company}`;
     const targets: RewriteTarget[] = [];
-    if ((role.blurb ?? '').trim()) targets.push({ text: role.blurb ?? '', context, kind: 'blurb', label: `${role.company || 'Job'} · Description`, key: `description:${role.lineageId ?? i}`,
+    if ((role.blurb ?? '').trim()) targets.push({ text: role.blurb ?? '', context, kind: 'blurb', label: `${role.company || 'Role'}, description`, key: `description:${role.lineageId ?? i}`,
       apply: (next, d) => { d.experiences[i]!.blurb = next; } });
     role.achievements.forEach((bullet, j) => {
-      if (bullet.bullet.trim()) targets.push({ text: bullet.bullet, context, kind: 'bullet', label: `${role.company || 'Job'} · bullet ${j + 1}`, key: bullet.lineageId,
+      if (bullet.bullet.trim()) targets.push({ text: bullet.bullet, context, kind: 'bullet', label: `${role.company || 'Role'}, bullet ${j + 1}`, key: bullet.lineageId,
         role: { company: role.company, title: role.title, from: role.from, client: role.client ?? '', description: role.blurb ?? '', techStack: role.techStack ?? '', position: i },
         apply: (next, d) => setBullet(d, i, role.lineageId, bullet.lineageId, j, next),
         append: (next, d) => appendBullet(d, i, role.lineageId, next) });
     });
-    if ((role.techStack ?? '').trim()) targets.push({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack', label: `${role.company || 'Job'} · Tech stack`, key: `tech-stack:${role.lineageId ?? i}`,
+    if ((role.techStack ?? '').trim()) targets.push({ text: role.techStack ?? '', context: roleLines(role), kind: 'techStack', label: `${role.company || 'Role'}, tech stack`, key: `tech-stack:${role.lineageId ?? i}`,
       apply: (next, d) => { d.experiences[i]!.techStack = stackLine(next); } });
     return targets;
   };
@@ -337,8 +345,8 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   });
   /** A section heading's delete: takes the whole section off this CV (it can be shown again). */
   const removeSection = (key: string, title: string) => onHideSection && !readOnly
-    ? <DocumentControl action="remove" compact label={`Remove ${title}`} className="pro-remove-section"
-        description={`Remove the ${title} section from this CV`} onClick={() => onHideSection(key)} />
+    ? <DocumentControl action="remove" hides compact label={`Hide ${title}`} className="pro-remove-section"
+        description={`Hide the ${title} section on this CV`} onClick={() => onHideSection(key)} />
     : null;
   const tailorButton = (title: string, onClick: (event: React.MouseEvent<HTMLButtonElement>) => void, className = '') =>
     onTailor && !readOnly ? <button type="button" className={`ai pro-tailor ${className}`} title={title} aria-label={title} onClick={onClick}><DashboardIcon name="sparkle" size={13} /></button> : null;
@@ -375,6 +383,27 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
     {!readOnly && <DocumentControl action="add" label="Add bullet" className="pro-add-bullet" controlKey={`add-bullet:${key}`}
       description={`Add a bullet to ${context}`} onClick={() => addItem(`${key}:bullet:${bullets.length}`, draft => insert(draft, bullets.length))} />}
   </>;
+
+  /** Dates and places as the Design panel says: "Jan 2024" or "01/2024", with or without the country. */
+  const dates = theme.dateFormat ?? 'short';
+  /** An education's school, and its degree and field: on two lines, or on one (the Design panel). */
+  const oneLineEducation = theme.educationLayout === 'one-line';
+  type Education = (typeof resume.educations)[number];
+  const institutionOf = (row: Education, i: number) => (
+    <RichText line value={row.institution} placeholder="Institution" bold={null} readOnly={readOnly} onChange={(v) => onChange((d) => { d.educations[i]!.institution = v; })} />
+  );
+  const degreeOf = (row: Education, i: number) => (
+    <span className="doc-title">
+      <EducationDegree value={row.degree ?? ''} hasField={Boolean(row.field?.trim())} readOnly={readOnly}
+        onChange={(value) => onChange((d) => { d.educations[i]!.degree = value; })} />
+      {(row.field?.trim() || !readOnly) && <RichText line value={row.field ?? ''} placeholder="Field of study" bold={null} readOnly={readOnly}
+        onChange={(value) => onChange((d) => { d.educations[i]!.field = value; })} />}
+    </span>
+  );
+  const place = (location?: string | null) => {
+    const text = location?.trim() ?? '';
+    return text && theme.showCountry === false ? withoutCountry(text) : text;
+  };
 
   /** A contact line: the filled fields, joined by " | ", with "Open for relocation" after the location when ticked. */
   const contactLine = (keys: Array<'phone' | 'email' | 'location' | 'linkedin' | 'github' | 'website'>) => {
@@ -429,7 +458,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
       <section className="doc-section" data-section="experience">
         <h2 tabIndex={-1} data-control-key="experience-heading">
           Professional Experience
-          {tailorButton('Tailor every job for this job posting', (event) => askAll(resume.experiences.flatMap((_, i) => roleTargets(i)), event))}
+          {tailorButton('Tailor every role for this job', (event) => askAll(resume.experiences.flatMap((_, i) => roleTargets(i)), event))}
           {removeSection('experience', 'Professional Experience')}
         </h2>
         {resume.experiences.map((role, i) => (
@@ -438,7 +467,9 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
               <span className="doc-company">
                 <RichText line value={role.company} placeholder="Company" bold={null} readOnly={readOnly} onChange={(v) => onChange((d) => { d.experiences[i]!.company = v; })} />
               </span>
-              <span className="doc-dates">{range(role.from, role.to, role.current)}</span>
+              {theme.locationAboveDates
+                ? place(role.location) && <span className="doc-place">{place(role.location)}</span>
+                : <span className="doc-dates">{range(role.from, role.to, role.current, dates)}</span>}
               {tailorButton(`Tailor ${role.title || 'this job'} at ${role.company || 'this company'}: its project and bullets`, (event) => askAll(roleTargets(i), event), 'pro-tailor-role')}
               {!readOnly && (
                 <DocumentControl action="remove" label="Remove experience" title="Remove role" description={`Remove experience: ${role.title} at ${role.company}`}
@@ -450,7 +481,9 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
                 <RichText line value={role.title} placeholder="Title" bold={null} readOnly={readOnly} onChange={(v) => onChange((d) => { d.experiences[i]!.title = v; })} />
                 {role.client?.trim() && <span> at {role.client}</span>}
               </span>
-              {role.location?.trim() && <span className="doc-place">{role.location}</span>}
+              {theme.locationAboveDates
+                ? <span className="doc-dates">{range(role.from, role.to, role.current, dates)}</span>
+                : place(role.location) && <span className="doc-place">{place(role.location)}</span>}
             </div>
             {/* The job's description: its own paragraph under the title line, before the bullets. */}
             {((role.blurb ?? '').trim() || (!readOnly && describing === (role.lineageId ?? String(i)))) && (
@@ -538,9 +571,9 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
           <article className={`doc-role pro-editable-role${markOf(project.lineageId)}`} key={project.lineageId ?? i}>
             <div className="doc-roleline">
               <span className="doc-company"><b>{project.name || 'Project'}</b></span>
-              <span className="doc-dates">{range(project.from, project.to, project.current)}</span>
+              <span className="doc-dates">{range(project.from, project.to, project.current, dates)}</span>
               {tailorButton(`Tailor ${project.name || 'this project'} for the job`, (event) => askAll(project.bullets.flatMap((text, j) => text.trim()
-                ? [{ text, context: project.name, kind: 'bullet', label: `${project.name || 'Project'} · bullet ${j + 1}`,
+                ? [{ text, context: project.name, kind: 'bullet', label: `${project.name || 'Project'}, bullet ${j + 1}`,
                     apply: (next: string, d: RenderedResume) => { d.projects![i]!.bullets[j] = next; } }] : []), event), 'pro-tailor-role')}
             </div>
             {(project.role || project.link) && (
@@ -662,28 +695,28 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
         {resume.educations.map((row, i) => (
           <article className={`doc-role doc-education${markOf(row.lineageId)}`} key={row.lineageId ?? i} data-edit-item="education" data-edit-key={row.lineageId} data-added={added === row.lineageId || undefined}>
             <div className="doc-roleline">
-              <span className="doc-company">
-                <RichText line value={row.institution} placeholder="Institution" bold={null} readOnly={readOnly} onChange={(v) => onChange((d) => { d.educations[i]!.institution = v; })} />
-              </span>
+              {oneLineEducation ? (
+                // One line: "Degree, Field, Institution", the dates on the right.
+                <span className="doc-edu-line">
+                  {degreeOf(row, i)}
+                  {([row.degree, row.field].some((v) => v?.trim()) && row.institution?.trim()) ? ', ' : !readOnly ? ' ' : null}
+                  <span className="doc-company">{institutionOf(row, i)}</span>
+                </span>
+              ) : (
+                <span className="doc-company">{institutionOf(row, i)}</span>
+              )}
               <span className="doc-dates">
-                {(row.from || !readOnly) && <RichText line value={monthYear(row.from)} placeholder="Education start date" bold={null} readOnly={readOnly}
+                {(row.from || !readOnly) && <RichText line value={formatDate(row.from, dates)} placeholder="Education start date" bold={null} readOnly={readOnly}
                   onChange={(value) => onChange((d) => { d.educations[i]!.from = dateForSave(value); })} />}
                 {((row.from && row.to) || !readOnly) && ' - '}
-                {(row.to || !readOnly) && <RichText line value={monthYear(row.to)} placeholder="Education end date" bold={null} readOnly={readOnly}
+                {(row.to || !readOnly) && <RichText line value={formatDate(row.to, dates)} placeholder="Education end date" bold={null} readOnly={readOnly}
                   onChange={(value) => onChange((d) => { d.educations[i]!.to = dateForSave(value); })} />}
               </span>
               {!readOnly && <DocumentControl action="remove" label="Remove education" description={`Remove education: ${row.institution || 'empty education'}`}
                 onClick={() => removeItem(resume.educations[i + 1]?.lineageId ?? resume.educations[i - 1]?.lineageId ?? 'add-education', d => { d.educations.splice(i, 1); })} />}
             </div>
-            {([row.degree, row.field].some((v) => v?.trim()) || !readOnly) && (
-              <div className="doc-subline">
-                <span className="doc-title">
-                  <EducationDegree value={row.degree ?? ''} hasField={Boolean(row.field?.trim())} readOnly={readOnly}
-                    onChange={(value) => onChange((d) => { d.educations[i]!.degree = value; })} />
-                  {(row.field?.trim() || !readOnly) && <RichText line value={row.field ?? ''} placeholder="Field of study" bold={null} readOnly={readOnly}
-                    onChange={(value) => onChange((d) => { d.educations[i]!.field = value; })} />}
-                </span>
-              </div>
+            {!oneLineEducation && ([row.degree, row.field].some((v) => v?.trim()) || !readOnly) && (
+              <div className="doc-subline">{degreeOf(row, i)}</div>
             )}
           </article>
         ))}
@@ -699,7 +732,7 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
           <article className={`doc-role doc-education${markOf(item.lineageId)}`} key={item.lineageId ?? i}>
             <div className="doc-roleline">
               <span className="doc-company"><b>{item.name || 'Certification'}</b></span>
-              <span className="doc-dates">{monthYear(item.date)}</span>
+              <span className="doc-dates">{formatDate(item.date, dates)}</span>
             </div>
             {(item.issuer || item.link) && (
               <div className="doc-subline"><span className="doc-title">{[item.issuer, item.link].filter(Boolean).join(' | ')}</span></div>
@@ -728,7 +761,10 @@ export function ProfessionalDocument({ resume: given, theme, onChange, readOnly,
   const name = [contact.firstName, contact.lastName];
 
   return (
-    <div ref={root} className={`page tpl-professional${readOnly ? ' read-only' : ''}`} style={themeVars(theme)}>
+    <div ref={root} style={themeVars(theme)} className={[
+      'page tpl-professional', readOnly && 'read-only', `align-${theme.headerAlign ?? 'center'}`, `bullets-${theme.bulletIcon ?? 'dash'}`,
+      `size-${theme.pageSize ?? 'a4'}`, `margins-${theme.margins ?? 'narrow'}`, theme.nameCaps === false && 'name-plain', theme.skillsListed === false && 'skills-plain', oneLineEducation && 'education-one-line',
+    ].filter(Boolean).join(' ')}>
       <header className="doc-head" data-section="header">
         <h1>
           <RichText line value={name[0] ?? ''} placeholder="First" bold={null} readOnly={readOnly} onChange={setContact('firstName')} />

@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { withTechStacks } from '../resume/techStack';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { api } from '../api';
 import { careerApi } from '../profile/careerApi';
 import { groupLikeProfile } from '../profile/skillGroups';
 import { resumeApi, type RenderedResume } from '../resumeApi';
@@ -9,14 +8,14 @@ import { notifyResumesChanged } from '../extensionBridge';
 import { ResumeDocument } from '../resume/ResumeDocument';
 import { PagedDocument, ScaledPage } from '../resume/PagedDocument';
 import { ImportButton } from '../resume/ImportButton';
-import { customKey, sectionOrder, type SectionKey } from '../resume/theme';
+import { customKey, sectionOrder, PAGE_SIZES, type SectionKey } from '../resume/theme';
 import { useEditableResumeTheme } from '../resume/useResumeTheme';
 import {
   CertificationsForm, CustomSectionForm, EducationForm, ExperienceForm, HeaderForm, ProjectsForm, SkillsForm, SummaryForm,
 } from '../resume/studio/SectionForms';
-import { resumeFromProfile } from '../resume/studio/fromProfile';
 import { NameSizeControl } from '../resume/studio/NameSizeControl';
 import { AssistantPanel } from '../resume/studio/AssistantPanel';
+import { DesignPanel } from '../resume/studio/DesignPanel';
 import { AiSettingsForm } from '../resume/studio/AiSettingsForm';
 import type { ChatSuggestion, IssueSection, ResumeScore } from '../resume/studio/assistantApi';
 import '../resume/document.css';
@@ -45,8 +44,8 @@ function labelOf(section: Section, resume: RenderedResume): string {
   return resume.customSections?.find((entry) => entry.lineageId === id)?.title.trim() || 'Untitled section';
 }
 
-const PAGE_WIDTH = 794;
-const PAGE_HEIGHT = 1123;
+/** The page in CSS pixels, by the design's page size: A4 794 × 1123, Letter 816 × 1056. */
+const pageBox = (size: keyof typeof PAGE_SIZES = 'a4') => ({ width: size === 'letter' ? 816 : 794, height: Math.round(PAGE_SIZES[size].height) });
 const AUTOSAVE_MS = 2000;
 
 const newId = () => crypto.randomUUID();
@@ -266,6 +265,7 @@ export function ResumeEditor() {
   }, [draft !== null]);
 
   // Opens at 100%, the page's real size; a narrow window shrinks it to fit. + zooms past it.
+  const { width: PAGE_WIDTH, height: PAGE_HEIGHT } = pageBox(theme.pageSize);
   const scale = zoom === 'fit-width'
     ? Math.min(1, Math.max(0.3, (canvasSize.width - 108) / PAGE_WIDTH))
     : zoom === 'fit-page'
@@ -327,18 +327,6 @@ export function ResumeEditor() {
       setSaveError(`Could not create the PDF: ${(err as Error).message}`);
     } finally {
       setExporting(false);
-    }
-  }
-
-  async function resetToProfile() {
-    if (!draft) return;
-    if (!confirm('Fill this CV from your Profile? Its current content stays in History.')) return;
-    try {
-      const [profile, career] = await Promise.all([api.profile(), careerApi.read()]);
-      setDraft(resumeFromProfile(draft, profile, career.data));
-      setSection(null);
-    } catch (err) {
-      setSaveError(`Could not read your Profile: ${(err as Error).message}`);
     }
   }
 
@@ -506,7 +494,7 @@ export function ResumeEditor() {
           <aside className="studio-left">
             <div className="studio-tabs">
               <button className={tab === 'editor' ? 'on' : ''} onClick={() => setTab('editor')}>Editor</button>
-              <button className={tab === 'layout' ? 'on' : ''} onClick={() => setTab('layout')}>Layout</button>
+              <button className={tab === 'layout' ? 'on' : ''} onClick={() => setTab('layout')}>Design</button>
               <button className={tab === 'ai' ? 'on' : ''} onClick={() => setTab('ai')}>AI Settings</button>
             </div>
 
@@ -568,43 +556,14 @@ export function ResumeEditor() {
                 ))}
 
                 <button className="studio-add-section" onClick={addCustomSection}>+ Add Custom Section</button>
-                <button className="studio-reset" onClick={() => void resetToProfile()}>↺ Reset to Profile</button>
               </div>
             )}
 
             {tab === 'ai' && <AiSettingsForm resumeId={id} />}
 
             {tab === 'layout' && (
-              <div className="studio-layout">
-                <p className="studio-design-note">
-                  Every CV uses the one design for now: Roboto, black, the name in capitals and headings over a rule.
-                  Choose which sections show, and in what order.
-                </p>
-                <NameSizeControl theme={theme} onChange={setTheme} />
-                <div className="studio-visibility">
-                  <p className="group">Sections</p>
-                  {order.map((key, index) => (
-                    <div className="row-vis" key={key}>
-                      <label>
-                        <input type="checkbox" checked={!hidden.has(key)} onChange={() => toggleHidden(key)} />
-                        {labelOf(key, draft)}
-                      </label>
-                      <span className="sf-tools">
-                        <button title="Move up" disabled={index === 0} onClick={() => {
-                          const next = [...order];
-                          [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                          setOrder(next);
-                        }}><DashboardIcon name="arrowUp" size={14} /></button>
-                        <button title="Move down" disabled={index === order.length - 1} onClick={() => {
-                          const next = [...order];
-                          [next[index + 1], next[index]] = [next[index]!, next[index + 1]!];
-                          setOrder(next);
-                        }}><DashboardIcon name="arrowDown" size={14} /></button>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <DesignPanel theme={theme} onChange={setTheme} order={order} hidden={hidden}
+                labelOf={(key) => labelOf(key, draft)} onOrder={setOrder} onToggleHidden={toggleHidden} />
             )}
           </aside>
         )}

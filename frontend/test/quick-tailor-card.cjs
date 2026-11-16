@@ -7,6 +7,10 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
 // Run against the local Vite server. All API responses are synthetic.
 const appUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+/** The fake API answers fast, in the same order a real one would. */
+const fake = ms => pause(ms / 5);
+/** Until no line is still typing itself in. */
+const typed = page => page.waitForFunction(() => !document.querySelector('.qt-typing'));
 
 async function check(browser) {
   const page = await browser.newPage();
@@ -54,7 +58,7 @@ async function check(browser) {
       if (pathname === '/api/jobs/job-1') return reply({ id: 'job-1', title: 'Engineer', company: 'Acme', description: 'Build Node.js services.' });
       if (pathname.endsWith('/score')) return reply({ score: 50, keywords: { matched: ['Node.js', 'TypeScript'], missing: ['Docker'], skillsOnly: ['TypeScript'] }, issues: [], job: { id: 'job-1', title: 'Engineer', company: 'Acme' } });
       if (pathname.endsWith('/tailor-summary/stream')) {
-        aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(150);
+        aiRequests.push(JSON.parse(request.postData() || '{}')); await fake(150);
         // The summary as it is written, the fix announced, then the checked result: one JSON object per line.
         const lines = [
           { type: 'draft', summary: 'Built services for **Ac' },
@@ -66,13 +70,13 @@ async function check(browser) {
       }
       if (pathname.endsWith('/tailor-skills')) {
         const body = JSON.parse(request.postData() || '{}');
-        await pause(150);
+        await fake(150);
         return reply({ groups: body.groups.map(group => ({ category: group.category, skills: [...new Set([...group.skills, 'Kubernetes'])], added: ['Kubernetes'], dropped: [] })), cannotDo: [] });
       }
       if (pathname.endsWith('/tailor-role')) {
         const body = JSON.parse(request.postData() || '{}');
         roleRequests.push(body);
-        await pause(200);
+        await fake(200);
         if (!profileChoice) return reply({ matched: false, profileRole: null, chosen: [], alternates: [] });
         if (body.role.bullets.length === 1) {
           const other = body.role.company === 'Other Co';
@@ -105,15 +109,15 @@ async function check(browser) {
           assert.ok(!body.others.includes(body.text), 'but never with itself');
         }
         if (body.kind === 'techStack') {
-          await pause(150);
+          await fake(150);
           return reply({ original: body.text, suggestion: 'Redis, Go', cannotDo: [] });
         }
         // Bullets of a job arrive one by one and are long, as the real AI's are.
         if (body.kind === 'bullet' && /Acme Labs/.test(body.context || '')) {
-          await pause(300 + 500 * aiRequests.length % 1200);
+          await fake(300 + 500 * aiRequests.length % 1200);
           return reply({ suggestion: `${body.text} Rewritten for the job with reliable services, observability and clear ownership from design through production support for the team.`, cannotDo: [] });
         }
-        await pause(150);
+        await fake(150);
         return reply({ suggestion: 'Built services for Acme.', cannotDo: [] });
       }
       return reply({});
@@ -128,7 +132,7 @@ async function check(browser) {
     const undo = '.qt-history button[aria-label="Undo"]', redo = '.qt-history button[aria-label="Redo"]';
     // The AI's text types itself into the card; wait until no line is still typing.
     const typedIn = async () => {
-      await pause(100);
+      await fake(100);
       await page.waitForFunction(() => !document.querySelector('.qt-unit .qt-typing'), { polling: 50 });
     };
     const summaryText = () => page.$eval(summary, element => element.textContent);
@@ -161,7 +165,7 @@ async function check(browser) {
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(aiRequests.length, asked + 1);
       assert.equal(aiRequests.at(-1).instruction, 'Make it shorter', 'the request typed under the screen goes to the AI');
-      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Try again').click());
+      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Tailor again').click());
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(aiRequests.length, asked + 2, 'Try again writes another version');
       await pause(100); // Shown as it was written: the change is drawn at once, not typed in again.
@@ -171,15 +175,15 @@ async function check(browser) {
       assert.equal(await page.$eval('.qt-unit .qt-change', element => element.textContent), 'First edit Built services for Acme.');
       assert.equal(await page.$eval('.qt-unit .qt-change b', element => element.textContent.trim()), 'Acme', 'with its bold');
       const report = await page.$eval('.qt-unit', element => element.innerText);
-      for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Deciding gap: Node.js', 'Gaps'])
+      for (const part of ['Still fails 1 check', 'Word count: 4 words', 'Biggest gap for this job: Node.js', 'Gaps'])
         assert.ok(report.toLowerCase().includes(part.toLowerCase()), `the summary card shows: ${part}`);
-      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent || button.getAttribute('aria-label'))), ['Use this', 'Try again', 'Close'], 'no Dismiss: the × at the row\'s end closes it');
+      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent || button.getAttribute('aria-label'))), ['Use', 'Tailor again', 'Close'], 'no Dismiss: the × at the row\'s end closes it');
       await page.$eval('.qt-card', card => { card.scrollTop = card.scrollHeight; });
       await pause(50);
       assert.ok(await page.$eval('.qt-card', card => {
         const bar = card.querySelector('.qt-menu > .qt-actions').getBoundingClientRect(), box = card.getBoundingClientRect();
         return bar.top >= box.top - 1 && bar.bottom <= box.bottom;
-      }), 'Use this and Try again stay at the top of the card while it scrolls');
+      }), 'Use and Tailor again stay at the top of the card while it scrolls');
       await page.$eval('.qt-card', card => { card.scrollTop = 0; });
       {
         // At the card's end, the wheel over the card does not scroll the CV behind it.
@@ -270,11 +274,12 @@ async function check(browser) {
       assert.match(slots[1], /Cut checkout latency by 30% with Redis caching\./);
       assert.match(slots[1], /From your Profile/);
       assert.doesNotMatch(slots[1], /For recruiters/, 'a plain line has no recruiter note');
-      // A keyword only in the skills list is marked as such.
+      // A keyword only in the skills list is in this CV, without the check mark, and says so on its own line.
       assert.deepEqual(
         await page.$$eval('.ra-kw.have', chips => chips.map(chip => chip.textContent)),
-        ['✓ Node.js', '✓ TypeScript · skills only'],
+        ['✓ Node.js', 'TypeScript'],
       );
+      assert.equal(await page.$eval('.qt-skills-only', line => line.textContent.trim()), 'Only in Skills: TypeScript. Add it to a bullet where you used it.');
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Swap').click());
       await typedIn();
       assert.match(await page.$$eval('.qt-unit .qt-slot', rows => rows[1].textContent), /Mentored two engineers on code review\./, 'Swap brings the next best');
@@ -292,7 +297,7 @@ async function check(browser) {
       await page.click('[title^="Tailor Backend Engineer at Acme Labs"]');
       await page.waitForSelector('.qt-unit .qt-generate');
       // Before Generate: one button, no Dismiss, and no empty band before "What should change?".
-      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent.trim() || button.getAttribute('aria-label'))), ['Generate', 'Close']);
+      assert.deepEqual(await page.$$eval('.qt-unit .qt-menu > .qt-actions button', buttons => buttons.map(button => button.textContent.trim() || button.getAttribute('aria-label'))), ['Tailor', 'Close']);
       assert.ok(await page.evaluate(() => {
         const actions = document.querySelector('.qt-unit .qt-menu > .qt-actions').getBoundingClientRect();
         const request = document.querySelector('.qt-unit .qt-request').getBoundingClientRect();
@@ -316,7 +321,7 @@ async function check(browser) {
       assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[2].querySelectorAll('button')].some(button => button.textContent === 'Add')));
       for (const index of [0, 1]) {
         const buttons = await page.evaluate(i => [...document.querySelectorAll('.qt-unit .qt-slot')[i].querySelectorAll('button')].map(button => button.textContent), index);
-        for (const name of ['Use', 'Skip', 'Swap', 'Try again']) assert.ok(buttons.includes(name), `line ${index + 1} has ${name} (${buttons.join(', ')})`);
+        for (const name of ['Use', 'Skip', 'Swap', 'Tailor again']) assert.ok(buttons.includes(name), `line ${index + 1} has ${name} (${buttons.join(', ')})`);
       }
       assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].some(button => button.textContent.trim() === 'Use all 3')), 'Use all counts the lines');
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all')).click());
@@ -374,7 +379,7 @@ async function check(browser) {
       assert.equal(roleRequests.at(-1).role.client, 'SymphonyAI');
       assert.deepEqual(roleRequests.at(-1).role.bullets, [bulletsBefore[0]]);
       assert.match(await page.$eval('.qt-unit', card => card.textContent), /From your Profile/);
-      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Try again').click());
+      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-actions button')].find(button => button.textContent === 'Tailor again').click());
       await page.waitForSelector('.qt-unit .qt-actions .primary:not([disabled])');
       assert.equal(roleRequests.length, before + 2, 'Try again also reads Profile and CV evidence');
       assert.equal(aiRequests.length, linesBefore, 'neither request falls back to the CV-only line rewriter');
@@ -390,7 +395,7 @@ async function check(browser) {
 
       // A section request keeps each role and its Swap alternatives separate.
       const groupedBefore = roleRequests.length;
-      await page.click('[title="Tailor every job for this job posting"]');
+      await page.click('[title="Tailor every role for this job"]');
       await page.waitForSelector('.qt-unit .qt-generate');
       await page.click('.qt-unit .qt-generate');
       // A whole section is shown in the CV's own text too, each line's change in its own place.

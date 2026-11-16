@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-/** A4 at 96dpi; each template's top and bottom page margin is the page's own top padding here. */
-const PAGE_HEIGHT = (297 * 96) / 25.4;
+/** A4 at 96dpi, unless the page says otherwise (--r-page-h: Letter is 1056px). Each template's top
+ *  and bottom page margin is the page's own top padding here. */
+const A4_HEIGHT = (297 * 96) / 25.4;
 const GAP = 28;
+const sheetHeight = (page: HTMLElement) => parseFloat(getComputedStyle(page).getPropertyValue('--r-page-h')) || A4_HEIGHT;
 
 /** The parts the print style keeps whole (break-inside: avoid), in reading order. */
 const BLOCKS = '.doc-head, .doc-section > h2, .doc-summary, .doc-roleline, .doc-subline, .doc-role-desc, .doc-bullets > li, .doc-skills, .doc-paragraph';
@@ -22,12 +24,14 @@ export function PagedDocument({ children, watch }: {
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState(1);
+  const [pageHeight, setPageHeight] = useState(A4_HEIGHT);
 
   useLayoutEffect(() => {
     const page = box.current?.querySelector<HTMLElement>('.page');
     if (!page) return;
 
     const paginate = () => {
+      const PAGE_HEIGHT = sheetHeight(page);
       const MARGIN = parseFloat(getComputedStyle(page).paddingTop) || 45.35;
       const blocks = [...page.querySelectorAll<HTMLElement>(BLOCKS)];
       for (const block of blocks) block.style.removeProperty('margin-top');
@@ -67,6 +71,7 @@ export function PagedDocument({ children, watch }: {
       const count = Math.max(1, Math.ceil((used - parseFloat(getComputedStyle(page).paddingTop)) / (PAGE_HEIGHT + GAP)));
       page.style.minHeight = `${count * (PAGE_HEIGHT + GAP) - GAP}px`;
       setPages(count);
+      setPageHeight(PAGE_HEIGHT);
     };
 
     paginate();
@@ -84,7 +89,7 @@ export function PagedDocument({ children, watch }: {
     <div className="paged" ref={box}>
       {children}
       {Array.from({ length: pages - 1 }, (_, index) => (
-        <div key={index} className="paged-gap" style={{ top: (index + 1) * (PAGE_HEIGHT + GAP) - GAP, height: GAP }}>
+        <div key={index} className="paged-gap" style={{ top: (index + 1) * (pageHeight + GAP) - GAP, height: GAP }}>
           <span>Page {index + 2}</span>
         </div>
       ))}

@@ -52,6 +52,16 @@ export interface AiSettings {
   instructions: string;
 }
 
+/** One thing the posting asks for, checked by the server against the Profile. */
+export interface FitRequirement {
+  name: string;
+  tier: 'must' | 'nice';
+  /** have: the Profile shows it; close: a close equivalent (`from`); missing: not shown. */
+  status: 'have' | 'close' | 'missing';
+  from: string | null;
+  jobQuote: string;
+}
+
 export interface JobAssessment {
   verdict: 'apply' | 'stretch' | 'skip' | 'unclear';
   /** 0 to 10, inside the verdict's band; null when unclear. */
@@ -62,6 +72,15 @@ export interface JobAssessment {
   questions: string[];
   /** The posting's technologies; inProfile is checked by the server against the Profile text. */
   technologies?: Array<{ name: string; inProfile: boolean }>;
+  /** The answer in one sentence. */
+  headline?: string;
+  requirements?: FitRequirement[];
+  /** One thing to do if you apply. */
+  advice?: string | null;
+  /** A hard requirement your Profile can't meet; only with "skip". */
+  dealbreaker?: { point: string; jobQuote: string } | null;
+  /** As the posting states them; null when it doesn't. */
+  facts?: { workMode: string | null; location: string | null; salary: string | null; applyBy: string | null };
   basis: { source: 'profile'; profileRevision: number; jobId: string };
 }
 

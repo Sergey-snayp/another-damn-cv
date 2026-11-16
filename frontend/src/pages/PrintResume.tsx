@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { RenderedResume } from '../resumeApi';
 import { ResumeDocument } from '../resume/ResumeDocument';
-import { designOf, type ResumeTheme } from '../resume/theme';
+import { designOf, loadFont, type ResumeTheme } from '../resume/theme';
 import '../resume/document.css';
 
 declare global {
@@ -38,7 +38,8 @@ export function PrintResume() {
     if (!view) return;
     // The design's font in regular, bold and italic, loaded before the PDF is printed.
     const font = `${view.theme.fontSize}pt ${view.theme.fontFamily}`;
-    void Promise.all([font, `bold ${font}`, `italic ${font}`, `italic bold ${font}`].map((spec) => document.fonts.load(spec).catch(() => [])))
+    void loadFont(view.theme.fontFamily)
+      .then(() => Promise.all([font, `bold ${font}`, `italic ${font}`, `italic bold ${font}`].map((spec) => document.fonts.load(spec).catch(() => []))))
       .then(() => document.fonts.ready)
       .then(() => requestAnimationFrame(() => {
         window.__resumeReady = true;

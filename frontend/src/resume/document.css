@@ -342,7 +342,7 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
    per job the company and dates in bold, then the title and place in italics;
    dash bullets indented 14px. */
 
-.page.tpl-professional { padding: 0.25in; color: #000; }
+.page.tpl-professional { width: var(--r-page-w, 210mm); min-height: var(--r-page-h, 297mm); padding: var(--r-margin, 0.25in); color: #000; }
 .tpl-professional .pro-placeholder { color: #b9c2cc; font-style: italic; }
 /* Lines are edited where they are: highlighting only, nothing that takes room. */
 .tpl-professional .pro-edit { cursor: text; border-radius: 2px; outline: 0; }
@@ -364,8 +364,13 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 .tpl-professional .doc-head h1 { margin: 0; font-size: var(--r-name, 30pt); font-weight: 700; line-height: 1.15; letter-spacing: 0; text-transform: uppercase; }
 .tpl-professional .doc-head h1 .editable { text-transform: uppercase; }
 .tpl-professional .doc-headline { margin: 0; font-size: 1em; font-weight: 400; font-style: italic; color: #000; }
-.tpl-professional .doc-contact { font-size: 1em; line-height: 1.6; color: #000; }
+.tpl-professional .doc-contact { font-size: 1em; line-height: calc(var(--r-line) + 0.3); color: #000; }
 .tpl-professional .doc-contact .sep { margin: 0; color: #000; white-space: pre; }
+/* Design panel: the header's alignment and the name without capitals. */
+.tpl-professional.align-left .doc-head { text-align: left; }
+.tpl-professional.align-right .doc-head { text-align: right; }
+.tpl-professional.name-plain .doc-head h1,
+.tpl-professional.name-plain .doc-head h1 .editable { text-transform: none; }
 
 .tpl-professional .doc-section { margin-bottom: var(--r-gap); }
 .tpl-professional .doc-section > h2 {
@@ -377,6 +382,11 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 
 .tpl-professional .doc-role { padding-top: 6px; margin: 0 0 7px; }
 .tpl-professional .doc-role.doc-education { margin-bottom: 12px; }
+.tpl-professional.education-one-line .doc-role.doc-education { margin-bottom: 4px; }
+/* One line: the degree in italics, the school in bold, the dates on the right. */
+.tpl-professional .doc-edu-line { min-width: 0; }
+.tpl-professional .doc-edu-line .doc-title { font-style: italic; font-weight: 400; }
+.tpl-professional .doc-edu-line .doc-company { font-weight: 700; }
 .tpl-professional .doc-education .doc-title { position: relative; }
 .tpl-professional .doc-add.pro-add-degree { display: inline-grid; place-items: center; position: absolute; left: -24px; top: 0; width: 18px; height: 18px; margin: 0; padding: 0; border-style: solid; background: var(--color-surface); color: var(--color-muted); opacity: 0; }
 .tpl-professional .doc-education:hover .pro-add-degree,
@@ -393,13 +403,30 @@ li.removed .label { color: var(--color-muted); text-decoration: line-through; }
 .tpl-professional .doc-bullets { margin: 0; padding: 0; }
 .tpl-professional .doc-bullets li { display: flex; gap: 4px; margin: 0; padding-left: 14px; }
 .tpl-professional .doc-bullets li::before { content: '-'; left: 3px; top: 0; color: #000; }
+/* Design panel: the bullet mark, and skills lines without one. */
+.tpl-professional.bullets-bullet .doc-bullets li::before { content: '•'; }
+.tpl-professional.bullets-arrow .doc-bullets li::before { content: '»'; }
+.tpl-professional.skills-plain [data-section="skills"] .doc-bullets li { padding-left: 0; }
+.tpl-professional.skills-plain [data-section="skills"] .doc-bullets li::before { content: none; }
 .tpl-professional .doc-bullets li > .pro-text,
 .tpl-professional .doc-bullets li > .editable { flex: 1; min-width: 0; }
 
 @media print {
   /* Its own sheet margins: 0.25in at the top and bottom of every page, 0.25in at the sides. */
   @page professional { size: A4; margin: 0.25in 0; }
-  .page.tpl-professional { page: professional; padding: 0 0.25in; }
+  .page.tpl-professional { page: professional; width: auto; min-height: 0; padding: 0 var(--r-margin, 0.25in); }
+  /* The Design panel's page size and margins: a page's size and margins can't come from a
+     variable, so each pair has its own named page. */
+  @page pro-a4-normal { size: A4; margin: 0.5in 0; }
+  @page pro-a4-wide { size: A4; margin: 0.75in 0; }
+  @page pro-letter-narrow { size: Letter; margin: 0.25in 0; }
+  @page pro-letter-normal { size: Letter; margin: 0.5in 0; }
+  @page pro-letter-wide { size: Letter; margin: 0.75in 0; }
+  .page.tpl-professional.size-a4.margins-normal { page: pro-a4-normal; }
+  .page.tpl-professional.size-a4.margins-wide { page: pro-a4-wide; }
+  .page.tpl-professional.size-letter.margins-narrow { page: pro-letter-narrow; }
+  .page.tpl-professional.size-letter.margins-normal { page: pro-letter-normal; }
+  .page.tpl-professional.size-letter.margins-wide { page: pro-letter-wide; }
   .tpl-professional .pro-placeholder { display: none; }
   .tpl-professional .pro-edit:hover, .tpl-professional .pro-edit:focus { background: none; box-shadow: none; }
   .doc-subline { break-inside: avoid; break-after: avoid; }

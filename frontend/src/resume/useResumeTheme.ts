@@ -28,6 +28,8 @@ function saveTheme(id: string, theme: ResumeTheme) {
   return fetch(`/api/resumes/${encodeURIComponent(id)}/theme`, {
     method: 'PUT',
     credentials: 'include',
+    // Finishes even when the tab closes right after the change.
+    keepalive: true,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(theme),
   }).then((response) => {
@@ -61,9 +63,20 @@ export function useEditableResumeTheme(id: string): [ResumeTheme, (theme: Resume
   const [theme, setTheme] = useState<ResumeTheme>(DEFAULT_THEME);
   const loaded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** A change not saved yet: it is sent at once when the person leaves or switches tabs. */
+  const pending = useRef<ResumeTheme | null>(null);
   useEffect(() => {
     let active = true;
     loaded.current = false;
+    const saveNow = () => {
+      clearTimeout(timer.current);
+      const next = pending.current;
+      pending.current = null;
+      if (next) void saveTheme(id, next).catch(() => undefined);
+    };
+    const onHide = () => { if (document.visibilityState === 'hidden') saveNow(); };
+    document.addEventListener('visibilitychange', onHide);
+    addEventListener('pagehide', saveNow);
     void loadTheme(id).then(
       (next) => {
         if (!active) return;
@@ -76,17 +89,24 @@ export function useEditableResumeTheme(id: string): [ResumeTheme, (theme: Resume
     );
     return () => {
       active = false;
-      clearTimeout(timer.current);
+      document.removeEventListener('visibilitychange', onHide);
+      removeEventListener('pagehide', saveNow);
+      saveNow();
     };
   }, [id]);
   const change = (next: ResumeTheme) => {
     setTheme(next);
     if (!loaded.current) return;
+    pending.current = next;
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => void saveTheme(id, next).catch(() => undefined), 600);
+    timer.current = setTimeout(() => {
+      pending.current = null;
+      void saveTheme(id, next).catch(() => undefined);
+    }, 600);
   };
   const flush = async () => {
     clearTimeout(timer.current);
+    pending.current = null;
     await saveTheme(id, theme);
   };
   return [theme, change, flush];

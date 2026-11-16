@@ -1,52 +1,115 @@
 /* Quick tailoring in the Profile's look: dark green actions, yellow AI buttons with a wand
    badge, white rounded panels, light grey inner boxes, quiet secondary buttons.
    Scoped to this page (.studio.qt), so the full editor keeps its own look. Layout and
-   behaviour are unchanged: only colour, type, borders and spacing. */
+   behaviour are unchanged: only colour, type, borders and spacing.
+
+   One meaning per colour on this page:
+     ink    text and the focus ring          pine   actions (solid and outlined buttons)
+     amber  AI actions only (✦, Tailor)      green  in your CV / Profile ("have")
+     ochre  a middling value (fair, stretch) brick  missing, removed, an error
+   The app's lime is not used here: its tokens are re-pointed below for this page only. */
 .studio.qt {
-  --qt-green: #1e4d45;
-  --qt-green-hover: #163a34;
-  --qt-green-soft: #eef5f3;
+  --qt-ink: #141414;
+  --qt-stone: #5c5c56;
+  --qt-pine: #1e4d45;
+  --qt-pine-hover: #163a34;
+  --qt-pine-soft: #eef5f3;
+  --qt-have: #187345;
+  --qt-have-soft: #edf6f0;
+  --qt-amber: #e9b73c;
+  --qt-amber-hover: #e2ab27;
+  --qt-amber-soft: #f3dc8c;
+  --qt-ochre: #8a6400;
+  --qt-brick: #b42318;
+  --qt-brick-line: #d27b74; /* a missing mark's border: 3.1:1 on white */
   --qt-line: #d9d9d6;
   --qt-line-soft: #e3e3e1;
-  --qt-grey: #f8f8f7;
-  --qt-grey-strong: #f2f2f0;
-  --qt-ai: #e9b73c;
-  --qt-ai-hover: #e2ab27;
-  --qt-ai-badge: #f3dc8c;
+  --qt-fill: #f8f8f7;
+  --qt-fill-strong: #f2f2f0;
+  --qt-disabled: #e6e6e4;
+  --qt-disabled-text: #8a8a85;
+  /* Type: 11 / 12.5 / 14 / 16 / 24. Radii: 4 / 8 / 14. */
+  --qt-text-xs: 11px;
+  --qt-text-sm: 12.5px;
+  --qt-text-md: 14px;
+  --qt-text-lg: 16px;
+  --qt-text-xl: 24px;
+  --qt-radius-sm: 4px;
+  --qt-radius: 8px;
+  --qt-radius-lg: 14px;
+  --qt-shadow-float: 0 12px 32px rgba(0, 0, 0, .14);
+  --qt-shadow-pop: 0 4px 12px rgba(0, 0, 0, .08);
+  --qt-focus: 2px solid var(--qt-ink);
+  /* Earlier names, kept for rules written against them. */
+  --qt-green: var(--qt-pine);
+  --qt-green-hover: var(--qt-pine-hover);
+  --qt-green-soft: var(--qt-pine-soft);
+  --qt-grey: var(--qt-fill);
+  --qt-grey-strong: var(--qt-fill-strong);
+  --qt-ai: var(--qt-amber);
+  --qt-ai-hover: var(--qt-amber-hover);
+  --qt-ai-badge: var(--qt-amber-soft);
+  /* The app's lime, re-pointed: an AI button (✦) is amber, a hover or selection tint is neutral. */
+  --color-accent: var(--qt-amber);
+  --color-accent-hover: var(--qt-amber-hover);
+  --color-accent-soft: var(--qt-fill-strong);
+  --color-accent-border: var(--qt-line);
+}
+
+/* ── Buttons, one family for the page: pine solid (the main action), outlined (secondary),
+   quiet icon buttons (history, ×), amber only for AI. One padding per kind. The app's own
+   button.primary (lime) and button.ghost (lime border) never show here. */
+.qt button.primary, .qt a.primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 14px; border: 1px solid var(--qt-pine); border-radius: var(--qt-radius); background: var(--qt-pine);
+  color: #fff; font-size: var(--qt-text-sm); font-weight: 600; line-height: 1.2; text-decoration: none;
+}
+.qt button.primary:hover:not(:disabled), .qt a.primary:hover { background: var(--qt-pine-hover); }
+.qt button.primary:disabled { border-color: var(--qt-disabled); background: var(--qt-disabled); color: var(--qt-disabled-text); }
+.qt button.ghost, .qt a.ghost {
+  padding: 7px 14px; border: 1px solid var(--qt-line); border-radius: var(--qt-radius); background: var(--color-surface);
+  color: var(--qt-ink); font-size: var(--qt-text-sm); font-weight: 600; line-height: 1.2; text-decoration: none;
+}
+.qt button.ghost:hover:not(:disabled), .qt a.ghost:hover { background: var(--qt-fill-strong); }
+.qt button.ghost:disabled { color: var(--qt-disabled-text); background: var(--color-surface); }
+/* Quiet icon buttons: no frame, 32px, a grey square on hover. */
+.qt :is(.qt-close, .qt-bar-close) {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0;
+  border-radius: var(--qt-radius); background: none; color: var(--qt-ink); font: inherit; line-height: 0; cursor: pointer;
+}
+.qt :is(.qt-close, .qt-bar-close) svg { display: block; }
+.qt :is(.qt-close, .qt-bar-close):hover:not(:disabled) { background: var(--qt-fill-strong); color: var(--qt-ink); }
+.qt :is(.qt-close, .qt-bar-close):disabled { opacity: .45; cursor: default; }
+
+/* ── Focus: one visible ring everywhere on the page, the CV's own fields included. */
+.studio.qt :focus-visible { outline: var(--qt-focus); outline-offset: 2px; }
+.qt .qt-request textarea:focus, .qt .qt-rename:focus { outline: var(--qt-focus); outline-offset: 2px; border-color: var(--qt-line); box-shadow: none; }
+@media screen {
+  .qt .tpl-professional .pro-edit:hover { background: var(--qt-fill-strong); }
+  .qt .tpl-professional .pro-edit:focus, .qt .editable:focus { outline: var(--qt-focus); outline-offset: 2px; background: var(--qt-fill-strong); box-shadow: none; }
+  .qt .paged .doc-bullets li:hover { background: var(--qt-fill-strong); }
 }
 
 /* ── Top bar: the name and status on the left; history, then quiet buttons, then Save. */
 .qt .studio-bar { gap: 14px; padding: 10px 24px; background: var(--color-surface); border-bottom: 1px solid var(--qt-line-soft); }
-.qt .studio-crumb { font-size: 14px; }
+.qt .studio-crumb { font-size: var(--qt-text-md); }
 .qt .studio-crumb b { font-weight: 700; }
-.qt .studio-crumb .qt-name { color: var(--color-muted); font-weight: 500; }
-.qt .studio-status { padding: 3px 10px; border-radius: 999px; background: var(--qt-grey-strong); color: var(--color-muted); font-size: 12px; font-weight: 500; }
-.qt .studio-status.bad { background: var(--color-error-soft); color: var(--color-error); }
+.qt .studio-crumb .qt-name { min-width: 0; max-width: none; color: var(--qt-ink); font-weight: 700; }
+/* The CV's state as text with an icon. */
+.qt .studio-status { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 0 6px 0 4px; border-radius: 0; background: none; color: var(--qt-stone); font-size: var(--qt-text-sm); font-weight: 600; }
+.qt .studio-status svg { display: block; flex: none; }
+.qt .studio-status.bad { background: none; color: var(--qt-brick); }
 .qt .studio-actions { gap: 8px; }
-.qt .studio-actions .ghost, .qt .studio-actions a.ghost {
-  padding: 7px 14px; border: 1px solid var(--qt-line); border-radius: 8px; background: var(--color-surface);
-  color: var(--color-text); font-size: 13px; font-weight: 600; line-height: 1.2;
-}
-.qt .studio-actions .ghost:hover:not(:disabled), .qt .studio-actions a.ghost:hover { background: var(--qt-grey-strong); }
-.qt .studio-actions .ghost:disabled { color: #a3a39f; background: var(--color-surface); }
-.qt .studio-actions .primary {
-  padding: 7px 18px; border: 1px solid var(--qt-green); border-radius: 8px; background: var(--qt-green);
-  color: #fff; font-size: 13px; font-weight: 600; line-height: 1.2;
-}
-.qt .studio-actions .primary:hover:not(:disabled) { background: var(--qt-green-hover); }
-.qt .studio-actions .primary:disabled { border-color: #e6e6e4; background: #e6e6e4; color: #9a9a96; }
-.qt .qt-history { border-color: var(--qt-line); border-radius: 8px; background: var(--color-surface); }
-.qt .qt-history button { padding: 7px 11px; font-size: 13px; font-weight: 500; }
-.qt .qt-history button + button { border-left-color: var(--qt-line-soft); }
-.qt .qt-history button:hover:not(:disabled) { background: var(--qt-grey-strong); }
+/* History as icons, in the quiet icon buttons' look. */
+.qt .qt-history { gap: 2px; border: 0; border-radius: var(--qt-radius); background: none; }
+.qt .qt-history button, .qt .qt-history button + button { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--qt-radius); color: var(--qt-ink); }
+.qt .qt-history button:hover:not(:disabled) { background: var(--qt-fill-strong); }
+.qt .qt-history button svg { display: block; }
+.qt .qt-history .qt-history-label { display: none; }
 
 /* ── The right column: Profile panels. */
 .qt .ra-card { padding: 20px 22px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
 .qt .ra-card h3 { margin: 0 0 12px; font-size: 16px; font-weight: 700; letter-spacing: -.1px; }
-.qt .qt-assessment-verdict { padding: 4px 11px; border-radius: 7px; font-weight: 600; }
-.qt .qt-assessment-verdict.apply { border-color: var(--qt-green); background: var(--qt-green-soft); color: var(--qt-green); }
-.qt .qt-assessment-score.apply .qt-assessment-meter i.on { background: var(--qt-green); }
-.qt .qt-assessment-meter i { width: 8px; height: 14px; border-radius: 3px; }
 .qt .qt-assessment-summary { font-size: 14px; }
 .qt .qt-assessment h4 { margin: 14px 0 6px; font-size: 13px; }
 .qt .qt-assessment ul { font-size: 13px; }
@@ -57,74 +120,77 @@
 .qt .qt-assessment-start .primary:hover:not(:disabled), .qt .qt-assessment .primary:hover:not(:disabled) { background: var(--qt-green-hover); }
 .qt .qt-assessment .ghost { border: 1px solid var(--qt-line); border-radius: 8px; background: var(--color-surface); font-weight: 600; }
 /* The job's keywords: pills like the Profile's. */
-.qt .ra-kw { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
-.qt .ra-kw.have { border-color: var(--qt-green); background: var(--qt-green-soft); color: var(--qt-green); }
-.qt .ra-kw.miss { border-color: var(--qt-line); background: var(--color-surface); color: var(--color-text); }
+.qt .ra-kw { padding: 3px 10px; border-radius: 999px; font-size: var(--qt-text-sm); font-weight: 500; }
+/* In the CV: green. Missing: brick, dashed (the shape says it too, not the colour alone). */
+.qt .ra-kw.have { border-color: var(--qt-have); background: var(--qt-have-soft); color: var(--qt-have); }
+.qt .ra-kw.miss { border-style: dashed; border-color: var(--qt-brick-line); background: var(--color-surface); color: var(--qt-brick); }
+/* "+ Docker" is an action: an outlined button, not a missing mark. */
+.qt .qt-add-skill { border: 1px solid var(--qt-line); background: var(--color-surface); color: var(--qt-ink); font-weight: 600; }
+.qt .qt-add-skill:hover:not(:disabled) { border-color: var(--qt-line); background: var(--qt-fill-strong); }
+/* A middling score in ochre (5.4:1), not the brand's lime or a light yellow. */
+.qt .ra-gauge.fair .value { stroke: var(--qt-ochre); }
 
-/* ── The tailoring card: a white card, the window onto the CV in light grey (it pulses green
+/* ── The tailoring card: a white card, the window onto the CV in light grey (it pulses grey
    while the AI writes), and the menu below. */
-.qt .qt-card.qt-unit { border: 1px solid var(--qt-line); border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, .14), 0 2px 6px rgba(0, 0, 0, .06); }
-.qt .qt-screen { background: var(--qt-grey); box-shadow: inset 0 -1px 0 var(--qt-line-soft); }
+.qt .qt-card.qt-unit { border: 1px solid var(--qt-line); border-radius: var(--qt-radius-lg); box-shadow: var(--qt-shadow-float); }
+.qt .qt-screen { background: var(--qt-fill); box-shadow: inset 0 -1px 0 var(--qt-line-soft); }
 .qt .qt-screen.is-busy { animation: qt-theme-pulse 1.6s ease-in-out infinite; }
 @keyframes qt-theme-pulse {
-  0%, 100% { background: var(--qt-grey); }
-  50% { background: color-mix(in srgb, var(--qt-green) 10%, var(--color-surface)); }
+  0%, 100% { background: var(--qt-fill); }
+  50% { background: var(--qt-line-soft); }
 }
-.qt .qt-screen-label { color: var(--color-muted); }
-.qt .qt-dot { background: var(--qt-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-green) 22%, transparent); }
-.qt .qt-close { width: 28px; height: 28px; border: 1px solid var(--qt-line); border-radius: 6px; background: var(--color-surface); color: var(--color-text); font-size: 17px; }
-.qt .qt-close:hover { background: var(--qt-grey-strong); }
+/* The window onto the CV: the page's white, lightly greyed, framed in stone; no lime. */
+.qt .qt-screen.is-window > .qt-screen-label { background: var(--qt-fill); }
+.qt .qt-window { background: color-mix(in srgb, var(--qt-stone) 6%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qt-stone) 45%, transparent); }
+.qt .qt-screen.is-busy > .qt-window { animation: qt-theme-window-pulse 1.6s ease-in-out infinite; }
+@keyframes qt-theme-window-pulse { 50% { background: color-mix(in srgb, var(--qt-stone) 16%, #fff); } }
+.qt .qt-screen-label { color: var(--qt-stone); }
+/* The AI's mark: amber, ringed in ink so it shows on the grey. */
+.qt .qt-dot { background: var(--qt-amber); box-shadow: 0 0 0 1px var(--qt-ink); }
 .qt .qt-menu { padding: 14px 16px 16px; }
 
-/* Buttons in the card and under each line: Use in dark green, the rest quiet and white. */
+/* Buttons in the card: the family above; here only how they sit in the row. */
 .qt .qt-actions { align-items: center; flex-wrap: wrap; gap: 8px; }
-.qt .qt-actions .primary {
-  padding: 7px 16px; border: 1px solid var(--qt-green); border-radius: 7px; background: var(--qt-green);
-  color: #fff; font-size: 13px; font-weight: 600;
-}
-.qt .qt-actions .primary:hover:not(:disabled) { background: var(--qt-green-hover); }
-.qt .qt-actions .primary:disabled { border-color: #e6e6e4; background: #e6e6e4; color: #9a9a96; }
-.qt .qt-actions .ghost {
-  padding: 7px 13px; border: 1px solid var(--qt-line); border-radius: 7px; background: var(--color-surface);
-  color: var(--color-text); font-size: 13px; font-weight: 500;
-}
-.qt .qt-actions .ghost:hover:not(:disabled) { background: var(--qt-grey-strong); }
-.qt .qt-slot .qt-actions .primary, .qt .qt-slot .qt-actions .ghost { padding: 3px 10px; font-size: 11.5px; border-radius: 6px; }
-/* The yellow AI buttons, each with its wand badge, as on the Profile. */
+/* The AI buttons, amber, each with its wand badge, as on the Profile. */
 .qt .qt-ai-button {
-  display: inline-flex; align-items: center; gap: 9px; padding: 6px 7px 6px 15px; border: 0; border-radius: 7px;
-  background: var(--qt-ai); color: #1f1f1f; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 9px; padding: 6px 7px 6px 14px; border: 0; border-radius: var(--qt-radius);
+  background: var(--qt-amber); color: var(--qt-ink); font: inherit; font-size: var(--qt-text-md); font-weight: 600; cursor: pointer;
 }
-.qt .qt-ai-button:hover:not(:disabled) { background: var(--qt-ai-hover); }
-.qt .qt-ai-button:disabled { background: #f0d690; color: #8d7a4c; cursor: default; }
-.qt .qt-ai-button .ai-badge { min-width: 28px; height: 24px; background: var(--qt-ai-badge); }
+.qt .qt-ai-button:hover:not(:disabled) { background: var(--qt-amber-hover); }
+.qt .qt-ai-button:disabled { background: #f0d690; color: #6b5d3a; cursor: default; }
+.qt .qt-ai-button .ai-badge { min-width: 28px; height: 24px; border-radius: var(--qt-radius-sm); background: var(--qt-amber-soft); }
 .qt .qt-generate.is-working { animation: qt-button-pulse 1.6s ease-in-out infinite; }
 
 /* "What should change?": a box like the Profile's editor, its one-click requests as chips. */
-.qt .qt-request { gap: 6px; font-size: 13px; font-weight: 700; color: var(--color-text); }
-.qt .qt-request textarea { padding: 9px 11px; border: 1px solid var(--qt-line); border-radius: 8px; background: var(--color-surface); font-size: 14px; }
-.qt .qt-request textarea:focus { outline: none; border-color: var(--qt-green); box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
+.qt .qt-request { gap: 6px; font-size: var(--qt-text-md); font-weight: 700; color: var(--qt-ink); }
+.qt .qt-request textarea { padding: 9px 11px; border: 1px solid var(--qt-line); border-radius: var(--qt-radius); background: var(--color-surface); font-size: var(--qt-text-md); }
 .qt .qt-menu .chips button {
-  padding: 5px 11px; border: 1px solid var(--qt-line); border-radius: 6px; background: var(--color-surface);
-  color: var(--color-text); font-size: 12.5px; font-weight: 500;
+  padding: 5px 11px; border: 1px solid var(--qt-line); border-radius: var(--qt-radius); background: var(--color-surface);
+  color: var(--qt-ink); font-size: var(--qt-text-sm); font-weight: 500;
 }
-.qt .qt-menu .chips button:hover { border-color: var(--qt-green); background: var(--qt-green-soft); }
-.qt .qt-working-status { color: var(--color-muted); }
-.qt .qt-note.qt-from, .qt .qt-slot-note.qt-from { border-color: var(--qt-green); background: var(--qt-green-soft); color: var(--qt-green); }
+.qt .qt-menu .chips button:hover { border-color: var(--qt-pine); background: var(--qt-pine-soft); }
+.qt .qt-working-status { color: var(--qt-stone); }
+
+/* Motion: the busy pulses stop when the system asks for less motion (these rules are more
+   specific than studio.css's own reduced-motion rules, so they are matched here). */
+@media (prefers-reduced-motion: reduce) {
+  .qt .qt-screen.is-busy, .qt .qt-screen.is-busy > .qt-window, .qt .qt-generate.is-working,
+  .qt .qt-dot.busy, .qt .qt-caret, .qt .qt-spinner { animation: none; }
+  .qt .qt-name-button .pen { transition: none; }
+}
+/* Where a line comes from: a neutral label (green means "in your CV", not a source). */
+.qt .qt-note.qt-from, .qt .qt-slot-note.qt-from { border-color: var(--qt-line); background: var(--qt-fill); color: var(--qt-ink); }
 .qt .qt-ai-button { flex: none; white-space: nowrap; }
 .qt .qt-actions .primary, .qt .qt-actions .ghost { flex: none; white-space: nowrap; }
-.qt .qt-report-deciding { background: #fbf3dc; border-color: #f0dca6; }
+.qt .qt-report-deciding { background: var(--qt-fill-strong); border-color: var(--qt-line); }
 
 /* One line, whatever the window: the CV's name gives way ("…") before any button does, and on
-   a narrower window Undo, Redo and Reset show only their icons (their names stay as labels). */
+   a narrower window Undo, Redo and Reset show only their icons (their names stay as labels).
+   The bar's wrapping is decided here only: one row, two rows at 900px and below. */
 .qt .studio-bar { flex-wrap: nowrap; }
 .qt .studio-crumb { flex: 1 1 auto; min-width: 0; }
-.qt .studio-crumb .qt-name { min-width: 0; max-width: none; color: var(--color-text); font-weight: 700; }
-.qt .studio-status { flex: none; }
 .qt .studio-actions { flex: none; flex-wrap: nowrap; }
 @media (max-width: 1320px) {
-  .qt .qt-history-label { display: none; }
-  .qt .qt-history button { padding: 7px 9px; }
   .qt .studio-bar { padding: 10px 16px; gap: 10px; }
   .qt .studio-actions .ghost, .qt .studio-actions a.ghost, .qt .studio-actions .primary { padding: 7px 11px; }
 }
@@ -132,17 +198,17 @@
 /* Zoom: a small control pinned to the top right of the CV, as it scrolls. */
 .qt .qt-zoom-bar {
   position: sticky; top: 10px; z-index: 6; display: flex; align-items: center; gap: 2px; width: fit-content;
-  margin: 0 -68px -38px auto; padding: 3px; border: 1px solid var(--qt-line); border-radius: 9px;
-  background: var(--color-surface); box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
+  margin: 0 -68px -38px auto; padding: 3px; border: 1px solid var(--qt-line); border-radius: var(--qt-radius);
+  background: var(--color-surface); box-shadow: var(--qt-shadow-pop);
 }
 .qt .qt-zoom-bar button {
   min-width: 30px; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: none;
-  color: var(--color-text); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+  color: var(--qt-ink); font: inherit; font-size: var(--qt-text-md); font-weight: 600; cursor: pointer;
 }
-.qt .qt-zoom-bar button:hover:not(:disabled) { background: var(--qt-grey-strong); }
+.qt .qt-zoom-bar button:hover:not(:disabled) { background: var(--qt-fill-strong); }
 .qt .qt-zoom-bar button:disabled { color: #b5b5b1; cursor: default; }
-.qt .qt-zoom-bar .qt-zoom-value { min-width: 50px; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.qt .qt-zoom-bar .qt-zoom-fit { font-size: 12.5px; color: var(--qt-green); }
+.qt .qt-zoom-bar .qt-zoom-value { min-width: 50px; font-size: var(--qt-text-sm); font-variant-numeric: tabular-nums; }
+.qt .qt-zoom-bar .qt-zoom-fit { font-size: var(--qt-text-sm); color: var(--qt-pine); }
 
 /* Less empty space between the CV and the right column: a narrower gutter for the lines'
    buttons, and the CV's column no wider than a full-size page needs (the rest goes right). */
@@ -154,26 +220,13 @@
 }
 
 /* The CV's name: click to rename, as in the full editor. */
-.qt .qt-name-button { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: 7px; background: none; color: var(--color-text); font: inherit; cursor: text; }
+.qt .qt-name-button { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: var(--qt-radius); background: none; color: var(--qt-ink); font: inherit; cursor: text; }
 .qt .qt-name-button .qt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qt .qt-name-button .pen { opacity: 0; color: var(--color-muted); font-size: 13px; transition: opacity .12s; }
-.qt .qt-name-button:hover, .qt .qt-name-button:focus-visible { background: var(--qt-grey-strong); }
+.qt .qt-name-button .pen { opacity: 0; color: var(--qt-stone); font-size: var(--qt-text-sm); transition: opacity .12s; }
+.qt .qt-name-button:hover, .qt .qt-name-button:focus-visible { background: var(--qt-fill-strong); }
 .qt .qt-name-button:hover .pen, .qt .qt-name-button:focus-visible .pen { opacity: 1; }
-.qt .qt-rename { min-width: 220px; width: min(520px, 40vw); padding: 5px 9px; border: 1px solid var(--qt-green); border-radius: 7px; font: inherit; font-size: 14px; font-weight: 700; outline: none; box-shadow: 0 0 0 3px rgba(30, 77, 69, .12); }
-
-/* The bar as a quiet strip: history as icons, the CV's state as text with an icon, × to close. */
-.qt .qt-history { gap: 2px; border: 0; background: none; }
-.qt .qt-history button, .qt .qt-history button + button { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; color: var(--color-text); }
-.qt .qt-history button svg { display: block; }
-.qt .qt-history .qt-history-label { display: none; }
-.qt .studio-status { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 4px; border-radius: 0; background: none; color: var(--color-muted); font-size: 13px; font-weight: 600; }
-.qt .studio-status svg { display: block; flex: none; }
-.qt .studio-status.bad { background: none; color: var(--color-error); }
-.qt .qt-bar-close { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--color-text); cursor: pointer; }
-.qt .qt-bar-close svg { display: block; }
-.qt .qt-bar-close:hover:not(:disabled) { background: var(--qt-grey-strong); }
-.qt .qt-bar-close:focus-visible { outline: 2px solid var(--qt-green); outline-offset: 2px; }
-.qt .qt-bar-close:disabled { opacity: .45; cursor: default; }
+/* Renaming: the page's one focus ring (above), no glow. */
+.qt .qt-rename { min-width: 220px; width: min(520px, 40vw); padding: 5px 9px; border: 1px solid var(--qt-line); border-radius: var(--qt-radius); font: inherit; font-size: var(--qt-text-md); font-weight: 700; }
 
 /* A narrow popup (the job page's window): the bar takes two rows, so the CV's name keeps its
    room (name and status first, the buttons under them), and the zoom control takes its own
@@ -199,12 +252,29 @@
 .qt .qt-card.qt-unit:not(.is-windowed) > .qt-screen :is(.qt-slot-line, .qt-screen-line, .pro-text, li, p, span) { font-size: inherit; line-height: inherit; }
 /* One solid button per line (Use, Add, Remove); Skip, Swap and Try again as quiet text. */
 .qt :is(.qt-slot, .qt-screen-line) .qt-actions { align-items: center; gap: 2px 4px; }
-.qt :is(.qt-slot, .qt-screen-line) .qt-actions .primary { padding: 3px 11px; font-size: 12px; border-radius: 6px; }
-.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost { padding: 3px 6px; border: 0; background: none; color: var(--color-muted); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
-.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost:hover:not(:disabled) { background: none; color: var(--color-text); }
-.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost:focus-visible { outline: 2px solid var(--qt-green); outline-offset: 1px; border-radius: 4px; }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .primary { padding: 3px 10px; font-size: var(--qt-text-sm); border-radius: 6px; }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost { padding: 3px 6px; border: 0; background: none; color: var(--qt-stone); font-size: var(--qt-text-sm); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost:hover:not(:disabled) { background: none; color: var(--qt-ink); }
+.qt :is(.qt-slot, .qt-screen-line) .qt-actions .ghost:focus-visible { outline: var(--qt-focus); outline-offset: 2px; border-radius: var(--qt-radius-sm); }
 /* Where a line comes from: quiet text after its buttons, not a pill on the sentence. */
-.qt .qt-tag { margin-left: 6px; color: var(--color-muted); font-size: 12px; font-weight: 500; }
+.qt .qt-tag { margin-left: 6px; color: var(--qt-stone); font-size: var(--qt-text-sm); font-weight: 500; }
+/* A line already used or skipped: full-contrast text (not faded), its state said in words with
+   a mark: "✓ Used" in green, "Skipped" in stone after a dash. */
+.qt :is(.qt-slot-line, .qt-screen-line):is(.is-used, .is-skipped) { opacity: 1; }
+/* (The state is the line's first plain note: after "not needed", the hints and an error, before
+   any ⚠ note, which keeps its own look.) */
+.qt .qt-slot-line:is(.is-used, .is-skipped) > .qt-slot-note:not(.qt-cut, .qt-hint, .ra-error) { font-weight: 600; }
+.qt .qt-slot-line.is-used > .qt-slot-note:not(.qt-cut, .qt-hint, .ra-error) { color: var(--qt-have); }
+.qt .qt-slot-line.is-skipped > .qt-slot-note:not(.qt-cut, .qt-hint, .ra-error) { color: var(--qt-stone); }
+.qt .qt-slot-line.is-skipped > .qt-slot-note:not(.qt-cut, .qt-hint, .ra-error):not(.qt-slot-note:not(.qt-cut, .qt-hint, .ra-error) ~ *)::before { content: "– "; }
+.qt .qt-slot-line:is(.is-used, .is-skipped) > .qt-slot-note:not(.qt-cut, .qt-hint, .ra-error) ~ .qt-slot-note:not(.qt-cut, .qt-hint, .ra-error) { color: var(--qt-stone); font-weight: 500; }
+.qt .qt-screen-line.is-used > .qt-screen-line-label > span { color: var(--qt-have); }
+.qt .qt-screen-line.is-skipped > .qt-screen-line-label > span { color: var(--qt-stone); }
+/* …and a bar in the margin: green for used, grey for skipped (no shift of the text). */
+.qt .qt-screen-line:is(.is-used, .is-skipped) { position: relative; }
+.qt .qt-screen-line:is(.is-used, .is-skipped)::after { content: ""; position: absolute; top: 0; bottom: 0; left: -9px; width: 2px; border-radius: 1px; background: var(--qt-line); }
+.qt .qt-screen-line + .qt-screen-line:is(.is-used, .is-skipped)::after { top: 10px; }
+.qt .qt-screen-line.is-used::after { background: var(--qt-have); }
 /* The results' lines in the job's own layout read at 14px at least: the copy is zoomed to
    the CV's zoom, so its base size is lifted by the inverse of that zoom. */
 .qt .qt-copy.is-live .page { font-size: max(var(--r-size), calc(14px / var(--qt-zoom, 1))) !important; }
@@ -213,6 +283,125 @@
 .qt .qt-copy.is-live .qt-slot .qt-slot-note { font-size: calc(13px / var(--qt-zoom, 1)); line-height: 1.4; }
 /* "What should change?" and the button that uses it, on one row. */
 .qt .qt-request-head { display: flex; align-items: center; gap: 10px; }
-.qt .qt-request-head label { flex: 1 1 auto; font-size: 13px; font-weight: 700; color: var(--color-text); }
-.qt .qt-request-head label small { font-weight: 400; color: var(--color-muted); }
+.qt .qt-request-head label { flex: 1 1 auto; font-size: var(--qt-text-md); font-weight: 700; color: var(--qt-ink); }
+.qt .qt-request-head label small { font-weight: 400; font-size: var(--qt-text-sm); color: var(--qt-stone); }
 .qt .qt-request-head .qt-again { flex: none; }
+
+/* "No change needed": a state, said quietly, not a greyed-out button. */
+.qt .qt-fits { display: inline-flex; align-items: center; padding: 3px 2px; color: var(--color-muted); font-size: 12.5px; font-weight: 600; }
+
+/* ── Right column: the job first (title, company, its posting, the description folded under
+   it), then "Should you apply?" and the job's keywords in this CV. One big number on the
+   screen: the fit. Two marks with one meaning each: a frame = in your Profile (the advice),
+   a fill = in this CV (the keyword chips and the description); dashed = not in this CV. */
+.qt .qt-job { gap: 14px; padding: 18px 18px 24px; }
+.qt .qt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.qt .qt-job-head { padding: 2px 4px 4px; }
+.qt .qt-job-title { margin: 0; font-size: var(--qt-text-lg); font-weight: 700; line-height: 1.3; letter-spacing: -.15px; color: var(--color-text); }
+.qt .qt-job-company { margin: 3px 0 0; font-size: var(--qt-text-md); color: var(--color-muted); }
+.qt .qt-job-none { margin: 10px 0 0; font-size: var(--qt-text-sm); color: var(--color-muted); }
+.qt .qt-description-toggle { margin: 10px -4px 0; }
+.qt .qt-description-toggle > summary { width: fit-content; margin-left: 4px; cursor: pointer; font-size: var(--qt-text-sm); font-weight: 600; color: var(--color-text); }
+.qt .qt-description-toggle[open] > summary { margin-bottom: 10px; }
+.qt .qt-description { padding: 12px 14px; border-radius: var(--qt-radius); background: var(--qt-fill); font-size: var(--qt-text-sm); line-height: 1.6; }
+/* The description's keywords look like the keyword chips: they mean the same thing. */
+.qt .qt-job { --qt-kw-fill: color-mix(in srgb, var(--qt-have) 14%, var(--color-surface)); }
+.qt .qt-description mark { padding: 0 3px; border: 1px solid transparent; border-radius: var(--qt-radius-sm); font-weight: 600; }
+.qt .qt-description mark.have { background: var(--qt-kw-fill); color: var(--qt-have); }
+.qt .qt-description mark.miss { border-style: dashed; border-color: var(--qt-brick-line); background: none; color: var(--qt-brick); }
+
+/* "Should you apply?": the fit and the answer once, then the reason. */
+.qt .qt-assessment-start p, .qt .qt-assessment-loading { font-size: var(--qt-text-sm); }
+
+/* The answer card (the whiteboard "Should you apply? At a glance"): verdict and score, a
+   10-step bar, one sentence, the checklist, one piece of advice, the job's facts, two buttons. */
+.qt .qt-fit {
+  --fit-have: #1f4d34; --fit-have-fill: #e7f0ea; --fit-have-line: #b7d1c0; --fit-have-bar: #2f6b4a;
+  --fit-close: #5a4214; --fit-close-fill: #f5ecd6; --fit-close-line: #d9c38e; --fit-close-bar: #b07415;
+  --fit-miss: #7a2e22; --fit-miss-fill: #fbf4f2; --fit-miss-line: #c98f82; --fit-miss-bar: #9a3a2c;
+  --fit-muted: #69655d; --fit-rule: rgba(29, 28, 26, .08);
+  --fit-tone: var(--fit-close); --fit-tone-fill: var(--fit-close-fill); --fit-bar: var(--fit-close-bar);
+  display: flex; flex-direction: column; gap: 24px;
+}
+.qt .qt-fit.is-apply { --fit-tone: var(--fit-have); --fit-tone-fill: var(--fit-have-fill); --fit-bar: var(--fit-have-bar); }
+.qt .qt-fit.is-skip { --fit-tone: var(--fit-miss); --fit-tone-fill: var(--fit-miss-fill); --fit-bar: var(--fit-miss-bar); }
+.qt .qt-fit.is-unclear { --fit-tone: var(--fit-muted); --fit-tone-fill: var(--qt-fill); --fit-bar: var(--fit-muted); }
+.qt .qt-fit > h3 { margin: 0 0 -12px; font-size: 13px; font-weight: 500; color: var(--fit-muted); }
+.qt .qt-fit p { margin: 0; }
+.qt .qt-fit-top { display: flex; flex-direction: column; gap: 12px; }
+.qt .qt-fit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.qt .qt-assessment-verdict { font-family: Newsreader, Georgia, 'Times New Roman', serif; font-size: 36px; font-weight: 500; line-height: 1.05; letter-spacing: -.01em; color: var(--color-text); }
+.qt .qt-assessment-value { display: flex; align-items: baseline; gap: 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qt .qt-assessment-value b { font-size: 32px; font-weight: 600; line-height: 1; color: var(--color-text); }
+.qt .qt-assessment-value > span:last-child { font-size: 16px; color: var(--fit-muted); }
+.qt .qt-fit-bar { display: flex; gap: 4px; }
+.qt .qt-fit-bar span { flex: 1; height: 8px; border-radius: 2px; background: var(--fit-rule); }
+.qt .qt-fit-bar span.on { background: var(--fit-bar); }
+.qt .qt-fit-headline { font-size: 15px; line-height: 1.45; color: #2b2a27; }
+
+.qt .qt-fit-group { display: flex; flex-direction: column; gap: 10px; }
+.qt .qt-fit-group-head { display: flex; justify-content: space-between; align-items: baseline; }
+.qt .qt-fit .qt-fit-group h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.qt .qt-fit-group-head span { font-size: 13px; color: var(--fit-muted); font-variant-numeric: tabular-nums; }
+.qt .qt-fit .qt-fit-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.qt .qt-fit .qt-fit-chips li + li { margin-top: 0; }
+.qt .qt-fit-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; box-sizing: border-box; padding: 4px 10px; border: 1px solid; border-radius: 8px; font-size: 13.5px; font-weight: 500; line-height: 1.25; }
+.qt .qt-fit-chip svg { flex: none; }
+.qt .qt-fit-chip.is-have { border-color: var(--fit-have-line); background: var(--fit-have-fill); color: var(--fit-have); }
+.qt .qt-fit-chip.is-close { border-color: var(--fit-close-line); background: var(--fit-close-fill); color: var(--fit-close); }
+/* Missing is dashed too: the shape says it, not the colour alone. */
+.qt .qt-fit-chip.is-missing { border-style: dashed; border-color: var(--fit-miss-line); background: var(--fit-miss-fill); color: var(--fit-miss); }
+.qt .qt-fit-from { font-weight: 400; color: #6b4f1a; }
+.qt .qt-fit-legend { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 2px; font-size: 12px; color: var(--fit-muted); }
+.qt .qt-fit-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.qt .qt-fit-legend svg { width: 12px; height: 12px; stroke-width: 3; }
+.qt .qt-fit-legend .is-have svg { color: var(--fit-have-bar); }
+.qt .qt-fit-legend .is-close svg { color: #6b4f1a; }
+.qt .qt-fit-legend .is-missing svg { color: var(--fit-miss-bar); }
+
+.qt .qt-fit-note { display: flex; gap: 12px; padding: 14px 16px; border-radius: 10px; background: var(--fit-tone-fill); color: var(--fit-tone); }
+.qt .qt-fit-note svg { flex: none; margin-top: 2px; }
+.qt .qt-fit-note > div { display: flex; flex-direction: column; gap: 3px; font-size: 14px; line-height: 1.45; }
+.qt .qt-fit-note-title { font-weight: 600; }
+.qt .qt-fit-note.is-blocked { border: 1px solid #e3b7ad; background: var(--fit-miss-fill); color: var(--fit-miss); }
+
+.qt .qt-fit-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; margin: 0; padding-top: 18px; border-top: 1px solid var(--fit-rule); }
+.qt .qt-fit-facts > div { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.qt .qt-fit-facts svg { flex: none; margin-top: 2px; color: var(--fit-muted); }
+.qt .qt-fit-facts dt { font-size: 12px; color: var(--fit-muted); }
+.qt .qt-fit-facts dd { margin: 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.qt .qt-fit-facts dd.is-unknown { color: var(--fit-muted); }
+
+.qt .qt-fit-actions { display: flex; gap: 8px; }
+.qt .qt-fit-button { flex: 1; display: inline-flex; align-items: center; justify-content: center; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid rgba(29, 28, 26, .16); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 14px; font-weight: 500; text-decoration: none; cursor: pointer; }
+.qt .qt-fit-button:hover { background: var(--qt-fill-strong); }
+.qt .qt-fit-button.is-main { border-color: #222; background: #222; color: #fff; }
+.qt .qt-fit-button.is-main:hover { background: #000; }
+.qt .qt-fit-button:focus-visible, .qt .qt-fit-more:focus-visible { outline: var(--qt-focus); outline-offset: 2px; }
+.qt .qt-fit-more { align-self: center; margin-top: -14px; padding: 4px; border: 0; background: none; font: inherit; font-size: 13px; color: var(--fit-muted); text-decoration: underline; cursor: pointer; }
+.qt .qt-fit-status { margin-top: -14px !important; font-size: 13px; color: var(--fit-muted); }
+.qt .qt-fit .ra-error { margin: -14px 0 0; }
+.qt .qt-fit-why { padding-top: 18px; border-top: 1px solid var(--fit-rule); }
+.qt .qt-fit-why h4 { margin: 16px 0 6px; }
+.qt .qt-fit-why blockquote { margin: 10px 0 0; padding: 2px 0 2px 10px; border-left: 2px solid var(--color-border); }
+.qt .qt-fit-why blockquote p { margin: 4px 0; line-height: 1.5; }
+.qt .qt-assessment-summary { margin: 0 0 6px; font-size: var(--qt-text-md); line-height: 1.55; }
+.qt .qt-tech-legend { display: block; margin: 0 0 4px; font-size: var(--qt-text-sm); color: var(--color-muted); }
+.qt .qt-tech-legend .qt-tech { font-weight: 600; color: var(--color-text); }
+.qt .qt-assessment h4 { margin: 16px 0 6px; font-size: var(--qt-text-sm); }
+.qt .qt-assessment ul { font-size: var(--qt-text-sm); line-height: 1.55; }
+.qt .qt-assessment-kind { font-size: var(--qt-text-sm); font-weight: 600; color: var(--color-text); }
+.qt .qt-assessment-details { font-size: var(--qt-text-sm); }
+.qt .qt-assessment-details summary { width: fit-content; }
+.qt .qt-assessment-basis { padding-top: 12px; font-size: var(--qt-text-sm); }
+
+/* "Job keywords in this CV": the count of the heading's own words, then the chips. */
+.qt .qt-keywords h3 { justify-content: space-between; align-items: baseline; }
+.qt .qt-keywords-count { flex: none; font-size: var(--qt-text-md); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-text); }
+/* In this CV: filled (a frame means "in your Profile" above). Only in Skills: the fill, dashed. */
+.qt .qt-keywords .ra-kw.have { border-color: transparent; background: var(--qt-kw-fill); color: var(--qt-have); }
+.qt .qt-keywords .ra-kw.have.only { border-style: dashed; border-color: var(--qt-have); opacity: 1; }
+.qt .qt-skills-only { margin: 12px 0 0; font-size: var(--qt-text-sm); line-height: 1.5; color: var(--color-text); }
+.qt .qt-keywords .qt-missing p { margin: 0 0 6px; font-size: var(--qt-text-sm); color: var(--color-muted); }
+.qt .qt-keywords .qt-add-skill { font-size: var(--qt-text-sm); }
+.qt .qt-keywords-empty { margin: 0; font-size: var(--qt-text-sm); color: var(--color-muted); }

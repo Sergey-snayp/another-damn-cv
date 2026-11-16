@@ -36,6 +36,6 @@ export function recruiterFlags(line: string, context = '', options: { countTerms
     ),
   ].slice(0, 2);
   if (unknown.length)
-    notes.push(`A recruiter may not know ${unknown.join(' or ')}. Spell it out once, or leave it out.`);
+    notes.push(`Recruiters may not know ${unknown.join(' or ')}. Spell it out once or cut it.`);
   return notes;
 }
