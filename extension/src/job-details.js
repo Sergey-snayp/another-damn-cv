@@ -77,7 +77,9 @@
     // The posting's own name for the employer; else the Workday tenant ("ubc" → "UBC").
     company: () => hiringOrganization() || tenantName(location.hostname.split('.')[0]),
     description: '[data-automation-id="jobPostingDescription"]',
-    logo: (page) => page.querySelector('img[data-automation-id="logo"]')?.getAttribute('src') || null,
+    // Its header, on the job page and its apply steps alike: this page's first (a fetched
+    // Workday page is drawn by its scripts and has no header yet).
+    logo: (page) => (document.querySelector('img[data-automation-id="logo"]') ?? page.querySelector('img[data-automation-id="logo"]'))?.getAttribute('src') || null,
     // An apply page (…/job/<place>/<name>/apply/applyManually) is its job page.
     jobUrl: () => {
       const found = location.pathname.match(/^(.*?\/(?:job|details)\/.+?)\/apply(?:\/|$)/);
@@ -98,9 +100,13 @@
     return found ? { company: found[1], title: found[2] } : null;
   }
 
-  /** The job's title: the board's place for it, the page's h1, else the tab's title without "X Careers - Apply for". */
+  /**
+   * The job's title: the board's place for it, the posting's structured data
+   * (an apply page's h1 is its step, "Create Account"), the page's h1, else the
+   * tab's title without "X Careers - Apply for".
+   */
   function title() {
-    return board()?.title() || clean(document.querySelector('h1')?.innerText) || tabParts()?.title || clean(document.title);
+    return board()?.title() || clean(posting()?.title) || clean(document.querySelector('h1')?.innerText) || tabParts()?.title || clean(document.title);
   }
   /**
    * The company: the board's own place for it, else the posting's structured

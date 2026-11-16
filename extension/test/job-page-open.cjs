@@ -10,15 +10,20 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
 const extension = path.resolve(__dirname, '..');
 const WORKDAY = 'https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/job/UBC-Vancouver-Campus---Vancouver-BC-Canada/Programmer-Analyst-I-2_JR26638';
 const PLAIN = 'https://blog.example.com/posts/hiring-tips';
+const POSTING_DATA = '<script type="application/ld+json">{"@context":"http://schema.org","@type":"JobPosting","title":"Programmer Analyst I","datePosted":"2026-11-13","description":"Flat copy without its lists.","hiringOrganization":{"@type":"Organization","name":"University of British Columbia"}}</script>';
+const LOGO = '<header><img data-automation-id="logo" src="https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/assets/logo" alt=""></header>';
 const pages = {
   [WORKDAY]: `<!doctype html><title>Programmer Analyst I</title>
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"JobPosting","title":"Programmer Analyst I","datePosted":"2026-11-13","description":"Flat copy without its lists.","hiringOrganization":{"@type":"Organization","name":"University of British Columbia"}}</script>
-    <header><img data-automation-id="logo" src="https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/assets/logo" alt=""></header>
+    ${POSTING_DATA}${LOGO}
     <main aria-label="Job Posting Description"><h2 data-automation-id="jobPostingHeader">Programmer Analyst I</h2>
     <div data-automation-id="locations"><dl><dt>locations</dt><dd>UBC Vancouver Campus - Vancouver, BC Canada</dd></dl></div>
     <template id="apply"><a role="button" data-automation-id="adventureButton" href="#" onclick="event.preventDefault(); document.body.insertAdjacentHTML('beforeend', '<div data-automation-id=wd-popup-frame><a data-automation-id=applyManually href=# onclick=&quot;event.preventDefault(); window.manual = true&quot;>Apply Manually</a></div>'); window.applied = true">Apply</a></template>
     <script>/* Workday draws its Apply button a moment after the page loads. */ setTimeout(() => document.getElementById('apply').replaceWith(document.getElementById('apply').content), 1500);</script>
     <div data-automation-id="jobPostingDescription"><p>Build and support university systems.</p><h3>What you bring</h3><ul><li>Two years of web development</li><li>SQL and REST APIs</li></ul></div></main>`,
+  // Its apply step: Workday's sign-up form, the job only in its structured data and header.
+  [`${WORKDAY}/apply/applyManually`]: `<!doctype html><title>Create Account</title>${POSTING_DATA}${LOGO}
+    <main><h1>Create Account</h1><label>Email Address <input type="email" data-automation-id="email"></label>
+    <label>Password <input type="password" data-automation-id="password"></label><button>Create Account</button></main>`,
   [PLAIN]: '<!doctype html><title>Hiring tips</title><h1>Hiring tips</h1><p>How to read a job posting.</p>',
 };
 
@@ -105,6 +110,14 @@ async function panelFixture(browser, jobPage, { silentFor = 0 } = {}) {
     const tenant = await page.evaluate(() => { document.querySelector('script[type="application/ld+json"]').remove(); return window.CVAutofillJobDetails.company(); });
     assert.equal(tenant, 'UBC');
     console.log('PASS Workday job card: title, employer, logo, location and the description with its lists');
+
+    // After Apply: the "Create Account" step keeps the job's own card.
+    await open(`${WORKDAY}/apply/applyManually`);
+    const step = await page.evaluate(() => window.__ask({ type: 'scan' }));
+    assert.deepEqual([step.context.title, step.context.company, step.context.logo, step.context.jobUrl],
+      ['Programmer Analyst I', 'University of British Columbia', 'https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/assets/logo', WORKDAY],
+      'the job, its employer and logo, and its job page: never "Create Account"');
+    console.log('PASS Workday apply step: the card is still the job, not "Create Account"');
     assert.equal(await page.evaluate(() => Boolean(window.applied)), false, 'opening the panel clicks nothing');
     // The real panel, as Simplify's shows a job page: the job, then Start Application. No warning.
     // Opened again: the panel meets the page before it answers, then before its Apply button is drawn.
