@@ -51,6 +51,7 @@ export const resumeThemeSchema = z
     showCountry: z.boolean().optional(),
     bulletIcon: z.enum(['bullet', 'dash', 'arrow']).optional(),
     skillsListed: z.boolean().optional(),
+    educationLayout: z.enum(['two-lines', 'one-line']).optional(),
     /** 2: saved by the Design panel, so the font, size and line height are the person's own. */
     version: z.literal(2).optional(),
   })
