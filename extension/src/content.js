@@ -699,9 +699,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
   if (message.type === 'open-form') {
-    // Only when the person presses "Open application form" in the panel.
+    // Only when the person presses "Open application form" in the panel. Then,
+    // like Simplify's Start Application, the site's next step: Workday asks how
+    // to apply, and "Apply Manually" opens the form.
     const opener = Sites.formOpener();
     opener?.click();
+    if (opener) {
+      let tries = 0;
+      const next = setInterval(() => {
+        const option = Sites.applyOption();
+        if (option) option.click();
+        if (option || ++tries >= 20) clearInterval(next);
+      }, 250);
+    }
     sendResponse({ ok: Boolean(opener) });
     return false;
   }
@@ -826,11 +836,11 @@ function updateLauncher() {
     if (lastOwnForm) formChanged();
     return;
   }
+  // A job posting opens the panel by itself, as Simplify's does (Workday's job
+  // page, Ashby's Overview tab, Lever's posting): the panel offers to open the form.
+  const jobPage = IS_TOP && Sites.isJobPage();
   if (!Fields.deepOne('input, textarea, select')) {
-    // A job page whose form is one click away (Ashby's Overview tab, Lever's posting):
-    // the button shows, and the panel offers to open the form. It opens by itself once
-    // the form is on the page.
-    showLauncher({ show: Boolean(Sites.formOpener()), form: false });
+    showLauncher({ show: jobPage || Boolean(Sites.formOpener()), form: jobPage, reason: 'a job posting' });
     lastOwnForm = false;
     return;
   }
@@ -838,7 +848,7 @@ function updateLauncher() {
   // Teamtailor and other boards on company domains are known by page structure.
   const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });
   // Always passed on: update() also puts the button back if the page removed it.
-  showLauncher({ show: verdict.show, reason: verdict.reason });
+  showLauncher(verdict.show || !jobPage ? { show: verdict.show, reason: verdict.reason } : { show: true, reason: 'a job posting' });
 }
 
 /**

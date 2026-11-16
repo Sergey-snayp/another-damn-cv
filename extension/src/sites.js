@@ -141,6 +141,50 @@ const APPLY_BUTTONS = {
   eightfold: 'button[data-test-id="apply-button"], a[href*="/careers/apply"]',
 };
 
+/**
+ * A second step some sites show after Apply: Workday asks how to apply, and
+ * "Apply Manually" opens the form (Simplify's applyOptionPaths).
+ */
+const APPLY_OPTIONS = {
+  workday: '[data-automation-id="wd-popup-frame"] a[data-automation-id="applyManually"]',
+};
+
+/**
+ * Job pages where the panel opens by itself before any form is on the page,
+ * as Simplify opens its panel there (its helpMessageUrls, 3.1.10). Chrome-style
+ * patterns: * is anything.
+ */
+const JOB_PAGES = [
+  '*://*.myworkdayjobs.com/*/job/*', '*://*.myworkdaysite.com/*/job/*',
+  '*://*.myworkdayjobs.com/*/apply/*', '*://*.myworkdaysite.com/*/apply/*',
+  '*://*.myworkdayjobs.com/*/login*', '*://*.myworkdaysite.com/*/login*',
+  '*://jobs.ashbyhq.com/*/*',
+  '*://apply.workable.com/*/j/*',
+  '*://*.bamboohr.com/jobs/*', '*://*.bamboohr.com/careers/*',
+  '*://jobs.dayforcehcm.com/*/jobs/*',
+  '*://app.trinethire.com/companies/*/jobs/*',
+  '*://*/*/CandidateExperience/*/sites/*/*/preview/*', '*://*/*/CandidateExperience/*/sites/*/job/*',
+  '*://*/*/sites/*/jobs/preview/*/apply/*', '*://*.oraclecloud.com/*/sites/*/job/*', '*://*/*/sites/CX*/job/*',
+  '*://*/TGnewUI/Search/*ome/Home*#jobDetails=*', '*://*/TGNewUI/Search/*ome/Home*#jobDetails=*',
+  '*://*/TGnewUI/Search/*ome/Home*#Applypage', '*://*/TGNewUI/Search/*ome/Home*#Applypage',
+  '*://*.naukri.com/registration/createAccount*',
+  '*://lifeattiktok.com/login*', '*://lifeattiktok.com/create-account*', '*://lifeattiktok.com/createaccount*',
+].map((pattern) => new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`));
+
+/**
+ * A job posting the panel opens on by itself, as Simplify does: one of the job
+ * pages above, or a job site we know whose page has its Apply button.
+ */
+function isJobPage(url = location.href) {
+  return JOB_PAGES.some((pattern) => pattern.test(url)) || (Boolean(siteForPage()) && Boolean(formOpener()));
+}
+
+/** The second step's button (Workday's "Apply Manually"), once it is on screen. */
+function applyOption() {
+  const selector = APPLY_OPTIONS[siteForPage()?.name];
+  return selector ? [...document.querySelectorAll(selector)].find((button) => button.getClientRects().length) ?? null : null;
+}
+
 /** The button that opens this site's application form, when it is still closed. */
 function formOpener() {
   const site = siteForPage();
@@ -177,4 +221,4 @@ function siteKeyFor(element, hostname = location.hostname) {
   return null;
 }
 
-window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, SITES };
+window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, isJobPage, applyOption, SITES };

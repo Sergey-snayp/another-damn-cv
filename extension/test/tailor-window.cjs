@@ -118,7 +118,7 @@ async function main() {
     assert.equal(await worker.evaluate(async () => (await chrome.storage.local.get('chosenResumeId')).chosenResumeId), 'copy-1');
 
     // 4) Close with no changes closes at once.
-    const closeButton = () => app.evaluateHandle(() => [...document.querySelectorAll('.studio-actions button')].find(button => button.textContent === 'Close'));
+    const closeButton = () => app.evaluateHandle(() => document.querySelector('.studio-actions button[aria-label="Close"]'));
     await (await closeButton()).click();
     await page.waitForFunction(() => !document.getElementById('adcv-tailor')?.isConnected, { timeout: 3000 });
 
@@ -130,13 +130,13 @@ async function main() {
     await again.evaluate(() => document.execCommand('insertText', false, ' Edited.'));
     await again.evaluate(() => document.activeElement.blur());
     await pause(200);
-    await (await again.evaluateHandle(() => [...document.querySelectorAll('.studio-actions button')].find(button => button.textContent === 'Close'))).click();
+    await (await again.evaluateHandle(() => document.querySelector('.studio-actions button[aria-label="Close"]'))).click();
     await again.waitForSelector('.qt-close-confirm');
     assert.equal(await tailorOpen(), true, 'nothing is lost without asking');
     await (await again.evaluateHandle(() => [...document.querySelectorAll('.qt-close-confirm button')].find(button => button.textContent === 'Keep editing'))).click();
     assert.equal(await again.$('.qt-close-confirm'), null);
-    await (await again.evaluateHandle(() => [...document.querySelectorAll('.studio-actions button')].find(button => button.textContent === 'Close'))).click();
-    await (await again.evaluateHandle(() => [...document.querySelectorAll('.qt-close-confirm button')].find(button => button.textContent === 'Close anyway'))).click();
+    await (await again.evaluateHandle(() => document.querySelector('.studio-actions button[aria-label="Close"]'))).click();
+    await (await again.evaluateHandle(() => [...document.querySelectorAll('.qt-close-confirm button')].find(button => button.textContent === 'Discard changes'))).click();
     await page.waitForFunction(() => !document.getElementById('adcv-tailor')?.isConnected, { timeout: 3000 });
 
     // 6) Only Quick tailoring links open; signed out, it says what to do.
