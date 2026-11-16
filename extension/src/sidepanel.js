@@ -147,6 +147,13 @@ let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = 
  */
 const WAKE_DELAYS = [300, 600, 1000, 1500, 2500];
 let pageWaking = true, wakeTries = 0, wakeUrl = null;
+/**
+ * A page still drawing itself (Workday draws its Apply button a moment after
+ * it loads) is not shown half-drawn: the placeholder stays until the page has
+ * a form, an Apply button or a posting, for at most this long.
+ */
+const SETTLE_MS = 2000, SETTLE_JOB_MS = 8000, SETTLE_EVERY = 400;
+let settleFrom = Date.now();
 let match = null, matchUrl = null, matchKeywords = null, matchCapture = null, matchRun = 0, improving = false;
 let matchReading = false, matchProblem = '', matchRetryTimer = null, matchRetryAttempt = 0;
 // The last Autofill result for this page: summary, notes and required fields still empty.
@@ -728,7 +735,7 @@ function paint(host, html, kind, force = false) {
 }
 function drawAutofill() {
   const host = $('panel-autofill');
-  if (!scan && pageWaking) { paint(host, PAGE_LOADING, 'loading'); return; }
+  if (pageWaking) { paint(host, PAGE_LOADING, 'loading'); return; }
   if (!scan && pageDisconnected) {
     if (paint(host, `<div class="notice">${icon('refresh')}<div><strong>Reload this page to reconnect</strong><p>The extension was updated while this page was open, so it can no longer read the form. Reloading keeps nothing you typed on the page.</p><button class="primary" id="reload-page">${icon('refresh')}Reload page</button></div></div>`, 'reload'))
       $('reload-page').addEventListener('click', () => { if (currentTab?.id) void chrome.tabs.reload(currentTab.id); });
@@ -1473,11 +1480,14 @@ async function refresh() {
   try {
     const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const pageTab = await ownTab(); const nextScan = await scanFrames(pageTab);
     // Not answering yet is not disconnected: a page still loading is asked again.
-    if (pageTab?.url !== wakeUrl) { wakeUrl = pageTab?.url ?? null; wakeTries = 0; }
+    if (pageTab?.url !== wakeUrl) { wakeUrl = pageTab?.url ?? null; wakeTries = 0; settleFrom = Date.now(); }
+    const latest = sequence === refreshId;
     if (nextScan || !pageDisconnected) pageWaking = false;
     else if (pageTab?.status === 'loading') pageWaking = true; // Asked again when it finishes loading.
-    else if (wakeTries < WAKE_DELAYS.length) { pageWaking = true; setTimeout(() => void refresh(), WAKE_DELAYS[wakeTries++]); }
+    else if (wakeTries < WAKE_DELAYS.length) { pageWaking = true; if (latest) setTimeout(() => void refresh(), WAKE_DELAYS[wakeTries++]); }
     else pageWaking = false;
+    const settled = !nextScan || nextScan.fields?.length || nextScan.canOpenForm || nextScan.context?.isJobPosting;
+    if (!settled && Date.now() - settleFrom < (nextScan.jobPage ? SETTLE_JOB_MS : SETTLE_MS)) { pageWaking = true; if (latest) setTimeout(() => void refresh(), SETTLE_EVERY); }
     const tab = pageTab ? { ...pageTab, jobUrl: nextScan?.context?.jobUrl || pageTab.url } : null;
     // Scanning may outlast a backend refresh. Read the latest library after
     // it finishes, so an earlier empty list cannot replace the fresh one.

@@ -88,6 +88,8 @@ function scan() {
     consentCount: lastScan.skipped.filter((item) => item.reason === 'consent').length,
     // The job page has an Apply button that opens a form not loaded yet.
     canOpenForm: Boolean(Sites.formOpener()) && !lastScan.found.length,
+    // A job posting by its address (Workday's job page): its Apply button may still be on its way.
+    jobPage: window === window.top && Sites.isJobPage(),
   };
 }
 

@@ -16,7 +16,8 @@ const pages = {
     <header><img data-automation-id="logo" src="https://ubc.wd10.myworkdayjobs.com/ubcstaffjobs/assets/logo" alt=""></header>
     <main aria-label="Job Posting Description"><h2 data-automation-id="jobPostingHeader">Programmer Analyst I</h2>
     <div data-automation-id="locations"><dl><dt>locations</dt><dd>UBC Vancouver Campus - Vancouver, BC Canada</dd></dl></div>
-    <a role="button" data-automation-id="adventureButton" href="#" onclick="event.preventDefault(); document.body.insertAdjacentHTML('beforeend', '<div data-automation-id=wd-popup-frame><a data-automation-id=applyManually href=# onclick=&quot;event.preventDefault(); window.manual = true&quot;>Apply Manually</a></div>'); window.applied = true">Apply</a>
+    <template id="apply"><a role="button" data-automation-id="adventureButton" href="#" onclick="event.preventDefault(); document.body.insertAdjacentHTML('beforeend', '<div data-automation-id=wd-popup-frame><a data-automation-id=applyManually href=# onclick=&quot;event.preventDefault(); window.manual = true&quot;>Apply Manually</a></div>'); window.applied = true">Apply</a></template>
+    <script>/* Workday draws its Apply button a moment after the page loads. */ setTimeout(() => document.getElementById('apply').replaceWith(document.getElementById('apply').content), 1500);</script>
     <div data-automation-id="jobPostingDescription"><p>Build and support university systems.</p><h3>What you bring</h3><ul><li>Two years of web development</li><li>SQL and REST APIs</li></ul></div></main>`,
   [PLAIN]: '<!doctype html><title>Hiring tips</title><h1>Hiring tips</h1><p>How to read a job posting.</p>',
 };
@@ -90,6 +91,7 @@ async function panelFixture(browser, jobPage, { silentFor = 0 } = {}) {
 
     await open(`${WORKDAY}?source=LinkedIn`);
     await page.waitForFunction(() => window.CVAutofillPanel?.isOpen(), { timeout: 5000 });
+    await page.waitForSelector('[data-automation-id="adventureButton"]');
     const scan = await page.evaluate(() => window.__ask({ type: 'scan' }));
     assert.equal(scan.canOpenForm, true, 'the panel offers Start Application');
     // The job card, read as Simplify reads Workday: the employer and its logo, never the web address.
@@ -105,9 +107,11 @@ async function panelFixture(browser, jobPage, { silentFor = 0 } = {}) {
     console.log('PASS Workday job card: title, employer, logo, location and the description with its lists');
     assert.equal(await page.evaluate(() => Boolean(window.applied)), false, 'opening the panel clicks nothing');
     // The real panel, as Simplify's shows a job page: the job, then Start Application. No warning.
-    const panel = await panelFixture(browser, page, { silentFor: 2500 });
+    // Opened again: the panel meets the page before it answers, then before its Apply button is drawn.
+    await open(`${WORKDAY}?source=LinkedIn`);
+    const panel = await panelFixture(browser, page, { silentFor: 600 });
     await panel.waitForSelector('#open-form', { timeout: 10000 });
-    assert.deepEqual(await panel.evaluate(() => window.__views), ['placeholder', 'start'], 'the placeholder, then Start Application: never "Reload this page"');
+    assert.deepEqual(await panel.evaluate(() => window.__views), ['placeholder', 'start'], 'the placeholder, then Start Application: never "Reload this page" or "Rescan page" in between');
     const [card, button] = await panel.evaluate(() => window.__placeholder);
     const landed = await panel.evaluate(() => [document.querySelector('#panel-autofill .job-context').getBoundingClientRect().top, document.querySelector('#panel-autofill .fill-block').getBoundingClientRect().top]);
     assert.ok(Math.abs(landed[0] - card) <= 1 && Math.abs(landed[1] - button) <= 1, `the job card and Start Application land where their placeholders were: ${landed} vs ${[card, button]}`);
