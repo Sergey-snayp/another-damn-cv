@@ -141,6 +141,12 @@ const jobAddress = (tab = currentTab) => tab?.jobUrl || tab?.url;
 let panelView = 'autofill';
 let copyValues = [];
 let resumes = { items: [], chosen: null }, resumeProblem = '', loadingResumes = false, pageDisconnected = false;
+/**
+ * A page still loading does not answer yet. The panel asks again after these
+ * waits, showing the placeholder, before it says the page needs a reload.
+ */
+const WAKE_DELAYS = [300, 600, 1000, 1500, 2500];
+let pageWaking = true, wakeTries = 0, wakeUrl = null;
 let match = null, matchUrl = null, matchKeywords = null, matchCapture = null, matchRun = 0, improving = false;
 let matchReading = false, matchProblem = '', matchRetryTimer = null, matchRetryAttempt = 0;
 // The last Autofill result for this page: summary, notes and required fields still empty.
@@ -706,38 +712,53 @@ function renderAutofill() {
   if (kept.focused) again.setSelectionRange(kept.start, kept.end);
   again.scrollTop = kept.scrollTop;
 }
+/** The page's shape while it is read: a job card and a button, so nothing moves when they arrive. */
+const PAGE_LOADING = `<section class="job-context" aria-hidden="true"><div class="page-card skeleton-card"><span class="company-avatar skeleton"></span><span class="page-card-body"><span class="skeleton skeleton-line wide"></span><span class="skeleton skeleton-line"></span></span></div></section><div class="fill-block" aria-hidden="true"><div class="skeleton skeleton-button"></div></div><p class="visually-hidden" role="status">Reading this page…</p>`;
+/**
+ * Draws a view only when it changed: a rescan that finds the same page never
+ * flickers. A different kind of view fades in.
+ */
+let paintedHtml = null, paintedKind = 'loading';
+function paint(host, html, kind, force = false) {
+  if (!force && html === paintedHtml && kind === paintedKind) return false;
+  host.innerHTML = html;
+  if (kind !== paintedKind) { host.classList.remove('view-in'); void host.offsetWidth; host.classList.add('view-in'); }
+  paintedHtml = html; paintedKind = kind;
+  return true;
+}
 function drawAutofill() {
   const host = $('panel-autofill');
+  if (!scan && pageWaking) { paint(host, PAGE_LOADING, 'loading'); return; }
   if (!scan && pageDisconnected) {
-    host.innerHTML = `<div class="notice">${icon('refresh')}<div><strong>Reload this page to reconnect</strong><p>The extension was updated while this page was open, so it can no longer read the form. Reloading keeps nothing you typed on the page.</p><button class="primary" id="reload-page">${icon('refresh')}Reload page</button></div></div>`;
-    $('reload-page').addEventListener('click', () => { if (currentTab?.id) void chrome.tabs.reload(currentTab.id); });
+    if (paint(host, `<div class="notice">${icon('refresh')}<div><strong>Reload this page to reconnect</strong><p>The extension was updated while this page was open, so it can no longer read the form. Reloading keeps nothing you typed on the page.</p><button class="primary" id="reload-page">${icon('refresh')}Reload page</button></div></div>`, 'reload'))
+      $('reload-page').addEventListener('click', () => { if (currentTab?.id) void chrome.tabs.reload(currentTab.id); });
     return;
   }
   if (scan?.context?.isJobPosting && !scan.fields?.length) {
-    host.innerHTML = `${pageCard()}${autofillCvCard()}${coverLetterCard()}`;
+    paint(host, `${pageCard()}${autofillCvCard()}${coverLetterCard()}`, 'job');
     return;
   }
   if (scan?.canOpenForm && !scan.fields?.length) {
     // A job page with its Apply button, as Simplify shows it: the job, then Start Application.
-    host.innerHTML = `${pageCard()}<div class="fill-block"><button class="primary fill-action" id="open-form">Start Application${icon('arrow', 18)}</button></div>${autofillCvCard()}${coverLetterCard()}`;
-    $('open-form').addEventListener('click', openForm);
+    if (paint(host, `${pageCard()}<div class="fill-block"><button class="primary fill-action" id="open-form">Start Application${icon('arrow', 18)}</button></div>${autofillCvCard()}${coverLetterCard()}`, 'job'))
+      $('open-form').addEventListener('click', openForm);
     return;
   }
   if (!scan || !scan.fields?.length) {
-    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p><button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${autofillCvCard()}${coverLetterCard()}`;
-    $('rescan-empty').addEventListener('click', refresh);
+    if (paint(host, `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p><button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${autofillCvCard()}${coverLetterCard()}`, 'empty'))
+      $('rescan-empty').addEventListener('click', refresh);
     return;
   }
   const ready = scan.fields.filter(field => valueFor(field.key)).length;
   const groups = new Map();
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
-  host.innerHTML = `${pageCard()}
+  paint(host, `${pageCard()}
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
     ${eligibilityCard()}
     ${autofillCvCard()}
     ${coverLetterCard()}
-    <details class="card autofill-detail" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check', 18)}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`;
+    <details class="card autofill-detail" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check', 18)}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`, 'fill', true);
   $('fill').addEventListener('click', runFill);
   $('add-details')?.addEventListener('click', () => void openApp('/profile'));
 }
@@ -1451,6 +1472,12 @@ async function refresh() {
   if (!filling && $('fill')) $('fill').disabled = true;
   try {
     const stored = await chrome.storage.local.get(['profile', 'autofillGroups', 'diversityAnswers', 'continueSteps', 'autofillDefaults', 'eligibility', 'acknowledgeRequired', 'careerSource']); const pageTab = await ownTab(); const nextScan = await scanFrames(pageTab);
+    // Not answering yet is not disconnected: a page still loading is asked again.
+    if (pageTab?.url !== wakeUrl) { wakeUrl = pageTab?.url ?? null; wakeTries = 0; }
+    if (nextScan || !pageDisconnected) pageWaking = false;
+    else if (pageTab?.status === 'loading') pageWaking = true; // Asked again when it finishes loading.
+    else if (wakeTries < WAKE_DELAYS.length) { pageWaking = true; setTimeout(() => void refresh(), WAKE_DELAYS[wakeTries++]); }
+    else pageWaking = false;
     const tab = pageTab ? { ...pageTab, jobUrl: nextScan?.context?.jobUrl || pageTab.url } : null;
     // Scanning may outlast a backend refresh. Read the latest library after
     // it finishes, so an earlier empty list cannot replace the fresh one.

@@ -346,3 +346,17 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 @keyframes cover-spin { to { transform: rotate(360deg); } }
 @keyframes cover-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 70%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .cover-generate.is-working, .cover-spinner { animation: none; } }
+
+/* While the page is read: the shape of the job card and its button, so nothing moves when they arrive. */
+.skeleton { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--color-border) 0%, var(--color-background) 50%, var(--color-border) 100%); background-size: 200% 100%; animation: skeleton-shine 1.4s ease-in-out infinite; opacity: .7; }
+.skeleton-card { pointer-events: none; }
+.skeleton-card .company-avatar { border-color: transparent; }
+.skeleton-line { width: 45%; height: 11px; margin: 4px 0; }
+.skeleton-line.wide { width: 70%; height: 15px; margin: 3px 0 6px; }
+.skeleton-button { height: 46px; border-radius: 9px; }
+@keyframes skeleton-shine { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+/* A new kind of view (job, form, notice) fades in instead of snapping. */
+.panel.view-in > * { animation: view-in .18s ease-out both; }
+@keyframes view-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } .panel.view-in > * { animation: none; } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

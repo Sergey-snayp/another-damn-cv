@@ -19,7 +19,7 @@ const pages = {
 };
 
 /** The real side panel, reading the job page the way Chrome would pass its messages. */
-async function panelFixture(browser, jobPage) {
+async function panelFixture(browser, jobPage, { silentFor = 0 } = {}) {
   const page = await browser.newPage();
   await page.setViewport({ width: 420, height: 900 });
   await page.exposeFunction('readJobPage', message => jobPage.evaluate(message => window.__ask(message), message));
@@ -32,20 +32,30 @@ async function panelFixture(browser, jobPage) {
     } else if (request.url().startsWith('http://localhost:3001/')) void request.respond({ contentType: 'application/json', body: '[]' });
     else void request.respond({ status: 404, body: '' });
   });
-  await page.evaluateOnNewDocument(url => {
+  await page.evaluateOnNewDocument(({ url, silentFor }) => {
+    // A page still loading: its scripts do not answer for a moment, as Chrome says it.
+    const answersFrom = Date.now() + silentFor;
+    // Every view the panel shows, to prove it never flashed a wrong one.
+    window.__views = [];
+    new MutationObserver(() => {
+      const host = document.getElementById('panel-autofill');
+      const view = host?.querySelector('.skeleton') ? 'placeholder' : /Reload this page/.test(host?.textContent) ? 'reload' : host?.querySelector('#open-form') ? 'start' : host?.textContent.trim().slice(0, 40);
+      if (view && window.__views.at(-1) !== view) window.__views.push(view);
+      if (view === 'placeholder') window.__placeholder ??= [host.querySelector('.job-context').getBoundingClientRect().top, host.querySelector('.fill-block').getBoundingClientRect().top];
+    }).observe(document, { subtree: true, childList: true });
     const store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile: {}, chosenResumeId: 'cv1' };
     const event = { addListener() {}, removeListener() {} };
     window.chrome = {
       runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async message => (message.type === 'panel-tab' ? { tabId: 1 } : {}) },
       storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async () => {} }, session: { get: async () => ({}), set: async () => {} }, onChanged: event },
-      tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message) => window.readJobPage(message), onUpdated: event, onActivated: event, create: async () => ({}) },
+      tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message) => { if (Date.now() < answersFrom) throw new Error('Could not establish connection. Receiving end does not exist.'); return window.readJobPage(message); }, onUpdated: event, onActivated: event, create: async () => ({}) },
       webNavigation: { getAllFrames: async () => [{ frameId: 0, url }] },
       scripting: { executeScript: async () => [] },
       permissions: { request: async () => true, contains: async () => true },
       identity: { getRedirectURL: () => 'https://fixture.chromiumapp.org/' },
       windows: { getCurrent: async () => ({ width: 1400, height: 900 }), onRemoved: event },
     };
-  }, jobPage.url());
+  }, { url: jobPage.url(), silentFor });
   await page.goto('http://extension.test/src/sidepanel.html');
   return page;
 }
@@ -81,8 +91,16 @@ async function panelFixture(browser, jobPage) {
     assert.equal(scan.canOpenForm, true, 'the panel offers Start Application');
     assert.equal(await page.evaluate(() => Boolean(window.applied)), false, 'opening the panel clicks nothing');
     // The real panel, as Simplify's shows a job page: the job, then Start Application. No warning.
-    const panel = await panelFixture(browser, page);
-    await panel.waitForSelector('#open-form');
+    const panel = await panelFixture(browser, page, { silentFor: 2500 });
+    await panel.waitForSelector('#open-form', { timeout: 10000 });
+    assert.deepEqual(await panel.evaluate(() => window.__views), ['placeholder', 'start'], 'the placeholder, then Start Application: never "Reload this page"');
+    const [card, button] = await panel.evaluate(() => window.__placeholder);
+    const landed = await panel.evaluate(() => [document.querySelector('#panel-autofill .job-context').getBoundingClientRect().top, document.querySelector('#panel-autofill .fill-block').getBoundingClientRect().top]);
+    assert.ok(Math.abs(landed[0] - card) <= 1 && Math.abs(landed[1] - button) <= 1, `the job card and Start Application land where their placeholders were: ${landed} vs ${[card, button]}`);
+    await panel.evaluate(() => { window.__painted = 0; new MutationObserver(() => window.__painted++).observe(document.getElementById('panel-autofill'), { childList: true }); });
+    await panel.evaluate(() => document.getElementById('reload').click());
+    await new Promise(resolve => setTimeout(resolve, 800));
+    assert.equal(await panel.evaluate(() => window.__painted), 0, 'a rescan that finds the same page redraws nothing');
     assert.equal(await panel.$eval('#open-form', button => button.textContent.trim()), 'Start Application');
     assert.doesNotMatch(await panel.$eval('#panel-autofill', node => node.textContent), /No application fields found|Rescan/);
     await panel.screenshot({ path: '/private/tmp/job-page-start-application.png' });
