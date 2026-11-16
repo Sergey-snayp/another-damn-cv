@@ -4,8 +4,11 @@ import { AssessJobFit } from '../src/modules/resumes/application/use-cases/asses
 import { ClaudeJobAssessor } from '../src/modules/resumes/adapters/outbound/ai/claude-job.assessor';
 import {
   assessmentEvidence,
+  factsFor,
   mentions,
+  requirementsFor,
   scoreForVerdict,
+  settledAssessment,
   technologiesFor,
   type JobAssessmentDraft,
   type JobAssessmentInput,
@@ -324,4 +327,71 @@ test('a missing or out-of-range score from the AI does not fail the assessment',
   const draft = await model.assess(input);
   assert.equal(draft.score, null);
   assert.deepEqual(draft.technologies, []);
+});
+
+const LARAVEL = {
+  job: {
+    title: 'Backend Engineer',
+    company: 'Acme',
+    description:
+      'Must have: senior backend experience and Laravel/PHP ownership. German at C1 is required. Nice to have: CI/CD and social casino domain. Remote within Canada. CAD 140,000 to 170,000. Apply by December 1.',
+  },
+  evidence: 'Led senior backend work in Node.js services.\nRan CI/CD pipelines on GitHub Actions.',
+  asOf: '2026-11-15',
+};
+
+test('the checklist keeps only what the posting asks for, and "you have it" needs Profile text', () => {
+  const list = requirementsFor(
+    [
+      { name: 'Senior backend', tier: 'must', status: 'have', jobQuote: 'senior backend experience', profileQuote: 'Led senior backend work' },
+      { name: 'Laravel / PHP', tier: 'must', status: 'close', from: 'Node.js', jobQuote: 'Laravel/PHP ownership', profileQuote: 'Node.js services' },
+      { name: 'Kotlin', tier: 'must', status: 'have', jobQuote: 'Kotlin services', profileQuote: 'Node.js services' },
+      { name: 'German C1', tier: 'must', status: 'have', jobQuote: 'German at C1 is required', profileQuote: 'Fluent German' },
+      { name: 'Social casino', tier: 'nice', status: 'close', from: 'Unity', jobQuote: 'social casino domain', profileQuote: 'Ran CI/CD pipelines' },
+      { name: 'CI/CD', tier: 'nice', status: 'have', jobQuote: 'CI/CD', profileQuote: 'Ran CI/CD pipelines' },
+      { name: 'senior backend', tier: 'nice', status: 'have', jobQuote: 'senior backend experience', profileQuote: 'Led senior backend work' },
+    ],
+    LARAVEL,
+  );
+  assert.deepEqual(
+    list.map(({ name, tier, status, from }) => [name, tier, status, from]),
+    [
+      ['Senior backend', 'must', 'have', null],
+      ['Laravel / PHP', 'must', 'close', 'Node.js'],
+      // A claim the Profile text doesn't back is "not shown", never "you have it".
+      ['German C1', 'must', 'missing', null],
+      // An equivalent the Profile doesn't name is not shown.
+      ['Social casino', 'nice', 'close', null],
+      ['CI/CD', 'nice', 'have', null],
+    ],
+    'Kotlin is dropped (the posting never asks for it) and a repeated name is shown once',
+  );
+});
+
+test('job facts come only from the posting, and a dealbreaker only with a skip verdict', () => {
+  assert.deepEqual(
+    factsFor({ workMode: 'Remote within Canada', location: 'Toronto', salary: 'CAD 140,000 to 170,000', applyBy: 'December 1' }, LARAVEL),
+    { workMode: 'Remote within Canada', location: null, salary: 'CAD 140,000 to 170,000', applyBy: 'December 1' },
+  );
+  const draft = {
+    verdict: 'skip' as const,
+    score: 5,
+    summary: 'The German requirement rules it out. The rest fits.',
+    strengths: [],
+    gaps: [],
+    questions: [],
+    technologies: [],
+    dealbreaker: { point: 'German at C1 is required and not in your Profile.', jobQuote: 'German at C1 is required' },
+  };
+  const skipped = settledAssessment(draft, LARAVEL);
+  assert.equal(skipped.score, 3);
+  assert.equal(skipped.headline, 'The German requirement rules it out.', 'no headline: the summary\'s first sentence');
+  assert.deepEqual(skipped.dealbreaker, draft.dealbreaker);
+  assert.deepEqual(skipped.requirements, []);
+  assert.equal(settledAssessment({ ...draft, verdict: 'stretch' }, LARAVEL).dealbreaker, null);
+  assert.equal(
+    settledAssessment({ ...draft, dealbreaker: { point: 'x', jobQuote: 'Security clearance' } }, LARAVEL).dealbreaker,
+    null,
+    'a dealbreaker the posting does not state is dropped',
+  );
 });

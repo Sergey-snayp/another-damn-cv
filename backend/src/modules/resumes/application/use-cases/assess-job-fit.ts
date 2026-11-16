@@ -47,14 +47,21 @@ export class AssessJobFit {
     const basis = { source: 'profile' as const, profileRevision: profile.revision, jobId };
     if (!input.evidence.trim())
       return {
-        verdict: 'unclear',
-        score: null,
-        summary:
-          'Your Profile has no career details to compare with this role yet. Add your experience, achievements and skills in Profile to get a useful recommendation.',
-        strengths: [],
-        gaps: [],
-        questions: ['What relevant experience, achievements and skills should your Profile include?'],
-        technologies: [],
+        ...settledAssessment(
+          {
+            verdict: 'unclear',
+            score: null,
+            headline: 'Your Profile has no career details to compare with this role yet.',
+            summary:
+              'Your Profile has no career details to compare with this role yet. Add your experience, achievements and skills in Profile to get a useful recommendation.',
+            advice: 'Add your experience, achievements and skills in Profile, then check the fit again.',
+            strengths: [],
+            gaps: [],
+            questions: ['What relevant experience, achievements and skills should your Profile include?'],
+            technologies: [],
+          },
+          input,
+        ),
         basis,
       };
     const key = JSON.stringify({ userId, basis, input });

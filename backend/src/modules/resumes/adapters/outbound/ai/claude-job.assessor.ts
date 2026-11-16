@@ -30,6 +30,37 @@ const answerSchema = z.object({
     .max(3),
   questions: z.array(z.string().trim().min(1).max(300)).max(3),
   technologies: z.array(z.string()).catch([]),
+  headline: z.string().trim().min(1).max(220).optional().catch(undefined),
+  // Checked one by one in code (settledAssessment): a bad item is dropped, not the whole answer.
+  requirements: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        tier: z.enum(['must', 'nice']),
+        status: z.enum(['have', 'close', 'missing']),
+        from: z.string().trim().max(60).nullable().optional(),
+        jobQuote: z.string().trim().max(500),
+        profileQuote: z.string().trim().max(500).nullable().optional(),
+      }),
+    )
+    .max(16)
+    .catch([]),
+  advice: z.string().trim().min(1).max(300).nullable().optional().catch(null),
+  dealbreaker: z
+    .object({ point: z.string().trim().min(1).max(300), jobQuote: z.string().trim().min(3).max(500) })
+    .nullable()
+    .optional()
+    .catch(null),
+  facts: z
+    .object({
+      workMode: z.string().nullable().optional(),
+      location: z.string().nullable().optional(),
+      salary: z.string().nullable().optional(),
+      applyBy: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional()
+    .catch(null),
 });
 
 const SYSTEM = `You are a candid career adviser beside a CV tailoring editor.
@@ -62,11 +93,41 @@ cloud services, tools, protocols and standards (up to 15, most important first).
 name exactly as the posting writes it. Not soft skills, spoken languages or job duties.
 When you name a technology in summary, points or questions, write it exactly as listed.
 
+Write headline: at most 16 words, addressed to the candidate as "you": what fits, then the
+biggest gap, in plain words. Good: "Your backend depth matches. Laravel/PHP would be new to you."
+Good: "Every must-have is in your Profile, used in a real role." Never list several technologies.
+
+List in requirements what the posting asks for, as a checklist: tier "must" for what it
+requires, "nice" for what it prefers or lists as a bonus (up to 6 must, 3 nice, most
+important first). One thing per requirement: split "AWS, MySQL and Kubernetes" into three.
+name is 1-3 words ("Senior backend", "PostgreSQL", "German C1"); an either-or stays one
+("Python or Kotlin").
+status "have" when the Profile shows it, with profileQuote copied exactly from the Profile;
+"close" when the Profile shows the same kind of skill in another form (another backend
+language, another cloud or database), with from naming it as the Profile writes it ("Node.js")
+and profileQuote showing it; "missing" when the Profile shows nothing like it.
+Every requirement cites jobQuote, exact posting text that asks for it.
+
+Write advice: one sentence of at most 18 words, the single most useful thing to do if they
+apply ("Show the same patterns from your Node.js work, and say plainly PHP is new to you.").
+
+Set dealbreaker only when the verdict is skip because of one hard requirement the
+Profile cannot meet (a required language level, licence, clearance or mandated degree):
+{"point":"why it rules the role out","jobQuote":"exact posting text"}. Never for work
+authorization, relocation or salary. Otherwise null.
+
+In facts copy from the posting, exactly as written, its workMode (remote, hybrid or on-site
+wording), location, salary and applyBy (an application deadline). null for any it does not state.
+
 Write 2-3 short sentences of opinion in summary, then at most 3 strengths, 3 gaps and
 3 useful questions to check before applying. Every strength must cite an exact quote
 from the job and an exact quote from the Profile evidence. Every gap must cite an exact
 quote from the posting. Keep the whole assessment concise. Return JSON only:
-{"verdict":"apply|stretch|skip|unclear","score":7,"summary":"My recommendation and why",
+{"verdict":"apply|stretch|skip|unclear","score":7,"headline":"One sentence answer",
+"summary":"My recommendation and why",
+"requirements":[{"name":"PostgreSQL","tier":"must|nice","status":"have|close|missing","from":null,"jobQuote":"exact posting text","profileQuote":"exact Profile text or null"}],
+"advice":"One thing to do if you apply","dealbreaker":null,
+"facts":{"workMode":null,"location":null,"salary":null,"applyBy":null},
 "strengths":[{"point":"Why this experience fits","jobQuote":"exact posting text","profileQuote":"exact Profile text"}],
 "gaps":[{"point":"What is not shown or needs stronger evidence","jobQuote":"exact posting text","importance":"required|preferred"}],
 "questions":["A material detail to clarify"],"technologies":["Node.js","PostgreSQL"]}`;
@@ -80,7 +141,7 @@ export class ClaudeJobAssessor implements JobAssessor {
       const raw = await this.llm.complete(
         `Assess this application as of ${input.asOf}.\n<application-data>\n${JSON.stringify(input)}\n</application-data>\n${correction}`,
         SYSTEM,
-        { timeoutMs: 120_000, maxOutputChars: 14000, effort: 'low' },
+        { timeoutMs: 120_000, maxOutputChars: 20000, effort: 'low' },
       );
       const parsed = answerSchema.safeParse(firstJsonObject(raw));
       if (parsed.success && assessmentHasSources(parsed.data, input))
@@ -93,6 +154,12 @@ export class ClaudeJobAssessor implements JobAssessor {
           })),
           gaps: parsed.data.gaps.map((item) => ({ ...item, point: withoutDashPunctuation(item.point) })),
           questions: parsed.data.questions.map(withoutDashPunctuation),
+          headline: parsed.data.headline && withoutDashPunctuation(parsed.data.headline),
+          advice: parsed.data.advice && withoutDashPunctuation(parsed.data.advice),
+          dealbreaker: parsed.data.dealbreaker && {
+            ...parsed.data.dealbreaker,
+            point: withoutDashPunctuation(parsed.data.dealbreaker.point),
+          },
         };
       correction =
         'The previous answer could not be verified. Return the specified JSON shape and copy supporting quotes exactly from the supplied job and Profile. Do not invent or paraphrase quoted evidence.';

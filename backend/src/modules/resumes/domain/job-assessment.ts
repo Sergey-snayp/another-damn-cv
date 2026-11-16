@@ -18,6 +18,31 @@ export interface AssessmentCareer {
 
 export type AssessmentVerdict = 'apply' | 'stretch' | 'skip' | 'unclear';
 
+export type RequirementTier = 'must' | 'nice';
+/** have: the Profile shows it; close: a close equivalent (`from`); missing: not shown. */
+export type RequirementStatus = 'have' | 'close' | 'missing';
+
+/** One thing the posting asks for, checked against the Profile. */
+export interface RequirementDraft {
+  name: string;
+  tier: RequirementTier;
+  status: RequirementStatus;
+  /** For close: what the candidate has instead ("Node.js" for "Laravel / PHP"). */
+  from?: string | null;
+  /** Exact posting text that asks for it. */
+  jobQuote: string;
+  /** Exact Profile text that shows it (have) or its equivalent (close). */
+  profileQuote?: string | null;
+}
+
+/** Facts about the job as the posting states them; null when it doesn't. */
+export interface JobFacts {
+  workMode: string | null;
+  location: string | null;
+  salary: string | null;
+  applyBy: string | null;
+}
+
 /** What the AI answers: its opinion plus the technology names the posting uses. */
 export interface JobAssessmentDraft {
   verdict: AssessmentVerdict;
@@ -29,6 +54,14 @@ export interface JobAssessmentDraft {
   gaps: Array<{ point: string; jobQuote: string; importance: 'required' | 'preferred' }>;
   questions: string[];
   technologies: string[];
+  /** The answer in one sentence. */
+  headline?: string;
+  requirements?: RequirementDraft[];
+  /** One thing to do if they apply. */
+  advice?: string | null;
+  /** A hard requirement the Profile cannot meet; only with a skip verdict. */
+  dealbreaker?: { point: string; jobQuote: string } | null;
+  facts?: Partial<JobFacts> | null;
 }
 
 /** A technology the posting names, and whether the Profile shows it (worked out in code). */
@@ -37,8 +70,22 @@ export interface AssessedTechnology {
   inProfile: boolean;
 }
 
-export interface JobAssessment extends Omit<JobAssessmentDraft, 'technologies'> {
+export interface Requirement {
+  name: string;
+  tier: RequirementTier;
+  status: RequirementStatus;
+  from: string | null;
+  jobQuote: string;
+}
+
+export interface JobAssessment
+  extends Omit<JobAssessmentDraft, 'technologies' | 'headline' | 'requirements' | 'advice' | 'dealbreaker' | 'facts'> {
   technologies: AssessedTechnology[];
+  headline: string;
+  requirements: Requirement[];
+  advice: string | null;
+  dealbreaker: { point: string; jobQuote: string } | null;
+  facts: JobFacts;
 }
 
 export interface JobAssessmentInput {
@@ -128,11 +175,65 @@ export function technologiesFor(names: string[], input: JobAssessmentInput): Ass
   return result;
 }
 
-/** The AI's draft as shown: the score kept inside its verdict, technologies checked against both texts. */
+const MAX_REQUIREMENTS: Record<RequirementTier, number> = { must: 8, nice: 5 };
+const quoted = (quote: string | null | undefined, source: string) =>
+  !!quote && normalized(quote).length >= 3 && normalized(source).includes(normalized(quote));
+
+/**
+ * The posting's requirements as a checklist. A requirement the posting doesn't say is dropped;
+ * "you have it" or "close" needs exact Profile text, otherwise it counts as not shown.
+ */
+export function requirementsFor(drafts: RequirementDraft[], input: JobAssessmentInput): Requirement[] {
+  const seen = new Set<string>();
+  const count: Record<RequirementTier, number> = { must: 0, nice: 0 };
+  const result: Requirement[] = [];
+  for (const draft of drafts) {
+    const name = draft.name.trim();
+    const key = normalized(name);
+    if (!name || name.length > 60 || seen.has(key) || count[draft.tier] >= MAX_REQUIREMENTS[draft.tier]) continue;
+    if (!quoted(draft.jobQuote, input.job.description)) continue;
+    const shown = draft.status !== 'missing' && quoted(draft.profileQuote, input.evidence);
+    const status: RequirementStatus = shown ? draft.status : 'missing';
+    const from = status === 'close' && draft.from?.trim() && mentions(input.evidence, draft.from.trim()) ? draft.from.trim() : null;
+    seen.add(key);
+    count[draft.tier] += 1;
+    result.push({ name, tier: draft.tier, status, from, jobQuote: draft.jobQuote });
+  }
+  // Must-haves first, each tier in the AI's order.
+  return [...result.filter((item) => item.tier === 'must'), ...result.filter((item) => item.tier === 'nice')];
+}
+
+/** A fact only when the posting says it: the text must appear in the posting. */
+export function factsFor(facts: Partial<JobFacts> | null | undefined, input: JobAssessmentInput): JobFacts {
+  const keep = (value: string | null | undefined) => {
+    const text = value?.trim();
+    return text && text.length <= 80 && quoted(text, input.job.description) ? text : null;
+  };
+  return {
+    workMode: keep(facts?.workMode),
+    location: keep(facts?.location),
+    salary: keep(facts?.salary),
+    applyBy: keep(facts?.applyBy),
+  };
+}
+
+/** The first sentence of the summary, when the AI gives no headline. */
+const firstSentence = (text: string) => text.match(/^.*?[.!?](?=\s|$)/s)?.[0] ?? text;
+
+/** The AI's draft as shown: the score kept inside its verdict, every claim checked against both texts. */
 export function settledAssessment(draft: JobAssessmentDraft, input: JobAssessmentInput): JobAssessment {
+  const dealbreaker =
+    draft.verdict === 'skip' && draft.dealbreaker && quoted(draft.dealbreaker.jobQuote, input.job.description)
+      ? draft.dealbreaker
+      : null;
   return {
     ...draft,
     score: scoreForVerdict(draft.verdict, draft.score),
     technologies: technologiesFor(draft.technologies, input),
+    headline: draft.headline?.trim() || firstSentence(draft.summary.trim()),
+    requirements: requirementsFor(draft.requirements ?? [], input),
+    advice: draft.advice?.trim() || null,
+    dealbreaker,
+    facts: factsFor(draft.facts, input),
   };
 }
