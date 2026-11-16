@@ -41,6 +41,18 @@ export const resumeThemeSchema = z
     /** The editor's section order and the sections hidden from the CV ("summary", "experience", …). */
     sectionOrder: z.array(z.string().min(1).max(60)).max(40).optional(),
     hiddenSections: z.array(z.string().min(1).max(60)).max(40).optional(),
+    // The full editor's Design panel.
+    headerAlign: z.enum(['left', 'center', 'right']).optional(),
+    margins: z.enum(['narrow', 'normal', 'wide']).optional(),
+    pageSize: z.enum(['a4', 'letter']).optional(),
+    nameCaps: z.boolean().optional(),
+    dateFormat: z.enum(['short', 'numeric', 'year', 'long']).optional(),
+    locationAboveDates: z.boolean().optional(),
+    showCountry: z.boolean().optional(),
+    bulletIcon: z.enum(['bullet', 'dash', 'arrow']).optional(),
+    skillsListed: z.boolean().optional(),
+    /** 2: saved by the Design panel, so the font, size and line height are the person's own. */
+    version: z.literal(2).optional(),
   })
   .strict();
 

@@ -17,9 +17,9 @@ function fingerprint(text: string): string {
 /**
  * The print page's layout. Raise it when the print style changes, so PDFs
  * made with the old style are made again. 2: page margins on every page.
- * 3: every CV in the one design.
+ * 3: every CV in the one design. 4: the Design panel (page size, margins, fonts, bullets).
  */
-export const PRINT_LAYOUT = 3;
+export const PRINT_LAYOUT = 4;
 
 /** "12:3f9a01bc:2": the CV version, a fingerprint of its design and the print layout. */
 export function pdfVersion(snapshot: number, theme: unknown): string {
