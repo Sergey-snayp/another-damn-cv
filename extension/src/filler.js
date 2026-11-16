@@ -182,6 +182,33 @@ function optionsFor(element) {
   return scope.flatMap((list) => [...list.querySelectorAll('[role="option"], [id*="-option-"]')]).filter(visible);
 }
 
+/**
+ * Workday's dropdown, as Simplify fills it: press the button, wait for the list
+ * it opens (Workday's active popup), and press the option that matches the
+ * first of `wanted` it has: the same text, else one starting with it.
+ */
+const PLACEHOLDER_CHOICE = /^\s*(select one|select|choose( one)?|please select|--+)\s*$/i;
+async function fillListbox(button, wanted) {
+  const choices = wanted.map(normal).filter(Boolean);
+  if (choices.includes(normal(button.textContent))) return { filled: true };
+  press(button);
+  let options = [];
+  for (let waited = 0; waited < 3000 && !options.length; waited += 150) {
+    await wait(150);
+    const owned = optionsFor(button).filter((option) => !button.contains(option));
+    options = owned.length ? owned : [...document.querySelectorAll('[data-automation-activepopup="true"] [role="option"], [role="listbox"] [role="option"]')].filter(visible);
+  }
+  const pick = choices.map((choice) => options.find((option) => optionText(option) === choice) ?? options.find((option) => optionText(option).startsWith(choice))).find(Boolean);
+  if (!pick) {
+    button.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    return { filled: false, note: options.length ? `"${wanted[0]}" is not one of its options. Choose one.` : 'Its list did not open. Choose one.' };
+  }
+  pick.scrollIntoView?.({ block: 'nearest' });
+  press(pick);
+  for (let waited = 0; waited < 1500 && PLACEHOLDER_CHOICE.test(button.textContent); waited += 100) await wait(100);
+  return { filled: !PLACEHOLDER_CHOICE.test(button.textContent) };
+}
+
 function press(element) {
   for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
     element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -413,6 +440,8 @@ async function fillField(field, value, resumeFileName) {
       }
       return result;
     }
+    case 'listbox':
+      return fillListbox(field.element, field.key === 'phoneType' ? [value, 'Mobile with text', 'Mobile', 'Cell', 'Primary'] : [value]);
     case 'select':
       return { filled: fillSelect(field.element, value) };
     case 'checkbox':
@@ -757,7 +786,43 @@ function valueFor(field, profile) {
     return [profile.city, profile.state, profile.country, profile.postalCode].filter(Boolean).join(', ') || profile.location;
   }
   if (field.key === 'location') return profile.location?.trim() || [profile.city, profile.state, profile.country].filter(part => part?.trim()).join(', ');
+  if (field.key === 'state') return provinceOf(profile);
+  if (field.key === 'phoneType') return profile.phoneType || 'Mobile';
+  // A form that asks for the country code apart (Workday) wants the number without it.
+  if (field.key === 'phone' && profile.phone && countryCodeApart(field.element)) return nationalNumber(profile.phone);
   return profile[field.key];
+}
+
+/**
+ * A separate country code control near the phone number: Workday's
+ * "Country Phone Code", or a select or combobox labelled country/dial code.
+ */
+function countryCodeApart(element) {
+  if (document.querySelector('[data-automation-id="formField-countryPhoneCode"], #phoneNumber--countryPhoneCode, [data-automation-id="countryPhoneCode"]')) return true;
+  const scope = element?.closest?.('form, fieldset, section') ?? document;
+  return [...scope.querySelectorAll('select, input, [role="combobox"], button[aria-haspopup="listbox"]')]
+    .some((control) => control !== element && /\b(country|dial(ing)?|calling|phone) code\b/i.test(window.CVAutofillFields.labelOf(control)));
+}
+
+/** Calling codes, longest first: "+1 (672) 888-0334" → "6728880334", "+48 512 345 678" → "512345678". */
+const CALLING_CODES = ['380', '351', '353', '972', '971', '44', '48', '49', '33', '34', '39', '31', '32', '41', '43', '45', '46', '47', '61', '64', '65', '81', '82', '86', '91', '52', '55', '27', '7', '1'];
+function nationalNumber(phone) {
+  const digits = String(phone).replace(/\D/g, '');
+  if (!String(phone).trim().startsWith('+')) return digits;
+  const code = CALLING_CODES.find((candidate) => digits.startsWith(candidate) && digits.length - candidate.length >= 7);
+  return code ? digits.slice(code.length) : digits;
+}
+
+/**
+ * The state or province: the profile's, unless it is empty or just the country
+ * ("Canada"); then a Canadian postal code's first letter names the province.
+ */
+const PROVINCES = { A: 'Newfoundland and Labrador', B: 'Nova Scotia', C: 'Prince Edward Island', E: 'New Brunswick', G: 'Quebec', H: 'Quebec', J: 'Quebec', K: 'Ontario', L: 'Ontario', M: 'Ontario', N: 'Ontario', P: 'Ontario', R: 'Manitoba', S: 'Saskatchewan', T: 'Alberta', V: 'British Columbia', Y: 'Yukon' };
+function provinceOf(profile) {
+  const state = String(profile.state ?? '').trim();
+  if (state && state.toLowerCase() !== String(profile.country ?? '').trim().toLowerCase()) return state;
+  const postal = String(profile.postalCode ?? '').trim().toUpperCase();
+  return /^[A-Z]\d[A-Z]/.test(postal) ? PROVINCES[postal[0]] ?? state : state;
 }
 
 /**

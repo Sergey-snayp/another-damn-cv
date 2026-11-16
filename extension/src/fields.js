@@ -25,6 +25,8 @@ const CATEGORIES = [
   { key: 'fullName', group: 'Personal', match: ['full name', 'your name', 'candidate name', 'legal name', 'name'] },
   { key: 'email', group: 'Personal', match: ['email', 'e-mail', 'email address'] },
   { key: 'phone', group: 'Personal', match: ['phone', 'mobile', 'telephone', 'cell', 'contact number'] },
+  // Workday's "Phone Device Type": Mobile, as Simplify chooses it.
+  { key: 'phoneType', group: 'Personal', match: ['phone device type', 'phone type', 'device type', 'type of phone'] },
   { key: 'pronouns', group: 'Personal', match: ['pronouns'] },
 
   // --- location -------------------------------------------------------------
@@ -382,6 +384,8 @@ const LONG_LABEL = 60;
 /** A question that asks for yes or no: "Are you subject to agreements with your current employer?" */
 const YES_NO = /^\s*(are|do|does|did|have|has|had|will|would|is|was|were|can|could|should|may)\b/i;
 
+const NAME_PARTS = new Set(['firstName', 'lastName', 'middleName', 'preferredName']);
+
 function categorise(signals, { long = false, yesNo = false } = {}) {
   if (NEVER_FILL.some((term) => mentions(signals, term))) {
     return { key: null, sensitive: true };
@@ -405,11 +409,14 @@ function categorise(signals, { long = false, yesNo = false } = {}) {
 
   // "Name pronunciation: how do you pronounce your name?" asks how, not the name.
   if (/\bpronounc/.test(signals)) return { key: null, sensitive: false };
+  // A phone extension stays empty, as Simplify leaves it: never the phone number again.
+  if (/\bext(ension)?\b/.test(signals) && /\b(phone|telephone|mobile|tel)\b/.test(signals)) return { key: null, sensitive: false };
 
   let best = null;
   // "the United States" is a country, never the State field ("…based in the United States?").
   const words = signals.replace(/\bunited states\b/g, 'usa');
 
+  let part = null;
   for (const category of CATEGORIES) {
     for (const phrase of category.match) {
       // A yes/no question is never a profile field: it asks for yes or no, not the employer's name.
@@ -419,8 +426,11 @@ function categorise(signals, { long = false, yesNo = false } = {}) {
       if (!best || phrase.length > best.length) {
         best = { key: category.key, length: phrase.length };
       }
+      if (NAME_PARTS.has(category.key) && (!part || phrase.length > part.length)) part = { key: category.key, length: phrase.length };
     }
   }
+  // Workday's "Last Name" sits under "Legal Name": the part asked for, never the whole name.
+  if (best?.key === 'fullName' && part) best = part;
 
   return { key: best?.key ?? null, sensitive: false };
 }
@@ -445,7 +455,13 @@ function uploadButtonText(input) {
 }
 const hasUploadButton = (input) => Boolean(uploadButtonText(input).trim());
 
+/** Workday's dropdowns: a button that opens a list of options ("Select One"). */
+const isListbox = (element) => element.tagName === 'BUTTON' && element.getAttribute('aria-haspopup') === 'listbox';
+
 function isFillable(element) {
+  // Only a labelled one in a form field: never a page's language or menu switcher.
+  if (isListbox(element)) return !element.disabled && !element.closest('[hidden], [aria-hidden="true"]') && element.offsetParent !== null
+    && Boolean(element.getAttribute('aria-labelledby') || element.labels?.length || element.closest('[data-automation-id^="formField"]'));
   if (element.disabled || element.readOnly) return false;
   if (element.type === 'hidden') return false;
   if (['password', 'submit', 'button', 'reset', 'image'].includes(element.type)) return false;
@@ -456,6 +472,7 @@ function isFillable(element) {
 
 /** What kind of control this is — the filler needs to know. */
 function kindOf(element) {
+  if (isListbox(element)) return 'listbox';
   if (element.tagName === 'SELECT') return 'select';
   if (element.tagName === 'TEXTAREA') return 'textarea';
   if (element.type === 'file') return 'file';
@@ -538,7 +555,7 @@ function isSideForm(form) {
 }
 
 function detectFields() {
-  const elements = deepAll('input, textarea, select');
+  const elements = deepAll('input, textarea, select, button[aria-haspopup="listbox"]');
   const found = [];
   const skipped = [];
   const sideForms = new Map();
