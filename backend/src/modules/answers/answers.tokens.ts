@@ -1,2 +1,4 @@
 export const ANSWER_REPOSITORY = Symbol('ANSWER_REPOSITORY');
 export const DEFAULT_REPOSITORY = Symbol('DEFAULT_REPOSITORY');
+export const SITE_LOGIN_REPOSITORY = Symbol('SITE_LOGIN_REPOSITORY');
+export const SITE_LOGIN_BOX = Symbol('SITE_LOGIN_BOX');

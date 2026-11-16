@@ -24,6 +24,11 @@ export const config = {
   port: Number(optional('PORT', '3001')),
   databaseUrl: required('DATABASE_URL'),
   sessionSecret: required('SESSION_SECRET'),
+  /**
+   * Seals the extension's job-site password. Empty: a key derived from
+   * SESSION_SECRET. Changing either makes a saved password unreadable.
+   */
+  siteLoginKey: optional('SITE_LOGIN_KEY', ''),
   /** The web app's address. On Render it is the service's own (RENDER_EXTERNAL_URL). */
   frontendUrl: optional('FRONTEND_URL', optional('RENDER_EXTERNAL_URL', 'http://localhost:5173')),
   /**

@@ -30,7 +30,13 @@ import {
   SaveAnswers,
   UpdateAnswer,
 } from './application/use-cases/manage-answers';
-import { ANSWER_REPOSITORY, DEFAULT_REPOSITORY } from './answers.tokens';
+import { ANSWER_REPOSITORY, DEFAULT_REPOSITORY, SITE_LOGIN_BOX, SITE_LOGIN_REPOSITORY } from './answers.tokens';
+import { config } from '../../shared/config/config';
+import { ExtensionSiteLoginController } from './adapters/inbound/http/site-login.controller';
+import { PrismaSiteLoginRepository } from './adapters/outbound/persistence/prisma-site-login.repository';
+import { AesGcmSecretBox } from './adapters/outbound/crypto/aes-gcm-secret-box';
+import type { SecretBox, SiteLoginRepository } from './application/ports/site-login';
+import { ReadSiteLogin, SaveSiteLogin } from './application/use-cases/site-login';
 
 const useCase = <T>(type: new (repository: AnswerRepository) => T) => ({
   provide: type,
@@ -51,6 +57,7 @@ const defaultsUseCase = <T>(type: new (repository: DefaultRepository) => T) => (
     ExtensionAnswersController,
     DefaultsController,
     ExtensionDefaultsController,
+    ExtensionSiteLoginController,
   ],
   providers: [
     {
@@ -63,6 +70,17 @@ const defaultsUseCase = <T>(type: new (repository: DefaultRepository) => T) => (
       inject: [PrismaService],
       useFactory: (db: PrismaService) => new PrismaDefaultRepository(db),
     },
+    {
+      provide: SITE_LOGIN_REPOSITORY,
+      inject: [PrismaService],
+      useFactory: (db: PrismaService) => new PrismaSiteLoginRepository(db),
+    },
+    { provide: SITE_LOGIN_BOX, useFactory: () => new AesGcmSecretBox(config.siteLoginKey || config.sessionSecret, 'site-login') },
+    ...[ReadSiteLogin, SaveSiteLogin].map((type) => ({
+      provide: type,
+      inject: [SITE_LOGIN_REPOSITORY, SITE_LOGIN_BOX],
+      useFactory: (logins: SiteLoginRepository, box: SecretBox) => new type(logins, box),
+    })),
     defaultsUseCase(ListDefaults),
     defaultsUseCase(SaveDefaults),
     defaultsUseCase(UpdateDefault),
