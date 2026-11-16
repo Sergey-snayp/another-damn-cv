@@ -70,7 +70,7 @@ export class ChooseRoleBullets {
     return {
       matched: true,
       profileRole: profileRole ? { title: profileRole.title, company: profileRole.company } : null,
-      ...checkChoice(answer, pool, count, min),
+      ...checkChoice(answer, pool, count, min, [input.role.description ?? '']),
     };
   }
 

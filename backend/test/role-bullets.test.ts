@@ -454,3 +454,40 @@ test('a job’s chosen bullets never repeat one another, nor do its Swap alterna
   assert.equal(openingVerb('**Built** the service.'), 'built');
   assert.ok(repeatsAny('Built REST APIs for card tokenization.', ['Built card tokenization REST APIs.']));
 });
+
+test('a bullet that says again what the job description above it says is dropped, and the next best fills its place', () => {
+  const description =
+    'Card payment platform processing 15,000–20,000 transactions a day across tokenization, 3-D Secure authorization, merchant onboarding and TLS certificate management.';
+  const role = {
+    company: 'Ciklum',
+    title: 'Senior Software Engineer',
+    from: '2024-10',
+    description,
+    bullets: [
+      'Delivered features across 3 payment services in Node.js and TypeScript on AWS.',
+      'Built the Discover integration for card tokenization in the payment API, covering token lifecycle, PAR lookup and notifications, secured with OAuth 2.0, signed JWT and JWE encryption.',
+    ],
+  };
+  const pool = rolePool(role, null);
+  const result = checkChoice(
+    {
+      chosen: [
+        { id: 'c1', text: role.bullets[0] },
+        {
+          id: 'cf1',
+          text: 'Supported a card payment platform processing 15,000 to 20,000 transactions a day across tokenization, 3-D Secure authorization, merchant onboarding and TLS certificate management.',
+        },
+      ],
+      alternates: [],
+    },
+    pool,
+    2,
+    2,
+    [description],
+  );
+  assert.deepEqual(
+    result.chosen.map((item) => item.id),
+    ['c1', 'c2'],
+    'the Discover bullet stays',
+  );
+});

@@ -235,8 +235,11 @@ export function checkChoice(
   pool: PoolItem[],
   count: number,
   min = count,
+  /** The job's description as the CV shows it above the bullets: no bullet may say it again. */
+  shown: string[] = [],
 ): Pick<RoleBulletChoice, 'chosen' | 'alternates'> {
   const byId = new Map(pool.map((item) => [item.id, item]));
+  const above = shown.filter((text) => text.trim());
   const used = new Set<string>();
   // Lines that never repeat one another: two bullets of one job never say the same thing.
   const take = (
@@ -264,6 +267,7 @@ export function checkChoice(
       }
       const line = fine ? reworded : withoutDashPunctuation(item.text);
       if (
+        repeatsAny(line, above) ||
         repeatsAny(
           line,
           [...beside, ...out].map((kept) => kept.text),
@@ -287,6 +291,7 @@ export function checkChoice(
   while (chosen.length < min && rest.length) {
     const item = rest.shift()!;
     if (
+      repeatsAny(item.text, above) ||
       repeatsAny(
         item.text,
         chosen.map((kept) => kept.text),
@@ -301,6 +306,7 @@ export function checkChoice(
     if (alternates.length === 4) break;
     if (
       used.has(item.id) ||
+      repeatsAny(item.text, above) ||
       repeatsAny(
         item.text,
         [...chosen, ...alternates].map((kept) => kept.text),
