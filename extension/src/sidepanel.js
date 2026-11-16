@@ -8,6 +8,7 @@ import { matchAnswers } from './answers.js';
 import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
 import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
+import { newSitePassword, readSiteLogin, saveSiteLogin } from './site-login.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear', workArrangement: 'Office, hybrid or remote', willingToRelocate: 'Relocation',
@@ -719,6 +720,45 @@ function renderAutofill() {
   if (kept.focused) again.setSelectionRange(kept.start, kept.end);
   again.scrollTop = kept.scrollTop;
 }
+// ─── A job site's account step ──────────────────────────────────────────
+// Workday's Create Account and Sign In, as Simplify does them: one button fills
+// the name, email, password and its verify box, and ticks the agreement, with
+// the one login saved on your account (the server keeps it, encrypted). The
+// first account gets a new password. The page's own button is left to press.
+const ACCOUNT_ROWS = { name: 'Full Name', email: 'Email Address', password: 'Password', verify: 'Verify New Password', agreement: 'Agree to Privacy Notice' };
+let accountStep = { status: 'idle', filled: [], message: '', url: null };
+function accountView() {
+  const signin = scan.account === 'signin';
+  const step = accountStep.url === currentTab?.url ? accountStep : { status: 'idle', filled: [], message: '' };
+  const working = step.status === 'working';
+  const said = working ? (signin ? 'Signing in…' : 'Creating your account…')
+    : step.status === 'done' ? `Done. Check the page, then press ${signin ? 'Sign In' : 'Create Account'}.`
+      : step.status === 'needs-password' ? 'Type your password on the page, or set it in Settings, under Job-site login.'
+        : step.message;
+  const rows = step.filled.map((key) => `<li>${icon('check', 14)}${esc(ACCOUNT_ROWS[key] ?? key)}</li>`).join('');
+  return `<div class="fill-block"><button class="primary fill-action" id="account-fill" ${working ? 'disabled aria-busy="true"' : ''}>${icon('bolt', 20)}${signin ? 'Sign In &amp; Autofill' : 'Create Account &amp; Autofill'}</button>${said ? `<div class="status${step.status === 'error' ? ' error' : ''}" role="status">${esc(said)}</div>` : ''}${rows ? `<ul class="account-rows">${rows}</ul>` : ''}</div>`;
+}
+function setAccountStep(next) { accountStep = { filled: [], message: '', ...next, url: currentTab?.url ?? null }; renderAutofill(); }
+async function fillAccount() {
+  if (accountStep.status === 'working' && accountStep.url === currentTab?.url) return;
+  const creating = scan?.account === 'create';
+  setAccountStep({ status: 'working' });
+  try {
+    let login = await readSiteLogin();
+    const email = login?.email || profile.email;
+    if (!email) throw new Error('Add your email to your Profile first.');
+    // The first account: a new password, saved on your account before it is used.
+    if (!login && creating) login = await saveSiteLogin(email, newSitePassword());
+    const fullName = profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+    const reply = await askPage({ type: 'account-fill', login: { email, password: login?.password ?? '', fullName } });
+    if (!reply) throw new Error('Lost contact with the page. Reload it and try again.');
+    if (reply.status === 'done' || reply.status === 'needs-password') setAccountStep({ status: reply.status, filled: reply.filled });
+    else setAccountStep({ status: 'error', filled: reply.filled, message: reply.status === 'password-rejected' ? 'The page did not take the password. Type it on the page.' : 'The account form is gone. Rescan the page.' });
+  } catch (error) {
+    setAccountStep({ status: 'error', message: error?.message || 'Could not fill the account form.' });
+  }
+}
+
 /** The page's shape while it is read: a job card and a button, so nothing moves when they arrive. */
 const PAGE_LOADING = `<section class="job-context" aria-hidden="true"><div class="page-card skeleton-card"><span class="company-avatar skeleton"></span><span class="page-card-body"><span class="skeleton skeleton-line wide"></span><span class="skeleton skeleton-line"></span></span></div></section><div class="fill-block" aria-hidden="true"><div class="skeleton skeleton-button"></div></div><p class="visually-hidden" role="status">Reading this page…</p>`;
 /**
@@ -743,6 +783,10 @@ function drawAutofill() {
   }
   if (scan?.context?.isJobPosting && !scan.fields?.length) {
     paint(host, `${pageCard()}${autofillCvCard()}${coverLetterCard()}`, 'job');
+    return;
+  }
+  if (scan?.account) {
+    if (paint(host, `${pageCard()}${accountView()}${autofillCvCard()}${coverLetterCard()}`, 'account')) $('account-fill').addEventListener('click', () => void fillAccount());
     return;
   }
   if (scan?.canOpenForm && !scan.fields?.length) {
@@ -1539,6 +1583,34 @@ $('sign-in').addEventListener('click', () => void doSignIn()); $('sign-out').add
 $('refresh-cvs').addEventListener('click', () => void loadResumes());
 $('open-app').addEventListener('click', () => void openApp()); $('edit-profile').addEventListener('click', () => void openApp('/profile')); $('open-documents').addEventListener('click', () => void openApp('/documents'));
 $('copy-redirect').addEventListener('click', async () => { try { await navigator.clipboard.writeText(redirectUri()); $('copy-redirect').textContent = 'Copied'; } catch { status('auth-status', 'Select the redirect URI to copy it manually.', 'error'); } });
+// Settings → Job-site login: read from your account each time, shown hidden, copied on request.
+let siteLogin = null, siteLoginEditing = false;
+async function renderSiteLogin(note = '') {
+  const box = $('site-login');
+  if (!siteLoginEditing) {
+    box.innerHTML = '<p class="muted">Loading…</p>';
+    try { siteLogin = await readSiteLogin(); } catch (error) { box.innerHTML = `<p class="muted">${esc(error?.message || 'Could not read it.')}</p>`; return; }
+  }
+  box.innerHTML = siteLoginEditing
+    ? `<form id="site-login-form" class="site-login-form"><label>Email<input type="email" id="site-login-email" required maxlength="254" value="${esc(siteLogin?.email || profile.email || '')}"></label><label>Password<input type="password" id="site-login-password" required minlength="8" maxlength="128" autocomplete="new-password"></label><div class="site-login-actions"><button class="primary" type="submit">Save</button><button class="ghost" type="button" id="site-login-cancel">Cancel</button></div></form>`
+    : siteLogin
+      ? `<dl class="site-login"><dt>Email</dt><dd>${esc(siteLogin.email)}</dd><dt>Password</dt><dd><span id="site-login-secret">${'•'.repeat(12)}</span></dd></dl><div class="site-login-actions"><button class="ghost" type="button" id="site-login-show">Show</button><button class="ghost" type="button" id="site-login-copy">Copy password</button><button class="ghost" type="button" id="site-login-change">Change</button></div>${note ? `<p class="muted" role="status">${esc(note)}</p>` : ''}`
+      : `<p class="muted">None yet. The first time you create an account, a strong password is made and saved here. Already have one? Set it.</p><div class="site-login-actions"><button class="ghost" type="button" id="site-login-change">Set password</button></div>`;
+  $('site-login-change')?.addEventListener('click', () => { siteLoginEditing = true; void renderSiteLogin(); });
+  $('site-login-cancel')?.addEventListener('click', () => { siteLoginEditing = false; void renderSiteLogin(); });
+  $('site-login-show')?.addEventListener('click', (event) => {
+    const secret = $('site-login-secret'); const shown = secret.textContent === siteLogin.password;
+    secret.textContent = shown ? '•'.repeat(12) : siteLogin.password; event.target.textContent = shown ? 'Show' : 'Hide';
+  });
+  $('site-login-copy')?.addEventListener('click', async (event) => {
+    try { await navigator.clipboard.writeText(siteLogin.password); event.target.textContent = 'Copied'; } catch { event.target.textContent = 'Could not copy'; }
+  });
+  $('site-login-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try { siteLogin = await saveSiteLogin($('site-login-email').value.trim(), $('site-login-password').value); siteLoginEditing = false; void renderSiteLogin('Saved on your account.'); }
+    catch (error) { status('auth-status', error?.message || 'Could not save it.', 'error'); }
+  });
+}
 function renderDisabledSites(hosts) {
   $('disabled-sites').hidden = !hosts.length;
   $('disabled-sites-list').innerHTML = hosts.map(host => `<li><span>${esc(host)}</span><button data-enable-host="${esc(host)}">Turn back on</button></li>`).join('');
@@ -1588,7 +1660,7 @@ $('fill-groups').addEventListener('change', async event => {
   const next = { ...fillGroups, [box.dataset.fillGroup]: box.checked };
   try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
 });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill', 'acknowledgeRequired', 'autofillDefaults']); $('acknowledge-required').checked = settings.acknowledgeRequired === true; useDefaults(settings.autofillDefaults); renderEligibilityAnswers(); $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill', 'acknowledgeRequired', 'autofillDefaults']); $('acknowledge-required').checked = settings.acknowledgeRequired === true; useDefaults(settings.autofillDefaults); renderEligibilityAnswers(); $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); void renderSiteLogin(); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['Another Damn CV ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });

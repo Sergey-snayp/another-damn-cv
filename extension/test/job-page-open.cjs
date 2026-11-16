@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(__dirname, '../../backend')] }));
+const { panelFixture } = require('./panel-fixture.cjs');
 
 // A job posting opens the panel by itself, before any form is on the page, as
 // Simplify's panel does (its Workday job pages). "Start Application" then
@@ -26,48 +27,6 @@ const pages = {
     <label>Password <input type="password" data-automation-id="password"></label><button>Create Account</button></main>`,
   [PLAIN]: '<!doctype html><title>Hiring tips</title><h1>Hiring tips</h1><p>How to read a job posting.</p>',
 };
-
-/** The real side panel, reading the job page the way Chrome would pass its messages. */
-async function panelFixture(browser, jobPage, { silentFor = 0 } = {}) {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 420, height: 900 });
-  await page.exposeFunction('readJobPage', message => jobPage.evaluate(message => window.__ask(message), message));
-  await page.setRequestInterception(true);
-  page.on('request', request => {
-    const file = path.join(extension, new URL(request.url()).pathname);
-    if (request.url().startsWith('http://extension.test/') && fs.existsSync(file)) {
-      const contentType = file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.html') ? 'text/html' : 'image/png';
-      void request.respond({ contentType, body: fs.readFileSync(file) });
-    } else if (request.url().startsWith('http://localhost:3001/')) void request.respond({ contentType: 'application/json', body: '[]' });
-    else void request.respond({ status: 404, body: '' });
-  });
-  await page.evaluateOnNewDocument(({ url, silentFor }) => {
-    // A page still loading: its scripts do not answer for a moment, as Chrome says it.
-    const answersFrom = Date.now() + silentFor;
-    // Every view the panel shows, to prove it never flashed a wrong one.
-    window.__views = [];
-    new MutationObserver(() => {
-      const host = document.getElementById('panel-autofill');
-      const view = host?.querySelector('.skeleton') ? 'placeholder' : /Reload this page/.test(host?.textContent) ? 'reload' : host?.querySelector('#open-form') ? 'start' : host?.textContent.trim().slice(0, 40);
-      if (view && window.__views.at(-1) !== view) window.__views.push(view);
-      if (view === 'placeholder') window.__placeholder ??= [host.querySelector('.job-context').getBoundingClientRect().top, host.querySelector('.fill-block').getBoundingClientRect().top];
-    }).observe(document, { subtree: true, childList: true });
-    const store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile: {}, chosenResumeId: 'cv1' };
-    const event = { addListener() {}, removeListener() {} };
-    window.chrome = {
-      runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async message => (message.type === 'panel-tab' ? { tabId: 1 } : {}) },
-      storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async () => {} }, session: { get: async () => ({}), set: async () => {} }, onChanged: event },
-      tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message) => { if (Date.now() < answersFrom) throw new Error('Could not establish connection. Receiving end does not exist.'); return window.readJobPage(message); }, onUpdated: event, onActivated: event, create: async () => ({}) },
-      webNavigation: { getAllFrames: async () => [{ frameId: 0, url }] },
-      scripting: { executeScript: async () => [] },
-      permissions: { request: async () => true, contains: async () => true },
-      identity: { getRedirectURL: () => 'https://fixture.chromiumapp.org/' },
-      windows: { getCurrent: async () => ({ width: 1400, height: 900 }), onRemoved: event },
-    };
-  }, { url: jobPage.url(), silentFor });
-  await page.goto('http://extension.test/src/sidepanel.html');
-  return page;
-}
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, timeout: 90_000 });

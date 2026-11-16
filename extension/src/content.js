@@ -90,6 +90,8 @@ function scan() {
     canOpenForm: Boolean(Sites.formOpener()) && !lastScan.found.length,
     // A job posting by its address (Workday's job page): its Apply button may still be on its way.
     jobPage: window === window.top && Sites.isJobPage(),
+    // A job site's account step: 'create' (Create Account) or 'signin', as Simplify tells them apart.
+    account: window.CVAutofillAccount?.find()?.kind ?? null,
   };
 }
 
@@ -699,6 +701,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'focus-field') {
     sendResponse({ ok: focusField(message.id) });
     return false;
+  }
+  if (message.type === 'account-fill') {
+    // Only when the person presses "Create Account & Autofill": never presses the page's button.
+    void window.CVAutofillAccount.fill(message.login).then(sendResponse, () => sendResponse({ status: 'failed', filled: [] }));
+    return true;
   }
   if (message.type === 'open-form') {
     // Only when the person presses "Open application form" in the panel. Then,
