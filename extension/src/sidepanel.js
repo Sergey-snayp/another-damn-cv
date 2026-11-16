@@ -25,7 +25,7 @@ const FILL_GROUPS = [
   // Types of work accepted (Profile) and relocation per country (default answers).
   { id: 'workPrefs', label: 'Work type and relocation', keys: ['workArrangement', 'willingToRelocate', 'workArrangements'] },
   // "How did you hear about this job?" → the link below. Off: saved answers fill it like any company question.
-  { id: 'heardAbout', label: '"How did you hear" → another-damn.cv', keys: ['heardAbout'] },
+  { id: 'heardAbout', label: '"How did you hear" → anotherdamn.cv', keys: ['heardAbout'] },
   // The company's own questions, from answers saved in the app. Not a profile field group.
   { id: 'answers', label: 'Saved answers', keys: [] },
   // Off unless switched on: answers live only in this browser (diversityAnswers).
@@ -40,7 +40,7 @@ const DIVERSITY_CHOICES = {
   eeoDisability: { label: 'Disability', choices: ['Prefer not to answer', 'No', 'Yes'] },
 };
 /** What "How did you hear about this job?" is answered with. */
-const HEARD_ABOUT_ANSWER = 'https://another-damn.cv';
+const HEARD_ABOUT_ANSWER = 'https://anotherdamn.cv/';
 let diversityAnswers = {}, continueSteps = false, eligibility = {}, autofillDefaults = [], acknowledgeRequired = false;
 
 // ─── Eligibility, asked once per country ─────────────────────────────────

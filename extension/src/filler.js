@@ -609,7 +609,7 @@ function eligibilityValue(field, profile) {
 
 // ─── "How did you hear about this job?" ────────────────────────────────
 // Settings → "How did you hear" (on by default): answered with the link to
-// another-damn.cv. A list of sources has no such option, so "Other" is
+// anotherdamn.cv. A list of sources has no such option, so "Other" is
 // chosen and the link goes in the "If other, please specify" box below; the
 // closest source (job board, website…) when there is no "Other".
 

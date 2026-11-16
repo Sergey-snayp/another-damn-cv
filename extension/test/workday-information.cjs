@@ -43,7 +43,7 @@ const page = `<!doctype html><title>Apply</title>${MENUS}<main><h2>My Informatio
   <section><h3>Phone</h3>${menu('phone-device-type', 'Phone Device Type*')}
     <div data-automation-id="formField-countryPhoneCode"><label for="cpc">Country Phone Code*</label><input id="cpc" placeholder="Search" role="combobox"></div>
     ${text('phoneNumber', 'Phone Number*')}${text('phoneExtension', 'Phone Extension')}</section></main>`;
-const profile = { firstName: 'Sergey', lastName: 'Proniuk', fullName: 'Sergey Proniuk', phone: '+1 (672) 888-0334', city: 'Vancouver', state: 'Canada', country: 'Canada', postalCode: 'V5K 1A1', heardAbout: 'https://another-damn.cv' };
+const profile = { firstName: 'Sergey', lastName: 'Proniuk', fullName: 'Sergey Proniuk', phone: '+1 (672) 888-0334', city: 'Vancouver', state: 'Canada', country: 'Canada', postalCode: 'V5K 1A1', heardAbout: 'https://anotherdamn.cv/' };
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, timeout: 90_000 });

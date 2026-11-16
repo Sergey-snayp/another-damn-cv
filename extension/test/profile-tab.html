@@ -72,7 +72,7 @@
         sentToPage.push(message);
         if (message.type === 'scan') return { url: 'https://jobs.example.com/apply', host: 'jobs.example.com', site: null, ruleCount: 0, context: { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', ...(POSTED_MODE && { postedAt: '2026-11-04T00:00:00Z' }), logo: LINKEDIN_MODE ? null : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', logoDomain: null }, fields: [...(CVS_MODE ? [{ key: 'resume', kind: 'file', group: 'Documents' }] : []), { key: 'firstName', kind: 'text', group: 'Personal' }, { key: 'currentCompany', kind: 'text', group: 'Experience' }, { key: 'school', kind: 'text', group: 'Education' }], skippedSensitive: 0, consentCount: 0, canOpenForm: false };
         if (message.type === 'job-details') return { title: 'Engineer', company: FORM_MODE ? '' : 'Acme', url: 'https://jobs.example.com/apply', location: FORM_MODE ? '' : 'Warsaw, Poland', salaryMin: 15000, salaryMax: 20000, salaryCurrency: 'PLN', salaryPeriod: 'month', employmentType: 'Full-time', description: 'Build payment APIs.', country: 'Poland' , ...(LINKEDIN_MODE && { description: '' }) };
-        if (message.type === 'questions') return { questions: [{ id: '7', question: 'How did you hear about us?', kind: 'text', value: 'https://another-damn.cv' }, { id: '8', question: 'Why Acme?', kind: 'textarea', value: '' }] };
+        if (message.type === 'questions') return { questions: [{ id: '7', question: 'How did you hear about us?', kind: 'text', value: 'https://anotherdamn.cv/' }, { id: '8', question: 'Why Acme?', kind: 'textarea', value: '' }] };
         if (message.type === 'replace-cv') return { replaced: 1, kept: 0 };
         if (message.type === 'fill') return { filled: 3, failures: [], notes: [], missing: [] };
         return null;
@@ -469,7 +469,7 @@
     await wait(100);
     expect(!document.getElementById('panel-job').hidden && document.querySelector('#job-form [name="notes"]') === null && !opened.length, 'reopening a newly saved job stays in the extension form');
     document.getElementById('job-form-back').click();
-    expect(recorded.at(-1)?.path === '/api/jobs/j1/application' && JSON.stringify(recorded.at(-1)?.body.answers) === JSON.stringify([{ question: 'How did you hear about us?', answer: 'https://another-damn.cv' }]),
+    expect(recorded.at(-1)?.path === '/api/jobs/j1/application' && JSON.stringify(recorded.at(-1)?.body.answers) === JSON.stringify([{ question: 'How did you hear about us?', answer: 'https://anotherdamn.cv/' }]),
       `saving records the answers on the form, not the empty ones (recorded ${JSON.stringify(recorded.at(-1))})`);
 
     // Opening "Fields to fill" does not move the panel, and it stays open when the panel redraws.

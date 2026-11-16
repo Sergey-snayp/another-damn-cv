@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <title>Autofill test — "How did you hear about this job?"</title>
 <!--
-  "How did you hear" questions are answered with the link to another-damn.cv:
+  "How did you hear" questions are answered with the link to anotherdamn.cv:
   typed into a text box; "Other" plus the link in the details box below for a
   list; the closest source when there is no "Other". "Who referred you?" and
   look-alikes are left alone. With the setting off, a saved answer fills it.
@@ -40,7 +40,7 @@ addEventListener('load', () => setTimeout(async () => {
   const problems = [];
   const expect = (ok, what) => { if (!ok) problems.push(what); };
   const $ = (id) => document.getElementById(id);
-  const M = window.CVAutofillMarks, LINK = 'https://another-damn.cv';
+  const M = window.CVAutofillMarks, LINK = 'https://anotherdamn.cv/';
   try {
     const keys = Object.fromEntries(window.CVAutofillFields.detectFields().found.map((field) => [field.element.id || field.element.name, field.key]));
     expect(keys.text === 'heardAbout' && keys.source === 'heardAbout' && keys.learn === 'heardAbout' && keys.nooption === 'heardAbout', `detects each wording (got ${JSON.stringify(keys)})`);

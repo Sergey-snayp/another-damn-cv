@@ -269,7 +269,7 @@ test('the extension records the CV and answers used on a saved job, for its owne
     body: {
       resumeId: cv.id,
       answers: [
-        { question: 'How did you hear about us?', answer: 'https://another-damn.cv' },
+        { question: 'How did you hear about us?', answer: 'https://anotherdamn.cv/' },
         { question: 'Why Acme?', answer: '  ' },
         { question: 'how did you hear about us?', answer: 'Twice' },
       ],
