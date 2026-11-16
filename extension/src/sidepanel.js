@@ -717,11 +717,15 @@ function drawAutofill() {
     host.innerHTML = `${pageCard()}${autofillCvCard()}${coverLetterCard()}`;
     return;
   }
+  if (scan?.canOpenForm && !scan.fields?.length) {
+    // A job page with its Apply button, as Simplify shows it: the job, then Start Application.
+    host.innerHTML = `${pageCard()}<div class="fill-block"><button class="primary fill-action" id="open-form">Start Application${icon('arrow', 18)}</button></div>${autofillCvCard()}${coverLetterCard()}`;
+    $('open-form').addEventListener('click', openForm);
+    return;
+  }
   if (!scan || !scan.fields?.length) {
-    const opener = scan?.canOpenForm ? `<button class="primary" id="open-form">${icon('file')}Open application form</button>` : '';
-    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan?.canOpenForm ? 'Open the form to start Autofill.' : scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p>${opener}<button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${autofillCvCard()}${coverLetterCard()}`;
+    host.innerHTML = `${pageCard()}<div class="notice">${icon('file')}<div><strong>${scan ? 'No application fields found yet' : 'Autofill is not available on this page'}</strong><p>${scan ? 'Open the application form, then rescan.' : 'Open a supported application form. Your CV and Profile are still available here.'}</p><button class="ghost" id="rescan-empty">${icon('refresh')}Rescan page</button></div></div>${autofillCvCard()}${coverLetterCard()}`;
     $('rescan-empty').addEventListener('click', refresh);
-    $('open-form')?.addEventListener('click', openForm);
     return;
   }
   const ready = scan.fields.filter(field => valueFor(field.key)).length;
@@ -889,7 +893,7 @@ document.addEventListener('click', event => {
 });
 /** Presses the job page's Apply button, then rescans once the form has loaded. */
 async function openForm() {
-  const button = $('open-form'); if (button) button.disabled = true;
+  const button = $('open-form'); if (button) { button.disabled = true; button.textContent = 'Opening the form…'; }
   await askPage({ type: 'open-form' });
   for (const delay of [800, 1500, 2500]) setTimeout(() => void refresh(), delay);
 }
