@@ -72,7 +72,8 @@ async function pageWithScripts(browser, pages) {
   await page.evaluateOnNewDocument(() => {
     window.__listeners = [];
     window.chrome = {
-      runtime: { id: 'test', getURL: file => (file.endsWith('.html') ? 'data:text/html,<p>Panel</p>' : 'data:text/css,'), onMessage: { addListener: listener => window.__listeners.push(listener) }, sendMessage: async () => ({}) },
+      // What the page scripts tell the extension, kept for the test to read.
+      runtime: { id: 'test', getURL: file => (file.endsWith('.html') ? 'data:text/html,<p>Panel</p>' : 'data:text/css,'), onMessage: { addListener: listener => window.__listeners.push(listener) }, sendMessage: async message => { (window.__sent ??= []).push(message); return {}; } },
       storage: { local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } },
     };
     window.__ask = message => new Promise(resolve => { for (const listener of window.__listeners) listener(message, { url: chrome.runtime.getURL('src/sidepanel.html'), id: 'test' }, resolve); });

@@ -2,6 +2,7 @@ import { matchAnswers, saveAnswers } from './answers.js';
 import { LINKEDIN_PAIRING_MS, tabOpenedBy } from './linkedin-handoff.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
 import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
+import { rememberSiteLogin } from './site-login.js';
 
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
@@ -162,6 +163,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true, ...draft });
     })().catch((error) => sendResponse({ ok: false, message: error instanceof NotSignedInError ? 'Sign in from the panel first.' : error.message }));
     return true;
+  }
+  // A job-site login that just worked and is not the saved one (a changed password): kept on the account.
+  if (message?.type === 'site-login-used' && fromContent) {
+    void rememberSiteLogin(message.email, message.password)
+      .then((result) => { if (result === 'saved') chrome.runtime.sendMessage({ type: 'site-login-saved' }).catch(() => {}); })
+      .catch(() => {});
+    return false;
   }
   // The person submitted the application form: the saved job moves to Applied.
   if (message?.type === 'application-submitted' && fromContent) {

@@ -15,9 +15,19 @@ const pages = {
     <button data-automation-id="createAccountSubmitButton" onclick="window.submitted = true">Create Account</button></main>`,
   [`${JOB}/login`]: `<!doctype html><title>Sign In</title>${POSTING}<main><h1>Sign In</h1>
     ${field('email', 'Email Address')}${field('password', 'Password', 'password')}
-    <button data-automation-id="signInSubmitButton" onclick="window.submitted = true">Sign In</button></main>`,
+    <button data-automation-id="signInSubmitButton" onclick="window.submitted = true; signIn()">Sign In</button></main>
+    <script>
+      // Workday signs in with the changed password and moves on; a wrong one says so and stays.
+      function signIn() {
+        if (document.getElementById('password').value === 'Changed-pass-789') setTimeout(() => { document.querySelector('main').innerHTML = '<h1>My Information</h1>'; }, 300);
+        else document.querySelector('main').insertAdjacentHTML('afterbegin', '<div role="alert" data-automation-id="errorMessage">Wrong email address or password.</div>');
+      }
+    </script>`,
 };
 const profile = { email: 'sam@example.com', firstName: 'Sam', lastName: 'Lee' };
+// Not a job site: a mail provider's sign-in, which must never be watched.
+const MAIL = 'https://accounts.example-mail.com/signin';
+pages[MAIL] = `<!doctype html><title>Sign in</title><main>${field('email', 'Email')}${field('password', 'Password', 'password')}<button onclick="setTimeout(() => { document.querySelector('main').innerHTML = '<h1>Inbox</h1>'; }, 300)">Sign in</button></main>`;
 const value = (page, id) => page.$eval(`#${id}`, input => input.value);
 
 (async () => {
@@ -80,6 +90,32 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     assert.deepEqual([await value(page, 'email'), await value(page, 'password'), empty.saves.length], ['sam@example.com', '', 0]);
     await panel.close();
     console.log('PASS Sign In without a saved login: email filled, asks for the password, saves nothing');
+
+    // 4) A password changed on the site: once signing in works, the login that worked is passed on to be kept.
+    const sentLogins = () => page.evaluate(() => (window.__sent ?? []).filter(message => message.type === 'site-login-used'));
+    await page.open(`${JOB}/login`);
+    await page.type('#email', 'sam@example.com');
+    await page.type('#password', 'Wrong-pass-000');
+    await page.click('[data-automation-id="signInSubmitButton"]');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    assert.deepEqual(await sentLogins(), [], 'a wrong password shows an error and is never kept');
+    await page.$eval('[role="alert"]', alert => alert.remove());
+    await page.$eval('#password', input => { input.value = ''; });
+    await page.type('#password', 'Changed-pass-789');
+    await page.click('[data-automation-id="signInSubmitButton"]');
+    await page.waitForFunction(() => (window.__sent ?? []).some(message => message.type === 'site-login-used'), { timeout: 5000, polling: 100 });
+    assert.deepEqual(await sentLogins(), [{ type: 'site-login-used', email: 'sam@example.com', password: 'Changed-pass-789', kind: 'signin' }]);
+    console.log('PASS a changed password: kept once signing in works, never a wrong one');
+
+    // 5) Anywhere else (a mail provider's sign-in): nothing is watched or passed on.
+    await page.open(MAIL);
+    await page.type('#email', 'sam@example.com');
+    await page.type('#password', 'Mail-pass-123');
+    await page.click('button');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    assert.equal(await page.$('h1') && await page.$eval('h1', h => h.textContent), 'Inbox');
+    assert.deepEqual(await sentLogins(), [], 'never on a site that is not a job site');
+    console.log('PASS other sites: a sign-in is never watched');
   } finally {
     await browser.close();
   }

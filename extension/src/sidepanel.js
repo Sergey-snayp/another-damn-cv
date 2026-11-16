@@ -1611,6 +1611,19 @@ async function renderSiteLogin(note = '') {
     catch (error) { status('auth-status', error?.message || 'Could not save it.', 'error'); }
   });
 }
+// A changed job-site password, kept on the account once it worked on a site (src/background.js).
+let toastTimer;
+function toast(text) {
+  const box = $('panel-toast');
+  box.textContent = text; box.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { box.hidden = true; }, 4000);
+}
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type !== 'site-login-saved') return false;
+  toast('Saved your new job-site password to your account.');
+  if ($('settings-dialog').open) void renderSiteLogin();
+  return false;
+});
 function renderDisabledSites(hosts) {
   $('disabled-sites').hidden = !hosts.length;
   $('disabled-sites-list').innerHTML = hosts.map(host => `<li><span>${esc(host)}</span><button data-enable-host="${esc(host)}">Turn back on</button></li>`).join('');

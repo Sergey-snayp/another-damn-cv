@@ -44,3 +44,15 @@ export function newSitePassword() {
   const order = crypto.getRandomValues(new Uint32Array(characters.length));
   return characters.map((character, index) => ({ character, sort: order[index] })).sort((a, b) => a.sort - b.sort).map(({ character }) => character).join('');
 }
+
+/**
+ * A login that just worked on a job site (src/account-form.js): kept when it is
+ * not the saved one, after a password change on the site. 'saved', 'same' or 'skipped'.
+ */
+export async function rememberSiteLogin(email, password) {
+  if (typeof email !== 'string' || typeof password !== 'string' || !/^[^\s@]+@[^\s@]+$/.test(email.trim()) || password.length < 8 || password.length > 128) return 'skipped';
+  const login = await readSiteLogin();
+  if (login && login.email === email.trim() && login.password === password) return 'same';
+  await saveSiteLogin(email.trim(), password);
+  return 'saved';
+}

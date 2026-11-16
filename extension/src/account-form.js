@@ -86,5 +86,50 @@
     return { status: 'done', kind: form.kind, filled };
   }
 
+  // ─── A password that worked ───────────────────────────────────────────
+  // Signing in (or creating an account) with a password other than the saved
+  // one, after a change on the site: once the form goes away with no error, the
+  // login that worked is kept on the account, as a password manager does. A
+  // wrong password shows an error and is never kept. Only on job sites.
+  const onJobSite = () => Boolean(window.CVAutofillSites?.siteForPage?.());
+  const ERROR = /wrong|incorrect|invalid|not match|doesn'?t match|try again|failed|locked|error/i;
+  const errorShown = () => [...document.querySelectorAll('[role="alert"], [aria-live="assertive"], [data-automation-id="errorMessage"], [data-automation-id*="error" i], [class*="error" i]')]
+    .some((node) => node.getClientRects().length && ERROR.test(node.textContent));
+  let pending = null;
+
+  async function watchOutcome(attempt) {
+    for (let waited = 0; waited < 15000; waited += 500) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (pending !== attempt) return;
+      if (errorShown()) { pending = null; return; }
+      if (!attempt.password.isConnected || !visible(attempt.password)) {
+        pending = null;
+        try { void chrome.runtime.sendMessage({ type: 'site-login-used', email: attempt.email, password: attempt.value, kind: attempt.kind }).catch(() => {}); } catch { /* extension reloaded */ }
+        return;
+      }
+    }
+    if (pending === attempt) pending = null;
+  }
+
+  /** The person sent the account form: remember what they sent, then see whether it worked. */
+  function sent() {
+    if (!onJobSite()) return;
+    const form = find();
+    const email = form?.email?.value.trim(), value = form?.password.value;
+    if (!form || !email || !value || (form.verify && form.verify.value !== value)) return;
+    pending = { email, value, kind: form.kind, password: form.password };
+    void watchOutcome(pending);
+  }
+  const onButton = (form, event) => {
+    if (!form?.submit) return false;
+    if (form.submit.contains(event.target)) return true;
+    // Workday covers its button with a clear layer that takes the click.
+    const box = form.submit.getBoundingClientRect();
+    return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+  };
+  document.addEventListener('submit', () => sent(), true);
+  document.addEventListener('click', (event) => { if (onJobSite() && event.isTrusted && onButton(find(), event)) sent(); }, true);
+  document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.isTrusted && onJobSite() && event.target?.type === 'password') sent(); }, true);
+
   window.CVAutofillAccount = { find, fill };
 })();
