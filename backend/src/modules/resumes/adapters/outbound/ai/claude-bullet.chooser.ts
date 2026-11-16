@@ -28,7 +28,9 @@ ABSOLUTE RULES. Breaking any of these makes the output unusable:
   from this exact role. You may turn a relevant, explicit fact from it into a concise CV
   bullet. Use only that item's facts. A stack alone proves tool use, not a product,
   migration, outcome, ownership or years of experience. Do not copy an entire description
-  or stack into a bullet.
+  or stack into a bullet. The candidate's own achievements come first: build a bullet from
+  context only for a fact no achievement shows, and never in place of an achievement that
+  shows what the posting asks for.
 - Do not mix work between clients or employers. Evidence was matched to this role.
 
 How to choose:

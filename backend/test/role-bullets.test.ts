@@ -491,3 +491,39 @@ test('a bullet that says again what the job description above it says is dropped
     'the Discover bullet stays',
   );
 });
+
+test("a pick thrown out gives its place to the AI's next best, so a strong bullet is not offered for removal", () => {
+  const description = 'Card payment platform processing 15,000–20,000 transactions a day across tokenization and 3-D Secure.';
+  const role = {
+    company: 'Ciklum',
+    title: 'Senior Software Engineer',
+    from: '2024-10',
+    description,
+    bullets: [
+      'Delivered features across 3 payment services in Node.js on AWS.',
+      'Built the Discover integration for card tokenization, adding 4,000+ transactions a day, secured with OAuth 2.0.',
+      'Built a TLS certificate service automating ACME renewal via Step Functions.',
+      'Updated the services Confluence documentation.',
+    ],
+  };
+  const pool = rolePool(role, null);
+  const result = checkChoice(
+    {
+      chosen: [
+        { id: 'c1', text: role.bullets[0] },
+        { id: 'cf1', text: 'Supported a card payment platform processing 15,000 to 20,000 transactions a day across tokenization and 3-D Secure.' },
+        { id: 'c3', text: role.bullets[2] },
+      ],
+      alternates: [
+        { id: 'c2', text: role.bullets[1] },
+        { id: 'c4', text: role.bullets[3] },
+      ],
+    },
+    pool,
+    5,
+    2,
+    [description],
+  );
+  assert.deepEqual(result.chosen.map((item) => item.id), ['c1', 'c3', 'c2'], 'the Discover bullet takes the dropped place');
+  assert.deepEqual(result.alternates.map((item) => item.id), ['c4']);
+});

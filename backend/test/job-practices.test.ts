@@ -76,3 +76,12 @@ test('the full tailoring prompt carries the posting words under the bullet that 
   );
   assert.match(prompt, /<bullet id="b2">Wrote the onboarding guide\.<\/bullet>/);
 });
+
+test('"4,000+ transactions a day" is scale, like "15,000–20,000 transactions a day"', () => {
+  const job = 'Our backend already operates at scale, processing high-volume, real-money transactions.';
+  for (const line of [
+    'Built the Discover integration for card tokenization in the payment API, adding 4,000+ transactions a day.',
+    'Card payment platform processing 15,000–20,000 transactions a day.',
+  ])
+    assert.equal(practiceHints(job, line)[0]?.term, 'at scale', line);
+});

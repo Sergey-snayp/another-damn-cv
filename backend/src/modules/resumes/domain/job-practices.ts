@@ -58,7 +58,7 @@ const PRACTICES: Practice[] = [
   {
     posting: /\b(?:scalab\w*|at scale|high[- ](?:load|traffic|throughput))\b/i,
     evidence: [
-      /\b\d[\d,.]*(?:\s*(?:to|–|-)\s*\d[\d,.]*)?\s*(?:k|million)?\s*(?:requests|transactions|events|messages|users|calls)\s*(?:per|a|each|\/)\s*(?:second|minute|hour|day)\b/i,
+      /\b\d[\d,.]*\+?(?:\s*(?:to|–|-)\s*\d[\d,.]*)?\s*(?:k|million)?\+?\s*(?:requests|transactions|events|messages|users|calls)\s*(?:per|a|each|\/)\s*(?:second|minute|hour|day)\b/i,
       /\b(?:throughput|bottlenecks?|parallelis\w*|paralleliz\w*)\b/i,
     ],
   },

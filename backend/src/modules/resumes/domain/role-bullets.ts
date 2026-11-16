@@ -281,6 +281,9 @@ export function checkChoice(
     return out;
   };
   const chosen = take(answer.chosen, count);
+  // A pick thrown out above leaves its place to the AI's own next best, not to an empty slot.
+  const wanted = Math.min(count, new Set(answer.chosen.map(({ id }) => id).filter((id) => byId.has(id))).size);
+  if (chosen.length < wanted) chosen.push(...take(answer.alternates, wanted - chosen.length, chosen));
   const rest = pool
     .filter((item) => !used.has(item.id) && item.kind !== 'context')
     .sort(
