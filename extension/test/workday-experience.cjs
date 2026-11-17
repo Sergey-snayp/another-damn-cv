@@ -59,7 +59,7 @@ const page = `<!doctype html><title>My Experience</title>
   }
   function addWebsite(button) {
     sites++;
-    document.getElementById('websites').insertAdjacentHTML('beforeend', '<div data-automation-id="websitePanelSet-' + sites + '">' + text('website', 'URL').replace(/id="website"/, 'id="website-' + sites + '"') + '</div>');
+    document.getElementById('websites').insertAdjacentHTML('beforeend', '<div data-automation-id="websitePanelSet-' + sites + '">' + DELETE + text('website', 'URL').replace(/id="website"/, 'id="website-' + sites + '"') + '</div>');
     button.setAttribute('aria-label', 'Add Another Websites');
   }
   // Workday's search boxes: Enter shows the known items that match; choosing one makes a chip.
@@ -67,7 +67,9 @@ const page = `<!doctype html><title>My Experience</title>
   // Workday keeps a date part only when its box loses focus (React's blur, from focusout): what Save checks.
   document.addEventListener('focusout', (event) => { if (/^(Month|Year)$/.test(event.target.getAttribute?.('aria-label') ?? '')) event.target.dataset.saved = event.target.value; });
   // A chosen item's delete mark, as Workday draws it.
-  const CHARM = '<div data-automation-id="DELETE_charm" onclick="this.parentElement.remove()"></div>';
+  const CHARM = '<div data-automation-id="DELETE_charm" onclick="removeChip(this)"></div>';
+  // Removing a chip draws its search box anew, as Workday does: the old input is gone.
+  window.removeChip = (mark) => { const chip = mark.parentElement, input = chip.parentElement.nextElementSibling; chip.remove(); if (input?.tagName === 'INPUT') input.replaceWith(input.cloneNode()); };
   const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript', 'Java', 'SQL Server', 'Amazon Web Services (AWS)'], schools: ['Original University', 'Other University'], studies: STUDIES };
   const DEGREES = ["Associate's Degree", "Bachelor's Degree", "Master's Degree"];
   let searching = null;
@@ -151,7 +153,8 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     await tab.$eval('#jobTitle-1', (input) => { input.value = 'Senior Engineer (edited)'; });
     await tab.$eval('#location-2', (input) => { input.value = ''; });
     await tab.$eval('#company-2', (input) => { input.value = ''; });
-    await tab.$eval('#chips', (chips) => chips.insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem">PostgreSQL<div data-automation-id="DELETE_charm" onclick="this.parentElement.remove()"></div></div>'));
+    await tab.$eval('#website-1', (input) => { input.value = 'linkedin.com/in/sergey/'; });
+    await tab.$eval('#chips', (chips) => chips.insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem">PostgreSQL' + CHARM + '</div>'));
     await fill();
     const counts = await tab.evaluate(() => ['workExperience', 'education', 'websitePanelSet'].map((name) => document.querySelectorAll(`[data-automation-id^="${name}-"]`).length));
     assert.deepEqual(counts, [2, 1, 2], 'a second Autofill adds no second copy');
@@ -170,6 +173,10 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
       // Chosen before, but not the CV's: another school and another field of study.
       for (const [id, text] of [['school-chip-1', 'Other University'], ['study-chip-1', 'Computer Science']]) document.getElementById(id).insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem" title="' + text + '">' + text + CHARM + '</div>');
       document.getElementById('startDate-month-1').value = '10';
+      // A link listed twice (once as Workday saved it): Workday refuses the page until one goes.
+      const sites = document.querySelector('[onclick="addWebsite(this)"]');
+      addWebsite(sites); addWebsite(sites);
+      document.getElementById('website-1').value = 'https://github.com/sergey'; document.getElementById('website-2').value = 'github.com/sergey/';
       document.querySelector('[data-automation-id="workExperience-1"] [data-automation-id="formField-startDate"]').insertAdjacentHTML('beforeend', '<p data-automation-id="errorMessage">Error: Invalid Date: 10/</p>');
     });
     const cleaned = await fill();
@@ -177,7 +184,8 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.ok(cleaned.notes.includes('Removed 3 Education entries not in your CV.'), `the panel is told (${JSON.stringify(cleaned.notes)})`);
     assert.deepEqual(await read(['startDate-month-1', 'startDate-year-1']), ['10', '2024'], 'a date Workday called invalid is set again');
     assert.deepEqual([await chips('school-chip-1'), await chips('study-chip-1')], [['Original University'], ['Computer Engineering, General']], 'a school and field of study that are not the CV\'s replaced, as Simplify replaces them');
-    console.log('PASS clean-up: extra Education panels deleted (and said so), an invalid date set again, a wrong school and field of study replaced');
+    assert.deepEqual(await tab.$$eval('[data-automation-id^="websitePanelSet-"] input', (inputs) => inputs.map((input) => input.value)), ['https://github.com/sergey', 'https://www.linkedin.com/in/sergey'], 'a repeated link removed, the missing one added');
+    console.log('PASS clean-up: extra Education panels deleted (and said so), an invalid date set again, a wrong school and field of study replaced, a repeated website removed');
 
     // Degree names as different Workday sites list them, picked the way Simplify picks.
     const pick = (texts, degree, field) => tab.evaluate((texts, degree, field) => { const index = window.CVAutofillHistory.degreeOption(texts, degree, field); return index === null ? null : texts[index]; }, texts, degree, field);

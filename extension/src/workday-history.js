@@ -340,6 +340,15 @@
   const campus = (text) => key(text).replace(/^the /, '').replace(/\s*-?\s*main campus$/, '').trim();
   const sameSchool = (chip, institution) => { const have = campus(chip), want = campus(institution); return !!have && !!want && (have === want || have.startsWith(want) || want.startsWith(have)); };
 
+  const SCHOOL = '[data-automation-id="formField-schoolItem"] input, [data-automation-id="formField-school"] input, [data-automation-id*="school" i] input[placeholder]';
+  const STUDY = '[data-automation-id="formField-field-of-study"] input, [data-automation-id="formField-fieldOfStudy"] input, [data-automation-id*="fieldOfStudy" i] input';
+  /** The panel's box again, once Workday has drawn it anew. */
+  async function again(panel, selector) {
+    await wait(200);
+    for (let waited = 0; !first(panel, selector) && waited < 1500; waited += 100) await wait(100);
+    return first(panel, selector);
+  }
+
   async function fillEducation(educations, source) {
     let count = 0;
     for (const [index, school] of educations.entries()) {
@@ -348,8 +357,9 @@
       const named = field(panel, 'input[data-automation-id="school"], input[name="schoolName"]', null);
       if (named) count += Number(type(named, school.institution, source));
       else {
-        const search = first(panel, '[data-automation-id="formField-schoolItem"] input, [data-automation-id="formField-school"] input, [data-automation-id*="school" i] input[placeholder]');
+        let search = first(panel, SCHOOL);
         if (search && school.institution && await clearWrong(search, (chip) => sameSchool(chip, school.institution))) {
+          search = await again(panel, SCHOOL) ?? search;
           const got = await searchPick(search, school.institution, (option) => option === normal(school.institution) || option.startsWith(normal(school.institution)));
           if (got) { filledMark(search, source); count++; } else checkMark(search, `"${school.institution}" is not in its list. Choose it yourself.`);
         }
@@ -360,7 +370,7 @@
         const result = await Filler().chooseInListbox(degree, (texts) => { seen = texts; return degreeOption(texts, school.degree, school.field); });
         if (result?.text) { filledMark(degree, source); count++; } else checkMark(degree, seen.length ? `"${school.degree}" matches none of its degrees (${seen.slice(0, 8).join(', ')}${seen.length > 8 ? '…' : ''}). Choose the closest.` : 'Its list of degrees did not open. Choose one.');
       }
-      const study = first(panel, '[data-automation-id="formField-field-of-study"] input, [data-automation-id="formField-fieldOfStudy"] input, [data-automation-id*="fieldOfStudy" i] input');
+      let study = first(panel, STUDY);
       // The same name, one that starts with it, then the one sharing most of its words ("Software Engineering" ~ "Engineering, Software").
       const wanted = key(school.field);
       const close = (option) => { const want = words(school.field), have = words(option); const shared = want.filter((word) => have.includes(word)).length; return shared > 0 && shared >= Math.ceil(want.length / 2); };
@@ -368,7 +378,10 @@
       // As Simplify does: Workday's own name for it from its list, typed as it is and chosen exactly.
       const name = study && school.field ? studyName(await workdayList('/values/educations/fieldsOfStudy'), school.field) : null;
       // A choice already made is kept only when it is that name, or the CV's (or starts with it); a closest guess is not enough.
-      if (study && school.field && Fields().chosenItem(study)) await clearWrong(study, (chip) => (name ? key(chip) === key(name) : false) || tests.slice(0, 2).some((test) => test(normal(chip))));
+      if (study && school.field && Fields().chosenItem(study) && await clearWrong(study, (chip) => (name ? key(chip) === key(name) : false) || tests.slice(0, 2).some((test) => test(normal(chip))))) {
+        // Workday draws the box again once a chip is removed: type into the new one.
+        study = await again(panel, STUDY);
+      }
       if (study && school.field && Fields().isEmpty(study) && !Fields().chosenItem(study)) {
         let got = null;
         if (name) got = await searchPick(study, name, [(option) => key(option) === key(name)]);
@@ -417,7 +430,8 @@
    * 39 of the CV's skills, each typed, searched and chosen only by those tests.
    */
   async function fillSkills(skills, source) {
-    const input = first(document, '[data-automation-id="formField-skills"] input, [data-automation-id="skillsSection"] input, [data-automation-id="formField-skillsPrompt"] input');
+    const SKILLS = '[data-automation-id="formField-skills"] input, [data-automation-id="skillsSection"] input, [data-automation-id="formField-skillsPrompt"] input';
+    let input = first(document, SKILLS);
     if (!input || !skills.length) return 0;
     const box = input.closest('[data-automation-id^="formField"], [data-automation-id="skillsSection"]') ?? input.parentElement;
     const chips = () => [...box.querySelectorAll('[data-automation-id="selectedItem"]')];
@@ -428,6 +442,9 @@
       press(remove);
       for (let waited = 0; chips().length === before && waited < 1000; waited += 100) await wait(100);
     }
+    // The box may be drawn anew after its chips go.
+    if (!input.isConnected) input = await again(document, SKILLS);
+    if (!input) return 0;
     const seen = new Set();
     let added = 0;
     for (const skill of skills.slice(0, 39)) {
@@ -441,17 +458,33 @@
     return added;
   }
 
+  /** A link as Workday compares it: no "https://", "www." or trailing slash ("https://linkedin.com/in/x" = "linkedin.com/in/x/"). */
+  const link = (url) => normal(url).replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+
   async function fillWebsites(websites, source) {
-    const inputs = () => panels('websites').map((panel) => first(panel, 'input[data-automation-id="website"], input[name="url"]')).filter(Boolean);
-    const listed = new Set(inputs().map((input) => normal(input.value)).filter(Boolean));
+    const inputOf = (panel) => first(panel, 'input[data-automation-id="website"], input[name="url"]');
+    const inputs = () => panels('websites').map(inputOf).filter(Boolean);
+    // Workday refuses the same link twice ("You can't add duplicate website URLs"): a repeated one's panel is deleted.
+    const kept = new Set();
+    for (const panel of panels('websites')) {
+      const url = link(inputOf(panel)?.value);
+      if (!url) continue;
+      if (!kept.has(url)) { kept.add(url); continue; }
+      const remove = first(panel, 'button[data-automation-id="panel-set-delete-button"], button[aria-label^="Delete"]')
+        ?? [...panel.querySelectorAll('button')].find((button) => shown(button) && /^delete\b/i.test(normal(button.textContent)));
+      if (!remove) continue;
+      press(remove);
+      for (let waited = 0; panel.isConnected && waited < 2000; waited += 100) await wait(100);
+    }
+    const listed = new Set(inputs().map((input) => link(input.value)).filter(Boolean));
     let count = 0;
     for (const url of websites) {
-      if (listed.has(normal(url))) continue;
+      if (!link(url) || listed.has(link(url))) continue;
       const empty = inputs().find((input) => Fields().isEmpty(input));
       const panel = empty ? null : await panelAt('websites', panels('websites').length);
-      const input = empty ?? (panel && first(panel, 'input[data-automation-id="website"], input[name="url"]'));
+      const input = empty ?? (panel && inputOf(panel));
       if (!input) break;
-      if (type(input, url, source)) { listed.add(normal(url)); count++; }
+      if (type(input, url, source)) { listed.add(link(url)); count++; }
     }
     return count;
   }
