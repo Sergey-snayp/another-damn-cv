@@ -34,6 +34,9 @@ const MENUS = `<script>
     const text = option.textContent;
     if (GROUPS[text]) return show(GROUPS[text], true);
     window.opened.textContent = text; option.closest('[data-automation-activepopup]').remove();
+    // "Other" opens a box to say which, as Workday's can.
+    if (text === 'Other' && window.opened.dataset.automationId === 'source')
+      window.opened.closest('[data-automation-id="formField-source"]').insertAdjacentHTML('afterend', '<div data-automation-id="formField-sourceOther"><label for="sourceOther">If other, please specify</label><input type="text" id="sourceOther"></div>');
   });
 </script>`;
 const page = `<!doctype html><title>Apply</title>${MENUS}<main><h2>My Information</h2>
@@ -79,8 +82,9 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', fullName: 'Sergey Pr
     const values = await tab.evaluate(() => Object.fromEntries([...document.querySelectorAll('input[type="text"]')].map(input => [input.id, input.value])));
     assert.deepEqual([values['legalName--lastName'], values.phoneNumber, values.phoneExtension], ['Proniuk', '6728880334', '']);
     const menus = await tab.evaluate(() => [...document.querySelectorAll('button[aria-haspopup="listbox"]')].map(button => button.textContent));
-    assert.deepEqual(menus, ['LinkedIn', 'British Columbia', 'Mobile'], "Workday's dropdowns: opened, the option chosen, shown on the button");
-    console.log('PASS Workday My Information: first and last name apart, phone without its country code, extension empty, its dropdowns chosen (How did you hear: Job Board → LinkedIn, where the job came from; Mobile; the province from the postal code)');
+    assert.deepEqual(menus, ['Other', 'British Columbia', 'Mobile'], "Workday's dropdowns: opened, the option chosen, shown on the button");
+    assert.equal(await tab.$eval('#sourceOther', input => input.value), 'Another Damn CV (https://anotherdamn.cv/)', 'How did you hear: Other, then the company in its box (not LinkedIn, though the link says source=LinkedIn)');
+    console.log('PASS Workday My Information: first and last name apart, phone without its country code, extension empty, its dropdowns chosen (How did you hear: Other and Another Damn CV in its box; Mobile; the province from the postal code)');
   } finally {
     await browser.close();
   }

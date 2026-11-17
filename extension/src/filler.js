@@ -631,13 +631,14 @@ function detailsBoxAfter(element) {
 }
 
 /**
- * Where this job came from, then Simplify's order for a list without a box for
- * the link: a job board before "Other". The page's own ?source= (LinkedIn) first.
+ * "How did you hear" in a list: Another Damn CV, the person's own company, when
+ * the list has it; else "Other" (its details box then gets the name); only a
+ * list without "Other" gets the closest source, a job board or website.
  */
-const SOURCE_ORDER = ['linkedin', 'indeed', 'glassdoor', 'job boards', 'job board', 'job sites', 'job site', 'job posting', 'online advertisement', 'online job', 'internet', 'website', 'career site', 'career websites', 'careers page', 'company website', 'social media', 'external', 'other', 'not listed'];
+const OUR_NAME = 'Another Damn CV';
+const SOURCE_ORDER = ['another damn cv', 'anotherdamn', 'other', 'not listed', 'job boards', 'job board', 'job sites', 'job site', 'job posting', 'online advertisement', 'online job', 'internet', 'website', 'career site', 'career websites', 'careers page', 'company website', 'external'];
 function sourceOption(texts) {
-  const came = normal(new URLSearchParams(location.search).get('source') || new URLSearchParams(location.search).get('utm_source') || '');
-  for (const wanted of [came, ...SOURCE_ORDER].filter(Boolean)) {
+  for (const wanted of SOURCE_ORDER) {
     const index = texts.findIndex((text) => text === wanted || text.startsWith(wanted) || text.split(/[^a-z0-9]+/).includes(wanted));
     if (index >= 0) return index;
   }
@@ -682,10 +683,18 @@ async function fillHeardAbout(field, link, state = {}) {
       chosen = { text: radioText(chosenElement), other: pick.other };
     }
   } else if (kind === 'listbox') {
-    // Workday's menu has no box for a link: the place this job came from, then Simplify's order.
+    // Workday's menu: Another Damn CV if listed, else "Other" with the name in the box it opens.
     const result = await chooseInListbox(element, (texts) => sourceOption(texts));
-    if (result?.text) return done('check', `Chose "${result.path.join(' → ')}". Check it.`);
-    return done('missing', 'None of its options is a job board or "Other". Choose one yourself.');
+    if (!result?.text) return done('missing', 'None of its options is "Other" or a job board. Choose one yourself.');
+    const named = /another ?damn/i.test(result.text);
+    let box = null;
+    for (let waited = 0; !named && !box && waited < 1500; waited += 150) { await wait(150); box = detailsBoxAfter(element); }
+    const said = `${OUR_NAME} (${link})`;
+    if (box) fillText(box, said);
+    const also = box ? [{ element: box, status: 'ok', reason: `Filled with ${said}` }] : [];
+    if (named) return done('ok', `Chose "${result.path.join(' → ')}".`);
+    if (box) return done('ok', `Chose "${result.path.join(' → ')}" and typed ${said} below.`, { also });
+    return done('check', `Chose "${result.path.join(' → ')}". The form has no box for ${OUR_NAME}.`);
   } else if (kind === 'combobox') {
     element.focus({ preventScroll: true });
     element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
