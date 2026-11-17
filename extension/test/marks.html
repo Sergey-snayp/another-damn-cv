@@ -64,6 +64,22 @@ addEventListener('DOMContentLoaded', async () => {
   expect(Marks.statusOf(document.querySelector('[name="relocate"][value="n"]')) === 'ok', 'green on the chosen radio option');
   expect(Marks.statusOf($('fintech')) === 'missing' && /^Required, still empty/.test(Marks.reasonOf($('fintech'))), 'red for a required field still empty');
 
+  // A field scrolled under the page's fixed bar (Workday's Save and Continue footer): its icon hides, never drawn over the bar.
+  const frame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const shownBefore = Marks.shownOf($('telegram'));
+  const box = $('telegram').getBoundingClientRect();
+  const bar = document.createElement('div');
+  bar.style.cssText = `position: fixed; left: 0; right: 0; top: ${box.top - 6}px; height: ${box.height + 12}px; background: #fff; z-index: 5`;
+  document.body.append(bar);
+  dispatchEvent(new Event('scroll'));
+  await frame();
+  const shownUnder = Marks.shownOf($('telegram'));
+  bar.remove();
+  dispatchEvent(new Event('scroll'));
+  await frame();
+  expect(shownBefore && !shownUnder && Marks.shownOf($('telegram')), `an icon hides while its field is under a fixed bar, and shows again after (${shownBefore}, ${shownUnder}, ${Marks.shownOf($('telegram'))})`);
+  expect(Marks.shownOf($('first')), 'other icons stay');
+
   // Autofill's own events are not the person's edits: the green icon stays.
   window.CVAutofillFiller.fillText($('first'), 'Ada');
   expect(Marks.statusOf($('first')) === 'ok', 'filling by the extension does not clear icons');

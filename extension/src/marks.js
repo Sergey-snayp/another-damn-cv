@@ -160,6 +160,32 @@
     } finally { host.style.removeProperty('pointer-events'); }
   }
 
+  /** The page's fixed or sticky bar (Workday's Save and Continue footer, a top header) a point is on, if any. */
+  function barAt(x, y, element) {
+    const hit = document.elementFromPoint(x, y);
+    for (let node = hit, depth = 0; node && node !== document.body && node !== document.documentElement && depth < 12; node = node.parentElement, depth++) {
+      if (node.contains(element)) return null;
+      const position = getComputedStyle(node).position;
+      if (position === 'fixed' || position === 'sticky') return node;
+    }
+    return null;
+  }
+
+  /**
+   * Whether the field, or the spot for its icon, is under such a bar: the
+   * field has scrolled behind it, so its icon is hidden rather than drawn
+   * over the bar. It shows again once the field scrolls back into view.
+   */
+  function underBar(element, rect, left, top) {
+    const height = document.documentElement.clientHeight, width = document.documentElement.clientWidth;
+    const inView = (x, y) => x >= 0 && y >= 0 && x < width && y < height;
+    host.style.setProperty('pointer-events', 'none', 'important');
+    try {
+      const points = [[rect.left + Math.min(rect.width / 2, 24), rect.top + rect.height / 2], [left + SIZE / 2, top + SIZE / 2]];
+      return points.some(([x, y]) => inView(x, y) && Boolean(barAt(x, y, element)));
+    } finally { host.style.removeProperty('pointer-events'); }
+  }
+
   /**
    * Where the icon sits: just outside the field's box and level with its
    * middle, on the right; on the left when the right is off the page or on
@@ -177,6 +203,7 @@
         : rect.right - SIZE - 12;
     node.style.left = `${spot + scrollX}px`;
     node.style.top = `${top + scrollY}px`;
+    node.hidden = underBar(element, rect, spot, top);
   }
 
   function reposition() {
@@ -648,5 +675,5 @@
   /** The popover's state, for tests. */
   const popoverState = () => ({ element: popover.element, message: popover.message, kind: popover.kind, spec: popover.spec, text: pop.textContent });
 
-  window.CVAutofillMarks = { setEditor, open, close: closePop, popoverState, show, showMissing, clear, reattach, point, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.reason ?? null };
+  window.CVAutofillMarks = { setEditor, open, close: closePop, popoverState, show, showMissing, clear, reattach, point, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, shownOf: (element) => Boolean(marks.get(element) && !marks.get(element).node.hidden), reasonOf: (element) => marks.get(element)?.reason ?? null };
 })();
