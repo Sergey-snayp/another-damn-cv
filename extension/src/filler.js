@@ -446,9 +446,25 @@ async function pickFile(button, fileUrl, fileName) {
 }
 
 /** Dispatches on control type so callers do not have to care. */
+/**
+ * Workday's upload box with a file already in it: that file is deleted first,
+ * as Simplify and Jobright do, so Autofill replaces the CV instead of adding a
+ * second copy each time it runs.
+ */
+async function removeUploaded(input) {
+  if (input.getAttribute('data-automation-id') !== 'file-upload-input-ref') return;
+  const box = input.parentElement?.closest('[data-automation-id^="formField"], [data-automation-id*="upload" i], [data-automation-id*="attachment" i]');
+  const buttons = () => [...(box?.querySelectorAll('button[data-automation-id="delete-file"], button[title="Delete file"]') ?? [])].filter(visible);
+  for (let tries = 0; buttons().length && tries < 5; tries++) {
+    press(buttons()[0]);
+    await wait(400);
+  }
+}
+
 async function fillField(field, value, resumeFileName) {
   switch (field.kind) {
     case 'file':
+      await removeUploaded(field.element);
       return { filled: await attachFile(field.element, value, resumeFileName ?? 'Resume.pdf') };
     case 'drop':
       return dropFile(field.element, value, resumeFileName ?? 'Resume.pdf');

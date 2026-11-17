@@ -75,6 +75,27 @@
     return panels(list)[index] ?? null;
   }
 
+  /**
+   * Clean-up, as Simplify and Jobright do it: a list with more panels than the
+   * CV has jobs (or schools) loses the extra ones from the end, by their own
+   * Delete button. Returns how many went.
+   */
+  async function trim(list, keep) {
+    let removed = 0;
+    for (let tries = 0; panels(list).length > keep && tries < 15; tries++) {
+      const last = panels(list).at(-1);
+      const remove = first(last, 'button[data-automation-id="panel-set-delete-button"], button[aria-label^="Delete"]')
+        ?? [...last.querySelectorAll('button, [role="button"]')].find((button) => shown(button) && /^delete\b/i.test(normal(button.textContent)));
+      if (!remove) break;
+      const before = panels(list).length;
+      press(remove);
+      for (let waited = 0; panels(list).length === before && waited < 3000; waited += 150) await wait(150);
+      if (panels(list).length === before) break;
+      removed++;
+    }
+    return removed;
+  }
+
   /** A field of a panel: by Workday's own names first, then by its label. */
   function field(panel, selectors, label) {
     return first(panel, selectors) ?? (label ? [...panel.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea')]
@@ -98,8 +119,8 @@
    * value, input, change, blur. Typing would set off Workday's own jump from a
    * two-digit month to the year, and the year would be lost.
    */
-  async function setDirect(element, value, reason) {
-    if (!element || !Fields().isEmpty(element)) return false;
+  async function setDirect(element, value, reason, again = false) {
+    if (!element || (!again && !Fields().isEmpty(element))) return false;
     element.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
     Filler().setValue(element, String(value));
     element.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
@@ -114,11 +135,13 @@
     if (!match) return 0;
     const box = panel.querySelector(`[data-automation-id="formField-${which}"], [id*="${which}"], [id*="${which === 'startDate' ? 'firstYear' : 'lastYear'}"]`) ?? null;
     if (!box) return 0;
+    // A date Workday calls invalid ("Invalid Date: 10/") is set again; a good one is left as it is.
+    const again = /invalid date/i.test(box.textContent);
     const month = first(box, 'input[aria-label="Month"], input[data-automation-id="dateSectionMonth-input"]');
     const year = first(box, 'input[aria-label="Year"], input[data-automation-id="dateSectionYear-input"]') ?? (month ? null : first(box, 'input'));
     let count = 0;
-    if (month && match[2] && await setDirect(month, String(Number(match[2])), reason)) count++;
-    if (year && await setDirect(year, match[1], reason)) count++;
+    if (month && match[2] && await setDirect(month, String(Number(match[2])), reason, again)) count++;
+    if (year && await setDirect(year, match[1], reason, again)) count++;
     return count;
   }
 
@@ -269,13 +292,22 @@
     marks.length = 0;
     if (!history || !here()) return { filled: 0, marks: [] };
     const source = history.source === 'resume' ? 'From your CV' : 'From your Profile';
-    let filled = 0;
-    filled += await fillWork(history.experiences ?? [], source);
+    const where = history.source === 'resume' ? 'your CV' : 'your Profile';
+    const jobs = history.experiences ?? [];
     // Schools with a degree: a course (no degree) would leave Workday's required Degree empty.
-    filled += await fillEducation((history.educations ?? []).filter((school) => String(school.degree ?? '').trim()), source);
+    const schools = (history.educations ?? []).filter((school) => String(school.degree ?? '').trim());
+    const notes = [];
+    // Clean-up first: panels beyond the CV's jobs and schools. A list the CV has nothing for is left alone.
+    const extraJobs = jobs.length ? await trim('work', jobs.length) : 0;
+    const extraSchools = schools.length ? await trim('education', schools.length) : 0;
+    if (extraJobs) notes.push(`Removed ${extraJobs} Work Experience ${extraJobs === 1 ? 'entry' : 'entries'} not in ${where}.`);
+    if (extraSchools) notes.push(`Removed ${extraSchools} Education ${extraSchools === 1 ? 'entry' : 'entries'} not in ${where}.`);
+    let filled = 0;
+    filled += await fillWork(jobs, source);
+    filled += await fillEducation(schools, source);
     filled += await fillSkills(history.skills ?? [], source);
     filled += await fillWebsites(history.websites ?? [], 'From your Profile');
-    return { filled, marks: [...marks] };
+    return { filled, marks: [...marks], notes };
   }
 
   /** Whether a field belongs to one of the lists or the skills box: filled here, never by the general fill. */

@@ -22,11 +22,18 @@ const page = `<!doctype html><title>My Experience</title>
 </main>
 <script>
   let works = 0, schools = 0, sites = 0;
+  // Workday's panel Delete button.
+  const DELETE = '<button type="button" data-automation-id="panel-set-delete-button" onclick="this.parentElement.remove()">Delete</button>';
+  // Its upload box: a chosen file shows as an item with its own Delete button.
+  document.addEventListener('change', (event) => {
+    if (event.target.id !== 'cv' || !event.target.files.length) return;
+    event.target.closest('.drop').insertAdjacentHTML('beforeend', '<div data-automation-id="file-upload-item">' + event.target.files[0].name + ' <button type="button" data-automation-id="delete-file" onclick="this.parentElement.remove()">Delete</button></div>');
+  });
   const text = (id, label, extra = '') => '<div data-automation-id="formField-' + id + '"><label for="' + id + '">' + label + '</label><input type="text" id="' + id + '" data-automation-id="' + id + '" ' + extra + '></div>';
   const monthYear = (id, label, n) => '<div data-automation-id="formField-' + id + '"><label>' + label + '</label><input aria-label="Month" id="' + id + '-month-' + n + '"><input aria-label="Year" id="' + id + '-year-' + n + '"></div>';
   function addWork(button) {
     works++;
-    document.getElementById('work').insertAdjacentHTML('beforeend', '<div data-automation-id="workExperience-' + works + '"><h4>Work Experience ' + works + '</h4>'
+    document.getElementById('work').insertAdjacentHTML('beforeend', '<div data-automation-id="workExperience-' + works + '"><h4>Work Experience ' + works + '</h4>' + DELETE
       + text('jobTitle', 'Job Title').replace(/id="jobTitle"/, 'id="jobTitle-' + works + '"')
       + text('company', 'Company').replace(/id="company"/, 'id="company-' + works + '"')
       + text('location', 'Location').replace(/id="location"/, 'id="location-' + works + '"')
@@ -37,7 +44,7 @@ const page = `<!doctype html><title>My Experience</title>
   }
   function addEducation(button) {
     schools++;
-    document.getElementById('education').insertAdjacentHTML('beforeend', '<div data-automation-id="education-' + schools + '"><h4>Education ' + schools + '</h4>'
+    document.getElementById('education').insertAdjacentHTML('beforeend', '<div data-automation-id="education-' + schools + '"><h4>Education ' + schools + '</h4>' + DELETE
       + '<div data-automation-id="formField-schoolItem"><label>School or University</label><div id="school-chip-' + schools + '"></div><input placeholder="Search" id="school-' + schools + '" data-picks="schools"></div>'
       + '<div data-automation-id="formField-degree"><label id="degree-label-' + schools + '">Degree</label><button type="button" aria-haspopup="listbox" aria-labelledby="degree-label-' + schools + '" data-automation-id="degree" id="degree-' + schools + '">Select One</button></div>'
       + '<div data-automation-id="formField-field-of-study"><label>Field of Study</label><div id="study-chip-' + schools + '"></div><input placeholder="Search" id="study-' + schools + '" data-picks="studies"></div>'
@@ -117,7 +124,8 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.deepEqual([await chips('school-chip-1'), await tab.$eval('#degree-1', (button) => button.textContent), await chips('study-chip-1'), await value('school-from-1'), await value('school-to-1')],
       [['Original University'], "Bachelor's Degree", ['Software Engineering'], '2013', '2017'], 'the school: found, its degree as Workday names it ("BSc" → Bachelor\'s Degree), the closest field of study when the exact one is not listed');
     assert.equal(await tab.$$eval('[data-automation-id^="education-"]', (panels) => panels.length), 1, 'a course (no degree) gets no Education panel');
-    assert.equal(await tab.$eval('#cv', (input) => input.files.length), 1, "the CV attached to Workday's hidden upload input");
+    const uploaded = () => tab.$$eval('[data-automation-id="file-upload-item"]', (items) => items.map((item) => item.firstChild.textContent.trim()));
+    assert.deepEqual(await uploaded(), ['Sergey_Proniuk_CV.pdf'], "the CV attached to Workday's hidden upload input");
     assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)'], 'skills Workday knows (searched with a real Enter); Rust is not in its list, so it is left out');
     assert.deepEqual(await read(['website-1', 'website-2']), history.websites);
     console.log('PASS Workday My Experience: each job, school and website added and filled, its degree and known skills chosen');
@@ -132,7 +140,23 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.equal(await value('jobTitle-1'), 'Senior Engineer (edited)', 'and never overwrites what is there');
     assert.deepEqual(await read(['company-2', 'location-2']), ['EPAM', 'Kyiv, Ukraine'], "an older job's emptied fields get that job's, never the current employer or home location");
     assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)']);
-    console.log('PASS a second Autofill: no job, school, website or skill twice, and nothing typed over');
+    assert.deepEqual(await uploaded(), ['Sergey_Proniuk_CV.pdf'], 'the CV replaced, not uploaded twice: the old file deleted first');
+    console.log('PASS a second Autofill: no job, school, website, skill or CV twice, and nothing typed over');
+
+    // Clean-up: a page left with extra panels and an invalid date, as Workday showed it.
+    await tab.open(URL);
+    await tab.evaluate(() => {
+      const work = document.querySelector('[aria-label="Add Work Experience"]'), school = document.querySelector('[aria-label="Add Education"]');
+      addWork(work);
+      for (let i = 0; i < 4; i++) addEducation(i ? document.querySelector('[aria-label="Add Another Education"]') : school);
+      document.getElementById('startDate-month-1').value = '10';
+      document.querySelector('[data-automation-id="workExperience-1"] [data-automation-id="formField-startDate"]').insertAdjacentHTML('beforeend', '<p data-automation-id="errorMessage">Error: Invalid Date: 10/</p>');
+    });
+    const cleaned = await fill();
+    assert.equal(await tab.$$eval('[data-automation-id^="education-"]', (panels) => panels.length), 1, 'Education panels beyond the CV\'s one school are deleted');
+    assert.ok(cleaned.notes.includes('Removed 3 Education entries not in your CV.'), `the panel is told (${JSON.stringify(cleaned.notes)})`);
+    assert.deepEqual(await read(['startDate-month-1', 'startDate-year-1']), ['10', '2024'], 'a date Workday called invalid is set again');
+    console.log('PASS clean-up: extra Education panels deleted (and said so), an invalid date set again');
   } finally {
     await browser.close();
   }

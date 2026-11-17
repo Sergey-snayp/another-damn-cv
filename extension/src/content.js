@@ -270,6 +270,7 @@ async function fill(profile, answers = []) {
     if (lists) {
       const history = await window.CVAutofillHistory.fill(profile.history);
       result.filled = (result.filled ?? 0) + history.filled;
+      result.notes = [...(result.notes ?? []), ...(history.notes ?? [])];
       if (history.marks.length) await Marks?.show(history.marks);
     }
   } finally {
