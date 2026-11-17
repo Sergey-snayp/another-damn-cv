@@ -22,7 +22,7 @@ const pages = {
     <script>
       // Workday signs in with the changed password and moves on; a wrong one says so and stays.
       function signIn() {
-        if (document.getElementById('password').value === 'Changed-pass-789') setTimeout(() => { document.querySelector('main').innerHTML = '<h1>My Information</h1>'; }, 300);
+        if (document.getElementById('password').value === 'Changed-pass-789') setTimeout(() => { document.querySelector('main').innerHTML = '<h1>My Information</h1>${field('firstName', 'First Name')}${field('lastName', 'Last Name')}'; }, 300);
         else document.querySelector('main').insertAdjacentHTML('afterbegin', '<div role="alert" data-automation-id="errorMessage">Wrong email address or password.</div>');
       }
     </script>`,
@@ -30,7 +30,7 @@ const pages = {
 // Signing in loads a new page, as Workday often does: the next page says whether it worked.
 pages[`${JOB}/login-reload`] = `<!doctype html><title>Sign In</title>${POSTING}<main><h1>Sign In</h1>
   ${field('email', 'Email Address')}${field('password', 'Password', 'password')}
-  <button data-automation-id="signInSubmitButton" onclick="setTimeout(() => { location.href = '${JOB}/home'; }, 400)">Sign In</button></main>`;
+  <button data-automation-id="signInSubmitButton" onclick="setTimeout(() => { location.href = '${JOB}/home'; }, 1500)">Sign In</button></main>`;
 pages[`${JOB}/home`] = `<!doctype html><title>Candidate Home</title>${POSTING}<main><h1>My Information</h1><div class="errorSummary">Errors Found</div>${field('firstName', 'First Name')}</main>`;
 pages[`${JOB}/login-again`] = `<!doctype html><title>Sign In</title>${POSTING}<main><div role="alert">Wrong email address or password.</div><h1>Sign In</h1>${field('email', 'Email Address')}${field('password', 'Password', 'password')}<button>Sign In</button></main>`;
 const profile = { email: 'sam@example.com', firstName: 'Sam', lastName: 'Lee' };
@@ -123,10 +123,12 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     await page.open(`${JOB}/login-reload`);
     await page.type('#email', 'sam@example.com');
     await page.type('#password', 'Changed-pass-789');
+    // Waiting for the new page from before the click: under load it may come before the next line.
+    const navigated = page.waitForNavigation({ timeout: 15000 });
     await page.click('[data-automation-id="signInSubmitButton"]');
     const handed = await page.evaluate(() => window.__sent.filter(message => message.type === 'site-login-attempt'));
     assert.deepEqual(handed, [{ type: 'site-login-attempt', email: 'sam@example.com', password: 'Changed-pass-789', kind: 'signin' }]);
-    await page.waitForNavigation();
+    await navigated;
     await page.open(`${JOB}/home`, () => { window.__loginPending = true; });
     await page.waitForFunction(() => (window.__sent ?? []).some(message => message.type === 'site-login-confirmed'), { timeout: 8000, polling: 200 });
     assert.ok(!(await page.evaluate(() => window.__sent.some(message => message.type === 'site-login-failed'))));
@@ -191,6 +193,23 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     await choosing.waitForFunction(() => /press Sign In\./.test(document.getElementById('panel-autofill').textContent), { timeout: 10000, polling: 100 });
     assert.deepEqual([await value(page, 'email'), await value(page, 'password')], ['sam@example.com', 'Saved-pass-123']);
     await choosing.close();
+    // 9) Signing in swaps Workday's page for the application at the same address: the panel follows.
+    await page.open(`${JOB}/login`);
+    const following = await panelFixture(browser, page, { profile, server: known });
+    await following.waitForSelector('#account-fill', { timeout: 10000 });
+    await page.evaluate(() => { window.__sent = []; });
+    // A page in a background tab never paints, and a click waits for it: the job page comes to the front, as the person sees it.
+    await page.bringToFront();
+    await page.type('#email', 'sam@example.com');
+    await page.type('#password', 'Changed-pass-789');
+    await page.click('[data-automation-id="signInSubmitButton"]');
+    await page.waitForFunction(() => (window.__sent ?? []).some(message => message.type === 'form-changed'), { timeout: 5000, polling: 100 });
+    await following.evaluate(() => window.__deliver({ type: 'form-changed' }));
+    await following.waitForSelector('#fill', { timeout: 10000 });
+    assert.equal(await following.$('#account-fill'), null, 'the sign-in step is gone from the panel');
+    assert.match(await following.$eval('#fill', button => button.textContent), /Autofill This Page/);
+    await following.close();
+    console.log('PASS after signing in, the application at the same address: the page says its form changed, the panel shows Autofill This Page');
     console.log('PASS Sign In or Create Account: a site you have an account on shows "Account already exists" and only Sign In, which opens it and fills the saved login; a new site offers it second');
   } finally {
     await browser.close();

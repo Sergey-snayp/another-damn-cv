@@ -52,10 +52,12 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       if (view && window.__views.at(-1) !== view) window.__views.push(view);
       if (view === 'placeholder') window.__placeholder ??= [host.querySelector('.job-context').getBoundingClientRect().top, host.querySelector('.fill-block').getBoundingClientRect().top];
     }).observe(document, { subtree: true, childList: true });
+    window.__deliver = message => { for (const listener of window.__panelListeners ?? []) listener(message, { tab: { id: 1 }, frameId: 0 }, () => {}); };
     const store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile, chosenResumeId: 'cv1' };
     const event = { addListener() {}, removeListener() {} };
     window.chrome = {
-      runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async message => background(message) },
+      // Messages from the page reach the panel through window.__deliver(message), as Chrome passes them.
+      runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: { addListener: listener => (window.__panelListeners ??= []).push(listener), removeListener() {} }, sendMessage: async message => background(message) },
       storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async () => {} }, session: { get: async () => ({}), set: async () => {} }, onChanged: event },
       tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message) => { if (Date.now() < answersFrom) throw new Error('Could not establish connection. Receiving end does not exist.'); return window.readJobPage(message); }, onUpdated: event, onActivated: event, create: async () => ({}) },
       webNavigation: { getAllFrames: async () => [{ frameId: 0, url }] },

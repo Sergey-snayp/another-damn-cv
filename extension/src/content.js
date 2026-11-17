@@ -858,9 +858,11 @@ function updateLauncher() {
   if (!Fields.deepOne('input, textarea, select')) {
     showLauncher({ show: jobPage || Boolean(Sites.formOpener()), form: jobPage, reason: 'a job posting' });
     lastOwnForm = false;
+    formChanged([]);
     return;
   }
   scan();
+  formChanged(lastScan.found);
   // Teamtailor and other boards on company domains are known by page structure.
   const verdict = window.CVAutofillJobForm.assess(lastScan.found, { knownSite: KNOWN_BOARD || Boolean(Sites.siteForPage()) });
   // Always passed on: update() also puts the button back if the page removed it.
@@ -969,9 +971,14 @@ addEventListener('click', (event) => {
  * (the next step of LinkedIn's Easy Apply), so its list and Autofill are current.
  */
 let lastFormFields = '';
-function formChanged() {
+/**
+ * Tells an open panel the form here changed, so it shows this step: LinkedIn's
+ * next Easy Apply step, or Workday's application once its Sign In is done
+ * (same address, new form). The account step counts as part of the form.
+ */
+function formChanged(found = Fields.detectFields().found) {
   if (!IS_TOP) return;
-  const fields = Fields.detectFields().found.map((field) => `${field.key}:${field.kind}`).sort().join(',');
+  const fields = [window.CVAutofillAccount?.find()?.kind ?? '', ...found.map((field) => `${field.key}:${field.kind}`).sort()].join(',');
   if (fields === lastFormFields) return;
   lastFormFields = fields;
   try { void chrome.runtime.sendMessage({ type: 'form-changed' }).catch(() => {}); } catch { /* extension reloaded */ }
