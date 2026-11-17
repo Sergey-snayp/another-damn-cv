@@ -223,10 +223,15 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     assert.doesNotMatch(pageText, /coming soon|subscription|Profile Strength/i, 'no placeholders');
     assert.deepEqual(await page.$$eval('.profile-tabs button', tabs => tabs.map(tab => tab.textContent)), ['Career', 'Personal info', 'Job preferences', 'Autofill answers']);
     const missing = await page.$$eval('.profile-checklist button', items => items.map(item => item.textContent));
-    assert.deepEqual(missing, ['Phone', 'Location', 'Work experience', 'A link (LinkedIn, GitHub…)'], 'what is missing, and only that');
+    // Each a step of "Complete Profile": phone and location are Personal details; no country or diversity answers yet.
+    assert.deepEqual(missing, ['Personal details', 'Work experience', 'Work authorization', 'Equal employment'], 'what is missing, and only that');
     await page.screenshot({ path: '/private/tmp/job-agent-profile-page.png', fullPage: true });
-    await button('Phone').click();
-    assert.equal(await page.$eval('.profile-tabs .is-active', tab => tab.textContent), 'Personal info', 'each missing item opens where to fill it');
+    // Each missing item opens "Complete Profile" at its step.
+    await button('Personal details').click();
+    await page.waitForSelector('dialog.complete-profile[open]');
+    assert.match(await page.$eval('.complete-steps [aria-current="step"]', step => step.textContent), /Personal/);
+    await page.click('dialog.complete-profile .complete-close');
+    await page.waitForFunction(() => !document.querySelector('dialog.complete-profile'));
     // Job preferences: type of work and Yes/No answers, saved together with Save changes.
     await page.evaluate(() => [...document.querySelectorAll('.profile-tabs button')].find(tab => tab.textContent === 'Job preferences').click());
     await page.click('.profile-choice:first-child input');

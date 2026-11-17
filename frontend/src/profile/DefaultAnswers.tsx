@@ -7,7 +7,14 @@ const LABELS: Record<AutofillDefault["kind"], string> = {
   workAuthorization: "Allowed to work",
   workedHereBefore: "Worked here before",
   willingToRelocate: "Willing to relocate",
+  workCountry: "Wants to work there",
+  citizenship: "Citizen",
+  authorizationBasis: "Authorization basis",
+  workPermit: "Work permit",
+  workPermitExpiry: "Permit expires",
 };
+/** Answered in Complete Profile → Equal Employment, as one card per country: not listed here one by one. */
+const PER_COUNTRY = new Set<AutofillDefault["kind"]>(["workCountry", "citizenship", "authorizationBasis", "workPermit", "workPermitExpiry"]);
 
 function where(row: AutofillDefault): string {
   if (row.kind === "workedHereBefore") return "For every company";
@@ -32,7 +39,7 @@ export function DefaultAnswers() {
     let active = true;
     setError("");
     defaultsApi.list().then(
-      (list) => active && setRows(list),
+      (list) => active && setRows(list.filter((row) => !PER_COUNTRY.has(row.kind))),
       (err: unknown) => active && setError(err instanceof Error ? err.message : "Could not load default answers."),
     );
     return () => {

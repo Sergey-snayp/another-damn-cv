@@ -15,7 +15,10 @@ import { BulletPanel } from "../profile/BulletPanel";
 import { BulletFocusProvider, type ActiveBullet } from "../profile/bulletFocus";
 import { useConfirm } from "../components/ConfirmDialog";
 import { CollectFromCvs } from "../profile/CollectFromCvs";
-import { EmploymentInformation } from '../profile/EmploymentInformation';
+import { CompleteProfileDialog, profileGaps, type Step } from "../profile/CompleteProfileDialog";
+import { EqualEmploymentSummary } from "../profile/EqualEmploymentSummary";
+import { defaultsApi } from "../profile/answersApi";
+import { readStatuses, type CountryStatus } from "../profile/workAuthorization";
 import "../profile/profile.css";
 
 type ProfileTab = "career" | "personal" | "preferences" | "answers";
@@ -76,6 +79,12 @@ export function Profile() {
   const [collecting, setCollecting] = useState<false | { job?: number }>(false);
   /** What the saved CVs have that the Profile doesn't, checked quietly after every Profile change. */
   const [collected, setCollected] = useState<CollectedJob[] | null>(null);
+  /** "Complete Profile" open at a step, as Jobright's. */
+  const [completing, setCompleting] = useState<Step | null>(null);
+  /** Work authorization per country, from the saved default answers. */
+  const [workStatuses, setWorkStatuses] = useState<CountryStatus[] | null>(null);
+  const loadWork = () => defaultsApi.list().then((rows) => setWorkStatuses(readStatuses(rows)), () => setWorkStatuses(null));
+  useEffect(() => { void loadWork(); }, [attempt]);
   const careerRevision = careerState?.revision;
   useEffect(() => {
     if (careerRevision === undefined) return;
@@ -152,17 +161,8 @@ export function Profile() {
   const currentRole = roles.find((role) => role.current) ?? [...roles].sort((a, b) => b.from.localeCompare(a.from))[0];
   const headline = [currentRole?.title, currentRole?.company].filter(Boolean).join(" · ");
   const place = profile?.location?.trim() || [profile?.city, profile?.country].filter((part) => part?.trim()).join(", ");
-  // What is still missing, each with where to fill it in. Shown only while something is.
-  const missing: { label: string; go(): void }[] = profile
-    ? [
-        { done: !!profile.firstName?.trim() && !!profile.lastName?.trim(), label: "Your name", go: () => setActive("personal") },
-        { done: !!profile.email?.trim(), label: "Email", go: () => setActive("personal") },
-        { done: !!profile.phone?.trim(), label: "Phone", go: () => setActive("personal") },
-        { done: !!place, label: "Location", go: () => setActive("personal") },
-        { done: roles.length > 0, label: "Work experience", go: () => setEditingCareer({ section: "experiences", entry: "new" }) },
-        { done: LINKS.some((link) => profile[link.key]?.trim()), label: "A link (LinkedIn, GitHub…)", go: () => setActive("personal") },
-      ].filter((item) => !item.done)
-    : [];
+  // What is still missing, each opening its step of "Complete Profile". Shown only while something is.
+  const missing = profileGaps(profile, careerState, workStatuses);
   /** One job's achievements changed on the page: saved on the latest Profile, so other edits are kept. */
   async function saveRole(index: number, patch: (current: CareerExperience) => Partial<CareerExperience>) {
     const latest = await careerApi.read();
@@ -354,18 +354,21 @@ export function Profile() {
             {activeBullet && <BulletPanel active={activeBullet} />}
             {!activeBullet && missing.length > 0 && (
               <section className="profile-panel profile-side-card" aria-labelledby="profile-missing-heading">
-                <h2 id="profile-missing-heading">Finish your profile</h2>
-                <p className="profile-muted">Autofill and job matching use these.</p>
+                <h2 id="profile-missing-heading">Complete your profile</h2>
+                <p className="profile-muted">Complete your profile to make job matching more accurate and let the extension autofill your applications.</p>
                 <ul className="profile-checklist">
                   {missing.map((item) => (
                     <li key={item.label}>
-                      <button type="button" className="profile-text-button" onClick={item.go}>
+                      <button type="button" className="profile-text-button" onClick={() => setCompleting(item.step)}>
                         <Icon name="plus" size={14} />
                         {item.label}
                       </button>
                     </li>
                   ))}
                 </ul>
+                <button type="button" className="profile-button profile-complete-button" disabled={!profile} onClick={() => setCompleting(missing[0]?.step ?? 1)}>
+                  Complete Profile
+                </button>
               </section>
             )}
           </aside>
@@ -432,7 +435,7 @@ export function Profile() {
             </button>
           </div>
         </form>
-        {active === 'personal' && <EmploymentInformation profile={profile} disabled={dirty || saving} onSaved={next => { setProfile(next); setDraft({ ...next }); setNotice('Employment information saved.'); }} />}
+        {active === "personal" && <EqualEmploymentSummary profile={profile} statuses={workStatuses} onEdit={() => setCompleting(5)} />}
         </>
       )}
 
@@ -480,6 +483,16 @@ export function Profile() {
             setWriting(null);
             setNotice(`Added ${added} ${added === 1 ? "bullet" : "bullets"} to ${role?.company || "this job"}.`);
           }}
+        />
+      )}
+      {completing && profile && (
+        <CompleteProfileDialog
+          start={completing}
+          profile={profile}
+          career={careerState}
+          onClose={() => { setCompleting(null); void loadWork(); }}
+          onProfileSaved={(next) => { setProfile(next); setDraft({ ...next }); }}
+          onCareerSaved={setCareerState}
         />
       )}
       {editingCareer && careerState && (

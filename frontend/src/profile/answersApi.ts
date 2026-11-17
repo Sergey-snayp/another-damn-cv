@@ -37,7 +37,17 @@ export const answersApi = {
  */
 export interface AutofillDefault {
   id: string;
-  kind: "workAuthorization" | "requiresSponsorship" | "workedHereBefore" | "willingToRelocate";
+  kind:
+    | "workAuthorization"
+    | "requiresSponsorship"
+    | "workedHereBefore"
+    | "willingToRelocate"
+    // Work authorization per country (Profile → Complete Profile → Equal Employment).
+    | "workCountry"
+    | "citizenship"
+    | "authorizationBasis"
+    | "workPermit"
+    | "workPermitExpiry";
   scope: string;
   value: string;
   updatedAt: string;

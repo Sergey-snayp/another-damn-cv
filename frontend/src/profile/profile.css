@@ -477,3 +477,4 @@
 .skill-sort-status svg { animation: skill-sort-pulse 1.2s ease-in-out infinite; }
 @keyframes skill-sort-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .skill-sort-status svg { animation: none; } }
+.profile-complete-button { width: 100%; justify-content: center; margin-top: 12px; }
