@@ -169,7 +169,7 @@ const stopOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node
  * icon saying why. `explainIf` limits which empty fields are explained (a
  * later step explains only its new fields).
  */
-async function runPass({ found, profile, answers = [], hooks, explainIf = () => true, onProgress = () => {} }) {
+async function runPass({ found, profile, answers = [], hooks, explainIf = () => true, onProgress = () => {}, sections = [] }) {
   const result = { filled: 0, fromAnswers: 0, acknowledged: 0, failures: [], notes: [] };
   const stops = [], covered = new Set(), groups = new Set(), state = {};
   const cover = (element) => { covered.add(element); if (element.type === 'radio' && element.name) groups.add(element.name); };
@@ -187,12 +187,28 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
     const element = byTag(item.id);
     if (element && !isCovered(element) && explainIf(element)) { stops.push({ kind: 'explain', element }); cover(element); }
   }
+  // Workday's My Experience lists (jobs, schools, skills, websites): each a stop where it starts on the page.
+  for (const section of sections) stops.push({ kind: 'section', element: section.element, section });
   stops.sort(stopOrder);
 
   let done = 0;
   for (const stop of stops) {
     onProgress(done++, stops.length);
     if (stop.kind === 'explain' && !Fields.isEmpty(stop.element)) continue;
+    if (stop.kind === 'section') {
+      // Its fields one by one, top to bottom, each visited and marked like any other field.
+      try {
+        const done = await stop.section.run({
+          before: (element) => hooks?.before?.({ element, kind: element.type === 'file' ? 'file' : 'text' }),
+          after: (mark) => hooks?.after?.({ element: mark.element }, mark, null),
+        });
+        result.filled += done.filled;
+        result.notes.push(...done.notes);
+      } catch (err) {
+        result.failures.push(`${Fields.labelOf(stop.element)}: ${err.message}`);
+      }
+      continue;
+    }
     const field = stop.field ?? { element: stop.element, kind: stop.item?.kind ?? stop.ack?.kind };
     const token = await hooks?.before?.(field);
     let mark = null, also = [];
@@ -254,27 +270,23 @@ function fieldsToAdd(profile, missing) {
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
   lastFill = { profile, failed: new Map(), answers: new Map(answers.map((item) => [String(item.id), item])) };
-  // Settings → "Animate filling" (off by default): the page follows each field as it fills.
-  // Otherwise the page stays where it is while it fills, and the panel shows the progress.
+  // Settings → "Animate filling" (on by default): the page glides to each field in page order,
+  // top to bottom, and nothing else may move it (a field's focus, a dropdown, the site's script).
+  // Off: the page stays where it is while it fills, and the panel shows the progress.
   const mode = await Marks.animationMode();
-  const hooks = Marks?.fillHooks(mode);
-  const hold = mode === 'off' ? holdPage() : null;
+  const hold = holdPage();
+  const hooks = Marks?.fillHooks(mode, hold);
   const progress = (done, total) => { try { void chrome.runtime.sendMessage({ type: 'fill-progress', done, total }).catch(() => {}); } catch { /* reloaded */ } };
   // Workday's My Experience: its job, school and website lists and its skills box are filled
-  // from the CV's own jobs below, never as the current employer or home location.
+  // from the CV's own jobs, in the same pass and page order, never as the current employer or home location.
   const lists = profile.history && window.CVAutofillHistory?.here();
   const found = lists ? lastScan.found.filter((field) => !window.CVAutofillHistory.owns(field.element)) : lastScan.found;
+  const sections = lists ? window.CVAutofillHistory.sections(profile.history) : [];
   let result;
   try {
-    result = await runPass({ found, profile, answers, hooks, onProgress: progress });
-    if (lists) {
-      const history = await window.CVAutofillHistory.fill(profile.history);
-      result.filled = (result.filled ?? 0) + history.filled;
-      result.notes = [...(result.notes ?? []), ...(history.notes ?? [])];
-      if (history.marks.length) await Marks?.show(history.marks);
-    }
+    result = await runPass({ found, profile, answers, hooks, onProgress: progress, sections });
   } finally {
-    hold?.release();
+    hold.release();
   }
   await hooks?.finish?.(lastScan.found);
   hooks?.end();
@@ -282,8 +294,8 @@ async function fill(profile, answers = []) {
   // A last check for anything the pass could not reach (fields that appeared meanwhile).
   const missing = missingWithReasons();
   await Marks?.showMissing(missing);
-  // One smooth scroll at the end, only when a field needs the person and is off screen.
-  if (hold) {
+  // Not animated: one smooth scroll at the end, only when a field needs the person and is off screen.
+  if (mode === 'off') {
     const first = missing.map((item) => Fields.byTag(item.id)).find(Boolean);
     const box = first?.getBoundingClientRect();
     if (box && (box.bottom < 0 || box.top > innerHeight)) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -581,14 +593,20 @@ Marks?.setEditor(editorFor);
  * back at once. The person scrolling (wheel, touch, keys, the scrollbar) ends it.
  */
 function holdPage() {
-  const x = scrollX, y = scrollY;
-  let holding = true;
-  const letGo = () => { holding = false; };
-  const back = () => { if (holding && (scrollX !== x || scrollY !== y)) scrollTo({ left: x, top: y, behavior: 'instant' }); };
+  let x = scrollX, y = scrollY;
+  let holding = true, moving = false;
+  const letGo = (event) => { if (event.isTrusted) holding = false; };
+  const back = () => { if (holding && !moving && (scrollX !== x || scrollY !== y)) scrollTo({ left: x, top: y, behavior: 'instant' }); };
   const people = ['wheel', 'touchmove', 'keydown', 'mousedown'];
   for (const type of people) addEventListener(type, letGo, { capture: true, passive: true });
   addEventListener('scroll', back, { passive: true });
   return {
+    /** Autofill's own glide to the next field: the only move allowed; the page is then held there. */
+    async move(glide) {
+      moving = true;
+      try { await glide(); } finally { moving = false; x = scrollX; y = scrollY; }
+    },
+    get holding() { return holding; },
     release() {
       for (const type of people) removeEventListener(type, letGo, { capture: true });
       removeEventListener('scroll', back);
@@ -655,9 +673,16 @@ async function fillNextStep() {
   try {
     const reply = await chrome.runtime.sendMessage({ type: 'step-request', questions });
     if (!reply?.armed) { stepsArmed = false; return; }
-    const hooks = Marks?.fillHooks(await Marks.animationMode());
+    const hold = holdPage();
+    const hooks = Marks?.fillHooks(await Marks.animationMode(), hold);
     lastFill = { profile: reply.profile, failed: lastFill.failed, answers: new Map([...lastFill.answers, ...(reply.answers ?? []).map((item) => [String(item.id), item])]) };
-    const result = await runPass({ found: fresh, profile: reply.profile, answers: reply.answers ?? [], hooks, explainIf: (element) => isNew.has(element) });
+    // A step that is Workday's My Experience: its lists in the same pass, in page order.
+    const lists = reply.profile?.history && window.CVAutofillHistory?.here();
+    const sections = lists ? window.CVAutofillHistory.sections(reply.profile.history) : [];
+    const own = lists ? fresh.filter((field) => !window.CVAutofillHistory.owns(field.element)) : fresh;
+    let result;
+    try { result = await runPass({ found: own, profile: reply.profile, answers: reply.answers ?? [], hooks, explainIf: (element) => isNew.has(element), sections }); }
+    finally { hold.release(); }
     await hooks?.finish?.(fresh);
     hooks?.end();
     await Marks?.showMissing(missingWithReasons());

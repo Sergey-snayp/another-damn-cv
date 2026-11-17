@@ -94,7 +94,8 @@ async function pageWithScripts(browser, pages) {
       // What the page scripts tell the extension, kept for the test to read.
       // The background's reply to "was a sign-in sent here?": window.__loginPending, set by page.open's setup.
       runtime: { id: 'test', getURL: file => (file.endsWith('.html') ? 'data:text/html,<p>Panel</p>' : 'data:text/css,'), onMessage: { addListener: listener => window.__listeners.push(listener) }, sendMessage: async message => { (window.__sent ??= []).push(message); return message.type === 'site-login-check' ? { pending: Boolean(window.__loginPending) } : {}; } },
-      storage: { local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } },
+      // Animation off unless a test turns it on (window.__settings): most tests check what fills, not how it moves.
+      storage: { local: { get: async () => ({ animateFill: false, ...(window.__settings ?? {}) }), set: async () => {} }, onChanged: { addListener() {} } },
     };
     window.__ask = message => new Promise(resolve => { for (const listener of window.__listeners) listener(message, { url: chrome.runtime.getURL('src/sidepanel.html'), id: 'test' }, resolve); });
   });

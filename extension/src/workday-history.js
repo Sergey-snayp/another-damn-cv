@@ -69,6 +69,7 @@
       const add = addButton(list);
       if (!add) return null;
       const before = panels(list).length;
+      await visit(add);
       press(add);
       for (let waited = 0; panels(list).length === before && waited < 5000; waited += 150) await wait(150);
     }
@@ -102,16 +103,36 @@
       .find((input) => shown(input) && label.test(Fields().labelOf(input))) ?? null : null);
   }
 
-  const marks = [];
-  const filledMark = (element, reason) => marks.push({ element, status: 'ok', reason });
-  const checkMark = (element, reason) => marks.push({ element, status: 'check', reason });
+  // Each field's icon, and the fill's guide while one section fills as part of
+  // the page's one pass (content.js): before a field, the page glides to it;
+  // after it, its glow and icon. The icons of a field show before the next one starts.
+  const marks = [], pending = [];
+  let guide = null;
+  const note = (mark) => { marks.push(mark); pending.push(mark); };
+  const filledMark = (element, reason) => note({ element, status: 'ok', reason });
+  const checkMark = (element, reason) => note({ element, status: 'check', reason });
+  async function flush() {
+    while (pending.length) { const mark = pending.shift(); await guide?.after?.(mark); }
+  }
+  /** The next field: the last one's icon first, then the page moves to this one. */
+  async function visit(element) {
+    await flush();
+    if (element) await guide?.before?.(element);
+  }
 
+  const fillable = (element, value) => Boolean(element) && value !== undefined && value !== null && value !== '' && Fields().isEmpty(element);
   /** Types `value` into an empty field; true when it went in. */
   function type(element, value, reason) {
-    if (!element || value === undefined || value === null || value === '' || !Fields().isEmpty(element)) return false;
+    if (!fillable(element, value)) return false;
     Filler().typeText(element, String(value), { leave: true });
     filledMark(element, reason);
     return true;
+  }
+  /** The same, visited first: 1 when it went in. */
+  async function put(element, value, reason) {
+    if (!fillable(element, value)) return 0;
+    await visit(element);
+    return Number(type(element, value, reason));
   }
 
   /**
@@ -121,6 +142,7 @@
    */
   async function setDirect(element, value, reason, again = false) {
     if (!element || (!again && !Fields().isEmpty(element))) return false;
+    await visit(element);
     await Filler().reactFill(element, String(value));
     filledMark(element, reason);
     await wait(200);
@@ -306,14 +328,14 @@
     for (const [index, role] of experiences.entries()) {
       const panel = await panelAt('work', index);
       if (!panel) break;
-      count += Number(type(field(panel, 'input[data-automation-id="jobTitle"], input[name="jobTitle"]', /job title|title/i), role.title, source));
-      count += Number(type(field(panel, 'input[data-automation-id="company"], input[name="companyName"]', /company|employer/i), role.company, source));
-      count += Number(type(field(panel, 'input[data-automation-id="location"], input[name="location"]', /location/i), role.location, source));
+      count += await put(field(panel, 'input[data-automation-id="jobTitle"], input[name="jobTitle"]', /job title|title/i), role.title, source);
+      count += await put(field(panel, 'input[data-automation-id="company"], input[name="companyName"]', /company|employer/i), role.company, source);
+      count += await put(field(panel, 'input[data-automation-id="location"], input[name="location"]', /location/i), role.location, source);
       const current = first(panel, 'input[data-automation-id="currentlyWorkHere"], input[name="currentlyWorkHere"]');
-      if (current && role.current && !current.checked) { press(current); filledMark(current, source); count++; }
+      if (current && role.current && !current.checked) { await visit(current); press(current); filledMark(current, source); count++; }
       count += await date(panel, 'startDate', role.from, source);
       if (!role.current) count += await date(panel, 'endDate', role.to, source);
-      count += Number(type(field(panel, 'textarea[data-automation-id="description"], textarea[id*="roleDescription"]', /description/i), role.description, source));
+      count += await put(field(panel, 'textarea[data-automation-id="description"], textarea[id*="roleDescription"]', /description/i), role.description, source);
     }
     return count;
   }
@@ -355,11 +377,12 @@
       const panel = await panelAt('education', index);
       if (!panel) break;
       const named = field(panel, 'input[data-automation-id="school"], input[name="schoolName"]', null);
-      if (named) count += Number(type(named, school.institution, source));
+      if (named) count += await put(named, school.institution, source);
       else {
         let search = first(panel, SCHOOL);
         if (search && school.institution && await clearWrong(search, (chip) => sameSchool(chip, school.institution))) {
           search = await again(panel, SCHOOL) ?? search;
+          await visit(search);
           const got = await searchPick(search, school.institution, (option) => option === normal(school.institution) || option.startsWith(normal(school.institution)));
           if (got) { filledMark(search, source); count++; } else checkMark(search, `"${school.institution}" is not in its list. Choose it yourself.`);
         }
@@ -367,6 +390,7 @@
       const degree = first(panel, 'button[data-automation-id="degree"], button[name="degree"]');
       if (degree && school.degree && /^\s*(select one|select)\s*$/i.test(degree.textContent)) {
         let seen = [];
+        await visit(degree);
         const result = await Filler().chooseInListbox(degree, (texts) => { seen = texts; return degreeOption(texts, school.degree, school.field); });
         if (result?.text) { filledMark(degree, source); count++; } else checkMark(degree, seen.length ? `"${school.degree}" matches none of its degrees (${seen.slice(0, 8).join(', ')}${seen.length > 8 ? '…' : ''}). Choose the closest.` : 'Its list of degrees did not open. Choose one.');
       }
@@ -384,6 +408,7 @@
       }
       if (study && school.field && Fields().isEmpty(study) && !Fields().chosenItem(study)) {
         let got = null;
+        await visit(study);
         if (name) got = await searchPick(study, name, [(option) => key(option) === key(name)]);
         // No list, or the name not found by its search: search with the CV's words.
         if (!got) for (const term of searchTerms(school.field)) if ((got = await searchPick(study, term, tests))) break;
@@ -433,6 +458,7 @@
     const SKILLS = '[data-automation-id="formField-skills"] input, [data-automation-id="skillsSection"] input, [data-automation-id="formField-skillsPrompt"] input';
     let input = first(document, SKILLS);
     if (!input || !skills.length) return 0;
+    await visit(input);
     const box = input.closest('[data-automation-id^="formField"], [data-automation-id="skillsSection"]') ?? input.parentElement;
     const chips = () => [...box.querySelectorAll('[data-automation-id="selectedItem"]')];
     for (let tries = 0; chips().length && tries < 60; tries++) {
@@ -484,7 +510,7 @@
       const panel = empty ? null : await panelAt('websites', panels('websites').length);
       const input = empty ?? (panel && inputOf(panel));
       if (!input) break;
-      if (type(input, url, source)) { listed.add(link(url)); count++; }
+      if (await put(input, url, source)) { listed.add(link(url)); count++; }
     }
     return count;
   }
@@ -493,30 +519,57 @@
   const here = () => Boolean(window.CVAutofillSites?.siteForPage()?.name === 'workday'
     && (first(document, LISTS.work.add) || first(document, LISTS.education.add) || panels('work').length || first(document, '[data-automation-id="formField-skills"] input')));
 
+  const SKILLS_BOX = '[data-automation-id="formField-skills"] input, [data-automation-id="skillsSection"] input, [data-automation-id="formField-skillsPrompt"] input';
+
   /**
-   * Fills the step from `history` ({ experiences, educations, skills, websites, source }).
-   * Returns { filled, marks }: the icons for every field it filled or could not.
+   * The step's sections from `history` ({ experiences, educations, skills,
+   * websites, source }), each with the element it starts at, so content.js
+   * fills them in the page's one pass, in page order with the other fields:
+   * Work Experience, Education, Skills, then (after the CV box) Websites.
+   * `run(guide)` fills one, field by field, top to bottom, calling
+   * guide.before(element) before each field and guide.after(mark) after it,
+   * and returns { filled, notes, marks }.
    */
-  async function fill(history) {
-    marks.length = 0;
-    if (!history || !here()) return { filled: 0, marks: [] };
+  function sections(history) {
+    if (!history || !here()) return [];
     const source = history.source === 'resume' ? 'From your CV' : 'From your Profile';
     const where = history.source === 'resume' ? 'your CV' : 'your Profile';
     const jobs = history.experiences ?? [];
     // Schools with a degree: a course (no degree) would leave Workday's required Degree empty.
     const schools = (history.educations ?? []).filter((school) => String(school.degree ?? '').trim());
-    const notes = [];
-    // Clean-up first: panels beyond the CV's jobs and schools. A list the CV has nothing for is left alone.
-    const extraJobs = jobs.length ? await trim('work', jobs.length) : 0;
-    const extraSchools = schools.length ? await trim('education', schools.length) : 0;
-    if (extraJobs) notes.push(`Removed ${extraJobs} Work Experience ${extraJobs === 1 ? 'entry' : 'entries'} not in ${where}.`);
-    if (extraSchools) notes.push(`Removed ${extraSchools} Education ${extraSchools === 1 ? 'entry' : 'entries'} not in ${where}.`);
-    let filled = 0;
-    filled += await fillWork(jobs, source);
-    filled += await fillEducation(schools, source);
-    filled += await fillSkills(history.skills ?? [], source);
-    filled += await fillWebsites(history.websites ?? [], 'From your Profile');
-    return { filled, marks: [...marks], notes };
+    const start = (list) => panels(list)[0] ?? addButton(list);
+    const removed = (count, name) => (count ? [`Removed ${count} ${name} ${count === 1 ? 'entry' : 'entries'} not in ${where}.`] : []);
+    const list = [];
+    const section = (element, work) => {
+      if (!element) return;
+      list.push({
+        element,
+        run: async (with_ = null) => {
+          guide = with_; marks.length = 0; pending.length = 0;
+          try {
+            const out = await work();
+            await flush();
+            return { filled: out.filled, notes: out.notes ?? [], marks: [...marks] };
+          } finally { guide = null; }
+        },
+      });
+    };
+    // Clean-up first, within its own list: panels beyond the CV's jobs and schools. A list the CV has nothing for is left alone.
+    if (jobs.length) section(start('work'), async () => ({ notes: removed(await trim('work', jobs.length), 'Work Experience'), filled: await fillWork(jobs, source) }));
+    if (schools.length) section(start('education'), async () => ({ notes: removed(await trim('education', schools.length), 'Education'), filled: await fillEducation(schools, source) }));
+    if ((history.skills ?? []).length) section(first(document, SKILLS_BOX), async () => ({ filled: await fillSkills(history.skills, source) }));
+    if ((history.websites ?? []).length || panels('websites').length) section(start('websites'), async () => ({ filled: await fillWebsites(history.websites ?? [], 'From your Profile') }));
+    return list;
+  }
+
+  /** Fills the whole step at once (no guide). Returns { filled, marks, notes }. */
+  async function fill(history) {
+    const result = { filled: 0, marks: [], notes: [] };
+    for (const part of sections(history)) {
+      const done = await part.run();
+      result.filled += done.filled; result.marks.push(...done.marks); result.notes.push(...done.notes);
+    }
+    return result;
   }
 
   /** Whether a field belongs to one of the lists or the skills box: filled here, never by the general fill. */
@@ -529,5 +582,5 @@
     return false;
   };
 
-  window.CVAutofillHistory = { fill, here, owns, degreeOption, searchTerms, studyName, skillTests };
+  window.CVAutofillHistory = { fill, sections, here, owns, degreeOption, searchTerms, studyName, skillTests };
 })();

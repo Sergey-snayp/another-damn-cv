@@ -40,7 +40,11 @@ const profile = { firstName: 'Sam', lastName: 'Lee', email: 'sam@example.com', p
         const start = scrollY;
         await window.__ask({ type: 'fill', profile, answers: [] });
         const during = positions.slice();
-        await new Promise((resolve) => setTimeout(resolve, 900)); // the end's one smooth scroll, if any
+        // The end's one smooth scroll, if any: wait until the page stops moving (slower on a busy machine).
+        for (let still = 0, last = -1, waited = 0; still < 4 && waited < 4000; waited += 100) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          still = Math.round(scrollY) === last ? still + 1 : 0; last = Math.round(scrollY);
+        }
         removeEventListener('scroll', watch);
         const portfolio = document.getElementById('portfolio')?.getBoundingClientRect();
         return {

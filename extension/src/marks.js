@@ -535,11 +535,11 @@
   } catch { /* extension reloaded */ }
 
   // ─── Follow-along while filling ──────────────────────────────────────────
-  // Settings → "Animate filling" (off by default). The page scrolls to each
-  // field that is off screen, and the field glows in its result colour. With
+  // Settings → "Animate filling" (on by default). The page glides to each
+  // field that is off screen, in page order, and the field glows in its result colour. With
   // the system's "Reduce motion" on, nothing scrolls and the glow does not
   // move. Scrolling by hand during a fill stops the follow-along for that fill.
-  const motion = { mode: 'off', tookOver: false };
+  const motion = { mode: 'off', tookOver: false, hold: null };
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   // Only the person's own scrolling counts. Autofill sends key presses itself
   // (ArrowDown and Enter open and pick dropdown options); those are not trusted.
@@ -550,8 +550,8 @@
 
   async function animationMode() {
     try {
-      // Off unless chosen: a still page while it fills reads calmer than one that follows each field.
-      if ((await chrome.storage.local.get('animateFill')).animateFill !== true) return 'off';
+      // On unless switched off: the page glides to each field, top to bottom.
+      if ((await chrome.storage.local.get('animateFill')).animateFill === false) return 'off';
     } catch { return 'off'; }
     return matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
   }
@@ -572,11 +572,15 @@
     const rect = anchor.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
     if (onScreen(rect)) return; // Already on screen: no jump.
-    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    await scrolled();
-    // A smooth scroll the page interrupted (or a browser without one): go there directly.
-    // 'instant' overrides pages that set CSS scroll-behavior: smooth (Greenhouse does).
-    if (!motion.tookOver && !onScreen(anchor.getBoundingClientRect())) anchor.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const glide = async () => {
+      anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await scrolled();
+      // A smooth scroll the page interrupted (or a browser without one): go there directly.
+      // 'instant' overrides pages that set CSS scroll-behavior: smooth (Greenhouse does).
+      if (!motion.tookOver && !onScreen(anchor.getBoundingClientRect())) anchor.scrollIntoView({ block: 'center', behavior: 'instant' });
+    };
+    // While a fill holds the page, this glide is the one move it allows.
+    await (motion.hold ? motion.hold.move(glide) : glide());
   }
 
   /** A ring around the field in its result colour. Returns a function that removes it. */
@@ -597,9 +601,10 @@
    * Hooks for one fill: before each field (scroll to it, pulse an upload) and
    * after it (glow, its icon, a short pause). Null when animation is off.
    */
-  function fillHooks(mode) {
+  function fillHooks(mode, hold = null) {
     motion.mode = mode;
     motion.tookOver = false;
+    motion.hold = hold;
     // Animation off: no scrolling or glow, but each field's icon still appears as soon as it is done.
     if (mode === 'off') {
       return {
@@ -646,6 +651,7 @@
         if (!motion.tookOver) glow(target, 'submit');
       },
       end() {
+        motion.hold = null;
         for (const type of ['wheel', 'touchmove', 'keydown']) removeEventListener(type, takeOver, { capture: true });
       },
     };

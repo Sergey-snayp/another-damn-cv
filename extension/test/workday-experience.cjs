@@ -187,6 +187,31 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.deepEqual(await tab.$$eval('[data-automation-id^="websitePanelSet-"] input', (inputs) => inputs.map((input) => input.value)), ['https://github.com/sergey', 'https://www.linkedin.com/in/sergey'], 'a repeated link removed, the missing one added');
     console.log('PASS clean-up: extra Education panels deleted (and said so), an invalid date set again, a wrong school and field of study replaced, a repeated website removed');
 
+    // Animated (the default): the step fills top to bottom in one pass, its lists with the CV box
+    // between Skills and Websites, and the page only ever moves down.
+    await tab.open(URL, () => { window.__settings = { animateFill: true }; });
+    await tab.addScriptTag({ content: pageWorld });
+    const glide = await tab.evaluate(async (profile) => {
+      const order = [], tops = [];
+      const note = (event) => { const id = event.target.id; if (id && order.at(-1) !== id) order.push(id); };
+      document.addEventListener('input', note, true);
+      document.addEventListener('change', note, true);
+      let watching = true;
+      const watch = () => { if (tops.at(-1) !== Math.round(scrollY)) tops.push(Math.round(scrollY)); if (watching) requestAnimationFrame(watch); };
+      requestAnimationFrame(watch);
+      await window.__ask({ type: 'fill', profile, answers: [] });
+      watching = false;
+      const ids = [...document.querySelectorAll('input, textarea, select')].map((element) => element.id);
+      // A date's Month and Year sit side by side as one field (its year goes first, as Simplify fills it).
+      const place = (id) => { const date = id.match(/^(.*)-(month|year)-(\d+)$/); return date ? Math.min(ids.indexOf(`${date[1]}-month-${date[3]}`), ids.indexOf(`${date[1]}-year-${date[3]}`)) : ids.indexOf(id); };
+      return { order, tops, at: order.map(place) };
+    }, profile);
+    assert.deepEqual(glide.at, [...glide.at].sort((a, b) => a - b), `filled top to bottom: ${glide.order.join(' → ')}`);
+    assert.ok(glide.order.indexOf('cv') > glide.order.indexOf('skills') && glide.order.indexOf('cv') < glide.order.indexOf('website-1'), 'the CV box in its place: after Skills, before Websites');
+    const up = glide.tops.findIndex((top, index) => index && top < glide.tops[index - 1] - 2);
+    assert.equal(up, -1, `the page only moved down (${glide.tops.join(', ')})`);
+    console.log(`PASS animated My Experience: ${glide.order.length} fields top to bottom, lists and the CV box in page order, the page only moving down`);
+
     // Degree names as different Workday sites list them, picked the way Simplify picks.
     const pick = (texts, degree, field) => tab.evaluate((texts, degree, field) => { const index = window.CVAutofillHistory.degreeOption(texts, degree, field); return index === null ? null : texts[index]; }, texts, degree, field);
     const generic = ["Associate's Degree", "Bachelor's Degree", "Master's Degree", 'Doctorate', 'High School'];
