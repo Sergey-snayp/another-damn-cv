@@ -178,20 +178,51 @@
     return label(pick);
   }
 
-  /** Workday's degree names for a CV's ("BSc" → "Bachelor's Degree"), most specific first. */
-  function degreeChoices(degree) {
-    const text = normal(degree);
-    const kinds = [
-      [/\b(ph\.?d|doctor|doctorate)/, ['Doctorate', 'Doctoral Degree', 'PhD', 'Ph.D.']],
-      [/\b(master|msc|m\.sc|ma\b|m\.a\b|mba|meng|m\.eng)/, ["Master's Degree", 'Masters Degree', 'Masters', 'Master']],
-      [/\b(bachelor|bsc|b\.sc|ba\b|b\.a\b|beng|b\.eng|bs\b|b\.s\b)/, ["Bachelor's Degree", 'Bachelors Degree', 'Bachelors', 'Bachelor']],
-      [/\b(associate)/, ["Associate's Degree", 'Associate Degree', 'Associates']],
-      [/\b(diploma)/, ['Diploma']],
-      [/\b(certificate|certification)/, ['Certificate']],
-    ];
-    const found = kinds.find(([pattern]) => pattern.test(text));
-    return [degree, ...(found ? found[1] : [])].filter(Boolean);
+  // Simplify's way of comparing names: no case, apostrophes, dots or plural s ("Bachelor's" = "Bachelors").
+  const key = (text) => normal(text).replace(/['’.]/g, '').replace(/([a-z0-9])s\b/g, '$1').replace(/\s+/g, ' ').trim();
+  const KINDS = {
+    doctor: /\b(phd|doctor|doctorate|doctoral)\b/,
+    master: /\b(master|msc|ma|ms|meng|masc|mba)\b/,
+    bachelor: /\b(bachelor|baccalaureate|undergraduate|bsc|ba|bs|beng|basc|bcom|bba)\b/,
+    associate: /\bassociate\b/,
+    diploma: /\bdiploma\b/,
+    certificate: /\b(certificate|certification)\b/,
+  };
+  // Words a degree's name may carry and still be the plain degree ("Bachelor's Degree or Equivalent").
+  const PLAIN = new Set(['degree', 'level', 'or', 'equivalent', 'higher', 'university', 'college', 'diploma', 'of', 'a']);
+  const kindOf = (text) => Object.keys(KINDS).find((kind) => KINDS[kind].test(key(text))) ?? null;
+  const plain = (text, kind) => { const [head, ...rest] = key(text).split(/[^a-z0-9]+/).filter(Boolean); return !!head && KINDS[kind].test(head) && rest.every((word) => PLAIN.has(word)); };
+  // Simplify's test for a science degree (BS, not BA) from the field of study.
+  const SCIENCE = /\b(engineer\w*|computer|software|informatics|information|data|math\w*|statistic\w*|physic\w*|chemi\w*|biolog\w*|neuro\w*|geolog\w*|astronom\w*|science|technology|security)\b/i;
+  const NOT_SCIENCE = /\b(political|social|library|liberal|behavio\w+|sport\w*|exercise|home|religious|domestic)\s+science/i;
+
+  /**
+   * The option for a CV's degree, as Simplify picks it: the same name; else the
+   * plain degree of its kind ("Bachelor's" → "Bachelor's Degree"); else a named
+   * one of its kind, Science or Arts by the field ("BSc - Bachelor of Science").
+   */
+  function degreeOption(texts, degree, field) {
+    const wanted = key(degree);
+    if (!wanted) return null;
+    const same = texts.findIndex((text) => key(text) === wanted);
+    if (same >= 0) return same;
+    const kind = kindOf(degree);
+    if (!kind) { const starts = texts.findIndex((text) => key(text).startsWith(wanted)); return starts >= 0 ? starts : null; }
+    const shortest = (indexes) => indexes.length ? indexes.sort((a, b) => texts[a].length - texts[b].length)[0] : null;
+    const all = texts.map((_, index) => index);
+    const plainOnes = all.filter((index) => plain(texts[index], kind));
+    if (plainOnes.length) return shortest(plainOnes);
+    // An MBA or a PhD only for a CV that says so.
+    const special = (text) => /\b(mba|phd|md|jd)\b/.test(key(text)) && !/\b(mba|phd|md|jd)\b/.test(wanted);
+    const named = all.filter((index) => kindOf(texts[index]) === kind && !special(texts[index]));
+    if (!named.length) return null;
+    const science = SCIENCE.test(field ?? '') && !NOT_SCIENCE.test(field ?? '');
+    const branch = named.filter((index) => (science ? /\b(science|sc|bsc|msc|bs|ms)\b/ : /\b(art|ba|ma)\b/).test(key(texts[index])));
+    return shortest(branch.length ? branch : named);
   }
+
+  /** Simplify's search terms for a long name: the whole of it, then its longest words, three searches at most. */
+  const searchTerms = (text) => [...new Set([String(text).trim(), ...String(text).split(/\s+/).filter((word) => word.length >= 3 && !/^(and|the|for|with)$/i.test(word)).sort((a, b) => b.length - a.length)])].slice(0, 3);
 
   async function fillWork(experiences, source) {
     let count = 0;
@@ -226,20 +257,19 @@
       }
       const degree = first(panel, 'button[data-automation-id="degree"], button[name="degree"]');
       if (degree && school.degree && /^\s*(select one|select)\s*$/i.test(degree.textContent)) {
-        const result = await Filler().fillListbox(degree, degreeChoices(school.degree));
-        if (result.filled) { filledMark(degree, source); count++; } else checkMark(degree, `"${school.degree}" is not one of its degrees. Choose the closest.`);
+        let seen = [];
+        const result = await Filler().chooseInListbox(degree, (texts) => { seen = texts; return degreeOption(texts, school.degree, school.field); });
+        if (result?.text) { filledMark(degree, source); count++; } else checkMark(degree, seen.length ? `"${school.degree}" matches none of its degrees (${seen.slice(0, 8).join(', ')}${seen.length > 8 ? '…' : ''}). Choose the closest.` : 'Its list of degrees did not open. Choose one.');
       }
       const study = first(panel, '[data-automation-id="formField-field-of-study"] input, [data-automation-id="formField-fieldOfStudy"] input, [data-automation-id*="fieldOfStudy" i] input');
       if (study && school.field && Fields().isEmpty(study) && !Fields().chosenItem(study)) {
-        const wanted = normal(school.field);
-        // The same name first, then the option sharing most of its words ("Software Engineering" ~ "Engineering, Software").
-        const words = (text) => normal(text).split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !['and', 'the', 'for', 'with'].includes(word));
+        const wanted = key(school.field);
+        // The same name, one that starts with it, then the one sharing most of its words ("Software Engineering" ~ "Engineering, Software").
+        const words = (text) => key(text).split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !['and', 'the', 'for', 'with'].includes(word));
         const close = (option) => { const want = words(school.field), have = words(option); const shared = want.filter((word) => have.includes(word)).length; return shared > 0 && shared >= Math.ceil(want.length / 2); };
-        const tests = [(option) => option === wanted, (option) => option.startsWith(wanted) || wanted.startsWith(option), close];
-        let got = await searchPick(study, school.field, tests);
-        // Nothing for the whole name: its main word ("Computer Engineering" → "Engineering").
-        const main = words(school.field).sort((a, b) => b.length - a.length)[0];
-        if (!got && main && main !== wanted) got = await searchPick(study, main, tests.slice(2));
+        const tests = [(option) => key(option) === wanted, (option) => key(option).startsWith(wanted) || wanted.startsWith(key(option)), close];
+        let got = null;
+        for (const term of searchTerms(school.field)) if ((got = await searchPick(study, term, tests))) break;
         if (got) { filledMark(study, source); count++; } else checkMark(study, `"${school.field}" is not in its list. Choose the closest.`);
       }
       count += await date(panel, 'startDate', school.from, source);
@@ -320,5 +350,5 @@
     return false;
   };
 
-  window.CVAutofillHistory = { fill, here, owns };
+  window.CVAutofillHistory = { fill, here, owns, degreeOption, searchTerms };
 })();

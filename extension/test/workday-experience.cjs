@@ -25,9 +25,11 @@ const page = `<!doctype html><title>My Experience</title>
   // Workday's panel Delete button.
   const DELETE = '<button type="button" data-automation-id="panel-set-delete-button" onclick="this.parentElement.remove()">Delete</button>';
   // Its upload box: a chosen file shows as an item with its own Delete button.
+  // Workday draws the upload box again after a delete: the old input is gone.
+  window.removeFile = (button) => { const old = button.closest('.drop').querySelector('input'); button.parentElement.remove(); old.replaceWith(old.cloneNode()); };
   document.addEventListener('change', (event) => {
     if (event.target.id !== 'cv' || !event.target.files.length) return;
-    event.target.closest('.drop').insertAdjacentHTML('beforeend', '<div data-automation-id="file-upload-item">' + event.target.files[0].name + ' <button type="button" data-automation-id="delete-file" onclick="this.parentElement.remove()">Delete</button></div>');
+    event.target.closest('.drop').insertAdjacentHTML('beforeend', '<div data-automation-id="file-upload-item">' + event.target.files[0].name + ' <button type="button" data-automation-id="delete-file" onclick="removeFile(this)">Delete</button></div>');
   });
   const text = (id, label, extra = '') => '<div data-automation-id="formField-' + id + '"><label for="' + id + '">' + label + '</label><input type="text" id="' + id + '" data-automation-id="' + id + '" ' + extra + '></div>';
   const monthYear = (id, label, n) => '<div data-automation-id="formField-' + id + '"><label>' + label + '</label><input aria-label="Month" id="' + id + '-month-' + n + '"><input aria-label="Year" id="' + id + '-year-' + n + '"></div>';
@@ -157,6 +159,21 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.ok(cleaned.notes.includes('Removed 3 Education entries not in your CV.'), `the panel is told (${JSON.stringify(cleaned.notes)})`);
     assert.deepEqual(await read(['startDate-month-1', 'startDate-year-1']), ['10', '2024'], 'a date Workday called invalid is set again');
     console.log('PASS clean-up: extra Education panels deleted (and said so), an invalid date set again');
+
+    // Degree names as different Workday sites list them, picked the way Simplify picks.
+    const pick = (texts, degree, field) => tab.evaluate((texts, degree, field) => { const index = window.CVAutofillHistory.degreeOption(texts, degree, field); return index === null ? null : texts[index]; }, texts, degree, field);
+    const generic = ["Associate's Degree", "Bachelor's Degree", "Master's Degree", 'Doctorate', 'High School'];
+    const named = ['BA - Bachelor of Arts', 'BSc - Bachelor of Science', 'BCom - Bachelor of Commerce', 'MSc - Master of Science', 'MBA - Master of Business Administration', 'PhD - Doctor of Philosophy'];
+    assert.equal(await pick(generic, "Bachelor's", 'Computer and Information Systems Security'), "Bachelor's Degree");
+    assert.equal(await pick(['Bachelors', 'Masters', 'Doctorate'], "Bachelor's Degree", ''), 'Bachelors', 'apostrophe and plural ignored');
+    assert.equal(await pick(['Bachelor Degree or Equivalent', 'Bachelor of Science (BS)', 'Master Degree or Equivalent'], 'BSc', 'Physics'), 'Bachelor Degree or Equivalent', 'the plain degree of its kind first');
+    assert.equal(await pick(named, "Bachelor's", 'Computer and Information Systems Security'), 'BSc - Bachelor of Science', 'a computing field: the Science one');
+    assert.equal(await pick(named, "Bachelor's", 'History'), 'BA - Bachelor of Arts', 'a humanities field: the Arts one');
+    assert.equal(await pick(named, "Master's", 'Software Engineering'), 'MSc - Master of Science', 'no MBA for a CV that does not say MBA');
+    assert.equal(await pick(['Undergraduate Degree', 'Graduate Degree'], "Bachelor's", ''), 'Undergraduate Degree');
+    assert.equal(await pick(['High School', 'College Diploma'], "Bachelor's", ''), null, 'nothing of its kind: left to the person');
+    assert.deepEqual(await tab.evaluate(() => window.CVAutofillHistory.searchTerms('Computer and Information Systems Security')), ['Computer and Information Systems Security', 'Information', 'Computer']);
+    console.log('PASS degree names as different sites list them (Bachelor\'s Degree, Bachelors, BSc - Bachelor of Science, Undergraduate Degree) and Simplify\'s search terms');
   } finally {
     await browser.close();
   }

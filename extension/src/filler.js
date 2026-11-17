@@ -452,20 +452,22 @@ async function pickFile(button, fileUrl, fileName) {
  * second copy each time it runs.
  */
 async function removeUploaded(input) {
-  if (input.getAttribute('data-automation-id') !== 'file-upload-input-ref') return;
+  if (input.getAttribute('data-automation-id') !== 'file-upload-input-ref') return input;
   const box = input.parentElement?.closest('[data-automation-id^="formField"], [data-automation-id*="upload" i], [data-automation-id*="attachment" i]');
   const buttons = () => [...(box?.querySelectorAll('button[data-automation-id="delete-file"], button[title="Delete file"]') ?? [])].filter(visible);
-  for (let tries = 0; buttons().length && tries < 5; tries++) {
-    press(buttons()[0]);
-    await wait(400);
-  }
+  let removed = false;
+  for (let tries = 0; buttons().length && tries < 5; tries++) { press(buttons()[0]); removed = true; await wait(400); }
+  if (!removed || input.isConnected) return input;
+  // Workday draws its upload box again after a delete: the new CV goes to the new input.
+  const fresh = () => (box?.isConnected ? box : document).querySelector('input[data-automation-id="file-upload-input-ref"]');
+  for (let waited = 0; !fresh() && waited < 2000; waited += 100) await wait(100);
+  return fresh() ?? input;
 }
 
 async function fillField(field, value, resumeFileName) {
   switch (field.kind) {
     case 'file':
-      await removeUploaded(field.element);
-      return { filled: await attachFile(field.element, value, resumeFileName ?? 'Resume.pdf') };
+      return { filled: await attachFile(await removeUploaded(field.element), value, resumeFileName ?? 'Resume.pdf') };
     case 'drop':
       return dropFile(field.element, value, resumeFileName ?? 'Resume.pdf');
     case 'pick':
@@ -1111,4 +1113,4 @@ function diversityChoiceFor(key, optionText) {
   return (DIVERSITY_VOCABULARY[key] ?? []).find((choice) => diversityOptionMatches(key, choice, optionText)) ?? null;
 }
 
-window.CVAutofillFiller = { fillListbox, setValue, workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile, pickFile };
+window.CVAutofillFiller = { fillListbox, chooseInListbox, setValue, workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile, pickFile };
