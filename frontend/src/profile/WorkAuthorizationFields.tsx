@@ -92,7 +92,7 @@ export function WorkAuthorizationFields({
                 {status.authorized === "Yes" && status.basis === "TEMPORARY_WORK_AUTHORIZATION" && (
                   <label className="work-row">
                     <span className="work-question">When does it expire? <small>Some forms ask for it.</small></span>
-                    <input type="month" value={status.expiry.slice(0, 7)} onChange={(event) => update(status.country, "expiry", event.target.value)} />
+                    <input type="date" aria-label={`${name} permit expiry date`} value={/^\d{4}-\d{2}-\d{2}$/.test(status.expiry) ? status.expiry : ""} onChange={(event) => update(status.country, "expiry", event.target.value)} />
                   </label>
                 )}
               </>

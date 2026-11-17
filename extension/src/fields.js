@@ -63,8 +63,14 @@ const CATEGORIES = [
   { key: 'graduationYear', group: 'Education', match: ['graduation year', 'year of graduation', 'grad year'] },
 
   // --- work authorization ---------------------------------------------------
-  { key: 'workAuthorization', group: 'Work Authorization', match: ['work authorization', 'authorized to work', 'legally authorized', 'right to work'] },
+  { key: 'workAuthorization', group: 'Work Authorization', match: ['work authorization', 'authorized to work', 'legally authorized', 'right to work', 'eligible to work', 'legally eligible', 'permitted to work', 'lawfully'] },
   { key: 'requiresSponsorship', group: 'Work Authorization', match: ['sponsorship', 'require sponsorship', 'visa sponsorship', 'visa', 'h 1b', 'h1b'] },
+  // Matched by statusKey() below, not by phrases: answered from the status in that country.
+  { key: 'citizenOrResident', group: 'Work Authorization', match: [] },
+  { key: 'citizenship', group: 'Work Authorization', match: [] },
+  { key: 'permanentResident', group: 'Work Authorization', match: [] },
+  { key: 'sinStartsWith9', group: 'Work Authorization', match: [] },
+  { key: 'workPermitExpiry', group: 'Work Authorization', match: [] },
 
   // --- compensation & availability -----------------------------------------
   { key: 'salaryExpectation', group: 'Compensation', match: ['salary expectation', 'expected salary', 'desired salary', 'compensation expectation'] },
@@ -119,13 +125,13 @@ const CATEGORY_BY_KEY = new Map(CATEGORIES.map((c) => [c.key, c]));
  * country it names, by its usual forms; null when it names none.
  */
 const COUNTRY_NAMES = {
-  'United States': ['united states', 'usa', 'u.s.', 'us', 'america'], Canada: ['canada'], 'United Kingdom': ['united kingdom', 'uk', 'u.k.', 'great britain', 'britain', 'england'],
-  Ireland: ['ireland'], Germany: ['germany'], France: ['france'], Netherlands: ['netherlands', 'holland'], Belgium: ['belgium'], Spain: ['spain'], Portugal: ['portugal'],
+  'United States': ['united states', 'usa', 'u.s.', 'us', 'america'], Canada: ['canada', 'canadian'], 'United Kingdom': ['united kingdom', 'uk', 'u.k.', 'great britain', 'britain', 'england', 'british'],
+  Ireland: ['ireland', 'irish'], Germany: ['germany'], France: ['france'], Netherlands: ['netherlands', 'holland'], Belgium: ['belgium'], Spain: ['spain'], Portugal: ['portugal'],
   Italy: ['italy'], Poland: ['poland'], 'Czech Republic': ['czech republic', 'czechia'], Austria: ['austria'], Switzerland: ['switzerland'], Sweden: ['sweden'],
   Norway: ['norway'], Denmark: ['denmark'], Finland: ['finland'], Estonia: ['estonia'], Latvia: ['latvia'], Lithuania: ['lithuania'], Romania: ['romania'],
   Bulgaria: ['bulgaria'], Hungary: ['hungary'], Greece: ['greece'], Ukraine: ['ukraine'], Israel: ['israel'], 'United Arab Emirates': ['united arab emirates', 'uae'],
-  India: ['india'], Singapore: ['singapore'], Japan: ['japan'], 'South Korea': ['south korea', 'korea'], China: ['china'], Australia: ['australia'],
-  'New Zealand': ['new zealand'], Mexico: ['mexico'], Brazil: ['brazil'], Argentina: ['argentina'], 'European Union': ['european union', 'eu'],
+  India: ['india'], Singapore: ['singapore'], Japan: ['japan'], 'South Korea': ['south korea', 'korea'], China: ['china'], Australia: ['australia', 'australian'],
+  'New Zealand': ['new zealand', 'new zealander'], Mexico: ['mexico'], Brazil: ['brazil'], Argentina: ['argentina'], 'European Union': ['european union', 'eu'],
 };
 /** Every country the text names, in the order it names them ("the US or Canada"). */
 function countriesIn(text) {
@@ -191,6 +197,29 @@ function jobCountry() {
 }
 
 /** "Have you ever worked at Box…", "Were you previously employed by us?" */
+/**
+ * Questions about a person's status in a country, beyond "authorized to work"
+ * and "sponsorship": answered from Profile → Equal Employment (citizen,
+ * permanent resident, the permit and its expiry), never guessed.
+ *   "Are you a Canadian Citizen or have Permanent Resident status?"  citizenOrResident
+ *   "Are you a citizen of the United States?"                         citizenship
+ *   "Are you a permanent resident?"                                   permanentResident
+ *   "Do you have a SIN that begins with the number 9?"                sinStartsWith9 (temporary residents' SIN)
+ *   "When does your work permit expire?"                              workPermitExpiry
+ * "Country of citizenship" asks for a country, not yes or no: not one of these.
+ */
+const STATUS_KEYS = new Set(['citizenOrResident', 'citizenship', 'permanentResident', 'sinStartsWith9', 'workPermitExpiry']);
+function statusKey(signals) {
+  const text = String(signals ?? '').toLowerCase();
+  if (/\b(social insurance number|sin)\b/.test(text) && /\b(9|nine)\b/.test(text)) return 'sinStartsWith9';
+  if (/country of citizenship|citizenship country|nationalit/.test(text)) return null;
+  if (/\bcitizen/.test(text) && /permanent resident/.test(text)) return 'citizenOrResident';
+  if (/\bare you an? ([a-z.]+ )?citizen\b|\bcitizen of\b|\bhold ([a-z.]+ )?citizenship\b/.test(text)) return 'citizenship';
+  if (/\bpermanent resident\b/.test(text) && !/sponsor/.test(text)) return 'permanentResident';
+  if (/\bexpir(y|es|ation)\b/.test(text) && /\b(work permit|permit|visa|work authori[sz]ation|immigration status)\b/.test(text)) return 'workPermitExpiry';
+  return null;
+}
+
 const WORKED_BEFORE = [
   /\b(ever|previously|formerly|before|in the past|prior)\b.{0,60}\b(worked|been employed|employed|been an? (employee|contractor|intern|consultant))\b/,
   /\b(worked|been employed|employed)\b.{0,80}\b(previously|formerly|before|in the past)\b/,
@@ -380,7 +409,7 @@ const ADDRESS_PARTS = [['city', 'town'], ['state', 'province', 'region'], ['coun
  * company?" is not Current company, "state" in "a U.S. state bar" is not
  * State. Simplify reads labels the same way (under 60 characters).
  */
-const QUESTION_KEYS = new Set(['requiresSponsorship', 'workAuthorization', 'willingToRelocate', 'workArrangement', 'heardAbout', 'resume', 'coverLetter', 'salaryExpectation', 'noticePeriod', 'startDate', 'workedHereBefore']);
+const QUESTION_KEYS = new Set(['citizenOrResident', 'citizenship', 'permanentResident', 'sinStartsWith9', 'workPermitExpiry', 'requiresSponsorship', 'workAuthorization', 'willingToRelocate', 'workArrangement', 'heardAbout', 'resume', 'coverLetter', 'salaryExpectation', 'noticePeriod', 'startDate', 'workedHereBefore']);
 const LONG_LABEL = 60;
 
 /** A question that asks for yes or no: "Are you subject to agreements with your current employer?" */
@@ -401,6 +430,9 @@ function categorise(signals, { long = false, yesNo = false } = {}) {
     if (RELOCATE.test(signals)) return { key: 'willingToRelocate', sensitive: false, office: WORK_SETUP.test(signals) };
     if (WORK_SETUP.test(signals)) return { key: 'workArrangement', sensitive: false };
   }
+  // Work status questions, answered from the person's status in that country (Profile → Equal Employment).
+  const status = statusKey(signals);
+  if (status) return { key: status, sensitive: false };
   // Before the general rules: "employed" would otherwise read as the current employer.
   if (WORKED_BEFORE.some((pattern) => pattern.test(signals))) {
     return { key: 'workedHereBefore', sensitive: false };
@@ -590,7 +622,9 @@ function detectFields() {
     const fromAutocomplete = ['text', 'search', 'tel', ''].includes(element.type ?? '') && autocomplete ? addressTokens[autocomplete] ?? null : null;
     const label = labelOf(element);
     const { key: guessed, sensitive, compound, office } = categorise(signals, { long: label.length > LONG_LABEL, yesNo: YES_NO.test(label) });
-    const key = fromSite ?? fromAutocomplete ?? guessed;
+    let key = fromSite ?? fromAutocomplete ?? guessed;
+    // UBC's "Please enter expiry date" follows its SIN question: the permit's expiry, by its place.
+    if (!key && /\bexpir(y|ation)\b/.test(signals) && STATUS_KEYS.has(found.at(-1)?.key)) key = 'workPermitExpiry';
 
     if (sensitive) {
       const question = (groupQuestion(element) ?? '').toLowerCase().replace(/\s+/g, ' ') || signals;
@@ -603,6 +637,9 @@ function detectFields() {
     if (key) {
       // Relocation is about the job's country when the question names none.
       const country = key === 'requiresSponsorship' || key === 'workAuthorization' ? countryIn(rawLabel(element) || signals)
+        // A SIN is Canada's; a status question names its country, else the one before it does.
+        : key === 'sinStartsWith9' ? 'Canada'
+        : STATUS_KEYS.has(key) ? countryIn(rawLabel(element) || signals) ?? (key === 'workPermitExpiry' ? found.at(-1)?.country : null) ?? null
         : key === 'willingToRelocate' ? countryIn(rawLabel(element) || signals) ?? jobCountry() : null;
       found.push({
         key,
@@ -743,6 +780,8 @@ function uploadedFiles(input) {
 function isEmpty(element) {
   // Workday's chosen chip fills the field; its search box stays empty.
   if (chosenItem(element)) return false;
+  // Workday's dropdown button names its choice; "Select One" until one is made.
+  if (isListbox(element)) return /^\s*(select( one)?|choose( one)?|-+)?\s*$/i.test(element.textContent);
   if (isCombobox(element)) return !comboboxValue(element);
   if (element.type === 'checkbox') return !element.checked;
   if (element.type === 'radio') return !groupRadios(element).some((radio) => radio.checked);
@@ -772,8 +811,9 @@ function findMissingRequired(found = detectFields().found) {
   if (!scopes.length) scopes.push(...searchRoots().map((root) => (root === document ? document.body : root)));
   const missing = [], seenRadios = new Set();
   for (const scope of scopes) {
-    for (const element of scope.querySelectorAll('input, select, textarea')) {
-      if (element.type === 'hidden' || element.disabled || ['submit', 'button', 'reset', 'image', 'password'].includes(element.type)) continue;
+    // Workday's dropdowns are buttons ("Select One"): a required one left so is missing too.
+    for (const element of scope.querySelectorAll('input, select, textarea, button[aria-haspopup="listbox"]')) {
+      if (element.type === 'hidden' || element.disabled || (!isListbox(element) && ['submit', 'button', 'reset', 'image', 'password'].includes(element.type))) continue;
       if (isHelperInput(element)) continue;
       // A file input hidden behind its own "Attach" button counts as shown.
       const visible = element.getClientRects().length || element.closest('label')?.getClientRects().length || (element.type === 'file' && hasUploadButton(element));

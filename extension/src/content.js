@@ -109,6 +109,8 @@ let lastFill = { profile: {}, failed: new Map(), answers: new Map() };
 // Fields whose default can be set from the icon (same list as the server's EXTENSION_PROFILE_KEYS).
 const PROFILE_DEFAULTS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'salaryExpectation', 'noticePeriod']);
 const ELIGIBILITY_FIELDS = new Set(['requiresSponsorship', 'workAuthorization']);
+/** Citizen, permanent resident, SIN and permit questions: answered from Profile → Equal Employment only. */
+const STATUS_FIELDS = new Set(['citizenOrResident', 'citizenship', 'permanentResident', 'sinStartsWith9', 'workPermitExpiry']);
 const WORK_FIELDS = new Set(['workArrangement', 'willingToRelocate']);
 const WORK_OPTIONS = [{ value: 'remote', label: 'Remote' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'onsite', label: 'On-site' }];
 
@@ -127,6 +129,10 @@ function explain(element) {
       const decision = Filler.workDecision(field, profile);
       if (decision.why === 'types') return 'Choose the types of work you accept: remote, hybrid, on-site. Click to choose.';
       if (decision.why === 'relocation') return decision.country ? `Would you relocate to ${decision.country}? Click to answer: it is saved for ${decision.country} only.` : 'Would you relocate? Click to answer.';
+    }
+    if (STATUS_FIELDS.has(field.key)) {
+      const country = field.country || profile.country || '';
+      return `Your work status${country ? ` in ${country}` : ''} is not complete, so this is left for you. Complete it in the app: Profile → Complete Profile → Equal Employment.`;
     }
     if (ELIGIBILITY_FIELDS.has(field.key)) {
       const what = field.key === 'requiresSponsorship' ? 'sponsorship' : 'work authorization';
@@ -285,6 +291,20 @@ async function fill(profile, answers = []) {
   let result;
   try {
     result = await runPass({ found, profile, answers, hooks, onProgress: progress, sections });
+    // Questions that appear only after an answer (an expiry date under "SIN begins with 9? Yes"):
+    // looked for again, as Jobright does, and filled in the same way.
+    const asked = new Set(found.map((field) => field.element));
+    for (let round = 0; round < 2; round++) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      scan();
+      const fresh = lastScan.found.filter((field) => !asked.has(field.element) && isBlank(field) && Filler.valueFor(field, profile) && !(lists && window.CVAutofillHistory.owns(field.element)));
+      if (!fresh.length) break;
+      fresh.forEach((field) => asked.add(field.element));
+      const more = await runPass({ found: fresh, profile, hooks, explainIf: () => false });
+      result.filled += more.filled;
+      result.notes.push(...more.notes);
+      result.failures.push(...more.failures);
+    }
   } finally {
     hold.release();
   }

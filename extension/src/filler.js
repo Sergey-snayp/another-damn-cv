@@ -513,6 +513,11 @@ async function workdayTook(input, box) {
 }
 
 async function fillField(field, value, resumeFileName) {
+  // Workday's date boxes (Month, Day, Year) keep a value only when set as Simplify sets them.
+  if (/^dateSection(Month|Day|Year)-input$/.test(field.element.getAttribute?.('data-automation-id') ?? '') && /^\d{1,4}$/.test(String(value))) {
+    await reactFill(field.element, String(value));
+    return { filled: true };
+  }
   switch (field.kind) {
     case 'file':
     {
@@ -658,6 +663,59 @@ const LOCATION_KEYS = new Set(['location', 'city', 'addressLine']);
 const OTHER_FALLBACK = new Set(['school', 'degree', 'fieldOfStudy']);
 
 const ELIGIBILITY = new Set(['requiresSponsorship', 'workAuthorization']);
+
+// ─── Status in a country ──────────────────────────────────────────────────
+// Citizen, permanent resident, SIN and permit questions, answered by fixed
+// rules from the status saved in Profile → Equal Employment for the country
+// the question is about (else the home country). Nothing is guessed: an
+// unknown status leaves the question to the person.
+const STATUS = new Set(['citizenOrResident', 'citizenship', 'permanentResident', 'sinStartsWith9', 'workPermitExpiry']);
+
+/** The saved status for the field's country, or null. */
+function statusFor(field, profile) {
+  const country = String(field.country || profile.country || '').trim().toLowerCase();
+  return country ? profile.workStatus?.[country] ?? null : null;
+}
+
+/**
+ * The answer a status gives:
+ *   citizen               citizen or PR: Yes · citizen: Yes · PR: No · SIN begins with 9: No
+ *   permanent resident    citizen or PR: Yes · citizen: No  · PR: Yes · SIN begins with 9: No
+ *   temporary permit      citizen or PR: No  · citizen: No  · PR: No  · SIN begins with 9: Yes · the permit's expiry
+ * A SIN starting with 9 is issued to temporary residents only.
+ */
+function statusValue(field, profile) {
+  const status = statusFor(field, profile);
+  if (!status) return '';
+  const citizen = status.citizenship === 'Yes' || status.basis === 'CITIZEN';
+  const resident = status.basis === 'PERMANENT_RESIDENT';
+  const temporary = status.citizenship === 'No' && (status.basis === 'TEMPORARY_WORK_AUTHORIZATION' || status.basis === 'OTHER');
+  const known = citizen || resident || temporary || status.basis === 'NOT_CURRENTLY_AUTHORIZED';
+  switch (field.key) {
+    case 'citizenOrResident': return citizen || resident ? 'Yes' : known ? 'No' : '';
+    case 'citizenship': return status.citizenship === 'Yes' || status.citizenship === 'No' ? status.citizenship : '';
+    case 'permanentResident': return resident ? 'Yes' : known ? 'No' : '';
+    case 'sinStartsWith9': return citizen || resident ? 'No' : temporary ? 'Yes' : '';
+    case 'workPermitExpiry': return temporary ? expiryFor(field.element, status.expiry) : '';
+    default: return '';
+  }
+}
+
+/**
+ * The permit's expiry ("2027-03-31") as the box wants it: Workday's Month, Day
+ * and Year boxes each their part, a date input as it is, a text box MM/DD/YYYY.
+ */
+function expiryFor(element, expiry) {
+  const match = String(expiry ?? '').match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+  if (!match) return '';
+  const [, year, month, day = ''] = match;
+  const part = `${element?.getAttribute?.('data-automation-id') ?? ''} ${element?.getAttribute?.('aria-label') ?? ''}`;
+  if (/month/i.test(part)) return String(Number(month));
+  if (/\bday/i.test(part)) return day ? String(Number(day)) : '';
+  if (/year/i.test(part)) return year;
+  if (element?.type === 'date') return day ? `${year}-${month}-${day}` : '';
+  return day ? `${month}/${day}/${year}` : `${month}/${year}`;
+}
 
 /**
  * Sponsorship and work authorization depend on the country asked about. A
@@ -904,6 +962,7 @@ function valueFor(field, profile) {
   if (field.key === 'coverLetter') return ['file', 'drop', 'pick'].includes(field.kind) ? profile.coverLetterDataUrl : profile.coverLetterText;
   if (field.key === 'workArrangement' || field.key === 'willingToRelocate') return workDecision(field, profile).value;
   if (ELIGIBILITY.has(field.key)) return eligibilityValue(field, profile);
+  if (STATUS.has(field.key)) return statusValue(field, profile);
   // Address pickers search by place: "Toronto, Canada" finds a suggestion where
   // a full street address often does not.
   if (field.kind === 'combobox' && LOCATION_KEYS.has(field.key)) {
@@ -973,6 +1032,7 @@ function markFor(field, result, profile) {
       : { status: 'check', reason: `Your cover letter: ${result.note}` };
   }
   if (result.already) return { status: 'ok', reason: `Already set on the page: ${result.already}` };
+  if (STATUS.has(field.key)) return { status: 'ok', reason: `From your work status in ${field.country || profile.country || 'that country'} (Profile → Equal Employment)` };
   if (result.note) return { status: 'check', reason: `Check this: ${result.note}` };
   // Worked here before: answered from the CV's employers, which may be incomplete.
   if (field.key === 'workedHereBefore') return { status: profile.workedHereBeforeSaved ? 'ok' : 'check', reason: profile.workedHereBeforeReason || 'From your CV. Check it.' };

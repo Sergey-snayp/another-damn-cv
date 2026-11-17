@@ -7,7 +7,7 @@ import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv 
 import { matchAnswers } from './answers.js';
 import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
-import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
+import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor, workStatusMap } from './defaults.js';
 import { forgetSiteOwnLogin, newSitePassword, readSiteLogin, saveSiteLogin, siteState } from './site-login.js';
 
 const FIELD_LABELS = {
@@ -59,6 +59,34 @@ function eligibilityQuestion(field) {
   const where = field.country ? ` in ${field.country}` : '';
   return field.key === 'requiresSponsorship' ? `Will you need visa sponsorship to work${where}?` : `Are you legally allowed to work${where}?`;
 }
+/** Citizen, permanent resident, SIN and permit questions: answered from Profile → Equal Employment. */
+const STATUS_KEYS = ['citizenOrResident', 'citizenship', 'permanentResident', 'sinStartsWith9', 'workPermitExpiry'];
+/** Whether a country's status answers every question Profile → Equal Employment asks. */
+function statusComplete(status) {
+  if (!status) return false;
+  if (status.citizenship === 'Yes') return true;
+  if (status.citizenship !== 'No' || !status.authorized || !status.sponsorship) return false;
+  if (status.authorized === 'No') return true;
+  if (!status.basis) return false;
+  return !['TEMPORARY_WORK_AUTHORIZATION', 'OTHER'].includes(status.basis) || Boolean(status.permit);
+}
+/**
+ * A form asks about work status for a country whose status is not complete:
+ * one line, and a button to complete it in the app (Profile → Complete
+ * Profile → Equal Employment). Autofill leaves those questions to the person.
+ */
+function workStatusLine() {
+  const home = String(profile.country ?? '').trim();
+  const asked = (scan?.fields ?? []).filter(field => (STATUS_KEYS.includes(field.key) || ELIGIBILITY_KEYS.includes(field.key)) && groupOn(field.key));
+  const status = workStatusMap(autofillDefaults);
+  const countries = [...new Set(asked.map(field => field.country || home).filter(Boolean))].filter(country => !statusComplete(status[country.toLowerCase()]));
+  if (!countries.length) return '';
+  return `<div class="notice work-status-notice" role="status">${icon('flag')}<div><strong>Your work info for ${esc(countries.join(' and '))} is not complete.</strong><p>Autofill leaves those questions to you until it is.</p><button class="ghost small" type="button" id="complete-work-status">Complete it</button></div></div>`;
+}
+document.addEventListener('click', event => {
+  if (!event.target.closest('#complete-work-status')) return;
+  void chrome.tabs.create({ url: `${APP_URL}/profile?complete=equal-employment` });
+});
 function eligibilityCard() {
   const open = (scan?.fields ?? []).filter(field => ELIGIBILITY_KEYS.includes(field.key) && groupOn(field.key) && !hasEligibilityAnswer(field));
   if (!open.length) return '';
@@ -72,7 +100,7 @@ document.addEventListener('click', async event => {
   try { useDefaults(await saveDefault(kind, scope.join(':'), button.dataset.answer)); renderAutofill(); }
   catch (error) { button.disabled = false; status('fill-status', error instanceof NotSignedInError ? 'Sign in to save eligibility answers.' : `Not saved: ${error.message}`, 'error'); }
 });
-const DEFAULT_LABELS = { requiresSponsorship: 'Sponsorship', workAuthorization: 'Work authorization', workedHereBefore: 'Worked here before', willingToRelocate: 'Relocate' };
+const DEFAULT_LABELS = { requiresSponsorship: 'Sponsorship', workAuthorization: 'Work authorization', workedHereBefore: 'Worked here before', willingToRelocate: 'Relocate', workCountry: 'Wants to work there', citizenship: 'Citizen', authorizationBasis: 'Authorization basis', workPermit: 'Work permit', workPermitExpiry: 'Permit expires' };
 // Answers still only in this browser (signed out since before 0.27.0) keep working until they move.
 let legacyEligibility = {};
 function useDefaults(rows) { autofillDefaults = Array.isArray(rows) ? rows : []; eligibility = { ...legacyEligibility, ...eligibilityMap(autofillDefaults) }; }
@@ -835,7 +863,7 @@ function drawAutofill() {
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
   paint(host, `${pageCard()}
     <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
-    ${eligibilityCard()}
+    ${workStatusLine() || eligibilityCard()}
     ${autofillCvCard()}
     ${coverLetterCard()}
     <details class="card autofill-detail" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check', 18)}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`, 'fill', true);
@@ -911,7 +939,7 @@ async function runFill() {
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     // Groups switched off, by field, so a still-empty field can say which setting left it empty.
     const offKeys = Object.fromEntries(FILL_GROUPS.filter(group => group.keys.length && !groupOn(group.keys[0])).flatMap(group => group.keys.map(key => [key, group.label])));
-    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, ...coverLetter, eligibility, acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}), history: formHistory() };
+    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, ...coverLetter, eligibility, workStatus: workStatusMap(autofillDefaults), acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}), history: formHistory() };
     // Each frame holding the form fills in turn; their results add up to one report.
     let result = null;
     for (const frameId of formFrames.length ? formFrames : [0]) {

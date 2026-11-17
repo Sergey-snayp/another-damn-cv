@@ -84,6 +84,15 @@ export function Profile() {
   /** Work authorization per country, from the saved default answers. */
   const [workStatuses, setWorkStatuses] = useState<CountryStatus[] | null>(null);
   const loadWork = () => defaultsApi.list().then((rows) => setWorkStatuses(readStatuses(rows)), () => setWorkStatuses(null));
+  // The extension's "Complete it" opens /profile?complete=equal-employment: that step of Complete Profile.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const step = ({ personal: 1, education: 2, experience: 3, skills: 4, "equal-employment": 5 } as Record<string, Step>)[params.get("complete") ?? ""];
+    if (!step) return;
+    setCompleting(step);
+    params.delete("complete");
+    window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`);
+  }, []);
   useEffect(() => { void loadWork(); }, [attempt]);
   const careerRevision = careerState?.revision;
   useEffect(() => {

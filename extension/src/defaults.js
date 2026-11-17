@@ -90,6 +90,23 @@ export function eligibilityMap(defaults = []) {
     .map((row) => [row.scope ? `${row.kind}:${row.scope}` : row.kind, row.value]));
 }
 
+/**
+ * The status in each country (Profile → Complete Profile → Equal Employment),
+ * by lower-case country: { canada: { citizenship, authorized, sponsorship,
+ * basis, permit, expiry } }. Autofill answers citizen, permanent resident,
+ * SIN and permit questions from it.
+ */
+export function workStatusMap(defaults = []) {
+  const fields = { citizenship: 'citizenship', workAuthorization: 'authorized', requiresSponsorship: 'sponsorship', authorizationBasis: 'basis', workPermit: 'permit', workPermitExpiry: 'expiry' };
+  const map = {};
+  for (const row of defaults) {
+    const field = fields[row.kind];
+    if (!field || !row.scope) continue;
+    (map[row.scope.trim().toLowerCase()] ??= {})[field] = row.value;
+  }
+  return map;
+}
+
 /** Relocation answers as Autofill reads them: { Poland: 'Yes', '': 'No' } ('' names no country). */
 export function relocationMap(defaults = []) {
   return Object.fromEntries(defaults.filter((row) => row.kind === 'willingToRelocate').map((row) => [row.scope, row.value]));
