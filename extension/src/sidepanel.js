@@ -808,6 +808,13 @@ function drawAutofill() {
       $('reload-page').addEventListener('click', () => { if (currentTab?.id) void chrome.tabs.reload(currentTab.id); });
     return;
   }
+  // A job page with its Apply button, as Simplify shows it: the job, then Start Application.
+  // Before the plain job-posting view: a posting that has Apply always offers it.
+  if (scan?.canOpenForm && !scan.fields?.length && !scan.account) {
+    if (paint(host, `${pageCard()}<div class="fill-block"><button class="primary fill-action" id="open-form">Start Application${icon('arrow', 18)}</button></div>${autofillCvCard()}${coverLetterCard()}`, 'job'))
+      $('open-form').addEventListener('click', openForm);
+    return;
+  }
   if (scan?.context?.isJobPosting && !scan.fields?.length) {
     paint(host, `${pageCard()}${autofillCvCard()}${coverLetterCard()}`, 'job');
     return;
@@ -815,12 +822,6 @@ function drawAutofill() {
   if (scan?.account) {
     if (paint(host, `${pageCard()}${accountView()}${autofillCvCard()}${coverLetterCard()}`, 'account'))
       for (const button of host.querySelectorAll('[data-account-want]')) button.addEventListener('click', () => void fillAccount(button.dataset.accountWant));
-    return;
-  }
-  if (scan?.canOpenForm && !scan.fields?.length) {
-    // A job page with its Apply button, as Simplify shows it: the job, then Start Application.
-    if (paint(host, `${pageCard()}<div class="fill-block"><button class="primary fill-action" id="open-form">Start Application${icon('arrow', 18)}</button></div>${autofillCvCard()}${coverLetterCard()}`, 'job'))
-      $('open-form').addEventListener('click', openForm);
     return;
   }
   if (!scan || !scan.fields?.length) {

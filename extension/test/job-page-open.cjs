@@ -98,7 +98,13 @@ const pages = {
     // The job page is a background tab here: wait by timer, not by repaint.
     await page.waitForFunction(() => window.applied === true && window.manual === true, { timeout: 5000, polling: 100 });
     await panel.close();
-    console.log('PASS Workday job page: the panel opens by itself, and Start Application clicks Apply, then Apply Manually');
+    // Opened from LinkedIn's Apply (?source=LinkedIn): the LinkedIn posting fills the card, and Start Application stays.
+    await open(`${WORKDAY}?source=LinkedIn`);
+    const fromLinkedIn = await panelFixture(browser, page, { session: { 'fromLinkedIn:1': { job: { title: 'Programmer Analyst I-2', company: 'UBC', description: 'Build and support university systems.' }, at: Date.now() } } });
+    await fromLinkedIn.waitForSelector('#open-form', { timeout: 10000 });
+    assert.equal(await fromLinkedIn.$eval('#open-form', button => button.textContent.trim()), 'Start Application', 'a job posting with an Apply button always offers Start Application');
+    await fromLinkedIn.close();
+    console.log('PASS Workday job page: the panel opens by itself, and Start Application clicks Apply, then Apply Manually (also when opened from LinkedIn)');
 
     await open(PLAIN);
     await new Promise(resolve => setTimeout(resolve, 1500));
