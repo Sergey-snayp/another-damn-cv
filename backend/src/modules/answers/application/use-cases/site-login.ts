@@ -23,6 +23,23 @@ export class ReadSiteLogin {
   }
 }
 
+/** The job sites the person has an account on, so their account page offers Sign In first. */
+export class ListSiteAccounts {
+  constructor(private readonly logins: SiteLoginRepository) {}
+  execute(userId: string): Promise<string[]> {
+    return this.logins.sites(userId);
+  }
+}
+
+/** A sign-in or a new account that worked on a site: that site is one the person has an account on. */
+export class RememberSiteAccount {
+  constructor(private readonly logins: SiteLoginRepository) {}
+  async execute(userId: string, host: string): Promise<string[]> {
+    await this.logins.addSite(userId, host.trim().toLowerCase());
+    return this.logins.sites(userId);
+  }
+}
+
 /** Saves the login: a password the extension made for a new account, or one the person set. */
 export class SaveSiteLogin {
   constructor(

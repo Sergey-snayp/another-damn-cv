@@ -35,6 +35,7 @@ model User {
   savedAnswers          SavedAnswer[]
   autofillDefaults      AutofillDefault[]
   siteLogin             SiteLogin?
+  siteAccounts          SiteAccount[]
   technologyNotes       TechnologyNote[]
   coverLetters          CoverLetter[]
 
@@ -245,6 +246,18 @@ model SiteLogin {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("site_logins")
+}
+
+/// A job site the person has an account on (Workday's ubc.wd10.myworkdayjobs.com), recorded when signing in or
+/// creating an account there worked: its account page then offers Sign In first.
+model SiteAccount {
+  userId    String
+  host      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, host])
+  @@map("site_accounts")
 }
 
 /// One status change, so a move can be undone and the job page can show its

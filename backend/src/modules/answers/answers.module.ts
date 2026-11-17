@@ -36,7 +36,7 @@ import { ExtensionSiteLoginController } from './adapters/inbound/http/site-login
 import { PrismaSiteLoginRepository } from './adapters/outbound/persistence/prisma-site-login.repository';
 import { AesGcmSecretBox } from './adapters/outbound/crypto/aes-gcm-secret-box';
 import type { SecretBox, SiteLoginRepository } from './application/ports/site-login';
-import { ReadSiteLogin, SaveSiteLogin } from './application/use-cases/site-login';
+import { ListSiteAccounts, ReadSiteLogin, RememberSiteAccount, SaveSiteLogin } from './application/use-cases/site-login';
 
 const useCase = <T>(type: new (repository: AnswerRepository) => T) => ({
   provide: type,
@@ -80,6 +80,11 @@ const defaultsUseCase = <T>(type: new (repository: DefaultRepository) => T) => (
       provide: type,
       inject: [SITE_LOGIN_REPOSITORY, SITE_LOGIN_BOX],
       useFactory: (logins: SiteLoginRepository, box: SecretBox) => new type(logins, box),
+    })),
+    ...[ListSiteAccounts, RememberSiteAccount].map((type) => ({
+      provide: type,
+      inject: [SITE_LOGIN_REPOSITORY],
+      useFactory: (logins: SiteLoginRepository) => new type(logins),
     })),
     defaultsUseCase(ListDefaults),
     defaultsUseCase(SaveDefaults),

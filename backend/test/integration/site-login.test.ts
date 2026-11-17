@@ -47,13 +47,13 @@ after(async () => {
 test('the login is saved sealed, read back by its owner only, and never cached', async () => {
   const empty = await call('GET', ownerToken);
   assert.equal(empty.status, 200);
-  assert.deepEqual(await empty.json(), { login: null });
+  assert.deepEqual(await empty.json(), { login: null, sites: [] });
 
   const password = 'Wd7!kq#Pz2mR9xLa';
   const saved = await call('PUT', ownerToken, { email: 'owner@example.com', password });
   assert.equal(saved.status, 200);
   assert.equal(saved.headers.get('cache-control'), 'no-store');
-  assert.equal((await saved.json()).login.password, password);
+  assert.equal(((await saved.json()) as { login: { password: string } }).login.password, password);
 
   const row = await prisma.siteLogin.findUnique({ where: { userId: owner.user.id } });
   assert.ok(row && !row.sealedPassword.includes(password) && row.sealedPassword.startsWith('v1.'), 'the database holds only the seal');
@@ -62,7 +62,18 @@ test('the login is saved sealed, read back by its owner only, and never cached',
   assert.equal(read.headers.get('cache-control'), 'no-store');
   assert.deepEqual(((await read.json()) as { login: { email: string; password: string } }).login, { email: 'owner@example.com', password, updatedAt: row!.updatedAt.toISOString() });
 
-  assert.deepEqual(await (await call('GET', otherToken)).json(), { login: null }, "another user never sees it");
+  assert.deepEqual(await (await call('GET', otherToken)).json(), { login: null, sites: [] }, "another user never sees it");
   assert.equal((await call('GET', null)).status, 401, 'not without the extension token');
   assert.equal((await call('PUT', ownerToken, { email: 'owner@example.com', password: 'short' })).status, 400);
+});
+
+test('the sites the person has an account on: added once, read with the login, never another person\'s', async () => {
+  const add = (token: string, host: string) => fetch(`${base}/api/extension/site-login/sites`, {
+    method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ host }),
+  });
+  assert.deepEqual(await (await add(ownerToken, 'UBC.wd10.myworkdayjobs.com')).json(), { sites: ['ubc.wd10.myworkdayjobs.com'] });
+  assert.deepEqual(await (await add(ownerToken, 'ubc.wd10.myworkdayjobs.com')).json(), { sites: ['ubc.wd10.myworkdayjobs.com'] }, 'once');
+  assert.deepEqual(((await (await call('GET', ownerToken)).json()) as { sites: string[] }).sites, ['ubc.wd10.myworkdayjobs.com']);
+  assert.deepEqual(((await (await call('GET', otherToken)).json()) as { sites: string[] }).sites, []);
+  assert.equal((await add(ownerToken, 'https://ubc.wd10.myworkdayjobs.com/x')).status, 400);
 });
