@@ -1,9 +1,16 @@
 /**
  * Runs the extension's tests fast, side by side, in one Chrome:
  *
- *   node test/run.cjs                     every test
+ *   node test/run.cjs                     every test, except the end-to-end ones
  *   node test/run.cjs account-step heard  only the named ones (.cjs, .test.mjs or .html)
+ *   node test/run.cjs --all               every test, end-to-end ones too
  *   node test/run.cjs --jobs 6            up to 6 at once (default 4: more overloads a laptop)
+ *
+ * The slowest tests start first (their times are kept from the last run in
+ * test/.durations.json, not in git), so one long test never finishes alone
+ * at the end. End-to-end tests (E2E below) need the app's servers running
+ * (localhost:5173 and :3001) and load the real extension: run them by name or
+ * with --all.
  *
  * - Browser tests (*.cjs): Chrome starts once and every test opens its own
  *   private window in it (see shared-browser.cjs). A test that loads the
@@ -24,9 +31,13 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
+const everything = args.includes('--all');
+/** Tests that need the app's servers running: only by name or with --all. */
+const E2E = new Set(['tailor-window']);
+const DURATIONS = path.join(__dirname, '.durations.json');
 const jobsAt = args.indexOf('--jobs');
 const jobs = jobsAt >= 0 ? Math.max(1, Number(args[jobsAt + 1]) || 4) : 4;
-const names = (jobsAt >= 0 ? args.filter((_, index) => index !== jobsAt && index !== jobsAt + 1) : args).map((name) => name.replace(/\.(cjs|test\.mjs|html)$/, ''));
+const names = (jobsAt >= 0 ? args.filter((_, index) => index !== jobsAt && index !== jobsAt + 1) : args).filter((name) => name !== '--all').map((name) => name.replace(/\.(cjs|test\.mjs|html)$/, ''));
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(root, '../backend')] }));
 const chromePath = process.env.CHROME_PATH || (process.platform === 'darwin'
   ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/usr/bin/google-chrome');
@@ -46,7 +57,7 @@ function tests() {
     ...files.filter((file) => file.endsWith('.cjs') && !['run.cjs', 'shared-browser.cjs', 'panel-fixture.cjs'].includes(file)).map((file) => ({ name: file.replace(/\.cjs$/, ''), kind: 'browser', file })),
     ...files.filter((file) => file.endsWith('.html') && /id = 'result'|pre#result/.test(fs.readFileSync(path.join(__dirname, file), 'utf8'))).map((file) => ({ name: file.replace(/\.html$/, ''), kind: 'page', file })),
   ];
-  if (!names.length) return all;
+  if (!names.length) return everything ? all : all.filter((test) => !E2E.has(test.name));
   const missing = names.filter((name) => !all.some((test) => test.name === name));
   if (missing.length) throw new Error(`No such test: ${missing.join(', ')}`);
   return all.filter((test) => names.includes(test.name));
@@ -116,8 +127,11 @@ async function page(test, browser, base) {
     console.log(`${pass ? 'ok  ' : 'FAIL'} ${test.name} (${seconds}s)${summary ? `\n  ${summary}` : ''}`);
   };
   try {
-    // Unit tests first, while Chrome starts: they need no browser.
-    const queue = [...list.filter((test) => test.kind === 'unit'), ...list.filter((test) => test.kind !== 'unit')];
+    // Unit tests first, while Chrome starts: they need no browser. Then the slowest first.
+    let durations = {};
+    try { durations = JSON.parse(fs.readFileSync(DURATIONS, 'utf8')); } catch { durations = {}; }
+    const slowest = (a, b) => (durations[b.name] ?? 0) - (durations[a.name] ?? 0);
+    const queue = [...list.filter((test) => test.kind === 'unit'), ...list.filter((test) => test.kind !== 'unit').sort(slowest)];
     await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
       while (queue.length) {
         const test = queue.shift();
@@ -129,9 +143,11 @@ async function page(test, browser, base) {
           result = test.kind === 'page' ? await page(test, browser, base)
             : await child(process.execPath, ['--require', path.join(__dirname, 'shared-browser.cjs'), path.join(__dirname, test.file)], { SHARED_CHROME_WS: browser.wsEndpoint() }, 180000);
         }
+        durations[test.name] = Math.round((Date.now() - at) / 100) / 10;
         report(test, result, Math.round((Date.now() - at) / 1000));
       }
     }));
+    try { fs.writeFileSync(DURATIONS, `${JSON.stringify(durations, null, 1)}\n`); } catch { /* read-only checkout: start order only */ }
   } finally {
     server.close();
     if (browserReady) await (await browserReady.catch(() => null))?.close();

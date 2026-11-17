@@ -84,7 +84,9 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
     }, step);
     const fieldsOnPage = async () => ((await page.evaluate(() => window.__ask({ type: 'scan' })))?.fields ?? []).map(field => `${field.key}:${field.kind}`);
     const formChanges = () => page.evaluate(() => window.__messages.filter(type => type === 'form-changed').length);
-    const settle = () => new Promise(resolve => setTimeout(resolve, 900));
+    // Long enough for the page scan (300 ms after a change) to have acted: for checks that nothing happened.
+    const settle = () => new Promise(resolve => setTimeout(resolve, 500));
+    const opens = () => page.waitForFunction(() => CVAutofillPanel.isOpen(), { timeout: 5000, polling: 50 });
 
     await settle();
     assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'the posting alone does not open the panel, even in a tab that had it open');
@@ -112,21 +114,19 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
     await settle();
     assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'a transparent Easy Apply dialog does not open the panel');
     await showStep(contactStep);
-    await settle();
-    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'opening Easy Apply opens the panel');
+    await opens(); // opening Easy Apply opens the panel
     // Easy Apply dismissed: the panel it opened closes; the next Easy Apply opens it again.
     await showStep('');
     await page.waitForFunction(() => !CVAutofillPanel.isOpen(), { timeout: 5000 }).catch(() => {});
     assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), false, 'closing Easy Apply closes the panel it opened');
     await showStep(contactStep);
-    await settle();
-    assert.equal(await page.evaluate(() => CVAutofillPanel.isOpen()), true, 'Easy Apply again opens it again');
+    await opens(); // Easy Apply again opens it again
     const afterContact = await formChanges();
     assert.ok(afterContact >= 1, 'opening Easy Apply tells the panel the form changed');
     assert.ok((await fieldsOnPage()).includes('firstName:text'), 'the contact step is found inside the shadow root');
 
     await showStep(resumeStep);
-    await settle();
+    for (let waited = 0; (await formChanges()) <= afterContact && waited < 5000; waited += 100) await new Promise(resolve => setTimeout(resolve, 100));
     assert.ok((await formChanges()) > afterContact, 'the next step, changed in place, tells the panel again');
     const fields = await fieldsOnPage();
     for (const field of ['resume:pick', 'coverLetter:pick']) assert.ok(fields.includes(field), `${field} on the resume step: ${fields}`);

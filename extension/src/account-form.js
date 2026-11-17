@@ -165,6 +165,8 @@
     let clear = 0;
     for (let waited = 0; waited < 10000; waited += 500) {
       await new Promise((resolve) => setTimeout(resolve, 500));
+      // The sign-in form back with its own error ("Wrong email address or password"): it did not work.
+      if (find() && errorTexts().some((text) => SIGN_IN_ERROR.test(text))) { void tell({ type: 'site-login-failed' }); return; }
       if (find() || errorTexts().some((text) => SIGN_IN_ERROR.test(text))) clear = 0;
       // A second, with no sign-in form and no error: signed in.
       else if (++clear >= 2) { void tell({ type: 'site-login-confirmed' }); return; }
