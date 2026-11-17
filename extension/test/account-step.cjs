@@ -148,25 +148,57 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     assert.deepEqual(await sentLogins(), [], 'never on a site that is not a job site');
     console.log('PASS other sites: a sign-in is never watched');
 
-    // 6) The panel asks before a changed password is kept: "Update password", or "Not now".
+    // 6) The panel asks before a changed password is kept: for this site only (each company's Workday
+    //    is its own account), for all sites, or "Not now".
     await page.open(`${JOB}/home`);
-    let asking = await panelFixture(browser, page, { profile, offer: { host: 'ubc.wd10.myworkdayjobs.com', email: 'sam@example.com', update: true } });
-    await asking.waitForSelector('#login-offer-accept', { timeout: 10000 });
-    assert.match(await asking.$eval('#login-offer', box => box.textContent), /Update your job-site password\?.*ubc\.wd10\.myworkdayjobs\.com.*sam@example\.com/s);
-    assert.doesNotMatch(await asking.$eval('#login-offer', box => box.textContent), /pass-/, 'never the password');
+    const offer = { host: 'ubc.wd10.myworkdayjobs.com', email: 'sam@example.com', update: true, own: false };
+    let asking = await panelFixture(browser, page, { profile, offer });
+    await asking.waitForSelector('[data-login-scope="site"]', { timeout: 10000 });
+    const card = await asking.$eval('#login-offer', box => box.textContent);
+    assert.match(card, /Save your new password\?.*ubc\.wd10\.myworkdayjobs\.com.*sam@example\.com/s);
+    assert.match(card, /Save for this site only.*Use for all sites.*Not now/s);
+    assert.doesNotMatch(card, /pass-/, 'never the password');
     await asking.screenshot({ path: '/private/tmp/login-offer.png' });
-    await asking.click('#login-offer-accept');
+    await asking.click('[data-login-scope="site"]');
     await asking.waitForFunction(() => document.getElementById('login-offer').hidden && !document.getElementById('panel-toast').hidden, { timeout: 5000, polling: 100 });
-    assert.equal(await asking.$eval('#panel-toast', toast => toast.textContent), 'Saved your new job-site password to your account.');
-    assert.deepEqual(await asking.evaluate(() => window.__answers), ['accept']);
+    assert.equal(await asking.$eval('#panel-toast', toast => toast.textContent), 'Saved for ubc.wd10.myworkdayjobs.com only. Other sites keep your saved password.');
+    assert.deepEqual(await asking.evaluate(() => window.__answers), ['accept site']);
     await asking.close();
-    asking = await panelFixture(browser, page, { profile, offer: { host: 'ubc.wd10.myworkdayjobs.com', email: 'sam@example.com', update: true } });
+    asking = await panelFixture(browser, page, { profile, offer });
+    await asking.waitForSelector('[data-login-scope="all"]', { timeout: 10000 });
+    await asking.click('[data-login-scope="all"]');
+    await asking.waitForFunction(() => document.getElementById('login-offer').hidden && !document.getElementById('panel-toast').hidden, { timeout: 5000, polling: 100 });
+    assert.equal(await asking.$eval('#panel-toast', toast => toast.textContent), 'Saved as your password for every job site.');
+    assert.deepEqual(await asking.evaluate(() => window.__answers), ['accept all']);
+    await asking.close();
+    asking = await panelFixture(browser, page, { profile, offer });
     await asking.waitForSelector('#login-offer-dismiss', { timeout: 10000 });
     await asking.click('#login-offer-dismiss');
     await asking.waitForFunction(() => document.getElementById('login-offer').hidden, { timeout: 5000, polling: 100 });
     assert.deepEqual(await asking.evaluate(() => window.__answers), ['dismiss']);
     await asking.close();
-    console.log('PASS the panel asks "Update your job-site password?": Update saves it, Not now drops it, the password never shown');
+    // No saved login yet: one button, saved as the login for every site.
+    asking = await panelFixture(browser, page, { profile, offer: { ...offer, update: false } });
+    await asking.waitForSelector('[data-login-scope="all"]', { timeout: 10000 });
+    assert.equal(await asking.$('[data-login-scope="site"]'), null);
+    await asking.close();
+    console.log('PASS the panel asks about a changed password: this site only, all sites, or Not now; the password never shown');
+
+    // 6b) A site with its own password: Sign In fills that one; Settings lists it and can give it back the saved password.
+    const ownServer = { login: { email: 'sam@example.com', password: 'Saved-pass-123', updatedAt: '2026-11-16T10:00:00.000Z' }, saves: [], sites: ['ubc.wd10.myworkdayjobs.com'], own: { 'ubc.wd10.myworkdayjobs.com': { email: 'sam@example.com', password: 'Ubc-only-456', updatedAt: '2026-11-17T10:00:00.000Z' } } };
+    await page.open(`${JOB}/login`);
+    const ownPanel = await panelFixture(browser, page, { profile, server: ownServer });
+    await ownPanel.waitForSelector('#account-fill[data-account-want="signin"]', { timeout: 10000 });
+    await ownPanel.click('#account-fill');
+    await page.waitForFunction(() => document.getElementById('password').value, { timeout: 8000, polling: 100 });
+    assert.equal(await page.$eval('#password', input => input.value), 'Ubc-only-456', "this site's own password, not the saved one");
+    await ownPanel.click('#settings');
+    await ownPanel.waitForSelector('[data-forget-login="ubc.wd10.myworkdayjobs.com"]', { timeout: 10000 });
+    await ownPanel.click('[data-forget-login="ubc.wd10.myworkdayjobs.com"]');
+    await ownPanel.waitForFunction(() => /now uses your saved password/.test(document.getElementById('site-login').textContent), { timeout: 8000, polling: 100 });
+    assert.deepEqual(ownServer.own, {}, 'the site went back to the saved password');
+    console.log('PASS a site with its own password: Sign In fills it, not the saved one; Settings lists it and gives it back the saved one');
+    await ownPanel.close();
 
     // 7) A site you have an account on: its Create Account page offers Sign In first, opens it, and fills the saved login.
     const known = { login: { email: 'sam@example.com', password: 'Saved-pass-123', updatedAt: '2026-11-16T10:00:00.000Z' }, saves: [], sites: ['ubc.wd10.myworkdayjobs.com'] };

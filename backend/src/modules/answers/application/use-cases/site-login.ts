@@ -11,15 +11,51 @@ function opened(stored: StoredSiteLogin, box: SecretBox): SiteLogin {
   return { email: stored.email, password, updatedAt: stored.updatedAt.toISOString() };
 }
 
-/** The saved login, for the extension to fill an account form; null before the first one. */
+/**
+ * The login to fill an account form with: the site's own when it has one (a
+ * password changed on that company's site), else the one saved login; null
+ * before the first.
+ */
 export class ReadSiteLogin {
   constructor(
     private readonly logins: SiteLoginRepository,
     private readonly box: SecretBox,
   ) {}
-  async execute(userId: string): Promise<SiteLogin | null> {
+  async execute(userId: string, host?: string): Promise<SiteLogin | null> {
+    const own = host ? await this.logins.findForSite(userId, host.trim().toLowerCase()) : null;
+    if (own) return { ...opened(own, this.box), site: host!.trim().toLowerCase() };
     const stored = await this.logins.find(userId);
     return stored ? opened(stored, this.box) : null;
+  }
+}
+
+/** Gives one site its own login: a password changed there and nowhere else. The site is recorded too. */
+export class SaveSiteOwnLogin {
+  constructor(
+    private readonly logins: SiteLoginRepository,
+    private readonly box: SecretBox,
+  ) {}
+  async execute(userId: string, host: string, login: { email: string; password: string }): Promise<SiteLogin> {
+    const site = host.trim().toLowerCase();
+    const stored = await this.logins.saveForSite(userId, site, { email: login.email.trim(), sealedPassword: this.box.seal(login.password) });
+    return { ...opened(stored!, this.box), site };
+  }
+}
+
+/** The site goes back to the one saved login. */
+export class ForgetSiteOwnLogin {
+  constructor(private readonly logins: SiteLoginRepository) {}
+  async execute(userId: string, host: string): Promise<string[]> {
+    await this.logins.saveForSite(userId, host.trim().toLowerCase(), null);
+    return this.logins.sitesWithOwnLogin(userId);
+  }
+}
+
+/** The sites with a login of their own, for Settings. */
+export class ListSitesWithOwnLogin {
+  constructor(private readonly logins: SiteLoginRepository) {}
+  execute(userId: string): Promise<string[]> {
+    return this.logins.sitesWithOwnLogin(userId);
   }
 }
 

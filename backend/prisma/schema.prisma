@@ -249,11 +249,15 @@ model SiteLogin {
 }
 
 /// A job site the person has an account on (Workday's ubc.wd10.myworkdayjobs.com), recorded when signing in or
-/// creating an account there worked: its account page then offers Sign In first.
+/// creating an account there worked: its account page then offers Sign In first. A site can keep a login of its
+/// own (a password changed on that company's site only); without one it uses the one SiteLogin.
 model SiteAccount {
-  userId    String
-  host      String
-  createdAt DateTime @default(now())
+  userId         String
+  host           String
+  createdAt      DateTime  @default(now())
+  email          String?
+  sealedPassword String?
+  loginUpdatedAt DateTime?
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, host])

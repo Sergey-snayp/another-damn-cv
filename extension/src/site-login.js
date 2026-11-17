@@ -3,7 +3,8 @@ import { NotSignedInError } from './jobs.js';
 
 /**
  * The one login the extension creates and signs in to job-site accounts with
- * (Workday's Create Account), as Simplify keeps one for every site. It lives on
+ * (Workday's Create Account), as Simplify keeps one for every site, plus a
+ * login of its own for a site where the person changed the password. It lives on
  * your account on the server, encrypted, so a new computer or a cleared browser
  * keeps it. The extension never stores it: it reads it when it fills a form.
  */
@@ -27,13 +28,21 @@ async function call(method, body, path = '') {
   return reply;
 }
 
-/** { email, password, updatedAt }, or null before the first account. */
-export const readSiteLogin = async () => (await call('GET')).login ?? null;
+/**
+ * { email, password, updatedAt }, or null before the first account. With a
+ * site's host: that site's own login when it has one (then `site` is set),
+ * else the one saved login.
+ */
+export const readSiteLogin = async (host) => (await call('GET', undefined, host ? `?host=${encodeURIComponent(host)}` : '')).login ?? null;
 export const saveSiteLogin = async (email, password) => (await call('PUT', { email, password })).login ?? null;
-/** The job sites (hosts) you have an account on, and the login's email (never its password): for the panel. */
-export const siteState = async () => {
-  const reply = await call('GET');
-  return { email: reply.login?.email ?? null, sites: reply.sites ?? [] };
+/** One site keeps its own login: a password changed on that company's site only. */
+export const saveSiteOwnLogin = async (host, email, password) => (await call('PUT', { email, password }, `/sites/${encodeURIComponent(host)}/login`)).login ?? null;
+/** The site goes back to the one saved login. Returns the sites that still have their own. */
+export const forgetSiteOwnLogin = async (host) => (await call('DELETE', undefined, `/sites/${encodeURIComponent(host)}/login`)).ownLogins ?? [];
+/** The job sites (hosts) you have an account on, those with a login of their own, and the email (never a password): for the panel. */
+export const siteState = async (host) => {
+  const reply = await call('GET', undefined, host ? `?host=${encodeURIComponent(host)}` : '');
+  return { email: reply.login?.email ?? null, sites: reply.sites ?? [], ownLogins: reply.ownLogins ?? [] };
 };
 /** Signing in or creating an account worked on this site. */
 export const rememberSite = async (host) => (await call('POST', { host }, '/sites')).sites ?? [];
@@ -62,12 +71,15 @@ const validLogin = (email, password) => typeof email === 'string' && typeof pass
 const OFFER_MS = 10 * 60_000;
 const offerKey = (tabId) => `siteLoginOffer:${tabId}`;
 
-/** 'offered' (the panel will ask), 'same' (already the saved login) or 'skipped'. */
+/**
+ * 'offered' (the panel will ask), 'same' (already the login this site uses:
+ * its own, or the one saved login) or 'skipped'.
+ */
 export async function offerSiteLogin(tabId, host, email, password) {
   if (!validLogin(email, password)) return 'skipped';
-  const login = await readSiteLogin();
+  const login = await readSiteLogin(host);
   if (login && login.email === email.trim() && login.password === password) return 'same';
-  await chrome.storage.session.set({ [offerKey(tabId)]: { host, email: email.trim(), password, update: Boolean(login), at: Date.now() } });
+  await chrome.storage.session.set({ [offerKey(tabId)]: { host, email: email.trim(), password, update: Boolean(login), own: Boolean(login?.site), at: Date.now() } });
   return 'offered';
 }
 
@@ -79,18 +91,31 @@ async function storedOffer(tabId) {
   return offer;
 }
 
-/** What the panel shows: the site, the email and whether it replaces a saved login. Never the password. */
+/**
+ * What the panel shows: the site, the email, whether it replaces a saved login
+ * and whether that site already has its own. Never the password.
+ */
 export async function offerFor(tabId) {
   const offer = await storedOffer(tabId);
-  return offer ? { host: offer.host, email: offer.email, update: offer.update } : null;
+  return offer ? { host: offer.host, email: offer.email, update: offer.update, own: Boolean(offer.own) } : null;
 }
 
-/** "Update password": the login is saved on the account. 'saved' or 'skipped'. */
-export async function acceptOffer(tabId) {
+/**
+ * The person's answer. `scope` 'site': this site keeps the new password as its
+ * own, every other site keeps the saved login. 'all': it becomes the saved
+ * login for every site (this site's own, if any, is dropped). With no saved
+ * login yet it becomes the saved one either way. 'saved' or 'skipped'.
+ */
+export async function acceptOffer(tabId, scope = 'site') {
   const offer = await storedOffer(tabId);
   await chrome.storage.session.remove(offerKey(tabId));
   if (!offer) return 'skipped';
+  if (offer.update && scope === 'site') {
+    await saveSiteOwnLogin(offer.host, offer.email, offer.password);
+    return 'saved';
+  }
   await saveSiteLogin(offer.email, offer.password);
+  if (offer.own) await forgetSiteOwnLogin(offer.host);
   return 'saved';
 }
 

@@ -2,12 +2,21 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 // A login that worked on a job site is kept only when it is not the saved one.
-function setup(context, saved) {
+// The server: one saved login, plus `own` logins for single sites (host → { email, password }).
+function setup(context, saved, own = {}) {
   const calls = [];
-  context.mock.method(globalThis, 'fetch', async (_url, options = {}) => {
-    calls.push(options.method ?? 'GET');
-    const login = options.method === 'PUT' ? JSON.parse(options.body) : saved;
-    return new Response(JSON.stringify({ login }), { headers: { 'Content-Type': 'application/json' } });
+  context.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const method = options.method ?? 'GET';
+    const { pathname, searchParams } = new URL(url);
+    const path = pathname.replace(/^.*\/site-login/, '');
+    calls.push(path ? `${method} ${path}` : method);
+    const site = path.match(/^\/sites\/([^/]+)\/login$/)?.[1];
+    let reply;
+    if (site && method === 'PUT') { own[site] = JSON.parse(options.body); reply = { login: { ...own[site], site } }; }
+    else if (site && method === 'DELETE') { delete own[site]; reply = { ownLogins: Object.keys(own) }; }
+    else if (method === 'PUT') { saved = JSON.parse(options.body); reply = { login: saved }; }
+    else { const host = searchParams.get('host'); reply = { login: host && own[host] ? { ...own[host], site: host } : saved, ownLogins: Object.keys(own) }; }
+    return new Response(JSON.stringify(reply), { headers: { 'Content-Type': 'application/json' } });
   });
   const previous = globalThis.chrome;
   context.after(() => { if (previous === undefined) delete globalThis.chrome; else globalThis.chrome = previous; });
@@ -34,28 +43,51 @@ test('a changed password that worked is offered, not saved, and the panel never 
   const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
   const { offerSiteLogin, offerFor } = await load(context);
   assert.equal(await offerSiteLogin(7, SITE, 'sam@example.com', 'New-pass-456'), 'offered');
-  assert.deepEqual(await offerFor(7), { host: SITE, email: 'sam@example.com', update: true });
+  assert.deepEqual(await offerFor(7), { host: SITE, email: 'sam@example.com', update: true, own: false });
   assert.deepEqual(calls, ['GET'], 'nothing written before the person answers');
 });
 
-test('"Update password" saves it on the account once; "Not now" drops it', async (context) => {
-  const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
-  const { offerSiteLogin, acceptOffer, dismissOffer, offerFor } = await load(context);
+test('"Save for this site only" keeps it for that site, and every other site keeps the saved password; "Not now" drops it', async (context) => {
+  const own = {};
+  const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' }, own);
+  const { offerSiteLogin, acceptOffer, dismissOffer, offerFor, readSiteLogin } = await load(context);
   await offerSiteLogin(7, SITE, 'sam@example.com', 'New-pass-456');
-  assert.equal(await acceptOffer(7), 'saved');
-  assert.deepEqual(calls, ['GET', 'PUT']);
-  assert.equal(await acceptOffer(7), 'skipped', 'once');
+  assert.equal(await acceptOffer(7, 'site'), 'saved');
+  assert.deepEqual(calls, ['GET', `PUT /sites/${SITE}/login`], 'only this site is written, not the saved login');
+  assert.equal((await readSiteLogin(SITE)).password, 'New-pass-456', 'this site: its own');
+  assert.equal((await readSiteLogin('workday.wd5.myworkdayjobs.com')).password, 'Old-pass-123', 'another company: the saved one');
+  assert.equal(await acceptOffer(7, 'site'), 'skipped', 'once');
+  calls.length = 0;
   await offerSiteLogin(8, SITE, 'sam@example.com', 'Other-pass-789');
   await dismissOffer(8);
   assert.equal(await offerFor(8), null);
-  assert.deepEqual(calls, ['GET', 'PUT', 'GET']);
+  assert.deepEqual(calls, ['GET'], 'nothing written');
+});
+
+test('signing in again with that site\'s own password: nothing offered', async (context) => {
+  setup(context, { email: 'sam@example.com', password: 'Old-pass-123' }, { [SITE]: { email: 'sam@example.com', password: 'Ubc-only-456' } });
+  const { offerSiteLogin } = await load(context);
+  assert.equal(await offerSiteLogin(7, SITE, 'sam@example.com', 'Ubc-only-456'), 'same');
+  assert.equal(await offerSiteLogin(7, 'workday.wd5.myworkdayjobs.com', 'sam@example.com', 'Old-pass-123'), 'same');
+});
+
+test('"Use for all sites" makes it the saved password, and the site\'s own one goes', async (context) => {
+  const own = { [SITE]: { email: 'sam@example.com', password: 'Ubc-only-456' } };
+  const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' }, own);
+  const { offerSiteLogin, offerFor, acceptOffer, readSiteLogin } = await load(context);
+  await offerSiteLogin(7, SITE, 'sam@example.com', 'New-pass-789');
+  assert.equal((await offerFor(7)).own, true, 'the panel can say this site had its own');
+  assert.equal(await acceptOffer(7, 'all'), 'saved');
+  assert.deepEqual(calls, ['GET', 'PUT', `DELETE /sites/${SITE}/login`]);
+  assert.equal((await readSiteLogin('workday.wd5.myworkdayjobs.com')).password, 'New-pass-789');
+  assert.equal((await readSiteLogin(SITE)).password, 'New-pass-789');
 });
 
 test('no saved login yet: offered as a new login', async (context) => {
   setup(context, null);
   const { offerSiteLogin, offerFor } = await load(context);
   assert.equal(await offerSiteLogin(7, SITE, ' sam@example.com ', 'New-pass-456'), 'offered');
-  assert.deepEqual(await offerFor(7), { host: SITE, email: 'sam@example.com', update: false });
+  assert.deepEqual(await offerFor(7), { host: SITE, email: 'sam@example.com', update: false, own: false });
 });
 
 test('not an email or too short a password: nothing is read or offered', async (context) => {

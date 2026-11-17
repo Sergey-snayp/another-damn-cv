@@ -36,7 +36,15 @@ import { ExtensionSiteLoginController } from './adapters/inbound/http/site-login
 import { PrismaSiteLoginRepository } from './adapters/outbound/persistence/prisma-site-login.repository';
 import { AesGcmSecretBox } from './adapters/outbound/crypto/aes-gcm-secret-box';
 import type { SecretBox, SiteLoginRepository } from './application/ports/site-login';
-import { ListSiteAccounts, ReadSiteLogin, RememberSiteAccount, SaveSiteLogin } from './application/use-cases/site-login';
+import {
+  ForgetSiteOwnLogin,
+  ListSiteAccounts,
+  ListSitesWithOwnLogin,
+  ReadSiteLogin,
+  RememberSiteAccount,
+  SaveSiteLogin,
+  SaveSiteOwnLogin,
+} from './application/use-cases/site-login';
 
 const useCase = <T>(type: new (repository: AnswerRepository) => T) => ({
   provide: type,
@@ -76,12 +84,12 @@ const defaultsUseCase = <T>(type: new (repository: DefaultRepository) => T) => (
       useFactory: (db: PrismaService) => new PrismaSiteLoginRepository(db),
     },
     { provide: SITE_LOGIN_BOX, useFactory: () => new AesGcmSecretBox(config.siteLoginKey || config.sessionSecret, 'site-login') },
-    ...[ReadSiteLogin, SaveSiteLogin].map((type) => ({
+    ...[ReadSiteLogin, SaveSiteLogin, SaveSiteOwnLogin].map((type) => ({
       provide: type,
       inject: [SITE_LOGIN_REPOSITORY, SITE_LOGIN_BOX],
       useFactory: (logins: SiteLoginRepository, box: SecretBox) => new type(logins, box),
     })),
-    ...[ListSiteAccounts, RememberSiteAccount].map((type) => ({
+    ...[ListSiteAccounts, RememberSiteAccount, ForgetSiteOwnLogin, ListSitesWithOwnLogin].map((type) => ({
       provide: type,
       inject: [SITE_LOGIN_REPOSITORY],
       useFactory: (logins: SiteLoginRepository) => new type(logins),

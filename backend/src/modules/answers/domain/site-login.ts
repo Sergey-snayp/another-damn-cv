@@ -8,6 +8,8 @@ export interface SiteLogin {
   email: string;
   password: string;
   updatedAt: string;
+  /** Set when this is one site's own login, not the one saved login. */
+  site?: string;
 }
 
 export class SiteLoginUnreadableError extends Error {

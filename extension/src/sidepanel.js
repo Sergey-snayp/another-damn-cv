@@ -8,7 +8,7 @@ import { matchAnswers } from './answers.js';
 import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
 import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
-import { newSitePassword, readSiteLogin, saveSiteLogin, siteState } from './site-login.js';
+import { forgetSiteOwnLogin, newSitePassword, readSiteLogin, saveSiteLogin, siteState } from './site-login.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', phoneType: 'Phone type', phoneCountryCode: 'Phone country code', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear', workArrangement: 'Office, hybrid or remote', willingToRelocate: 'Relocation',
@@ -770,7 +770,8 @@ async function fillAccount(want) {
       scan = { ...scan, account: next.account, accountSwitch: next.accountSwitch };
     }
     setAccountStep({ status: 'working', want });
-    let login = await readSiteLogin();
+    // This site's own login when you changed its password there, else the one saved login.
+    let login = await readSiteLogin(hostOf(currentTab?.url));
     const email = login?.email || profile.email;
     if (!email) throw new Error('Add your email to your Profile first.');
     // The first account: a new password, saved on your account before it is used.
@@ -1584,7 +1585,7 @@ async function refresh() {
     // An account page: whether you have an account on this site, read once per site before drawing.
     if (nextScan?.account && hostOf(pageTab?.url) && accountSites.host !== hostOf(pageTab.url)) {
       const host = hostOf(pageTab.url);
-      try { const state = await siteState(); accountSites = { host, known: state.sites.includes(host), email: state.email }; } catch { accountSites = { host, known: false, email: null }; }
+      try { const state = await siteState(host); accountSites = { host, known: state.sites.includes(host), email: state.email }; } catch { accountSites = { host, known: false, email: null }; }
     }
     const tab = pageTab ? { ...pageTab, jobUrl: nextScan?.context?.jobUrl || pageTab.url } : null;
     // Scanning may outlast a backend refresh. Read the latest library after
@@ -1645,12 +1646,21 @@ async function renderSiteLogin(note = '') {
     box.innerHTML = '<p class="muted">Loading…</p>';
     try { siteLogin = await readSiteLogin(); } catch (error) { box.innerHTML = `<p class="muted">${esc(error?.message || 'Could not read it.')}</p>`; return; }
   }
+  // Sites with a password of their own (changed on that company's site only).
+  let ownSites = [];
+  if (!siteLoginEditing) { try { ownSites = (await siteState()).ownLogins; } catch { ownSites = []; } }
+  const ownList = ownSites.length ? `<p class="muted">These sites use their own password:</p><ul class="site-list">${ownSites.map((host) => `<li><span>${esc(host)}</span><button type="button" data-forget-login="${esc(host)}">Use saved password</button></li>`).join('')}</ul>` : '';
   box.innerHTML = siteLoginEditing
     ? `<form id="site-login-form" class="site-login-form"><label>Email<input type="email" id="site-login-email" required maxlength="254" value="${esc(siteLogin?.email || profile.email || '')}"></label><label>Password<input type="password" id="site-login-password" required minlength="8" maxlength="128" autocomplete="new-password"></label><div class="site-login-actions"><button class="primary" type="submit">Save</button><button class="ghost" type="button" id="site-login-cancel">Cancel</button></div></form>`
     : siteLogin
-      ? `<dl class="site-login"><dt>Email</dt><dd>${esc(siteLogin.email)}</dd><dt>Password</dt><dd><span id="site-login-secret">${'•'.repeat(12)}</span></dd></dl><div class="site-login-actions"><button class="ghost" type="button" id="site-login-show">Show</button><button class="ghost" type="button" id="site-login-copy">Copy password</button><button class="ghost" type="button" id="site-login-change">Change</button></div>${note ? `<p class="muted" role="status">${esc(note)}</p>` : ''}`
+      ? `<dl class="site-login"><dt>Email</dt><dd>${esc(siteLogin.email)}</dd><dt>Password</dt><dd><span id="site-login-secret">${'•'.repeat(12)}</span></dd></dl><div class="site-login-actions"><button class="ghost" type="button" id="site-login-show">Show</button><button class="ghost" type="button" id="site-login-copy">Copy password</button><button class="ghost" type="button" id="site-login-change">Change</button></div>${ownList}${note ? `<p class="muted" role="status">${esc(note)}</p>` : ''}`
       : `<p class="muted">None yet. The first time you create an account, a strong password is made and saved here. Already have one? Set it.</p><div class="site-login-actions"><button class="ghost" type="button" id="site-login-change">Set password</button></div>`;
   $('site-login-change')?.addEventListener('click', () => { siteLoginEditing = true; void renderSiteLogin(); });
+  box.querySelectorAll('[data-forget-login]').forEach((button) => button.addEventListener('click', async () => {
+    button.disabled = true;
+    try { await forgetSiteOwnLogin(button.dataset.forgetLogin); void renderSiteLogin(`${button.dataset.forgetLogin} now uses your saved password.`); }
+    catch (error) { button.disabled = false; status('auth-status', error?.message || 'Could not change it.', 'error'); }
+  }));
   $('site-login-cancel')?.addEventListener('click', () => { siteLoginEditing = false; void renderSiteLogin(); });
   $('site-login-show')?.addEventListener('click', (event) => {
     const secret = $('site-login-secret'); const shown = secret.textContent === siteLogin.password;
@@ -1690,16 +1700,25 @@ async function checkLoginOffer() {
 function renderLoginOffer() {
   const box = $('login-offer');
   if (!loginOffer?.email) { box.hidden = true; box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="login-offer-card"><strong>${loginOffer.update ? 'Update your job-site password?' : 'Save this job-site login?'}</strong><p>You signed in to ${esc(loginOffer.host)} as ${esc(loginOffer.email)} with ${loginOffer.update ? 'a different password from the saved one' : 'a login that is not saved yet'}. ${loginOffer.update ? 'Updating' : 'Saving'} keeps it on your account, encrypted.</p><div class="site-login-actions"><button class="primary" type="button" id="login-offer-accept">${loginOffer.update ? 'Update password' : 'Save login'}</button><button class="ghost" type="button" id="login-offer-dismiss">Not now</button></div></div>`;
+  // A changed password: kept for this company's site only (each company's Workday is its own account), or for every site.
+  const actions = loginOffer.update
+    ? `<button class="primary" type="button" data-login-scope="site">Save for this site only</button><button class="ghost" type="button" data-login-scope="all">Use for all sites</button>`
+    : `<button class="primary" type="button" data-login-scope="all">Save login</button>`;
+  const said = loginOffer.update
+    ? `You signed in to ${esc(loginOffer.host)} as ${esc(loginOffer.email)} with a password different from the one ${loginOffer.own ? 'saved for this site' : 'saved'}. Each company's site is a separate account.`
+    : `You signed in to ${esc(loginOffer.host)} as ${esc(loginOffer.email)} with a login that is not saved yet. Saving keeps it on your account, encrypted.`;
+  box.innerHTML = `<div class="login-offer-card"><strong>${loginOffer.update ? 'Save your new password?' : 'Save this job-site login?'}</strong><p>${said}</p><div class="site-login-actions">${actions}<button class="ghost" type="button" id="login-offer-dismiss">Not now</button></div></div>`;
   box.hidden = false;
-  $('login-offer-accept').addEventListener('click', async (event) => {
-    event.target.disabled = true;
-    const reply = await chrome.runtime.sendMessage({ type: 'site-login-offer-accept' }).catch(() => null);
+  const host = loginOffer.host;
+  box.querySelectorAll('[data-login-scope]').forEach((button) => button.addEventListener('click', async () => {
+    box.querySelectorAll('button').forEach((each) => { each.disabled = true; });
+    const scope = button.dataset.loginScope;
+    const reply = await chrome.runtime.sendMessage({ type: 'site-login-offer-accept', scope }).catch(() => null);
     loginOffer = null; renderLoginOffer();
-    if (reply?.result === 'saved') toast('Saved your new job-site password to your account.');
+    if (reply?.result === 'saved') toast(scope === 'site' ? `Saved for ${host} only. Other sites keep your saved password.` : 'Saved as your password for every job site.');
     else toast(reply?.error || 'It was not saved: the offer had expired. Sign in again to be asked.');
     if ($('settings-dialog').open) void renderSiteLogin();
-  });
+  }));
   $('login-offer-dismiss').addEventListener('click', () => {
     void chrome.runtime.sendMessage({ type: 'site-login-offer-dismiss' }).catch(() => {});
     loginOffer = null; renderLoginOffer();

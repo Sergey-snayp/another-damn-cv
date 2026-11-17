@@ -205,7 +205,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'site-login-offer-accept' && fromPanel) {
-    void acceptOffer(tabId).then((result) => { logged(result === 'saved' ? 'updated on your account' : 'the offer had expired'); sendResponse({ result }); }, (error) => sendResponse({ error: error?.message || 'Could not save it.' }));
+    const scope = message.scope === 'all' ? 'all' : 'site';
+    void acceptOffer(tabId, scope).then((result) => { logged(result === 'saved' ? (scope === 'all' ? 'saved for every site' : 'saved for this site only') : 'the offer had expired'); sendResponse({ result, scope }); }, (error) => sendResponse({ error: error?.message || 'Could not save it.' }));
     return true;
   }
   if (message?.type === 'site-login-offer-dismiss' && fromPanel) {

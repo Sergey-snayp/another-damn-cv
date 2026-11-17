@@ -28,7 +28,13 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
         server.login = { ...JSON.parse(request.postData()), updatedAt: '2026-11-16T10:00:00.000Z' };
         server.saves.push(server.login);
       }
-      json({ login: server.login, sites: server.sites ?? [] });
+      // A site's own login (a password changed there only) when the page asks for its host.
+      const host = address.searchParams.get('host'), own = server.own ?? {};
+      json({ login: host && own[host] ? { ...own[host], site: host } : server.login, sites: server.sites ?? [], ownLogins: Object.keys(own) });
+    } else if (address.origin === 'http://localhost:3001' && /^\/api\/extension\/site-login\/sites\/[^/]+\/login$/.test(address.pathname) && request.method() === 'DELETE') {
+      const host = decodeURIComponent(address.pathname.split('/')[5]);
+      if (server.own) delete server.own[host];
+      json({ ownLogins: Object.keys(server.own ?? {}) });
     } else if (address.origin === 'http://localhost:3001') json([]);
     else void request.respond({ status: 404, body: '' });
   });
@@ -38,7 +44,7 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
     const background = message => {
       if (message.type === 'panel-tab') return { tabId: 1 };
       if (message.type === 'site-login-offer?') return window.__offer;
-      if (message.type === 'site-login-offer-accept') { window.__answers.push('accept'); window.__offer = null; return { result: 'saved' }; }
+      if (message.type === 'site-login-offer-accept') { window.__answers.push(`accept ${message.scope}`); window.__offer = null; return { result: 'saved', scope: message.scope }; }
       if (message.type === 'site-login-offer-dismiss') { window.__answers.push('dismiss'); window.__offer = null; return { ok: true }; }
       return {};
     };
