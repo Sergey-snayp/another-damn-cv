@@ -145,16 +145,14 @@
    * fields (Country next to Phone) leave only a narrow gap. Checked on screen;
    * off screen counts as free.
    */
-  function clashes(element, left, top, { onOwnField = false } = {}) {
+  function clashes(element, left, top) {
     const own = element.type === 'radio' || element.type === 'checkbox' ? element.closest('fieldset, [role="radiogroup"], [role="group"]') : null;
     const points = [[left + SIZE / 2, top + SIZE / 2], [left + 1, top + SIZE / 2], [left + SIZE + 3, top + SIZE / 2]];
     host.style.setProperty('pointer-events', 'none', 'important');
     try {
       return points.some(([x, y]) => {
         const hit = document.elementFromPoint(x, y);
-        if (!hit || hit === document.documentElement || hit === document.body) return false;
-        // Beside its title, the icon must not cover its own field either (a label on the field's line).
-        if (hit.contains(element)) return onOwnField && (hit === element || element.contains(hit) || hit.closest('input, select, textarea, button, [role="combobox"]') === element);
+        if (!hit || hit === document.documentElement || hit === document.body || hit.contains(element)) return false;
         // A choice question's own other options are not another field.
         if (own && own.contains(hit)) return false;
         return Boolean(hit.closest('input, select, textarea, button, a, [role="combobox"]')) || fieldsIn(hit) > 0;
@@ -162,61 +160,15 @@
     } finally { host.style.removeProperty('pointer-events'); }
   }
 
-  const shown = (node) => Boolean(node) && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
-  const choice = (element) => element.type === 'radio' || element.type === 'checkbox';
   /**
-   * The words a field is named by, on the page: its label, the label it is
-   * labelled by, a choice question's title, or the title in its form field
-   * box (Workday's). Never a label that holds the field itself, or one far away.
-   */
-  function titleFor(element) {
-    const byId = (ids) => (ids ?? '').split(/\s+/).map((id) => id && document.getElementById(id)).find(shown);
-    let title = null;
-    if (choice(element)) {
-      const group = element.closest('fieldset, [role="radiogroup"], [role="group"]');
-      title = group?.querySelector(':scope > legend') ?? byId(group?.getAttribute('aria-labelledby'));
-    } else {
-      title = [...(element.labels ?? [])].find(shown) ?? byId(element.getAttribute('aria-labelledby'));
-    }
-    if (!title) {
-      const box = element.closest('[data-automation-id^="formField"], fieldset, [role="group"]');
-      const options = choice(element) ? new Set(Fields().radiosOf?.(element) ?? [element]) : null;
-      title = box && [...box.querySelectorAll('label, legend')].find((node) => shown(node)
-        && !(node.control && options?.has(node.control)) && !node.querySelector('input, select, textarea, button'));
-    }
-    if (!shown(title) || title.contains(element) || title.querySelector('input, select, textarea, button')) return null;
-    return title;
-  }
-
-  /** The end of the title's last line of text: where "Country *" stops, not where its box does. */
-  function titleEnd(title) {
-    const range = document.createRange();
-    range.selectNodeContents(title);
-    const lines = [...range.getClientRects()].filter((box) => box.width && box.height);
-    return lines.length ? lines.at(-1) : null;
-  }
-
-  /**
-   * Where the icon sits: right after the words the field is named by
-   * ("Country * ✓"), so it reads with the question and never covers the field
-   * or its arrow. A field with no visible title nearby keeps it beside its
-   * box: outside on the right, else on the left, else inside the right edge.
+   * Where the icon sits: just outside the field's box and level with its
+   * middle, on the right; on the left when the right is off the page or on
+   * another field; inside the right edge only when neither side is free.
    */
   function place(element, node) {
     const rect = rectFor(element);
     node.hidden = !rect.width && !rect.height;
     if (node.hidden) return;
-    const title = titleFor(element);
-    const end = title && titleEnd(title);
-    // Above the field or beside it, close by: a title far away names something else.
-    if (end && end.bottom <= rect.bottom + 4 && rect.top - end.bottom < 80 && Math.abs(end.left - rect.left) < 600) {
-      const x = end.right + 6, y = end.top + (end.height - SIZE) / 2;
-      if (x + SIZE + 4 <= document.documentElement.clientWidth && !clashes(element, x, y, { onOwnField: true })) {
-        node.style.left = `${x + scrollX}px`;
-        node.style.top = `${y + scrollY}px`;
-        return;
-      }
-    }
     const width = document.documentElement.clientWidth;
     const top = rect.top + (rect.height - SIZE) / 2 - 2; // The middle of the box.
     const right = rect.right + 8, left = rect.left - SIZE - 12;
@@ -695,7 +647,5 @@
   /** The popover's state, for tests. */
   const popoverState = () => ({ element: popover.element, message: popover.message, kind: popover.kind, spec: popover.spec, text: pop.textContent });
 
-  window.CVAutofillMarks = { setEditor, open, close: closePop, popoverState, show, showMissing, clear, reattach, point, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.reason ?? null,
-    /** Where an element's icon sits on the page (for tests): { left, top }. */
-    placeOf: (element) => { const node = marks.get(element)?.node; return node && !node.hidden ? { left: parseFloat(node.style.left), top: parseFloat(node.style.top) } : null; } };
+  window.CVAutofillMarks = { setEditor, open, close: closePop, popoverState, show, showMissing, clear, reattach, point, animationMode, fillHooks, stopFollowing, glowing: () => shadow.querySelectorAll('.glow').length, count: () => marks.size, statusOf: (element) => marks.get(element)?.status ?? null, reasonOf: (element) => marks.get(element)?.reason ?? null };
 })();

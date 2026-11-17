@@ -712,7 +712,19 @@ function chosenValue(element) {
   return '';
 }
 
+/**
+ * The item a Workday multiselect already shows as chosen ("Canada (+1)"),
+ * a chip beside its empty search box; '' when none.
+ */
+function chosenItem(element) {
+  const box = element.closest?.('[data-automation-id="multiSelectContainer"], [data-uxi-widget-type="multiselect"], [data-automation-id^="formField"]');
+  const text = box?.querySelector('[data-automation-id="selectedItem"]')?.textContent.trim() ?? '';
+  return /^no items/i.test(text) ? '' : text;
+}
+
 function isEmpty(element) {
+  // Workday's chosen chip fills the field; its search box stays empty.
+  if (chosenItem(element)) return false;
   if (isCombobox(element)) return !comboboxValue(element);
   if (element.type === 'checkbox') return !element.checked;
   if (element.type === 'radio') return !groupRadios(element).some((radio) => radio.checked);
@@ -890,6 +902,7 @@ function groupOf(key) {
 
 // Content scripts cannot be ES modules, so the API hangs off window.
 window.CVAutofillFields = {
+  chosenItem,
   detectFields,
   isRequired,
   findMissingRequired,

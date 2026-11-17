@@ -456,9 +456,8 @@ async function fillField(field, value, resumeFileName) {
       return pickFile(field.element, value, resumeFileName ?? 'Resume.pdf');
     case 'combobox': {
       // Workday's multiselect with an item already chosen ("Canada (+1)"): left as it is, as Simplify leaves it.
-      const chosenItem = field.element.closest('[data-automation-id="multiSelectContainer"], [data-uxi-widget-type="multiselect"], [data-automation-id^="formField"]')
-        ?.querySelector('[data-automation-id="selectedItem"]');
-      if (chosenItem && chosenItem.textContent.trim() && !/no items/i.test(chosenItem.textContent)) return { filled: true, already: chosenItem.textContent.trim() };
+      const already = window.CVAutofillFields.chosenItem(field.element);
+      if (already) return { filled: true, already };
       const result = await fillCombobox(field.element, value);
       // A school, degree or subject a site's fixed list does not have: its "Other", as a person
       // would choose. Typed text with nothing chosen does not count: react-select drops it on leaving.
