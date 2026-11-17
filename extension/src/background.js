@@ -2,7 +2,7 @@ import { matchAnswers, saveAnswers } from './answers.js';
 import { LINKEDIN_PAIRING_MS, tabOpenedBy } from './linkedin-handoff.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
 import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
-import { rememberSiteLogin } from './site-login.js';
+import { attemptFor, confirmAttempt, dropAttempt, noteAttempt, rememberSiteLogin } from './site-login.js';
 
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
@@ -165,10 +165,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   // A job-site login that just worked and is not the saved one (a changed password): kept on the account.
+  // The attempt is held in memory as it is sent; the same page, or the next one, says whether it worked.
+  const host = (() => { try { return new URL(sender.url ?? sender.tab.url ?? '').host; } catch { return ''; } })();
+  // What happened, for chrome://extensions → service worker (never the password).
+  const saved = (result) => {
+    console.info(`[Another Damn CV] Job-site login on ${host}: ${{ saved: 'saved on your account', same: 'already the saved one', skipped: 'nothing to save' }[result] ?? result}.`);
+    if (result === 'saved') chrome.runtime.sendMessage({ type: 'site-login-saved' }).catch(() => {});
+  };
+  if (message?.type === 'site-login-attempt' && fromContent) {
+    void noteAttempt(tabId, host, message.email, message.password).catch(() => {});
+    return false;
+  }
+  if (message?.type === 'site-login-check' && fromContent) {
+    void attemptFor(tabId, host).then((attempt) => sendResponse({ pending: Boolean(attempt) }), () => sendResponse({ pending: false }));
+    return true;
+  }
+  if (message?.type === 'site-login-confirmed' && fromContent) {
+    void confirmAttempt(tabId, host).then(saved).catch((error) => console.info(`[Another Damn CV] Job-site login on ${host}: not saved (${error?.message ?? error}).`));
+    return false;
+  }
+  if (message?.type === 'site-login-failed' && fromContent) {
+    void dropAttempt(tabId).catch(() => {});
+    console.info(`[Another Damn CV] Job-site login on ${host}: the sign-in did not work, nothing saved.`);
+    return false;
+  }
   if (message?.type === 'site-login-used' && fromContent) {
-    void rememberSiteLogin(message.email, message.password)
-      .then((result) => { if (result === 'saved') chrome.runtime.sendMessage({ type: 'site-login-saved' }).catch(() => {}); })
-      .catch(() => {});
+    void dropAttempt(tabId).catch(() => {});
+    void rememberSiteLogin(message.email, message.password).then(saved).catch((error) => console.info(`[Another Damn CV] Job-site login on ${host}: not saved (${error?.message ?? error}).`));
     return false;
   }
   // The person submitted the application form: the saved job moves to Applied.

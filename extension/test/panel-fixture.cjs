@@ -73,14 +73,16 @@ async function pageWithScripts(browser, pages) {
     window.__listeners = [];
     window.chrome = {
       // What the page scripts tell the extension, kept for the test to read.
-      runtime: { id: 'test', getURL: file => (file.endsWith('.html') ? 'data:text/html,<p>Panel</p>' : 'data:text/css,'), onMessage: { addListener: listener => window.__listeners.push(listener) }, sendMessage: async message => { (window.__sent ??= []).push(message); return {}; } },
+      // The background's reply to "was a sign-in sent here?": window.__loginPending, set by page.open's setup.
+      runtime: { id: 'test', getURL: file => (file.endsWith('.html') ? 'data:text/html,<p>Panel</p>' : 'data:text/css,'), onMessage: { addListener: listener => window.__listeners.push(listener) }, sendMessage: async message => { (window.__sent ??= []).push(message); return message.type === 'site-login-check' ? { pending: Boolean(window.__loginPending) } : {}; } },
       storage: { local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } },
     };
     window.__ask = message => new Promise(resolve => { for (const listener of window.__listeners) listener(message, { url: chrome.runtime.getURL('src/sidepanel.html'), id: 'test' }, resolve); });
   });
   const scripts = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json'))).content_scripts.find(entry => entry.js.includes('src/content.js')).js;
-  page.open = async url => {
+  page.open = async (url, setup) => {
     await page.goto(url);
+    if (setup) await page.evaluate(setup);
     for (const file of scripts) await page.addScriptTag({ path: path.join(extension, file) });
   };
   return page;

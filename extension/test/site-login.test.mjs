@@ -11,7 +11,11 @@ function setup(context, saved) {
   });
   const previous = globalThis.chrome;
   context.after(() => { if (previous === undefined) delete globalThis.chrome; else globalThis.chrome = previous; });
-  globalThis.chrome = { storage: { local: { get: async () => ({ auth: { syncToken: 'token' } }), set: async () => {}, remove: async () => {} } } };
+  const session = {};
+  globalThis.chrome = { storage: {
+    local: { get: async () => ({ auth: { syncToken: 'token' } }), set: async () => {}, remove: async () => {} },
+    session: { get: async (key) => ({ [key]: session[key] }), set: async (values) => Object.assign(session, values), remove: async (key) => { delete session[key]; } },
+  } };
   return calls;
 }
 const load = (context) => import(`../src/site-login.js?test=${encodeURIComponent(context.name)}`);
@@ -39,5 +43,28 @@ test('not an email or too short a password: nothing is read or written', async (
   const { rememberSiteLogin } = await load(context);
   assert.equal(await rememberSiteLogin('sam', 'New-pass-456'), 'skipped');
   assert.equal(await rememberSiteLogin('sam@example.com', 'short'), 'skipped');
+  assert.deepEqual(calls, []);
+});
+
+test('a sign-in in flight: kept in memory, saved when the next page confirms it, then forgotten', async (context) => {
+  const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
+  const { noteAttempt, attemptFor, confirmAttempt } = await load(context);
+  await noteAttempt(7, 'ubc.wd10.myworkdayjobs.com', 'sam@example.com', 'New-pass-456');
+  assert.equal((await attemptFor(7, 'ubc.wd10.myworkdayjobs.com')).password, 'New-pass-456');
+  assert.equal(await attemptFor(7, 'accounts.example-mail.com'), null, 'only the same site can confirm it');
+  await noteAttempt(7, 'ubc.wd10.myworkdayjobs.com', 'sam@example.com', 'New-pass-456');
+  assert.equal(await confirmAttempt(7, 'ubc.wd10.myworkdayjobs.com'), 'saved');
+  assert.deepEqual(calls, ['GET', 'PUT']);
+  assert.equal(await attemptFor(7, 'ubc.wd10.myworkdayjobs.com'), null, 'forgotten once used');
+});
+
+test('an attempt older than a minute is never used', async (context) => {
+  const calls = setup(context, null);
+  const { noteAttempt, confirmAttempt } = await load(context);
+  const now = Date.now;
+  context.mock.method(Date, 'now', () => now() - 61_000);
+  await noteAttempt(7, 'ubc.wd10.myworkdayjobs.com', 'sam@example.com', 'New-pass-456');
+  context.mock.restoreAll();
+  assert.equal(await confirmAttempt(7, 'ubc.wd10.myworkdayjobs.com'), 'skipped');
   assert.deepEqual(calls, []);
 });

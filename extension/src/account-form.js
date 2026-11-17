@@ -88,38 +88,64 @@
 
   // ─── A password that worked ───────────────────────────────────────────
   // Signing in (or creating an account) with a password other than the saved
-  // one, after a change on the site: once the form goes away with no error, the
-  // login that worked is kept on the account, as a password manager does. A
-  // wrong password shows an error and is never kept. Only on job sites.
+  // one, after a change on the site: once it worked, the login is kept on the
+  // account, as a password manager does. A wrong password shows an error and is
+  // never kept. Only on job sites.
+  //
+  // Workday often loads a new page after signing in, which ends this script.
+  // So the attempt goes to the background (memory only) as it is sent, and
+  // whichever page comes next says whether it worked: the same page once the
+  // form is gone, or the next page when it has no sign-in form and no new error.
   const onJobSite = () => Boolean(window.CVAutofillSites?.siteForPage?.());
   const ERROR = /wrong|incorrect|invalid|not match|doesn'?t match|try again|failed|locked|error/i;
-  const errorShown = () => [...document.querySelectorAll('[role="alert"], [aria-live="assertive"], [data-automation-id="errorMessage"], [data-automation-id*="error" i], [class*="error" i]')]
-    .some((node) => node.getClientRects().length && ERROR.test(node.textContent));
+  const ERROR_NODES = '[role="alert"], [aria-live="assertive"], [data-automation-id="errorMessage"], [data-automation-id*="error" i], [class*="error" i]';
+  /** Error messages on screen. Only a new one counts: Workday keeps "Errors Found" headings around. */
+  const errorTexts = () => [...document.querySelectorAll(ERROR_NODES)].filter((node) => node.getClientRects().length && ERROR.test(node.textContent)).map((node) => node.textContent.trim());
+  /** On the next page only a sign-in's own errors count, not an application form's "Errors Found". */
+  const SIGN_IN_ERROR = /wrong|incorrect|invalid|not match|doesn'?t match|try again|locked/i;
+  const tell = (message) => { try { return chrome.runtime.sendMessage(message).catch(() => null); } catch { return Promise.resolve(null); } };
   let pending = null;
 
   async function watchOutcome(attempt) {
     for (let waited = 0; waited < 15000; waited += 500) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       if (pending !== attempt) return;
-      if (errorShown()) { pending = null; return; }
+      if (errorTexts().some((text) => !attempt.before.has(text))) { pending = null; void tell({ type: 'site-login-failed' }); return; }
       if (!attempt.password.isConnected || !visible(attempt.password)) {
         pending = null;
-        try { void chrome.runtime.sendMessage({ type: 'site-login-used', email: attempt.email, password: attempt.value, kind: attempt.kind }).catch(() => {}); } catch { /* extension reloaded */ }
+        void tell({ type: 'site-login-used', email: attempt.email, password: attempt.value, kind: attempt.kind });
         return;
       }
     }
     if (pending === attempt) pending = null;
   }
 
-  /** The person sent the account form: remember what they sent, then see whether it worked. */
+  /** The person sent the account form: hand the attempt to the background, then see whether it worked. */
   function sent() {
     if (!onJobSite()) return;
     const form = find();
     const email = form?.email?.value.trim(), value = form?.password.value;
     if (!form || !email || !value || (form.verify && form.verify.value !== value)) return;
-    pending = { email, value, kind: form.kind, password: form.password };
+    pending = { email, value, kind: form.kind, password: form.password, before: new Set(errorTexts()) };
+    void tell({ type: 'site-login-attempt', email, password: value, kind: form.kind });
     void watchOutcome(pending);
   }
+
+  /** A page loaded right after a sign-in was sent here: it worked unless the form or a new error is back. */
+  async function confirmAfterLoad() {
+    if (window !== window.top || !onJobSite()) return;
+    const reply = await tell({ type: 'site-login-check' });
+    if (!reply?.pending) return;
+    let clear = 0;
+    for (let waited = 0; waited < 10000; waited += 500) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (find() || errorTexts().some((text) => SIGN_IN_ERROR.test(text))) clear = 0;
+      // A second, with no sign-in form and no error: signed in.
+      else if (++clear >= 2) { void tell({ type: 'site-login-confirmed' }); return; }
+    }
+    void tell({ type: 'site-login-failed' });
+  }
+
   const onButton = (form, event) => {
     if (!form?.submit) return false;
     if (form.submit.contains(event.target)) return true;
@@ -130,6 +156,7 @@
   document.addEventListener('submit', () => sent(), true);
   document.addEventListener('click', (event) => { if (onJobSite() && event.isTrusted && onButton(find(), event)) sent(); }, true);
   document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.isTrusted && onJobSite() && event.target?.type === 'password') sent(); }, true);
+  void confirmAfterLoad();
 
   window.CVAutofillAccount = { find, fill };
 })();

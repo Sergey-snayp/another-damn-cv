@@ -56,3 +56,32 @@ export async function rememberSiteLogin(email, password) {
   await saveSiteLogin(email.trim(), password);
   return 'saved';
 }
+
+// ─── A sign-in in flight ──────────────────────────────────────────────────
+// What was sent on a job site's account form, kept by the background in memory
+// only (chrome.storage.session, which page scripts cannot read) for a minute,
+// so the next page can confirm it worked even when the site loads a new page.
+const ATTEMPT_MS = 60_000;
+const attemptKey = (tabId) => `siteLoginAttempt:${tabId}`;
+
+export async function noteAttempt(tabId, host, email, password) {
+  if (typeof email !== 'string' || typeof password !== 'string') return;
+  await chrome.storage.session.set({ [attemptKey(tabId)]: { host, email: email.trim(), password, at: Date.now() } });
+}
+
+export async function attemptFor(tabId, host) {
+  const key = attemptKey(tabId);
+  const attempt = (await chrome.storage.session.get(key))[key];
+  if (!attempt) return null;
+  if (attempt.host !== host || Date.now() - attempt.at > ATTEMPT_MS) { await chrome.storage.session.remove(key); return null; }
+  return attempt;
+}
+
+export const dropAttempt = (tabId) => chrome.storage.session.remove(attemptKey(tabId));
+
+/** The next page says the sign-in worked: the login is kept if it is new. 'saved', 'same' or 'skipped'. */
+export async function confirmAttempt(tabId, host) {
+  const attempt = await attemptFor(tabId, host);
+  await dropAttempt(tabId);
+  return attempt ? rememberSiteLogin(attempt.email, attempt.password) : 'skipped';
+}

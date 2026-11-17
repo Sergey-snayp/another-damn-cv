@@ -13,7 +13,8 @@ const pages = {
     ${field('email', 'Email Address')}${field('password', 'Password', 'password')}${field('verifyPassword', 'Verify New Password', 'password')}
     <div data-automation-id="createAccountCheckbox"><input type="checkbox" id="agree"><label for="agree">Yes, I have read and consent to the terms and conditions.</label></div>
     <button data-automation-id="createAccountSubmitButton" onclick="window.submitted = true">Create Account</button></main>`,
-  [`${JOB}/login`]: `<!doctype html><title>Sign In</title>${POSTING}<main><h1>Sign In</h1>
+  // Workday keeps headings like "Errors Found" on its pages: they are not this sign-in's error.
+  [`${JOB}/login`]: `<!doctype html><title>Sign In</title>${POSTING}<div class="errorSummary">Errors Found</div><main><h1>Sign In</h1>
     ${field('email', 'Email Address')}${field('password', 'Password', 'password')}
     <button data-automation-id="signInSubmitButton" onclick="window.submitted = true; signIn()">Sign In</button></main>
     <script>
@@ -24,6 +25,12 @@ const pages = {
       }
     </script>`,
 };
+// Signing in loads a new page, as Workday often does: the next page says whether it worked.
+pages[`${JOB}/login-reload`] = `<!doctype html><title>Sign In</title>${POSTING}<main><h1>Sign In</h1>
+  ${field('email', 'Email Address')}${field('password', 'Password', 'password')}
+  <button data-automation-id="signInSubmitButton" onclick="setTimeout(() => { location.href = '${JOB}/home'; }, 400)">Sign In</button></main>`;
+pages[`${JOB}/home`] = `<!doctype html><title>Candidate Home</title>${POSTING}<main><h1>My Information</h1><div class="errorSummary">Errors Found</div>${field('firstName', 'First Name')}</main>`;
+pages[`${JOB}/login-again`] = `<!doctype html><title>Sign In</title>${POSTING}<main><div role="alert">Wrong email address or password.</div><h1>Sign In</h1>${field('email', 'Email Address')}${field('password', 'Password', 'password')}<button>Sign In</button></main>`;
 const profile = { email: 'sam@example.com', firstName: 'Sam', lastName: 'Lee' };
 // Not a job site: a mail provider's sign-in, which must never be watched.
 const MAIL = 'https://accounts.example-mail.com/signin';
@@ -99,6 +106,8 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     await page.click('[data-automation-id="signInSubmitButton"]');
     await new Promise(resolve => setTimeout(resolve, 1500));
     assert.deepEqual(await sentLogins(), [], 'a wrong password shows an error and is never kept');
+    assert.deepEqual(await page.evaluate(() => window.__sent.filter(message => /^site-login-(attempt|failed)$/.test(message.type)).map(message => message.type)), ['site-login-attempt', 'site-login-failed'],
+      'the attempt is handed over as it is sent, and dropped on the error ("Errors Found" from before does not count)');
     await page.$eval('[role="alert"]', alert => alert.remove());
     await page.$eval('#password', input => { input.value = ''; });
     await page.type('#password', 'Changed-pass-789');
@@ -106,6 +115,23 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     await page.waitForFunction(() => (window.__sent ?? []).some(message => message.type === 'site-login-used'), { timeout: 5000, polling: 100 });
     assert.deepEqual(await sentLogins(), [{ type: 'site-login-used', email: 'sam@example.com', password: 'Changed-pass-789', kind: 'signin' }]);
     console.log('PASS a changed password: kept once signing in works, never a wrong one');
+
+    // 4b) Signing in loads a new page: the attempt went to the background, and the next page confirms it.
+    await page.open(`${JOB}/login-reload`);
+    await page.type('#email', 'sam@example.com');
+    await page.type('#password', 'Changed-pass-789');
+    await page.click('[data-automation-id="signInSubmitButton"]');
+    const handed = await page.evaluate(() => window.__sent.filter(message => message.type === 'site-login-attempt'));
+    assert.deepEqual(handed, [{ type: 'site-login-attempt', email: 'sam@example.com', password: 'Changed-pass-789', kind: 'signin' }]);
+    await page.waitForNavigation();
+    await page.open(`${JOB}/home`, () => { window.__loginPending = true; });
+    await page.waitForFunction(() => (window.__sent ?? []).some(message => message.type === 'site-login-confirmed'), { timeout: 8000, polling: 200 });
+    assert.ok(!(await page.evaluate(() => window.__sent.some(message => message.type === 'site-login-failed'))));
+    // …and a sign-in that comes back to its form with an error is dropped.
+    await page.open(`${JOB}/login-again`, () => { window.__loginPending = true; });
+    await page.waitForFunction(() => (window.__sent ?? []).some(message => message.type === 'site-login-failed'), { timeout: 15000, polling: 200 });
+    assert.ok(!(await page.evaluate(() => window.__sent.some(message => message.type === 'site-login-confirmed'))));
+    console.log('PASS a sign-in that loads a new page: handed over as it is sent, confirmed by the next page, dropped when the form comes back');
 
     // 5) Anywhere else (a mail provider's sign-in): nothing is watched or passed on.
     await page.open(MAIL);
