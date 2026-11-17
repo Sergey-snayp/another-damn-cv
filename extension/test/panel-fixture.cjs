@@ -50,7 +50,8 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       const host = document.getElementById('panel-autofill');
       const view = host?.querySelector('.skeleton') ? 'placeholder' : /Reload this page/.test(host?.textContent) ? 'reload' : host?.querySelector('#open-form') ? 'start' : host?.querySelector('#account-fill') ? 'account' : host?.textContent.trim().slice(0, 40);
       if (view && window.__views.at(-1) !== view) window.__views.push(view);
-      if (view === 'placeholder') window.__placeholder ??= [host.querySelector('.job-context').getBoundingClientRect().top, host.querySelector('.fill-block').getBoundingClientRect().top];
+      // Where the placeholder was just before the real view replaced it (its styles loaded by then).
+      if (view === 'placeholder') window.__placeholder = [host.querySelector('.job-context').getBoundingClientRect().top, host.querySelector('.fill-block').getBoundingClientRect().top];
     }).observe(document, { subtree: true, childList: true });
     window.__deliver = message => { for (const listener of window.__panelListeners ?? []) listener(message, { tab: { id: 1 }, frameId: 0 }, () => {}); };
     const store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile, chosenResumeId: 'cv1' };
