@@ -169,7 +169,7 @@ const stopOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node
  * icon saying why. `explainIf` limits which empty fields are explained (a
  * later step explains only its new fields).
  */
-async function runPass({ found, profile, answers = [], hooks, explainIf = () => true }) {
+async function runPass({ found, profile, answers = [], hooks, explainIf = () => true, onProgress = () => {} }) {
   const result = { filled: 0, fromAnswers: 0, acknowledged: 0, failures: [], notes: [] };
   const stops = [], covered = new Set(), groups = new Set(), state = {};
   const cover = (element) => { covered.add(element); if (element.type === 'radio' && element.name) groups.add(element.name); };
@@ -189,7 +189,9 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
   }
   stops.sort(stopOrder);
 
+  let done = 0;
   for (const stop of stops) {
+    onProgress(done++, stops.length);
     if (stop.kind === 'explain' && !Fields.isEmpty(stop.element)) continue;
     const field = stop.field ?? { element: stop.element, kind: stop.item?.kind ?? stop.ack?.kind };
     const token = await hooks?.before?.(field);
@@ -252,17 +254,26 @@ function fieldsToAdd(profile, missing) {
 async function fill(profile, answers = []) {
   scan(); // Forms can replace controls between the preview and a click.
   lastFill = { profile, failed: new Map(), answers: new Map(answers.map((item) => [String(item.id), item])) };
-  // Settings → "Animate filling": the page follows each field as it fills. Icons appear as each field is done either way.
-  const hooks = Marks?.fillHooks(await Marks.animationMode());
+  // Settings → "Animate filling" (off by default): the page follows each field as it fills.
+  // Otherwise the page stays where it is while it fills, and the panel shows the progress.
+  const mode = await Marks.animationMode();
+  const hooks = Marks?.fillHooks(mode);
+  const hold = mode === 'off' ? holdPage() : null;
+  const progress = (done, total) => { try { void chrome.runtime.sendMessage({ type: 'fill-progress', done, total }).catch(() => {}); } catch { /* reloaded */ } };
   // Workday's My Experience: its job, school and website lists and its skills box are filled
   // from the CV's own jobs below, never as the current employer or home location.
   const lists = profile.history && window.CVAutofillHistory?.here();
   const found = lists ? lastScan.found.filter((field) => !window.CVAutofillHistory.owns(field.element)) : lastScan.found;
-  const result = await runPass({ found, profile, answers, hooks });
-  if (lists) {
-    const history = await window.CVAutofillHistory.fill(profile.history);
-    result.filled = (result.filled ?? 0) + history.filled;
-    if (history.marks.length) await Marks?.show(history.marks);
+  let result;
+  try {
+    result = await runPass({ found, profile, answers, hooks, onProgress: progress });
+    if (lists) {
+      const history = await window.CVAutofillHistory.fill(profile.history);
+      result.filled = (result.filled ?? 0) + history.filled;
+      if (history.marks.length) await Marks?.show(history.marks);
+    }
+  } finally {
+    hold?.release();
   }
   await hooks?.finish?.(lastScan.found);
   hooks?.end();
@@ -270,6 +281,12 @@ async function fill(profile, answers = []) {
   // A last check for anything the pass could not reach (fields that appeared meanwhile).
   const missing = missingWithReasons();
   await Marks?.showMissing(missing);
+  // One smooth scroll at the end, only when a field needs the person and is off screen.
+  if (hold) {
+    const first = missing.map((item) => Fields.byTag(item.id)).find(Boolean);
+    const box = first?.getBoundingClientRect();
+    if (box && (box.bottom < 0 || box.top > innerHeight)) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
   await Marks?.show(fieldsToAdd(profile, missing));
   keepAnswers();
   return {
@@ -556,6 +573,28 @@ function workEditor(element, field, defaults, profile) {
   };
 }
 Marks?.setEditor(editorFor);
+
+/**
+ * Keeps the page where the person left it while Autofill fills it: a scroll the
+ * page or a field makes on its own (focus, a dropdown, a site's script) is put
+ * back at once. The person scrolling (wheel, touch, keys, the scrollbar) ends it.
+ */
+function holdPage() {
+  const x = scrollX, y = scrollY;
+  let holding = true;
+  const letGo = () => { holding = false; };
+  const back = () => { if (holding && (scrollX !== x || scrollY !== y)) scrollTo({ left: x, top: y, behavior: 'instant' }); };
+  const people = ['wheel', 'touchmove', 'keydown', 'mousedown'];
+  for (const type of people) addEventListener(type, letGo, { capture: true, passive: true });
+  addEventListener('scroll', back, { passive: true });
+  return {
+    release() {
+      for (const type of people) removeEventListener(type, letGo, { capture: true });
+      removeEventListener('scroll', back);
+      back();
+    },
+  };
+}
 
 /** Scrolls to a field from the panel's "still empty" list and outlines it briefly. */
 function focusField(id) {

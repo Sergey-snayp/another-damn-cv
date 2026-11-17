@@ -12,7 +12,8 @@
       --dump-dom "file://$PWD/test/animation.html" | grep -o '<pre id="result">.*</pre>'
 -->
 <script>
-  const settings = {};
+  // "Animate filling" is off by default; this page tests it switched on.
+  const settings = { animateFill: true };
   window.chrome = { storage: { local: { get: async () => settings }, onChanged: { addListener() {} } } };
 </script>
 <style>
@@ -83,7 +84,7 @@ addEventListener('DOMContentLoaded', async () => {
   settings.animateFill = false;
   log = await run();
   expect(log.every((e) => e.y === 0 && e.glowing === 0) && $('city').value === 'Toronto', 'off: fills without moving the page');
-  delete settings.animateFill;
+  settings.animateFill = true;
 
   // 4. "Reduce motion": fills without scrolling.
   const realMatch = window.matchMedia;

@@ -508,7 +508,7 @@
   } catch { /* extension reloaded */ }
 
   // ─── Follow-along while filling ──────────────────────────────────────────
-  // Settings → "Animate filling" (on by default). The page scrolls to each
+  // Settings → "Animate filling" (off by default). The page scrolls to each
   // field that is off screen, and the field glows in its result colour. With
   // the system's "Reduce motion" on, nothing scrolls and the glow does not
   // move. Scrolling by hand during a fill stops the follow-along for that fill.
@@ -523,7 +523,8 @@
 
   async function animationMode() {
     try {
-      if ((await chrome.storage.local.get('animateFill')).animateFill === false) return 'off';
+      // Off unless chosen: a still page while it fills reads calmer than one that follows each field.
+      if ((await chrome.storage.local.get('animateFill')).animateFill !== true) return 'off';
     } catch { return 'off'; }
     return matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
   }
