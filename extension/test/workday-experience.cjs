@@ -64,12 +64,12 @@ const page = `<!doctype html><title>My Experience</title>
   }
   // Workday's search boxes: Enter shows the known items that match; choosing one makes a chip.
   const STUDIES = ${JSON.stringify(STUDIES)};
-  const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript'], schools: ['Original University', 'Other University'], studies: STUDIES };
+  const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript', 'Java', 'SQL Server', 'Amazon Web Services (AWS)'], schools: ['Original University', 'Other University'], studies: STUDIES };
   const DEGREES = ["Associate's Degree", "Bachelor's Degree", "Master's Degree"];
   let searching = null;
   const popup = (texts, prompt) => {
     document.querySelector('[data-automation-activepopup]')?.remove();
-    document.body.insertAdjacentHTML('beforeend', '<div data-automation-activepopup="true"><ul role="listbox">' + texts.map((t) => prompt
+    document.body.insertAdjacentHTML('beforeend', '<div data-automation-activepopup="true"><ul role="listbox">' + (texts.length ? '' : '<li>No Items.</li>') + texts.map((t) => prompt
       ? '<li><div data-automation-id="promptLeafNode"><div data-automation-id="promptOption" data-automation-label="' + t + '">' + t + '</div></div></li>'
       : '<li role="option">' + t + '</li>').join('') + '</ul></div>');
   };
@@ -88,7 +88,7 @@ const page = `<!doctype html><title>My Experience</title>
     document.querySelector('[data-automation-activepopup]').remove();
     if (searching.tagName === 'BUTTON') { searching.textContent = chosen; return; }
     const chips = searching.dataset.picks === 'skills' ? document.getElementById('chips') : searching.previousElementSibling;
-    chips.insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem">' + chosen + '</div>');
+    chips.insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem">' + chosen + (searching.dataset.picks === 'skills' ? '<div data-automation-id="DELETE_charm" onclick="this.parentElement.remove()"></div>' : '') + '</div>');
     searching.value = '';
   });
 </script>`;
@@ -104,7 +104,7 @@ const history = {
     // A course: no degree, so no Education panel (Workday would demand a degree).
     { institution: 'EPAM', degree: '', field: 'Advanced Node.js', from: '', to: '' },
   ],
-  skills: ['TypeScript', 'Node.js', 'Rust'],
+  skills: ['TypeScript', 'Node.js', 'Rust', 'Java', 'SQL', 'Amazon Web Services'],
   websites: ['https://www.linkedin.com/in/sergey', 'https://github.com/sergey'],
 };
 // A home location and current employer that must never land in an older job's panel.
@@ -135,7 +135,7 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.equal(listAsked, 1, "Workday's list of fields of study read once, as Simplify reads it");
     const uploaded = () => tab.$$eval('[data-automation-id="file-upload-item"]', (items) => items.map((item) => item.firstChild.textContent.trim()));
     assert.deepEqual(await uploaded(), ['Sergey_Proniuk_CV.pdf'], "the CV attached to Workday's hidden upload input");
-    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)'], 'skills Workday knows (searched with a real Enter); Rust is not in its list, so it is left out');
+    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)', 'Java', 'SQL Server', 'Amazon Web Services (AWS)'], 'skills Workday knows, chosen as Jobright chooses (searched with a real Enter); Rust is not in its list, so it is left out; Java is not JavaScript');
     assert.deepEqual(await read(['website-1', 'website-2']), history.websites);
     console.log('PASS Workday My Experience: each job, school and website added and filled, its degree and known skills chosen');
 
@@ -143,12 +143,13 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     await tab.$eval('#jobTitle-1', (input) => { input.value = 'Senior Engineer (edited)'; });
     await tab.$eval('#location-2', (input) => { input.value = ''; });
     await tab.$eval('#company-2', (input) => { input.value = ''; });
+    await tab.$eval('#chips', (chips) => chips.insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem">PostgreSQL<div data-automation-id="DELETE_charm" onclick="this.parentElement.remove()"></div></div>'));
     await fill();
     const counts = await tab.evaluate(() => ['workExperience', 'education', 'websitePanelSet'].map((name) => document.querySelectorAll(`[data-automation-id^="${name}-"]`).length));
     assert.deepEqual(counts, [2, 1, 2], 'a second Autofill adds no second copy');
     assert.equal(await value('jobTitle-1'), 'Senior Engineer (edited)', 'and never overwrites what is there');
     assert.deepEqual(await read(['company-2', 'location-2']), ['EPAM', 'Kyiv, Ukraine'], "an older job's emptied fields get that job's, never the current employer or home location");
-    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)']);
+    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)', 'Java', 'SQL Server', 'Amazon Web Services (AWS)'], 'the chips there before (one added by hand) removed first, then the CV\'s skills, as Jobright does');
     assert.deepEqual(await uploaded(), ['Sergey_Proniuk_CV.pdf'], 'the CV replaced, not uploaded twice: the old file deleted first');
     console.log('PASS a second Autofill: no job, school, website, skill or CV twice, and nothing typed over');
 
@@ -179,6 +180,17 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.equal(await pick(named, "Master's", 'Software Engineering'), 'MSc - Master of Science', 'no MBA for a CV that does not say MBA');
     assert.equal(await pick(['Undergraduate Degree', 'Graduate Degree'], "Bachelor's", ''), 'Undergraduate Degree');
     assert.equal(await pick(['High School', 'College Diploma'], "Bachelor's", ''), null, 'nothing of its kind: left to the person');
+    // Jobright's strict skill tests, against option lists as Workday shows them.
+    const skill = (options, name) => tab.evaluate((options, name) => { for (const test of window.CVAutofillHistory.skillTests(name)) { const hit = options.find((option) => test(option.toLowerCase())); if (hit) return hit; } return null; }, options, name);
+    assert.equal(await skill(['C', 'C++', 'C# (Programming Language)'], 'C#'), 'C# (Programming Language)', 'C# is not C');
+    assert.equal(await skill(['C#', 'C++'], 'C++'), 'C++');
+    assert.equal(await skill(['JavaScript', 'Java'], 'Java'), 'Java');
+    assert.equal(await skill(['JavaScript'], 'Java'), null, 'no fuzzy guess: Java is not JavaScript');
+    assert.equal(await skill(['Docker (Software)'], 'Docker'), 'Docker (Software)', "Workday's own qualifier");
+    assert.equal(await skill(['Dockerfile'], 'Docker'), null);
+    assert.equal(await skill(['Microsoft SQL Server'], 'SQL'), 'Microsoft SQL Server', 'a short name: one of its words');
+    assert.equal(await skill(['Amazon Web Services (AWS)'], 'Amazon Web Services'), 'Amazon Web Services (AWS)');
+    assert.equal(await skill(['Ruby on Rails'], 'Ruby'), null, 'a longer single word: the same name only');
     const study = (names, field) => tab.evaluate((names, field) => window.CVAutofillHistory.studyName(names, field), names, field);
     assert.equal(await study(STUDIES, 'Computer and Information Systems Security'), 'Computer and Information Systems Security/Information Assurance');
     assert.equal(await study(['Computer Science', 'Engineering, Software', 'Software Testing'], 'Software Engineering'), 'Engineering, Software', 'the most words shared');

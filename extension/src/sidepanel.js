@@ -1036,7 +1036,7 @@ function formHistory() {
       description: [clean(role.description), ...(role.bullets ?? []).filter((bullet) => !(role.excluded ?? []).includes(bullet)).map((bullet) => `• ${clean(bullet)}`)].filter(Boolean).join('\n').slice(0, 4000),
     })) : [],
     educations: groupOn('school') ? (view?.educations ?? []).slice(0, 5).map(({ institution, degree, field, from, to }) => ({ institution, degree, field, from, to })) : [],
-    skills: work ? (view?.skills ?? []).slice(0, 30) : [],
+    skills: work ? (view?.skills ?? []).slice(0, 39) : [],
     websites: links,
   };
 }

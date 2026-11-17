@@ -149,25 +149,50 @@
    * A Workday search box (school, field of study, a skill): types the text,
    * presses Enter as Workday wants, and picks the option that matches.
    */
-  async function searchPick(input, text, matches) {
+  async function searchPick(input, text, matches, { patient = false } = {}) {
     if (!input || !text) return null;
     input.focus({ preventScroll: true });
     Filler().typeText(input, text);
     // A real Enter: Chrome drops keyCode from a made-up key event, and Workday searches on keyCode 13.
-    for (const type of ['keydown', 'keypress', 'keyup']) {
-      const key = new KeyboardEvent(type, { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter' });
-      Object.defineProperty(key, 'keyCode', { get: () => 13 });
-      Object.defineProperty(key, 'which', { get: () => 13 });
-      input.dispatchEvent(key);
-    }
-    let options = [];
-    for (let waited = 0; waited < 3000 && !options.length; waited += 150) {
-      await wait(150);
-      options = [...document.querySelectorAll('[data-automation-activepopup="true"] [data-automation-id="promptOption"], [data-automation-activepopup="true"] [role="option"], [role="listbox"] [role="option"]')].filter(shown);
-    }
+    const enter = () => {
+      for (const type of ['keydown', 'keypress', 'keyup']) {
+        const key = new KeyboardEvent(type, { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter' });
+        Object.defineProperty(key, 'keyCode', { get: () => 13 });
+        Object.defineProperty(key, 'which', { get: () => 13 });
+        input.dispatchEvent(key);
+      }
+    };
+    enter();
     const label = (option) => normal(option.getAttribute('data-automation-label') || option.textContent);
+    const NO_ITEMS = /^(no items\.?|no matches found|no results)$/;
+    const listed = () => [...document.querySelectorAll('[data-automation-activepopup="true"] [data-automation-id="promptOption"], [data-automation-activepopup="true"] [role="option"], [role="listbox"] [role="option"]')].filter((option) => shown(option) && !NO_ITEMS.test(label(option)));
     // Several tests, best first: the first that any option passes picks it.
-    const pick = [].concat(matches).map((test) => options.find((option) => test(label(option)))).find(Boolean);
+    const choose = (options) => [].concat(matches).map((test) => options.find((option) => test(label(option)))).find(Boolean);
+    let options = [], pick = null;
+    if (patient) {
+      // As Jobright: results arrive in stages, so look up to 30 times for a match, searching again at the 12th.
+      // Stops early once Workday says "No Items", or after searching again its results stay the same.
+      let none = 0, same = 0, last = '';
+      for (let poll = 1; poll <= 30 && !pick; poll++) {
+        await wait(150);
+        options = listed();
+        pick = choose(options);
+        if (pick) break;
+        const empty = [...document.querySelectorAll('[data-automation-activepopup="true"]')].some((popup) => NO_ITEMS.test(normal(popup.textContent)));
+        none = empty && !options.length ? none + 1 : 0;
+        const now = options.map(label).join('|');
+        same = poll > 12 && now && now === last ? same + 1 : 0;
+        last = now;
+        if (none >= 4 || same >= 6) break;
+        if (poll === 12) enter();
+      }
+    } else {
+      for (let waited = 0; waited < 3000 && !options.length; waited += 150) {
+        await wait(150);
+        options = listed();
+      }
+      pick = choose(options);
+    }
     if (!pick) {
       input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
       Filler().typeText(input, '');
@@ -330,18 +355,60 @@
     return count;
   }
 
+  // Jobright's ways of comparing a skill with an option: words as typed, letters
+  // and digits only, and those plus the characters that make "C#", "C++", "Node.js".
+  const plainText = (text) => String(text ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const letters = (text) => plainText(text).replace(/[^a-z0-9]/g, '');
+  const marked = (text) => plainText(text).replace(/[^a-z0-9+#.]/g, '');
+  const tokens = (text) => plainText(text).split(/[^a-z0-9]+/).filter(Boolean);
+  const repeats = (long, short) => !!long && !!short && long.length > short.length && long.length % short.length === 0 && long === short.repeat(long.length / short.length);
+
+  /**
+   * Jobright's strict tests for a skill, best first: the same name; one of the
+   * option's words ("SQL" in "SQL Server", for a name of several words or of
+   * three letters or fewer); an option containing it ("Node.js" in "Node.js
+   * (Programming)"). Plus Workday's own qualifier ("TypeScript (Programming)").
+   * Never a fuzzy guess.
+   */
+  function skillTests(skill) {
+    const words = plainText(skill), bare = letters(skill), sharp = marked(skill), special = sharp !== bare;
+    if (!bare) return [];
+    const expanded = tokens(skill).length > 1 || bare.length <= 3;
+    const tests = [
+      (option) => plainText(option) === words || marked(option) === sharp || repeats(marked(option), sharp)
+        || (!special && marked(option) === letters(option) && (letters(option) === bare || repeats(letters(option), bare))),
+      (option) => plainText(option).startsWith(`${words} (`),
+    ];
+    if (!special && expanded) tests.push((option) => tokens(option).includes(bare));
+    if ((!special && bare.length <= 3) || !expanded) return tests;
+    tests.push((option) => (special ? marked(option) : letters(option)).includes(special ? sharp : bare));
+    return tests;
+  }
+
+  /**
+   * Skills as Jobright fills them: the chips already there removed, then up to
+   * 39 of the CV's skills, each typed, searched and chosen only by those tests.
+   */
   async function fillSkills(skills, source) {
     const input = first(document, '[data-automation-id="formField-skills"] input, [data-automation-id="skillsSection"] input, [data-automation-id="formField-skillsPrompt"] input');
     if (!input || !skills.length) return 0;
     const box = input.closest('[data-automation-id^="formField"], [data-automation-id="skillsSection"]') ?? input.parentElement;
-    const have = new Set([...box.querySelectorAll('[data-automation-id="selectedItem"]')].map((item) => normal(item.textContent)));
+    const chips = () => [...box.querySelectorAll('[data-automation-id="selectedItem"]')];
+    for (let tries = 0; chips().length && tries < 60; tries++) {
+      const remove = box.querySelector('[data-automation-id="DELETE_charm"]');
+      if (!remove) break;
+      const before = chips().length;
+      press(remove);
+      for (let waited = 0; chips().length === before && waited < 1000; waited += 100) await wait(100);
+    }
+    const seen = new Set();
     let added = 0;
-    for (const skill of skills.slice(0, 30)) {
-      const wanted = normal(skill);
-      // Already chosen, by the same name or Workday's longer one ("Node.js (Programming)").
-      if (!wanted || [...have].some((item) => item === wanted || item.startsWith(`${wanted} (`))) continue;
-      const got = await searchPick(input, skill, [(option) => option === wanted, (option) => option.startsWith(`${wanted} (`)]);
-      if (got) { have.add(got); added++; }
+    for (const skill of skills.slice(0, 39)) {
+      if (!letters(skill) || seen.has(marked(skill))) continue;
+      seen.add(marked(skill));
+      const tests = skillTests(skill);
+      const got = await searchPick(input, skill, tests, { patient: true });
+      if (got) added++;
     }
     if (added) filledMark(input, `${added} skill${added === 1 ? '' : 's'} added from ${source.replace(/^From /, '')}`);
     return added;
@@ -402,5 +469,5 @@
     return false;
   };
 
-  window.CVAutofillHistory = { fill, here, owns, degreeOption, searchTerms, studyName };
+  window.CVAutofillHistory = { fill, here, owns, degreeOption, searchTerms, studyName, skillTests };
 })();
