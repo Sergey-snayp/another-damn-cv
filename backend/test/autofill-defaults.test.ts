@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cleanDefaults, scopeKey } from '../src/modules/answers/domain/defaults';
+import { cleanDefaults, defaultValueProblem, scopeKey } from '../src/modules/answers/domain/defaults';
 import { extensionProfileSchema } from '../src/modules/profiles/adapters/inbound/http/profiles.controller';
 import { saveDefaultsSchema } from '../src/modules/answers/adapters/inbound/http/defaults.controller';
 
@@ -36,6 +36,23 @@ test('only known kinds can be saved as defaults', () => {
     !saveDefaultsSchema.safeParse({ defaults: [{ kind: 'email', scope: '', value: 'x@y.z' }] }).success,
   );
   assert.ok(!saveDefaultsSchema.safeParse({ defaults: [] }).success);
+});
+
+test('work authorization per country: each kind keeps only values it understands', () => {
+  const ok = (kind: string, value: string) => saveDefaultsSchema.safeParse({ defaults: [{ kind, scope: 'Canada', value }] }).success;
+  assert.ok(ok('workCountry', 'Yes'));
+  assert.ok(!ok('workCountry', 'Maybe'));
+  assert.ok(ok('citizenship', 'No'));
+  assert.ok(!ok('citizenship', 'Sometimes'));
+  for (const basis of ['CITIZEN', 'PERMANENT_RESIDENT', 'TEMPORARY_WORK_AUTHORIZATION', 'OTHER', 'NOT_CURRENTLY_AUTHORIZED']) assert.ok(ok('authorizationBasis', basis), basis);
+  assert.ok(!ok('authorizationBasis', 'tourist'));
+  assert.ok(ok('workPermit', 'OPEN_WORK_PERMIT'));
+  assert.ok(!ok('workPermit', 'open permit <script>'));
+  assert.ok(ok('workPermitExpiry', '2027-03'));
+  assert.ok(ok('workPermitExpiry', '2027-03-31'));
+  assert.ok(!ok('workPermitExpiry', '03/2027'));
+  assert.ok(ok('citizenship', ''), 'a blank value is dropped when saved, as for every kind');
+  assert.equal(defaultValueProblem('workAuthorization', 'Yes, I am'), null, 'the older kinds keep their wording');
 });
 
 test('the extension may set fillable profile values but not name or email', () => {

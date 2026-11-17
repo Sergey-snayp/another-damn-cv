@@ -12,8 +12,30 @@ export const DEFAULT_KINDS = [
   'requiresSponsorship',
   'workedHereBefore',
   'willingToRelocate',
+  // Work authorization per country, as Jobright asks it (its "Equal Employment" step):
+  // a country you want to work in, whether you are its citizen, on what basis you may
+  // work there and with which permit, and (ours) when that permit expires.
+  'workCountry',
+  'citizenship',
+  'authorizationBasis',
+  'workPermit',
+  'workPermitExpiry',
 ] as const;
 export type DefaultKind = (typeof DEFAULT_KINDS)[number];
+
+/** On what basis a person may work in a country. A citizen needs no basis; "not authorized" is set for them. */
+export const AUTHORIZATION_BASES = ['CITIZEN', 'PERMANENT_RESIDENT', 'TEMPORARY_WORK_AUTHORIZATION', 'OTHER', 'NOT_CURRENTLY_AUTHORIZED'] as const;
+
+/** Why a default's value cannot be kept, or null. Yes/No kinds keep the wording a form used before ("Yes, I am"). */
+export function defaultValueProblem(kind: DefaultKind, value: string): string | null {
+  const text = value.trim();
+  if (kind === 'workCountry' && text !== 'Yes') return 'A country you want to work in is saved as "Yes".';
+  if (kind === 'citizenship' && !['Yes', 'No'].includes(text)) return 'Citizenship is "Yes" or "No".';
+  if (kind === 'authorizationBasis' && !(AUTHORIZATION_BASES as readonly string[]).includes(text)) return 'Unknown authorization basis.';
+  if (kind === 'workPermit' && !/^[A-Z0-9_]{1,60}$/.test(text)) return 'Unknown work permit type.';
+  if (kind === 'workPermitExpiry' && !/^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/.test(text)) return 'A permit expiry date is YYYY-MM or YYYY-MM-DD.';
+  return null;
+}
 
 export interface AutofillDefault {
   id: string;
@@ -33,6 +55,14 @@ export class DefaultNotFoundError extends Error {
   constructor() {
     super('No such default answer.');
     this.name = 'DefaultNotFoundError';
+  }
+}
+
+/** A value that does not fit its kind ("Maybe" for citizenship). */
+export class DefaultValueError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DefaultValueError';
   }
 }
 

@@ -18,7 +18,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 import { AuthGuard, CurrentUser, SyncTokenGuard } from '../../../../auth/http';
 import { ZodValidationPipe } from '../../../../../shared/http/zod-validation.pipe';
-import { DEFAULT_KINDS, DefaultNotFoundError, type NewDefault } from '../../../domain/defaults';
+import { DEFAULT_KINDS, DefaultNotFoundError, DefaultValueError, defaultValueProblem, type NewDefault } from '../../../domain/defaults';
 import {
   DeleteDefault,
   ListDefaults,
@@ -30,7 +30,16 @@ const value = z.string().max(500);
 export const saveDefaultsSchema = z
   .object({
     defaults: z
-      .array(z.object({ kind: z.enum(DEFAULT_KINDS), scope: z.string().max(200), value }).strict())
+      .array(
+        z
+          .object({ kind: z.enum(DEFAULT_KINDS), scope: z.string().max(200), value })
+          .strict()
+          .superRefine((item, context) => {
+            // A blank value is dropped when saved; any other must fit its kind.
+            const problem = item.value.trim() ? defaultValueProblem(item.kind, item.value) : null;
+            if (problem) context.addIssue({ code: 'custom', message: problem, path: ['value'] });
+          }),
+      )
       .min(1)
       .max(100),
   })
@@ -39,10 +48,11 @@ export const updateDefaultSchema = z
   .object({ value: value.refine((text) => text.trim().length > 0) })
   .strict();
 
-@Catch(DefaultNotFoundError)
+@Catch(DefaultNotFoundError, DefaultValueError)
 class DefaultErrorFilter implements ExceptionFilter {
-  catch(error: DefaultNotFoundError, host: ArgumentsHost) {
-    host.switchToHttp().getResponse<Response>().status(404).json({ statusCode: 404, message: error.message });
+  catch(error: DefaultNotFoundError | DefaultValueError, host: ArgumentsHost) {
+    const status = error instanceof DefaultValueError ? 400 : 404;
+    host.switchToHttp().getResponse<Response>().status(status).json({ statusCode: status, message: error.message });
   }
 }
 

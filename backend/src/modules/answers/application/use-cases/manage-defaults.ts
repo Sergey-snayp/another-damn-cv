@@ -1,5 +1,5 @@
 import type { DefaultRepository } from '../ports/defaults';
-import { cleanDefaults, DefaultNotFoundError, type NewDefault } from '../../domain/defaults';
+import { cleanDefaults, DefaultNotFoundError, DefaultValueError, defaultValueProblem, type NewDefault } from '../../domain/defaults';
 
 export class ListDefaults {
   constructor(private readonly repository: DefaultRepository) {}
@@ -19,6 +19,10 @@ export class SaveDefaults {
 export class UpdateDefault {
   constructor(private readonly repository: DefaultRepository) {}
   async execute(userId: string, id: string, value: string) {
+    const current = (await this.repository.list(userId)).find((row) => row.id === id);
+    if (!current) throw new DefaultNotFoundError();
+    const problem = defaultValueProblem(current.kind, value);
+    if (problem) throw new DefaultValueError(problem);
     const updated = await this.repository.update(userId, id, value.trim());
     if (!updated) throw new DefaultNotFoundError();
     return updated;
