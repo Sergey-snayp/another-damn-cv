@@ -96,6 +96,16 @@ const MARKED_SITES = (window.CVAutofillSiteFields ?? []).map((entry) => ({
   name: entry.name,
   matches: { test: (hostname) => entry.hosts.some((host) => host.test(hostname)) },
   fields: entry.fields,
+  // On a company's own domain (Lululemon's careers site is Avature's): the system's mark in the
+  // page (`markers`, CSS) or its own address pattern on any host (`pages`, the whole URL).
+  ...((entry.markers?.length || entry.pages?.length) && {
+    fingerprint: () => (entry.pages ?? []).some((page) => page.test(location.href))
+      || (entry.markers ?? []).some((marker) => {
+        // A selector, or a selector and the words its element says ("Powered by Pinpoint").
+        const [selector, text] = typeof marker === 'string' ? [marker, null] : [marker.selector, marker.text];
+        try { return [...document.querySelectorAll(selector)].some((node) => !text || text.test(node.textContent)); } catch { return false; }
+      }),
+  }),
 }));
 
 function siteFor(hostname) {
@@ -107,9 +117,19 @@ function rulesFor(hostname) {
   return [...SITES, ...MARKED_SITES].filter((site) => site.matches.test(hostname));
 }
 
-/** The site rule for this page: by host, or by page structure for custom domains. */
+/**
+ * The site rule for this page: by host, or (a company's own domain) by the
+ * system's mark in the page, as Simplify finds them (its embeddedPaths).
+ * The page's mark is looked for once per address and second: it is asked often.
+ */
+let marked = { at: 0, url: '', site: null };
 function siteForPage(hostname = location.hostname) {
-  return siteFor(hostname) ?? SITES.find((site) => site.fingerprint?.()) ?? null;
+  const byHost = siteFor(hostname);
+  if (byHost || hostname !== location.hostname) return byHost;
+  if (marked.url === location.href && Date.now() - marked.at < 1000) return marked.site;
+  const site = SITES.find((entry) => entry.fingerprint?.()) ?? MARKED_SITES.find((entry) => entry.fingerprint?.()) ?? null;
+  marked = { at: Date.now(), url: location.href, site };
+  return site;
 }
 
 /**
@@ -139,6 +159,9 @@ const APPLY_BUTTONS = {
   seek: 'a[data-automation="job-detail-apply"]',
   oraclecloud: 'button.apply-now-button',
   eightfold: 'button[data-test-id="apply-button"], a[href*="/careers/apply"]',
+  avature: 'a[href*="ApplicationMethods"], a[href*="ApplyRegister"]',
+  brassring: 'button#applyFromDetailBtn',
+  phenompeople: 'a[data-ph-at-id="apply-link"]',
 };
 
 /**

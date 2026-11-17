@@ -8,7 +8,7 @@
 (() => {
   if (window.CVAutofillSiteFields) return;
   window.CVAutofillSiteFields = [
-    { name: 'adp', hosts: [/^myjobs\.adp\.com$/, /^recruiting\.adp\.com$/], fields: [
+    { name: 'adp', pages: [/^https?:\/\/recruiting\.adp\.com\/srccar\/public\/.*$/, /^https?:\/\/myjobs\.adp\.com\/.*\/cx$/, /^https?:\/\/myjobs\.adp\.com\/.*\/cx\?.*$/, /^https?:\/\/myjobs\.adp\.com\/.*\/cx\/.*$/, /^https?:\/\/myjobs\.adp\.com\/.*$/], hosts: [/^myjobs\.adp\.com$/, /^recruiting\.adp\.com$/, /(^|\.)workforcenow\.adp\.com$/], fields: [
       ['name', 'desktopButton', 'coverLetter'],
       ['name', 'desktopButton', 'resume'],
     ] },
@@ -19,8 +19,9 @@
       ['id', 'personalInfomationLastName', 'lastName'],
       ['id', 'personalInfomationMiddleName', 'middleName'],
       ['id', 'resumeUploadContainer', 'resume'],
+      ['name', 'phone', 'phone'],
     ] },
-    { name: 'amazon', hosts: [/(^|\.)amazon\.jobs$/], fields: [
+    { name: 'amazon', pages: [/^https?:\/\/([^\/]+\.)?amazon\.jobs\/.*$/, /^https?:\/\/([^\/]+\.)?amazonuniversity\.jobs\/profile.*$/], hosts: [/(^|\.)amazon\.jobs$/], fields: [
       ['id', 'applicant_address_city', 'city'],
       ['id', 'applicant_address_street_line1', 'addressLine'],
       ['id', 'applicant_address_zip', 'postalCode'],
@@ -32,7 +33,7 @@
       ['name', 'ELIGIBLE_TO_BEGIN_EMPLOYMENT', 'workAuthorization'],
       ['name', 'REQUIRE_SPONSORSHIP', 'requiresSponsorship'],
     ] },
-    { name: 'apple', hosts: [/^jobs\.apple\.com$/], fields: [
+    { name: 'apple', pages: [/^https?:\/\/jobs\.apple\.com\/.*\/details\/.*$/, /^https?:\/\/jobs\.apple\.com\/app\/.*\/apply\/.*$/], hosts: [/^jobs\.apple\.com$/], fields: [
       ['id', 'apply-review-country', 'country'],
       ['id', 'apply-review-email', 'email'],
       ['id', 'apply-review-firstname', 'firstName'],
@@ -48,18 +49,19 @@
       ['name', 'phone', 'phone'],
       ['name', 'state-preferred', 'state'],
     ] },
-    { name: 'ashbyhq', hosts: [/^jobs\.ashbyhq\.com$/], fields: [
+    { name: 'ashbyhq', markers: ['iframe[src^="https://jobs.ashbyhq.com/"]', 'meta[property="og:url"][content^="https://jobs.ashbyhq.com/"]'], pages: [/^https?:\/\/([^\/]+\.)?ashbyhq\.com\/.*\/.*$/, /[?&]ashby_jid=/], hosts: [/^jobs\.ashbyhq\.com$/], fields: [
       ['data-field-path', '_systemfield_location', 'location'],
       ['id', '_systemfield_resume', 'resume'],
       ['name', '_systemfield_email', 'email'],
       ['name', '_systemfield_name', 'fullName'],
       ['name', '_systemfield_resume', 'resume'],
     ] },
-    { name: 'avature', hosts: [/(^|\.)avature\.net$/, /^careers\.bain\.com$/, /^careers\.jacobs\.com$/, /^careers\.tql\.com$/, /^www\.bain\.com$/], fields: [
+    { name: 'avature', markers: ['meta[name="avature.portal.id"]', 'script[src*="avature"]', 'link[href*="avature"]'], pages: [/^https?:\/\/careers\.jacobs\.com\/en_US\/careers\/.*$/, /^https:\/\/intuit\.avature\.net\/en_US\/externalCareers\/ApplicationConfirmation.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/ApplicationForm.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/ApplicationMethods.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/ApplicationQuestions.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/careers\/CompleteApplication$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/careers\/CompleteApplication\?.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/careers\/CompleteApplication\/.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/ApplicationReview.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/Register.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/LinkedInApplicationForm.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/LinkedInApplicationForm.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/YourInformation.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/campusApply.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/GeneralInfo.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/careers\/JobDetail.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/careers\/JobDetail\/.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/careers\/JobDetail\/.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/External\/JobDetail.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/careers\/LocationAndProfile\/.*$/, /^https?:\/\/([^\/]+\.)?avature\.net\/.*\/careers\/LocationAndProfile\/.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/ApplicationForm.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/ApplicationMethods.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/ApplicationQuestions.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/ApplicationReview.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/Register.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/GeneralInfo.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/JobDetail.*$/, /^https?:\/\/careers\.arcb\.com\/careersmarketplace\/ApplicationDotKnockedOutWizard.*$/, /^https?:\/\/apply\.deloitte\.com\/.*\/careers\/.*$/, /^https?:\/\/apply\.deloitte\.com\/.*\/External\/.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/ApplicationForm.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/ApplicationMethods.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/ApplicationQuestions.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/ApplicationReview.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/Register.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/InviteToApply.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/GeneralInfo.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/JobDetail.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/JobDetail\/.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/careers\/LocationAndProfile\/.*$/, /^https?:\/\/careers\.cbre\.com\/.*\/External\/JobDetail.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/ApplicationForm.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/ApplicationMethods.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/ApplicationQuestions.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/ApplicationReview.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/Register.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/InviteToApply.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/GeneralInfo.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/JobDetail.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/JobDetail\/.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/careers\/LocationAndProfile\/.*$/, /^https?:\/\/careers\.mantech\.com\/.*\/External\/JobDetail.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/JobDetail.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/ApplicationMethods.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/JobApplication.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/ApplicationForm.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/ApplicationQuestions.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/ApplicationReview.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/Register.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/GeneralInfo.*$/, /^https?:\/\/careers\.ibm\.com\/.*\/careers\/YourInformation.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/ApplicationForm.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/ApplicationMethods.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/ApplicationQuestions.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/ApplicationReview.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/Register.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/InviteToApply.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/GeneralInfo.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/JobDetail.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/JobDetail\/.*$/, /^https?:\/\/careers\.tql\.com\/.*\/TQLexternalcareers\/LocationAndProfile\/.*$/, /^https?:\/\/careers\.tql\.com\/.*\/External\/JobDetail.*$/], hosts: [/(^|\.)avature\.net$/, /^careers\.bain\.com$/, /^careers\.jacobs\.com$/, /^careers\.tql\.com$/, /^www\.bain\.com$/], fields: [
       ['id', 'resumeFile', 'resume'],
       ['id', 'tpt_resumeFile', 'resume'],
+      ['id', 'methodButton--file', 'resume'],
     ] },
-    { name: 'bamboohr', hosts: [/(^|\.)bamboohr\.com$/], fields: [
+    { name: 'bamboohr', pages: [/^https?:\/\/([^\/]+\.)?bamboohr\.com\/jobs.*$/, /^https?:\/\/([^\/]+\.)?bamboohr\.com\/careers.*$/], hosts: [/(^|\.)bamboohr\.com$/], fields: [
       ['id', 'city', 'city'],
       ['id', 'educationInstitutionName', 'school'],
       ['id', 'educationLevelId', 'degree'],
@@ -79,7 +81,7 @@
       ['name', 'streetAddress.value', 'addressLine'],
       ['name', 'zip.value', 'postalCode'],
     ] },
-    { name: 'breezyhr', hosts: [/(^|\.)breezy\.hr$/], fields: [
+    { name: 'breezyhr', pages: [/^https?:\/\/([^\/]+\.)?breezy\.hr\/p\/.*$/, /^https?:\/\/([^\/]+\.)?breezy\.hr\/.*\/apply.*$/], hosts: [/(^|\.)breezy\.hr$/], fields: [
       ['name', 'cAddress', 'addressLine'],
       ['name', 'cCoverLetter', 'coverLetter'],
       ['name', 'cEmail', 'email'],
@@ -87,7 +89,7 @@
       ['name', 'cPhoneNumber', 'phone'],
       ['name', 'cResume', 'resume'],
     ] },
-    { name: 'comeet', hosts: [/(^|\.)comeet\.co$/, /(^|\.)comeet\.com$/], fields: [
+    { name: 'comeet', pages: [/^https?:\/\/([^\/]+\.)?comeet\.com\/jobs\/.*\/.*\/.*\/.*$/, /^https?:\/\/([^\/]+\.)?comeet\.co\/jobs\/.*\/.*\/apply.*$/], hosts: [/(^|\.)comeet\.co$/, /(^|\.)comeet\.com$/], fields: [
       ['name', 'coverLetter', 'coverLetter'],
       ['name', 'cv', 'resume'],
       ['name', 'email', 'email'],
@@ -105,7 +107,7 @@
       ['name', '_systemfield_name', 'fullName'],
       ['name', '_systemfield_resume', 'resume'],
     ] },
-    { name: 'dayforcehcm', hosts: [/^jobs\.dayforcehcm\.com$/], fields: [
+    { name: 'dayforcehcm', pages: [/^https?:\/\/([^\/]+\.)?jobs\.dayforcehcm\.com(?=[\/?#]|$)/, /^https:\/\/dfid\.dayforcehcm\.com\/globalidentity\/account\/.*$/], hosts: [/^jobs\.dayforcehcm\.com$/], fields: [
       ['id', 'jobPostingApplication_files_resume', 'resume'],
       ['id', 'jobPostingApplication_personalInfo_address1', 'addressLine'],
       ['id', 'jobPostingApplication_personalInfo_candidateSource', 'heardAbout'],
@@ -128,13 +130,13 @@
       ['name', 'linkedinUrl', 'linkedin'],
       ['name', 'phoneNumber', 'phone'],
     ] },
-    { name: 'eightfold', hosts: [/(^|\.)eightfold\.ai$/, /^apply\.eyelinestudios\.com$/, /^apply\.netflixhouse\.com$/, /^careers\.qualcomm\.com$/, /^explore\.jobs\.netflix\.net$/], fields: [
+    { name: 'eightfold', markers: ['script[src*="eightfold"]', 'link[href*="eightfold"]'], pages: [/^https?:\/\/([^\/]+\.)?eightfold\.ai\/careers.*$/, /^https?:\/\/([^\/]+\.)?eightfold\.ai\/careerhub\/.*$/], hosts: [/(^|\.)eightfold\.ai$/, /^apply\.eyelinestudios\.com$/, /^apply\.netflixhouse\.com$/, /^careers\.qualcomm\.com$/, /^explore\.jobs\.netflix\.net$/], fields: [
       ['data-testid', 'common-text-input-email-input', 'email'],
       ['data-testid', 'common-text-input-first-name-input', 'firstName'],
       ['data-testid', 'common-text-input-last-name-input', 'lastName'],
       ['data-testid', 'common-text-input-phone-input', 'phone'],
     ] },
-    { name: 'freshteam', hosts: [/(^|\.)freshteam\.com$/], fields: [
+    { name: 'freshteam', pages: [/^https?:\/\/([^\/]+\.)?freshteam\.com\/jobs\/.*$/], hosts: [/(^|\.)freshteam\.com$/], fields: [
       ['id', 'applicant_lead_attributes[email]', 'email'],
       ['id', 'applicant_lead_attributes[first_name]', 'firstName'],
       ['id', 'applicant_lead_attributes[last_name]', 'lastName'],
@@ -161,7 +163,7 @@
       ['id', 'gi-primary-phone-field', 'phone'],
       ['id', 'gi-zip-code-field', 'postalCode'],
     ] },
-    { name: 'greenhouse', hosts: [/(^|\.)coinbase\.com$/, /(^|\.)hubspot\.com$/, /^boards\.anz\.greenhouse\.io$/, /^boards\.eu\.greenhouse\.io$/, /^boards\.greenhouse\.io$/, /^job\-boards\.anz\.greenhouse\.io$/, /^job\-boards\.eu\.greenhouse\.io$/, /^job\-boards\.greenhouse\.io$/, /^jobs\.bayada\.com$/, /^jobs\.dropbox\.com$/], fields: [
+    { name: 'greenhouse', markers: ['form[action^="https://boards.greenhouse.io/"]', 'form[action^="https://boards.eu.greenhouse.io/"]', 'form[action^="https://boards.anz.greenhouse.io/"]', 'form[action^="https://job-boards.greenhouse.io/"]', 'form[action^="https://job-boards.eu.greenhouse.io/"]', 'form[action^="https://job-boards.anz.greenhouse.io/"]', 'iframe#grnhse_iframe', 'iframe[src*="greenhouse.io/embed/job_app?"]', 'input[type="hidden"][name="action"][value="greenhouse/applications/submit"]'], pages: [/^https?:\/\/([^\/]+\.)?greenhouse\.io(?=[\/?#]|$)/, /[?&]gh_jid=/, /[?&]gh_src=/, /^https:\/\/www\.kaseya\.com\/.*$/], hosts: [/(^|\.)coinbase\.com$/, /(^|\.)hubspot\.com$/, /^boards\.anz\.greenhouse\.io$/, /^boards\.eu\.greenhouse\.io$/, /^boards\.greenhouse\.io$/, /^job\-boards\.anz\.greenhouse\.io$/, /^job\-boards\.eu\.greenhouse\.io$/, /^job\-boards\.greenhouse\.io$/, /^jobs\.bayada\.com$/, /^jobs\.dropbox\.com$/], fields: [
       ['id', 'candidate-location', 'location'],
       ['id', 'cover_letter', 'coverLetter'],
       ['id', 'cover_letter_file', 'coverLetter'],
@@ -192,8 +194,31 @@
       ['name', 'location', 'location'],
       ['name', 'postalCode', 'postalCode'],
       ['name', 'questions.location', 'location'],
+      ['id', 'apply-email', 'email'],
+      ['id', 'apply-first_name', 'firstName'],
+      ['id', 'apply-last_name', 'lastName'],
+      ['id', 'apply-phone', 'phone'],
+      ['id', 'apply-resume', 'resume'],
+      ['id', 'cover_letter_chosen', 'coverLetter'],
+      ['id', 'email-address', 'email'],
+      ['id', 'emailAddress', 'email'],
+      ['id', 'email_address', 'email'],
+      ['id', 'first-name', 'firstName'],
+      ['id', 'firstName', 'firstName'],
+      ['id', 'firstname', 'firstName'],
+      ['id', 'last-name', 'lastName'],
+      ['id', 'lastName', 'lastName'],
+      ['id', 'lastname', 'lastName'],
+      ['id', 'location', 'location'],
+      ['id', 'resume_chosen', 'resume'],
+      ['name', 'first-name', 'firstName'],
+      ['name', 'firstName', 'firstName'],
+      ['name', 'firstname', 'firstName'],
+      ['name', 'last-name', 'lastName'],
+      ['name', 'lastName', 'lastName'],
+      ['name', 'lastname', 'lastName'],
     ] },
-    { name: 'gusto', hosts: [/^jobs\.gusto\.com$/], fields: [
+    { name: 'gusto', pages: [/^https?:\/\/([^\/]+\.)?jobs\.gusto\.com(?=[\/?#]|$)/], hosts: [/^jobs\.gusto\.com$/], fields: [
       ['id', 'job-applicant-form', 'email'],
       ['name', 'job_applicant[cover_letter]', 'coverLetter'],
       ['name', 'job_applicant[email]', 'email'],
@@ -219,7 +244,7 @@
       ['name', 'lastName', 'lastName'],
       ['name', 'uname', 'email'],
     ] },
-    { name: 'icims', hosts: [/(^|\.)icims\.com$/, /(^|\.)jibeapply\.com$/], fields: [
+    { name: 'icims', pages: [/^https?:\/\/([^\/]+\.)?icims\.com(?=[\/?#]|$)/], hosts: [/(^|\.)icims\.com$/, /(^|\.)jibeapply\.com$/], fields: [
       ['autocomplete', 'email', 'email'],
       ['autocomplete', 'family-name', 'lastName'],
       ['autocomplete', 'given-name', 'firstName'],
@@ -251,7 +276,7 @@
       ['name', 'names-last-name', 'lastName'],
       ['name', 'phone', 'phone'],
     ] },
-    { name: 'jazzhr', hosts: [/(^|\.)applytojob\.com$/], fields: [
+    { name: 'jazzhr', pages: [/^https?:\/\/([^\/]+\.)?applytojob\.com\/apply\/.*$/], hosts: [/(^|\.)applytojob\.com$/], fields: [
       ['id', 'resumator-address-value', 'addressLine'],
       ['id', 'resumator-city-value', 'city'],
       ['id', 'resumator-country-value', 'country'],
@@ -266,8 +291,9 @@
       ['id', 'resumator-state-value', 'state'],
       ['id', 'resumator-website-value', 'website'],
       ['name', 'resumator-coverletter-value', 'coverLetter'],
+      ['id', 'resumator-choose-upload', 'resume'],
     ] },
-    { name: 'jobscore', hosts: [/^careers\.jobscore\.com$/], fields: [
+    { name: 'jobscore', pages: [/^https?:\/\/careers\.jobscore\.com\/apply_flow\/.*$/, /^https?:\/\/careers\.jobscore\.com\/careers\/.*\/jobs\/.*$/], hosts: [/^careers\.jobscore\.com$/], fields: [
       ['id', 'candidate_card_first_name', 'firstName'],
       ['id', 'candidate_card_home_city', 'city'],
       ['id', 'candidate_card_home_country', 'country'],
@@ -285,8 +311,10 @@
       ['id', 'resume_document', 'resume'],
       ['id', 'state_us', 'state'],
       ['name', 'cover_letter', 'coverLetter'],
+      ['id', 'candidate_card_source_board_name', 'heardAbout'],
+      ['id', 'resume_doc', 'resume'],
     ] },
-    { name: 'jobvite', hosts: [/^jobs\.jobvite\.com$/], fields: [
+    { name: 'jobvite', pages: [/^https?:\/\/jobs\.jobvite\.com\/.*\/job\/.*$/, /^https?:\/\/jobs\.jobvite\.com\/.*\/apply.*$/, /[?&]jobviteiframe=/], hosts: [/^jobs\.jobvite\.com$/], fields: [
       ['autocomplete', 'address-level1', 'state'],
       ['autocomplete', 'address-level2', 'city'],
       ['autocomplete', 'address-line1', 'addressLine'],
@@ -298,7 +326,7 @@
       ['autocomplete', 'tel', 'phone'],
       ['id', 'attachResume', 'resume'],
     ] },
-    { name: 'lever', hosts: [/^jobs\.eu\.lever\.co$/, /^jobs\.lever\.co$/], fields: [
+    { name: 'lever', pages: [/^https?:\/\/jobs\.lever\.co\/.*\/.*$/, /^https?:\/\/jobs\.eu\.lever\.co\/.*\/.*$/, /[?&]LeverAppId=/], hosts: [/^jobs\.eu\.lever\.co$/, /^jobs\.lever\.co$/], fields: [
       ['id', 'location-input', 'location'],
       ['id', 'resume-upload-input', 'resume'],
       ['name', 'email', 'email'],
@@ -322,15 +350,19 @@
       ['name', 'name', 'fullName'],
       ['name', 'work_auth', 'workAuthorization'],
     ] },
-    { name: 'meta', hosts: [/(^|\.)facebookcareers\.com$/, /(^|\.)metacareers\.com$/], fields: [
+    { name: 'meta', pages: [/^https?:\/\/([^\/]+\.)?metacareers\.com(?=[\/?#]|$)/], hosts: [/(^|\.)facebookcareers\.com$/, /(^|\.)metacareers\.com$/], fields: [
       ['id', 'JobApplicationForm_locationCity', 'location'],
       ['id', 'JobApplicationForm_phoneNumber', 'phone'],
       ['id', 'fileUploader', 'resume'],
       ['name', 'candidateEmail', 'email'],
       ['name', 'candidateName', 'fullName'],
       ['name', 'candidatePhone', 'phone'],
+      ['id', 'JobApplicationForm_email', 'email'],
+      ['id', 'JobApplicationForm_firstName', 'firstName'],
+      ['id', 'JobApplicationForm_lastName', 'lastName'],
+      ['id', 'JobApplicationForm_website', 'linkedin'],
     ] },
-    { name: 'okta', hosts: [/^www\.okta\.com$/], fields: [
+    { name: 'okta', pages: [/^https?:\/\/www\.okta\.com\/company\/careers\/.*\/.*$/], hosts: [/^www\.okta\.com$/], fields: [
       ['id', 'edit-email', 'email'],
       ['id', 'edit-first-name', 'firstName'],
       ['id', 'edit-last-name', 'lastName'],
@@ -338,7 +370,7 @@
       ['name', 'files[cover_letter]', 'coverLetter'],
       ['name', 'files[resume]', 'resume'],
     ] },
-    { name: 'oraclecloud', hosts: [/(^|\.)oraclecloud\.com$/, /^careers\.oracle\.com$/], fields: [
+    { name: 'oraclecloud', pages: [/^https?:\/\/([^\/]+\.)?oraclecloud\.com\/.*\/CandidateExperience\/.*\/sites\/.*\/job\/.*$/, /^https?:\/\/([^\/]+\.)?oraclecloud\.com\/.*\/CandidateExperience\/.*\/sites\/.*\/.*\/preview\/.*$/, /^https?:\/\/[^\/]+\/.*\/CandidateExperience\/.*\/sites\/.*\/job\/.*$/, /^https?:\/\/[^\/]+\/.*\/CandidateExperience\/.*\/sites\/.*\/.*\/preview\/.*$/, /^https?:\/\/[^\/]+\/.*\/sites\/.*\/jobs\/preview\/.*\/apply\/.*$/, /^https?:\/\/[^\/]+\/.*\/sites\/.*\/jobs\/preview\/.*\/easy\-apply.*$/], hosts: [/(^|\.)oraclecloud\.com$/, /^careers\.oracle\.com$/], fields: [
       ['name', 'addressLine1', 'addressLine'],
       ['name', 'city', 'city'],
       ['name', 'country', 'country'],
@@ -350,8 +382,9 @@
       ['name', 'primary-email', 'email'],
       ['name', 'region2', 'state'],
       ['name', 'zipCode', 'postalCode'],
+      ['name', 'recruitmentSourceOtherDetails', 'heardAbout'],
     ] },
-    { name: 'paylocity', hosts: [/(^|\.)paylocity\.com$/], fields: [
+    { name: 'paylocity', pages: [/^https?:\/\/([^\/]+\.)?paylocity\.com\/recruiting\/.*$/, /^https?:\/\/([^\/]+\.)?paylocity\.com\/Recruiting\/.*$/], hosts: [/(^|\.)paylocity\.com$/], fields: [
       ['data-automation-id', 'info.howDidYouHearAboutUs', 'heardAbout'],
       ['id', 'acknowledgements.authorizedToWorkInUs', 'workAuthorization'],
       ['id', 'btn-coverLetter', 'coverLetter'],
@@ -366,8 +399,9 @@
       ['id', 'public-site-address-city', 'city'],
       ['id', 'public-site-address-country', 'country'],
       ['id', 'public-site-address-zip', 'postalCode'],
+      ['id', 'acknowledgements.authorizedToWorkInUs__listbox', 'workAuthorization'],
     ] },
-    { name: 'pinpointhq', hosts: [/(^|\.)pinpointhq\.com$/], fields: [
+    { name: 'pinpointhq', markers: [{ selector: 'a', text: /powered by pinpoint/i }, 'script[src*="d2n5ied94mazop.cloudfront.net"]', 'link[href*="d2n5ied94mazop.cloudfront.net"]'], pages: [/^https?:\/\/([^\/]+\.)?pinpointhq\.com\/.*\/postings\/.*$/, /^https?:\/\/([^\/]+\.)?pinpointhq\.com\/postings\/.*$/], hosts: [/(^|\.)pinpointhq\.com$/], fields: [
       ['id', 'address-country', 'country'],
       ['id', 'application_form[application][cv]', 'resume'],
       ['id', 'application_form_application_country', 'country'],
@@ -377,7 +411,7 @@
       ['id', 'application_form_application_linkedin_url', 'linkedin'],
       ['id', 'application_form_application_phone', 'phone'],
     ] },
-    { name: 'polymer', hosts: [/^jobs\.polymer\.co$/], fields: [
+    { name: 'polymer', markers: ['a.footer__logo[href^="https://www.polymer.co"]'], pages: [/^https?:\/\/jobs\.polymer\.co\/.*\/.*$/], hosts: [/^jobs\.polymer\.co$/], fields: [
       ['id', 'file', 'resume'],
       ['id', 'inputEmailaddress', 'email'],
       ['id', 'inputGitHubprofile', 'github'],
@@ -388,7 +422,7 @@
       ['id', 'inputTwitterprofile', 'twitter'],
       ['id', 'inputWebsiteURL', 'website'],
     ] },
-    { name: 'recruitee', hosts: [/(^|\.)recruitee\.com$/], fields: [
+    { name: 'recruitee', markers: ['[data-cy="brand-wrapper-section"] > a[href^="https://recruitee.com"]', 'script[src*="recruitee"]', 'link[href*="recruitee"]'], pages: [/^https?:\/\/([^\/]+\.)?recruitee\.com\/.*\/.*$/], hosts: [/(^|\.)recruitee\.com$/], fields: [
       ['name', 'candidate.coverLetterFile', 'coverLetter'],
       ['name', 'candidate.cover_letter', 'coverLetter'],
       ['name', 'candidate.cv', 'resume'],
@@ -402,7 +436,7 @@
       ['name', 'candidate[name]', 'fullName'],
       ['name', 'candidate[phone]', 'phone'],
     ] },
-    { name: 'rippling', hosts: [/(^|\.)rippling\-ats\.com$/, /^ats\.rippling\.com$/], fields: [
+    { name: 'rippling', pages: [/^https?:\/\/([^\/]+\.)?rippling\-ats\.com\/job\/.*\/apply.*$/, /^https?:\/\/([^\/]+\.)?rippling\-ats\.com\/jobs\/eop_survey\/.*$/, /^https?:\/\/ats\.rippling\.com\/.*\/jobs\/.*$/], hosts: [/(^|\.)rippling\-ats\.com$/, /^ats\.rippling\.com$/], fields: [
       ['data-testid', 'input-cover_letter', 'coverLetter'],
       ['data-testid', 'input-resume', 'resume'],
       ['data-testid', 'location', 'location'],
@@ -425,8 +459,9 @@
       ['name', 'first_name', 'firstName'],
       ['name', 'last_name', 'lastName'],
       ['name', 'phone', 'phone'],
+      ['name', 'address_line_1', 'addressLine'],
     ] },
-    { name: 'smartrecruiters', hosts: [/^jobs\.smartrecruiters\.com$/], fields: [
+    { name: 'smartrecruiters', pages: [/^https?:\/\/jobs\.smartrecruiters\.com\/oneclick\-ui\/company\/.*$/, /^https?:\/\/jobs\.smartrecruiters\.com\/.*\/.*$/], hosts: [/^jobs\.smartrecruiters\.com$/, /(^|\.)smartr\.me$/], fields: [
       ['id', 'confirm-email-input', 'email'],
       ['id', 'email-input', 'email'],
       ['id', 'first-name-input', 'firstName'],
@@ -435,6 +470,7 @@
       ['id', 'twitter-input', 'twitter'],
       ['id', 'website-input', 'portfolio'],
       ['id', 'website-input', 'website'],
+      ['id', 'phone-number-input', 'phone'],
     ] },
     { name: 'successfactors', hosts: [/(^|\.)ns2cloud\.com$/, /(^|\.)sapsf\.com$/, /(^|\.)sapsf\.eu$/, /(^|\.)successfactors\.com$/, /(^|\.)successfactors\.eu$/], fields: [
       ['id', 'fbclc_emailConf', 'email'],
@@ -459,10 +495,10 @@
       ['name', 'new_user', 'email'],
       ['name', 'reemail', 'email'],
     ] },
-    { name: 'taleo', hosts: [/(^|\.)taleo\.net$/], fields: [
+    { name: 'taleo', pages: [/^https?:\/\/([^\/]+\.)?taleo\.net\/.*\/application\.jss.*$/, /^https?:\/\/([^\/]+\.)?taleo\.net\/.*\/flow\.jsf.*$/, /^https?:\/\/([^\/]+\.)?taleo\.net\/.*\/jobapply.*$/, /^https?:\/\/([^\/]+\.)?taleo\.net\/.*\/ats\/careers\/.*$/, /^https?:\/\/([^\/]+\.)?taleo\.net\/careersection\/.*\/jobdetail\.ftl.*$/, /^https?:\/\/([^\/]+\.)?taleo\.net\/.*\/htmlResourceViewer\.jss.*$/, /^https?:\/\/([^\/]+\.)?burnsmcd\.com\/apply.*$/, /^https?:\/\/([^\/]+\.)?burnsmcd\.com\/careersection\/application\.jss.*$/, /^https?:\/\/([^\/]+\.)?burnsmcd\.com\/careersection\/flow\.jsf.*$/, /^https?:\/\/([^\/]+\.)?burnsmcd\.com\/careersection\/jobapply.*$/, /^https?:\/\/([^\/]+\.)?burnsmcd\.com\/careersection\/htmlResourceViewer\.jss.*$/, /^https?:\/\/talentacquisition\.3ds\.com\/.*\/application\.jss.*$/, /^https?:\/\/talentacquisition\.3ds\.com\/.*\/flow\.jsf.*$/, /^https?:\/\/talentacquisition\.3ds\.com\/.*\/jobapply.*$/, /^https?:\/\/talentacquisition\.3ds\.com\/.*\/ats\/careers\/.*$/, /^https?:\/\/talentacquisition\.3ds\.com\/.*\/htmlResourceViewer\.jss.*$/], hosts: [/(^|\.)taleo\.net$/], fields: [
       ['id', 'email', 'email'],
     ] },
-    { name: 'tesla', hosts: [/(^|\.)tesla\.com$/], fields: [
+    { name: 'tesla', pages: [/^https?:\/\/([^\/]+\.)?jobs\.tesla\.com\/.*$/, /^https?:\/\/([^\/]+\.)?tesla\.com\/careers\/.*$/], hosts: [/(^|\.)tesla\.com$/], fields: [
       ['name', 'eeo.eeoDisabilityStatusName', 'fullName'],
       ['name', 'legal.legalAcknowledgmentName', 'fullName'],
       ['name', 'legal.legalImmigrationSponsorship', 'requiresSponsorship'],
@@ -474,7 +510,7 @@
       ['name', 'personal.profileLinks[0].link', 'portfolio'],
       ['name', 'personal.resume', 'resume'],
     ] },
-    { name: 'trinethire', hosts: [/^app\.trinethire\.com$/], fields: [
+    { name: 'trinethire', pages: [/^https?:\/\/app\.trinethire\.com\/companies\/.*\/jobs\/.*$/], hosts: [/^app\.trinethire\.com$/], fields: [
       ['name', 'applicant[address]', 'addressLine'],
       ['name', 'applicant[city]', 'city'],
       ['name', 'applicant[email]', 'email'],
@@ -492,7 +528,7 @@
       ['name', 'applicant_resumes[resume]', 'resume'],
       ['name', 'attach_other_files[attach_another_file_1]', 'coverLetter'],
     ] },
-    { name: 'uber', hosts: [/(^|\.)uber\.com$/], fields: [
+    { name: 'uber', pages: [/^https?:\/\/([^\/]+\.)?uber\.com(?=[\/?#]|$)/], hosts: [/(^|\.)uber\.com$/], fields: [
       ['name', 'email', 'email'],
       ['name', 'firstName', 'firstName'],
       ['name', 'githubURL', 'github'],
@@ -507,7 +543,7 @@
       ['name', 'websiteURL', 'website'],
       ['name', 'zipCode', 'postalCode'],
     ] },
-    { name: 'ultipro', hosts: [/(^|\.)rec\.pro\.ukg\.net$/, /(^|\.)ultipro\.ca$/, /(^|\.)ultipro\.com$/], fields: [
+    { name: 'ultipro', pages: [/^https?:\/\/([^\/]+\.)?ultipro\.com\/.*\/JobBoard\/.*\/OpportunityDetail.*$/, /^https?:\/\/([^\/]+\.)?ultipro\.com\/.*\/JobBoard\/.*\/OpportunityApply.*$/, /^https?:\/\/([^\/]+\.)?ultipro\.com\/.*\/JobBoard\/.*\/Account\/Register.*$/, /^https?:\/\/([^\/]+\.)?ultipro\.ca\/.*\/JobBoard\/.*\/OpportunityDetail.*$/, /^https?:\/\/([^\/]+\.)?ultipro\.ca\/.*\/JobBoard\/.*\/OpportunityApply.*$/, /^https?:\/\/([^\/]+\.)?ultipro\.ca\/.*\/JobBoard\/.*\/Account\/Register.*$/, /^https?:\/\/([^\/]+\.)?rec\.pro\.ukg\.net\/.*\/JobBoard\/.*\/OpportunityDetail.*$/, /^https?:\/\/([^\/]+\.)?rec\.pro\.ukg\.net\/.*\/JobBoard\/.*\/OpportunityApply.*$/, /^https?:\/\/([^\/]+\.)?rec\.pro\.ukg\.net\/.*\/JobBoard\/.*\/Account\/Register.*$/], hosts: [/(^|\.)rec\.pro\.ukg\.net$/, /(^|\.)ultipro\.ca$/, /(^|\.)ultipro\.com$/], fields: [
       ['id', 'AddressLine1', 'addressLine'],
       ['id', 'ApplicantSource', 'heardAbout'],
       ['id', 'City', 'city'],
@@ -526,7 +562,7 @@
       ['id', 'Website', 'website'],
       ['id', 'YourName', 'fullName'],
     ] },
-    { name: 'waymo', hosts: [/^careers\.withwaymo\.com$/, /^waymo\.com$/], fields: [
+    { name: 'waymo', pages: [/^https?:\/\/careers\.withwaymo\.com\/jobs\/.*$/], hosts: [/^careers\.withwaymo\.com$/, /^waymo\.com$/], fields: [
       ['id', 'field-cover_letter', 'coverLetter'],
       ['id', 'field-email', 'email'],
       ['id', 'field-first_name', 'firstName'],
@@ -535,7 +571,7 @@
       ['id', 'field-phone', 'phone'],
       ['id', 'field-resume', 'resume'],
     ] },
-    { name: 'workable', hosts: [/^apply\.workable\.com$/, /^jobs\.workable\.com$/], fields: [
+    { name: 'workable', markers: ['meta[name="domain"][content="workable.com"]'], pages: [/^https?:\/\/([^\/]+\.)?careers\.arbor\-education\.com(?=[\/?#]|$)/, /^https?:\/\/apply\.workable\.com\/.*$/, /^https?:\/\/jobs\.workable\.com\/.*$/, /[?&]selectedJobId=/], hosts: [/^apply\.workable\.com$/, /^jobs\.workable\.com$/], fields: [
       ['data-ui', 'headline', 'currentTitle'],
       ['data-ui', 'resume', 'coverLetter'],
       ['data-ui', 'resume', 'resume'],
@@ -545,7 +581,7 @@
       ['id', 'lastname', 'lastName'],
       ['name', 'phone', 'phone'],
     ] },
-    { name: 'workday', hosts: [/(^|\.)myworkdayjobs\.com$/, /(^|\.)myworkdaysite\.com$/], fields: [
+    { name: 'workday', hosts: [/(^|\.)myworkdayjobs\.com$/, /(^|\.)myworkdaysite\.com$/, /(^|\.)myworkdayjobs\-impl\.com$/, /(^|\.)myworkday\.com$/], fields: [
       ['data-automation-id', 'addressSection_city', 'city'],
       ['data-automation-id', 'addressSection_countryRegion', 'state'],
       ['data-automation-id', 'countryDropdown', 'country'],
@@ -574,6 +610,136 @@
       ['name', 'emailAddress', 'email'],
       ['name', 'linkedInAccount', 'linkedin'],
       ['name', 'postalCode', 'postalCode'],
+      ['data-automation-id', 'formField-preferredName--firstName', 'preferredName'],
+    ] },
+    { name: 'appcast', hosts: [/^apply\.appcast\.io$/], fields: [
+    ] },
+    { name: 'bytedance', pages: [/^https?:\/\/([^\/]+\.)?jobs\.bytedance\.com\/en\/resume.*$/, /^https:\/\/jobs\.bytedance\.com\/en\/login.*$/, /^https?:\/\/jobs\.bytedance\.com\/.*\/.*\/.*\/detail.*$/, /^https?:\/\/jobs\.bytedance\.com\/.*\/.*\/.*\/apply.*$/, /^https?:\/\/jobs\.bytedance\.com\/.*\/.*\/applied.*$/, /^https?:\/\/joinbytedance\.com\/search\/.*$/], hosts: [/^jobs\.bytedance\.com$/, /^joinbytedance\.com$/], fields: [
+    ] },
+    { name: 'brassring', pages: [/\/TGNewUI\/(Search\/Home\/Home|Profile\/Home\/ProfileBuilder)/i, /^https?:\/\/([^\/]+\.)?brassring\.com\/TGnewUI\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'google', pages: [/^https:\/\/(www\.)?google\.com\/about\/careers\/applications\/apply\//, /^https?:\/\/google\.com\/about\/careers\/.*$/, /^https?:\/\/([^\/]+\.)?google\.com\/about\/careers\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'homerun', markers: ['meta[name*="homerun:company_id"]'], hosts: [], fields: [
+      ['id', 'resume_files', 'resume'],
+      ['name', 'city', 'city'],
+      ['name', 'country', 'country'],
+      ['name', 'email', 'email'],
+      ['name', 'first_name', 'firstName'],
+      ['name', 'last_name', 'lastName'],
+      ['name', 'linkedin', 'linkedin'],
+      ['name', 'phone_number', 'phone'],
+      ['name', 'state', 'state'],
+      ['name', 'website', 'website'],
+    ] },
+    { name: 'phenompeople', markers: ['head[data-ph-id^="ph-page-"]', 'body[data-ph-id^="ph-page-"]', 'script[src*="APPLY_form_renderer.js"]', 'link[href*="APPLY_form_renderer.js"]'], pages: [/^https?:\/\/jobs\.bswhealth\.com\/.*\/apply.*$/, /^https?:\/\/careers\.uvahealth\.org\/.*\/apply.*$/, /^https?:\/\/careers\.dukehealth\.org\/.*\/apply.*$/, /^https?:\/\/www\.jobs\.abbott\/.*\/apply.*$/, /^https?:\/\/careers\.aspendental\.com\/.*\/apply.*$/, /^https?:\/\/careers\.fivebelow\.com\/.*\/apply.*$/, /^https?:\/\/careers\.fourseasons\.com\/.*\/apply.*$/, /^https?:\/\/careers\.kbr\.com\/.*\/apply.*$/, /^https?:\/\/jobs\.kuehne\-nagel\.com\/.*\/apply.*$/, /^https?:\/\/careers\.mastercard\.com\/.*\/apply.*$/, /^https?:\/\/careers\.mcafee\.com\/.*\/apply.*$/, /^https?:\/\/jobs\-cee\.pwc\.com\/.*\/apply.*$/, /^https?:\/\/careers\.roche\.com\/.*\/apply.*$/, /^https?:\/\/www\.vcacareers\.com\/.*\/apply.*$/, /^https?:\/\/careers\.wasteconnections\.com\/.*\/apply.*$/], hosts: [], fields: [
+      ['autocomplete', 'tel-national', 'phone'],
+      ['id', 'applicantSource', 'heardAbout'],
+      ['id', 'city', 'city'],
+      ['id', 'cntryFields.city', 'city'],
+      ['id', 'cntryFields.country', 'country'],
+      ['id', 'cntryFields.firstName', 'firstName'],
+      ['id', 'cntryFields.lastName', 'lastName'],
+      ['id', 'cntryFields.location', 'location'],
+      ['id', 'cntryFields.state', 'state'],
+      ['id', 'cntryFields.territory', 'state'],
+      ['id', 'country', 'country'],
+      ['id', 'email', 'email'],
+      ['id', 'firstName', 'firstName'],
+      ['id', 'github', 'github'],
+      ['id', 'lastName', 'lastName'],
+      ['id', 'linkedin', 'linkedin'],
+      ['id', 'location', 'location'],
+      ['id', 'phoneNumber', 'phone'],
+      ['id', 'phoneWidget.phoneNumber', 'phone'],
+      ['id', 'portfolio', 'portfolio'],
+      ['id', 'state', 'state'],
+      ['id', 'territory', 'state'],
+      ['id', 'twitter', 'twitter'],
+      ['id', 'website', 'website'],
+      ['name', 'city', 'city'],
+      ['name', 'cntryFields.city', 'city'],
+      ['name', 'cntryFields.country', 'country'],
+      ['name', 'cntryFields.state', 'state'],
+      ['name', 'cntryFields.territory', 'state'],
+      ['name', 'country', 'country'],
+      ['name', 'email', 'email'],
+      ['name', 'github', 'github'],
+      ['name', 'linkedin', 'linkedin'],
+      ['name', 'phoneNumber', 'phone'],
+      ['name', 'portfolio', 'portfolio'],
+      ['name', 'state', 'state'],
+      ['name', 'territory', 'state'],
+      ['name', 'twitter', 'twitter'],
+      ['name', 'website', 'website'],
+      ['name', 'zip/postalCode', 'postalCode'],
+    ] },
+    { name: 'roblox', hosts: [/^jobs\.roblox\.com$/, /^careers\.roblox\.com$/], fields: [
+      ['id', 'resume-upload', 'resume'],
+    ] },
+    { name: 'teamtailor', markers: ['main[data-controller="careersite--jobs--form-overlay"]', 'script[src*="teamtailor-cdn.com"]', 'link[href*="teamtailor-cdn.com"]'], pages: [/^https?:\/\/([^\/]+\.)?teamtailor\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?careers\.blueorange\.digital(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?careers\.totalperform\.com(?=[\/?#]|$)/], hosts: [/(^|\.)teamtailor\.com$/], fields: [
+      ['id', 'upload_resume_field', 'resume'],
+      ['name', 'candidate[email]', 'email'],
+      ['name', 'candidate[first_name]', 'firstName'],
+      ['name', 'candidate[github]', 'github'],
+      ['name', 'candidate[last_name]', 'lastName'],
+      ['name', 'candidate[linkedin]', 'linkedin'],
+      ['name', 'candidate[phone]', 'phone'],
+      ['name', 'candidate[portfolio]', 'portfolio'],
+      ['name', 'candidate[twitter]', 'twitter'],
+      ['name', 'candidate[website]', 'website'],
+    ] },
+    { name: 'adobe', pages: [/^https?:\/\/([^\/]+\.)?careers\.adobe\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'careerplug', pages: [/^https?:\/\/([^\/]+\.)?careerplug\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?sfagentjobs\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?sfagentcareers\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?apscareerportal\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'careerspage', hosts: [/(^|\.)careers\-page\.com$/], fields: [
+    ] },
+    { name: 'careerstoasttab', pages: [/^https?:\/\/careers\.toasttab\.com\/jobs.*$/], hosts: [], fields: [
+    ] },
+    { name: 'catsone', pages: [/^https?:\/\/([^\/]+\.)?catsone\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'cisco', pages: [/^https?:\/\/careers\.cisco\.com\/.*\/apply.*$/], hosts: [], fields: [
+    ] },
+    { name: 'clearcompany', pages: [/^https?:\/\/([^\/]+\.)?hrmdirect\.com\/employment\/job\-opening\.php.*$/], hosts: [/(^|\.)clearcompany\.com$/], fields: [
+    ] },
+    { name: 'gem', pages: [/^https?:\/\/([^\/]+\.)?jobs\.gem\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'gohire', pages: [/^https?:\/\/jobs\.gohire\.io\/.*\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'hiringthing', pages: [/^https?:\/\/([^\/]+\.)?hiringthing\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?oasisrecruit\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?elevate\-ats\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?prismhr\-hire\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?gnahiring\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?rippling\-ats\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'hubspot', pages: [/^https?:\/\/www\.hubspot\.com\/careers\/jobs\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'intuit', pages: [/^https?:\/\/jobs\.intuit\.com\/job\/.*$/, /^https?:\/\/intuit\.avature\.net\/.*\/externalCareers\/JobApplication.*$/], hosts: [/(^|\.)intuit\-quiz\.app\.intuit\.com$/], fields: [
+    ] },
+    { name: 'isolved', pages: [/^https?:\/\/([^\/]+\.)?isolvedhire\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'jobdiva', pages: [/^https?:\/\/([^\/]+\.)?jobdiva\.com\/portal\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'kula', pages: [/^https?:\/\/([^\/]+\.)?careers\.kula\.ai(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'paycomonline', hosts: [/(^|\.)paycomonline\.com$/, /(^|\.)paycomonline\.net$/], fields: [
+    ] },
+    { name: 'paycor', hosts: [], fields: [
+    ] },
+    { name: 'personio', pages: [/^https?:\/\/([^\/]+\.)?personio\.de(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?personio\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'recruiterflow', markers: ['script[src*="recruiterflow.com"]', 'link[href*="recruiterflow.com"]'], pages: [/^https?:\/\/([^\/]+\.)?recruiterflow\.com(?=[\/?#]|$)/], hosts: [], fields: [
+    ] },
+    { name: 'ripplehire', hosts: [/(^|\.)ripplehire\.com$/], fields: [
+    ] },
+    { name: 'tiktok', pages: [/^https?:\/\/([^\/]+\.)?lifeattiktok\.com\/resume.*$/, /^https:\/\/lifeattiktok\.com\/login.*$/, /^https:\/\/www\.lifeattiktok\.com\/login.*$/, /^https:\/\/lifeattiktok\.com\/create\-account.*$/, /^https:\/\/www\.lifeattiktok\.com\/create\-account.*$/, /^https:\/\/careers\.tiktok\.com\/login.*$/, /^https:\/\/www\.careers\.tiktok\.com\/login.*$/, /^https:\/\/careers\.tiktok\.com\/create\-account.*$/, /^https:\/\/www\.careers\.tiktok\.com\/create\-account.*$/, /^https?:\/\/lifeattiktok\.com\/search\/.*$/, /^https?:\/\/www\.lifeattiktok\.com\/search\/.*$/, /^https?:\/\/careers\.tiktok\.com\/resume\/.*$/, /^https?:\/\/([^\/]+\.)?tiktokusds\.com\/.*\/resume.*$/, /^https?:\/\/([^\/]+\.)?tiktokusds\.com\/.*\/position\/.*\/detail.*$/], hosts: [], fields: [
+    ] },
+    { name: 'trakstar', pages: [/^https?:\/\/([^\/]+\.)?hire\.trakstar\.com\/jobs\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'walmart', pages: [/^https?:\/\/careers\.walmart\.com\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'xcompany', pages: [/^https?:\/\/x\.company\/.*$/], hosts: [], fields: [
+    ] },
+    { name: 'ycombinator', hosts: [/(^|\.)www\.ycombinator\.com$/], fields: [
+    ] },
+    { name: 'zohorecruit', pages: [/^https?:\/\/([^\/]+\.)?zohorecruit\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?zohorecruit\.ca(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?zohorecruit\.eu(?=[\/?#]|$)/], hosts: [], fields: [
     ] },
   ];
 })();
