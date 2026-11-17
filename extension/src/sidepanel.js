@@ -8,7 +8,7 @@ import { matchAnswers } from './answers.js';
 import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
 import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
-import { newSitePassword, readSiteLogin, saveSiteLogin, siteAccounts } from './site-login.js';
+import { newSitePassword, readSiteLogin, saveSiteLogin, siteState } from './site-login.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', phoneType: 'Phone type', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear', workArrangement: 'Office, hybrid or remote', willingToRelocate: 'Relocation',
@@ -727,14 +727,15 @@ function renderAutofill() {
 // first account gets a new password. The page's own button is left to press.
 const ACCOUNT_ROWS = { name: 'Full Name', email: 'Email Address', password: 'Password', verify: 'Verify New Password', agreement: 'Agree to Privacy Notice' };
 let accountStep = { status: 'idle', filled: [], message: '', url: null, want: null };
-/** Whether this page's site is one you have an account on: read before drawing, so the buttons never change. */
-let accountSites = { host: null, known: false };
+/** Whether this page's site is one you have an account on, and its email: read before drawing, so nothing changes after. */
+let accountSites = { host: null, known: false, email: null };
 const hostOf = (url) => { try { return new URL(url).host; } catch { return ''; } };
 function accountView() {
   const on = scan.account;
   const known = accountSites.known && accountSites.host === hostOf(currentTab?.url);
-  // A site you have an account on offers Sign In first, even on its Create Account page.
+  // A site you have an account on offers Sign In only, even on its Create Account page.
   const want = on === 'signin' || (known && scan.accountSwitch) ? 'signin' : 'create';
+  const exists = known && want === 'signin';
   const other = want === 'signin' ? 'create' : 'signin';
   const step = accountStep.url === currentTab?.url ? accountStep : { status: 'idle', filled: [], message: '' };
   const working = step.status === 'working';
@@ -746,8 +747,10 @@ function accountView() {
   const rows = step.filled.map((key) => `<li>${icon('check', 14)}${esc(ACCOUNT_ROWS[key] ?? key)}</li>`).join('');
   const label = (kind) => (kind === 'signin' ? 'Sign In &amp; Autofill' : 'Create Account &amp; Autofill');
   const otherLabel = other === 'create' ? (on === 'create' ? 'Create a new account instead' : 'New here? Create Account') : 'I already have an account: Sign In';
-  const offerOther = other === on || scan.accountSwitch;
-  return `<div class="fill-block"><button class="primary fill-action" id="account-fill" data-account-want="${want}" ${working ? 'disabled aria-busy="true"' : ''}>${icon('bolt', 20)}${label(want)}</button>${known && on === 'create' ? '<p class="hint account-known">You have an account on this site.</p>' : ''}${offerOther ? `<button class="ghost account-other" type="button" data-account-want="${other}" ${working ? 'disabled' : ''}>${otherLabel}</button>` : ''}${said ? `<div class="status${step.status === 'error' ? ' error' : ''}" role="status">${esc(said)}</div>` : ''}${rows ? `<ul class="account-rows">${rows}</ul>` : ''}</div>`;
+  const offerOther = !exists && (other === on || scan.accountSwitch);
+  // The account it signs in to, before the one button: what will happen, then the action.
+  const card = exists ? `<div class="account-exists" role="status">${icon('check', 18)}<div><strong>Account already exists</strong>${accountSites.email ? `<span>Sign in as ${esc(accountSites.email)}</span>` : ''}</div></div>` : '';
+  return `<div class="fill-block">${card}<button class="primary fill-action" id="account-fill" data-account-want="${want}" ${working ? 'disabled aria-busy="true"' : ''}>${icon('bolt', 20)}${label(want)}</button>${offerOther ? `<button class="ghost account-other" type="button" data-account-want="${other}" ${working ? 'disabled' : ''}>${otherLabel}</button>` : ''}${said ? `<div class="status${step.status === 'error' ? ' error' : ''}" role="status">${esc(said)}</div>` : ''}${rows ? `<ul class="account-rows">${rows}</ul>` : ''}</div>`;
 }
 function setAccountStep(next) { accountStep = { filled: [], message: '', ...next, url: currentTab?.url ?? null }; renderAutofill(); }
 /** Fills the account form for `want` ('create' or 'signin'), opening that form first when the page shows the other. */
@@ -1559,7 +1562,7 @@ async function refresh() {
     // An account page: whether you have an account on this site, read once per site before drawing.
     if (nextScan?.account && hostOf(pageTab?.url) && accountSites.host !== hostOf(pageTab.url)) {
       const host = hostOf(pageTab.url);
-      try { accountSites = { host, known: (await siteAccounts()).includes(host) }; } catch { accountSites = { host, known: false }; }
+      try { const state = await siteState(); accountSites = { host, known: state.sites.includes(host), email: state.email }; } catch { accountSites = { host, known: false, email: null }; }
     }
     const tab = pageTab ? { ...pageTab, jobUrl: nextScan?.context?.jobUrl || pageTab.url } : null;
     // Scanning may outlast a backend refresh. Read the latest library after

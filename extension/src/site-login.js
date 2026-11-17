@@ -30,8 +30,11 @@ async function call(method, body, path = '') {
 /** { email, password, updatedAt }, or null before the first account. */
 export const readSiteLogin = async () => (await call('GET')).login ?? null;
 export const saveSiteLogin = async (email, password) => (await call('PUT', { email, password })).login ?? null;
-/** The job sites (hosts) you have an account on: their account page offers Sign In first. */
-export const siteAccounts = async () => (await call('GET')).sites ?? [];
+/** The job sites (hosts) you have an account on, and the login's email (never its password): for the panel. */
+export const siteState = async () => {
+  const reply = await call('GET');
+  return { email: reply.login?.email ?? null, sites: reply.sites ?? [] };
+};
 /** Signing in or creating an account worked on this site. */
 export const rememberSite = async (host) => (await call('POST', { host }, '/sites')).sites ?? [];
 

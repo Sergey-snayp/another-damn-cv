@@ -383,6 +383,10 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .login-offer-card strong { display: block; font-size: 14px; }
 .login-offer-card p { margin: 6px 0 10px; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }
 .login-offer-card .site-login-actions button { flex: 1 1 auto; width: auto; min-height: 38px; padding: 8px 12px; font-size: 13px; }
-/* The account page's second choice ("I already have an account: Sign In"), and the note that you have one. */
+/* The account page's second choice ("I already have an account: Sign In"). */
 .account-other { margin-top: 8px; min-height: 40px; font-size: 13px; }
-.account-known { margin: 8px 0 0; font-size: 12px; color: var(--color-muted); }
+/* "Account already exists": the account it signs in to, above the one Sign In button. */
+.account-exists { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--color-success-border); border-radius: 12px; background: var(--color-success-soft); }
+.account-exists > svg { flex: none; margin-top: 1px; color: var(--color-success); }
+.account-exists strong { display: block; font-size: 14px; color: var(--color-text); }
+.account-exists span { display: block; margin-top: 2px; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }

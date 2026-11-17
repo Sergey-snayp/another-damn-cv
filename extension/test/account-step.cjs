@@ -172,8 +172,10 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     let choosing = await panelFixture(browser, page, { profile, server: known });
     await choosing.waitForSelector('#account-fill', { timeout: 10000 });
     assert.equal(await choosing.$eval('#account-fill', button => button.textContent.trim()), 'Sign In & Autofill');
-    assert.match(await choosing.$eval('.account-known', note => note.textContent), /You have an account on this site/);
-    assert.equal(await choosing.$eval('.account-other', button => button.textContent.trim()), 'Create a new account instead');
+    assert.equal(await choosing.$eval('.account-exists', card => card.textContent), 'Account already existsSign in as sam@example.com');
+    assert.equal(await choosing.$('.account-other'), null, 'a site with an account: only Sign In');
+    assert.equal(await choosing.$$eval('#panel-autofill button[data-account-want]', buttons => buttons.length), 1);
+    assert.doesNotMatch(await choosing.$eval('#panel-autofill', node => node.textContent), /Saved-pass-123/, 'never the password');
     await choosing.screenshot({ path: '/private/tmp/account-known-site.png' });
     await choosing.click('#account-fill');
     await choosing.waitForFunction(() => /press Sign In\./.test(document.getElementById('panel-autofill').textContent), { timeout: 10000, polling: 100 });
@@ -189,7 +191,7 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     await choosing.waitForFunction(() => /press Sign In\./.test(document.getElementById('panel-autofill').textContent), { timeout: 10000, polling: 100 });
     assert.deepEqual([await value(page, 'email'), await value(page, 'password')], ['sam@example.com', 'Saved-pass-123']);
     await choosing.close();
-    console.log('PASS Sign In or Create Account: a site you have an account on offers Sign In first, opens it and fills the saved login; a new site offers it second');
+    console.log('PASS Sign In or Create Account: a site you have an account on shows "Account already exists" and only Sign In, which opens it and fills the saved login; a new site offers it second');
   } finally {
     await browser.close();
   }
