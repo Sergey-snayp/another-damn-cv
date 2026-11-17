@@ -7,12 +7,12 @@ import { NotSignedInError } from './jobs.js';
  * your account on the server, encrypted, so a new computer or a cleared browser
  * keeps it. The extension never stores it: it reads it when it fills a form.
  */
-async function call(method, body) {
+async function call(method, body, path = '') {
   const { auth } = await chrome.storage.local.get('auth');
   if (!auth?.syncToken) throw new NotSignedInError();
   let response;
   try {
-    response = await fetch(`${API_URL}/api/extension/site-login`, {
+    response = await fetch(`${API_URL}/api/extension/site-login${path}`, {
       method,
       cache: 'no-store',
       headers: { Authorization: `Bearer ${auth.syncToken}`, ...(body !== undefined && { 'Content-Type': 'application/json' }) },
@@ -24,12 +24,16 @@ async function call(method, body) {
   if (response.status === 401) { await signOut(); throw new NotSignedInError(); }
   const reply = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(typeof reply.message === 'string' ? reply.message : `Server returned ${response.status}.`);
-  return reply.login ?? null;
+  return reply;
 }
 
 /** { email, password, updatedAt }, or null before the first account. */
-export const readSiteLogin = () => call('GET');
-export const saveSiteLogin = (email, password) => call('PUT', { email, password });
+export const readSiteLogin = async () => (await call('GET')).login ?? null;
+export const saveSiteLogin = async (email, password) => (await call('PUT', { email, password })).login ?? null;
+/** The job sites (hosts) you have an account on: their account page offers Sign In first. */
+export const siteAccounts = async () => (await call('GET')).sites ?? [];
+/** Signing in or creating an account worked on this site. */
+export const rememberSite = async (host) => (await call('POST', { host }, '/sites')).sites ?? [];
 
 /**
  * A new password, as Simplify makes one: a capital, a small letter, a digit and

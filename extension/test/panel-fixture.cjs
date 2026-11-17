@@ -28,7 +28,7 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
         server.login = { ...JSON.parse(request.postData()), updatedAt: '2026-11-16T10:00:00.000Z' };
         server.saves.push(server.login);
       }
-      json({ login: server.login });
+      json({ login: server.login, sites: server.sites ?? [] });
     } else if (address.origin === 'http://localhost:3001') json([]);
     else void request.respond({ status: 404, body: '' });
   });

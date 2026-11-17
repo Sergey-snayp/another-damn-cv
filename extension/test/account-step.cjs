@@ -12,7 +12,9 @@ const pages = {
   [`${JOB}/apply/applyManually`]: `<!doctype html><title>Create Account</title>${POSTING}<main><h1>Create Account</h1>
     ${field('email', 'Email Address')}${field('password', 'Password', 'password')}${field('verifyPassword', 'Verify New Password', 'password')}
     <div data-automation-id="createAccountCheckbox"><input type="checkbox" id="agree"><label for="agree">Yes, I have read and consent to the terms and conditions.</label></div>
-    <button data-automation-id="createAccountSubmitButton" onclick="window.submitted = true">Create Account</button></main>`,
+    <button data-automation-id="createAccountSubmitButton" onclick="window.submitted = true">Create Account</button>
+    <p>Already have an account? <button data-automation-id="signInLink" onclick="window.switched = true; document.querySelector('main').innerHTML = document.getElementById('sign-in').innerHTML">Sign In</button></p></main>
+    <template id="sign-in"><h1>Sign In</h1>${field('email', 'Email Address')}${field('password', 'Password', 'password')}<button data-automation-id="signInSubmitButton" onclick="window.submitted = true">Sign In</button></template>`,
   // Workday keeps headings like "Errors Found" on its pages: they are not this sign-in's error.
   [`${JOB}/login`]: `<!doctype html><title>Sign In</title>${POSTING}<div class="errorSummary">Errors Found</div><main><h1>Sign In</h1>
     ${field('email', 'Email Address')}${field('password', 'Password', 'password')}
@@ -49,6 +51,7 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     let panel = await panelFixture(browser, page, { profile, server });
     await panel.waitForSelector('#account-fill', { timeout: 10000 });
     assert.equal(await panel.$eval('#account-fill', button => button.textContent.trim()), 'Create Account & Autofill');
+    assert.equal(await panel.$eval('.account-other', button => button.textContent.trim()), 'I already have an account: Sign In', 'a new site: Create Account first, Sign In second');
     assert.match(await panel.$eval('#job-card', card => card.textContent), /Programmer Analyst I/, 'the card is the job, not "Create Account"');
     await panel.click('#account-fill');
     await panel.waitForFunction(() => /Done\. Check the page, then press Create Account\./.test(document.getElementById('panel-autofill').textContent), { timeout: 10000, polling: 100 });
@@ -162,6 +165,31 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     assert.deepEqual(await asking.evaluate(() => window.__answers), ['dismiss']);
     await asking.close();
     console.log('PASS the panel asks "Update your job-site password?": Update saves it, Not now drops it, the password never shown');
+
+    // 7) A site you have an account on: its Create Account page offers Sign In first, opens it, and fills the saved login.
+    const known = { login: { email: 'sam@example.com', password: 'Saved-pass-123', updatedAt: '2026-11-16T10:00:00.000Z' }, saves: [], sites: ['ubc.wd10.myworkdayjobs.com'] };
+    await page.open(`${JOB}/apply/applyManually`);
+    let choosing = await panelFixture(browser, page, { profile, server: known });
+    await choosing.waitForSelector('#account-fill', { timeout: 10000 });
+    assert.equal(await choosing.$eval('#account-fill', button => button.textContent.trim()), 'Sign In & Autofill');
+    assert.match(await choosing.$eval('.account-known', note => note.textContent), /You have an account on this site/);
+    assert.equal(await choosing.$eval('.account-other', button => button.textContent.trim()), 'Create a new account instead');
+    await choosing.screenshot({ path: '/private/tmp/account-known-site.png' });
+    await choosing.click('#account-fill');
+    await choosing.waitForFunction(() => /press Sign In\./.test(document.getElementById('panel-autofill').textContent), { timeout: 10000, polling: 100 });
+    assert.equal(await page.evaluate(() => window.switched), true, "Workday's Sign In link pressed");
+    assert.deepEqual([await value(page, 'email'), await value(page, 'password'), known.saves.length], ['sam@example.com', 'Saved-pass-123', 0]);
+    assert.equal(await page.evaluate(() => Boolean(window.submitted)), false, 'and never pressed Sign In');
+    await choosing.close();
+    // 8) A new site, but the person says they have an account: the same, from the second button.
+    await page.open(`${JOB}/apply/applyManually`);
+    choosing = await panelFixture(browser, page, { profile, server: { ...known, sites: [] } });
+    await choosing.waitForSelector('.account-other', { timeout: 10000 });
+    await choosing.click('.account-other');
+    await choosing.waitForFunction(() => /press Sign In\./.test(document.getElementById('panel-autofill').textContent), { timeout: 10000, polling: 100 });
+    assert.deepEqual([await value(page, 'email'), await value(page, 'password')], ['sam@example.com', 'Saved-pass-123']);
+    await choosing.close();
+    console.log('PASS Sign In or Create Account: a site you have an account on offers Sign In first, opens it and fills the saved login; a new site offers it second');
   } finally {
     await browser.close();
   }

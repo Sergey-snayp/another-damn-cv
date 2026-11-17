@@ -2,7 +2,7 @@ import { matchAnswers, saveAnswers } from './answers.js';
 import { LINKEDIN_PAIRING_MS, tabOpenedBy } from './linkedin-handoff.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
 import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
-import { acceptOffer, attemptFor, confirmAttempt, dismissOffer, dropAttempt, noteAttempt, offerFor, offerSiteLogin } from './site-login.js';
+import { acceptOffer, attemptFor, confirmAttempt, dismissOffer, dropAttempt, noteAttempt, offerFor, offerSiteLogin, rememberSite } from './site-login.js';
 
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
@@ -173,6 +173,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // What happened, for chrome://extensions → service worker (never the password).
     logged({ offered: 'a new password, the panel asks to update it', same: 'already the saved one', skipped: 'nothing to save' }[result] ?? result);
     if (result === 'offered') chrome.runtime.sendMessage({ type: 'site-login-offer' }).catch(() => {});
+    // It worked here, so this is a site you have an account on: its account page offers Sign In first.
+    if (result === 'offered' || result === 'same') void rememberSite(host).then(() => logged('a site you have an account on')).catch(() => {});
   };
   const failed = (error) => logged(`not offered (${error?.message ?? error})`);
   if (message?.type === 'site-login-attempt' && fromContent) {

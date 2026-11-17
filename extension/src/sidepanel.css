@@ -383,3 +383,6 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .login-offer-card strong { display: block; font-size: 14px; }
 .login-offer-card p { margin: 6px 0 10px; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }
 .login-offer-card .site-login-actions button { flex: 1 1 auto; width: auto; min-height: 38px; padding: 8px 12px; font-size: 13px; }
+/* The account page's second choice ("I already have an account: Sign In"), and the note that you have one. */
+.account-other { margin-top: 8px; min-height: 40px; font-size: 13px; }
+.account-known { margin: 8px 0 0; font-size: 12px; color: var(--color-muted); }

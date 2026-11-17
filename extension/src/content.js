@@ -92,6 +92,8 @@ function scan() {
     jobPage: window === window.top && Sites.isJobPage(),
     // A job site's account step: 'create' (Create Account) or 'signin', as Simplify tells them apart.
     account: window.CVAutofillAccount?.find()?.kind ?? null,
+    // It links to the other form: "Sign In" on Create Account, "Create Account" on Sign In.
+    accountSwitch: Boolean(window.CVAutofillAccount?.find()?.other),
   };
 }
 
@@ -700,6 +702,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'focus-field') {
     sendResponse({ ok: focusField(message.id) });
+    return false;
+  }
+  if (message.type === 'account-switch') {
+    // Only when the person chose the other form in the panel ("I already have an account").
+    sendResponse({ ok: Boolean(window.CVAutofillAccount?.switchForm()) });
     return false;
   }
   if (message.type === 'account-fill') {

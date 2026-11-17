@@ -8,7 +8,7 @@ import { matchAnswers } from './answers.js';
 import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
 import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor } from './defaults.js';
-import { newSitePassword, readSiteLogin, saveSiteLogin } from './site-login.js';
+import { newSitePassword, readSiteLogin, saveSiteLogin, siteAccounts } from './site-login.js';
 
 const FIELD_LABELS = {
   firstName: 'First name', lastName: 'Last name', middleName: 'Middle name', preferredName: 'Preferred name', fullName: 'Full name', email: 'Email', phone: 'Phone', phoneType: 'Phone type', pronouns: 'Pronouns', location: 'Location', city: 'City', state: 'State / province', country: 'Country', postalCode: 'Postal code', addressLine: 'Address', linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'Portfolio', website: 'Website', telegram: 'Telegram', workedHereBefore: 'Worked here before', eeoGender: 'Gender', eeoHispanic: 'Hispanic or Latino', eeoRace: 'Race or ethnicity', eeoVeteran: 'Veteran status', eeoDisability: 'Disability', twitter: 'Twitter / X', resume: 'Resume', coverLetter: 'Cover letter', currentCompany: 'Current company', currentTitle: 'Current title', yearsExperience: 'Years of experience', school: 'School', degree: 'Degree', fieldOfStudy: 'Field of study', graduationYear: 'Graduation year', workAuthorization: 'Work authorization', requiresSponsorship: 'Needs sponsorship', salaryExpectation: 'Salary expectation', noticePeriod: 'Notice period', heardAbout: 'How did you hear', workArrangement: 'Office, hybrid or remote', willingToRelocate: 'Relocation',
@@ -726,36 +726,59 @@ function renderAutofill() {
 // the one login saved on your account (the server keeps it, encrypted). The
 // first account gets a new password. The page's own button is left to press.
 const ACCOUNT_ROWS = { name: 'Full Name', email: 'Email Address', password: 'Password', verify: 'Verify New Password', agreement: 'Agree to Privacy Notice' };
-let accountStep = { status: 'idle', filled: [], message: '', url: null };
+let accountStep = { status: 'idle', filled: [], message: '', url: null, want: null };
+/** Whether this page's site is one you have an account on: read before drawing, so the buttons never change. */
+let accountSites = { host: null, known: false };
+const hostOf = (url) => { try { return new URL(url).host; } catch { return ''; } };
 function accountView() {
-  const signin = scan.account === 'signin';
+  const on = scan.account;
+  const known = accountSites.known && accountSites.host === hostOf(currentTab?.url);
+  // A site you have an account on offers Sign In first, even on its Create Account page.
+  const want = on === 'signin' || (known && scan.accountSwitch) ? 'signin' : 'create';
+  const other = want === 'signin' ? 'create' : 'signin';
   const step = accountStep.url === currentTab?.url ? accountStep : { status: 'idle', filled: [], message: '' };
   const working = step.status === 'working';
-  const said = working ? (signin ? 'Signing in…' : 'Creating your account…')
-    : step.status === 'done' ? `Done. Check the page, then press ${signin ? 'Sign In' : 'Create Account'}.`
+  const signing = (step.want ?? want) === 'signin';
+  const said = working ? (step.switching ? (signing ? 'Opening Sign In…' : 'Opening Create Account…') : signing ? 'Signing in…' : 'Creating your account…')
+    : step.status === 'done' ? `Done. Check the page, then press ${signing ? 'Sign In' : 'Create Account'}.`
       : step.status === 'needs-password' ? 'Type your password on the page, or set it in Settings, under Job-site login.'
         : step.message;
   const rows = step.filled.map((key) => `<li>${icon('check', 14)}${esc(ACCOUNT_ROWS[key] ?? key)}</li>`).join('');
-  return `<div class="fill-block"><button class="primary fill-action" id="account-fill" ${working ? 'disabled aria-busy="true"' : ''}>${icon('bolt', 20)}${signin ? 'Sign In &amp; Autofill' : 'Create Account &amp; Autofill'}</button>${said ? `<div class="status${step.status === 'error' ? ' error' : ''}" role="status">${esc(said)}</div>` : ''}${rows ? `<ul class="account-rows">${rows}</ul>` : ''}</div>`;
+  const label = (kind) => (kind === 'signin' ? 'Sign In &amp; Autofill' : 'Create Account &amp; Autofill');
+  const otherLabel = other === 'create' ? (on === 'create' ? 'Create a new account instead' : 'New here? Create Account') : 'I already have an account: Sign In';
+  const offerOther = other === on || scan.accountSwitch;
+  return `<div class="fill-block"><button class="primary fill-action" id="account-fill" data-account-want="${want}" ${working ? 'disabled aria-busy="true"' : ''}>${icon('bolt', 20)}${label(want)}</button>${known && on === 'create' ? '<p class="hint account-known">You have an account on this site.</p>' : ''}${offerOther ? `<button class="ghost account-other" type="button" data-account-want="${other}" ${working ? 'disabled' : ''}>${otherLabel}</button>` : ''}${said ? `<div class="status${step.status === 'error' ? ' error' : ''}" role="status">${esc(said)}</div>` : ''}${rows ? `<ul class="account-rows">${rows}</ul>` : ''}</div>`;
 }
 function setAccountStep(next) { accountStep = { filled: [], message: '', ...next, url: currentTab?.url ?? null }; renderAutofill(); }
-async function fillAccount() {
+/** Fills the account form for `want` ('create' or 'signin'), opening that form first when the page shows the other. */
+async function fillAccount(want) {
   if (accountStep.status === 'working' && accountStep.url === currentTab?.url) return;
-  const creating = scan?.account === 'create';
-  setAccountStep({ status: 'working' });
   try {
+    if (want !== scan?.account) {
+      setAccountStep({ status: 'working', want, switching: true });
+      const switched = await askPage({ type: 'account-switch' });
+      if (!switched?.ok) throw new Error(want === 'signin' ? 'This page has no Sign In link. Open Sign In on the page, then try again.' : 'This page has no Create Account link. Open it on the page, then try again.');
+      let next = null;
+      for (let waited = 0; waited < 6000 && next?.account !== want; waited += 300) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        next = await askPage({ type: 'scan' });
+      }
+      if (next?.account !== want) throw new Error('The other form did not open. Open it on the page, then try again.');
+      scan = { ...scan, account: next.account, accountSwitch: next.accountSwitch };
+    }
+    setAccountStep({ status: 'working', want });
     let login = await readSiteLogin();
     const email = login?.email || profile.email;
     if (!email) throw new Error('Add your email to your Profile first.');
     // The first account: a new password, saved on your account before it is used.
-    if (!login && creating) login = await saveSiteLogin(email, newSitePassword());
+    if (!login && want === 'create') login = await saveSiteLogin(email, newSitePassword());
     const fullName = profile.fullName || [profile.firstName, profile.lastName].filter(Boolean).join(' ');
     const reply = await askPage({ type: 'account-fill', login: { email, password: login?.password ?? '', fullName } });
     if (!reply) throw new Error('Lost contact with the page. Reload it and try again.');
-    if (reply.status === 'done' || reply.status === 'needs-password') setAccountStep({ status: reply.status, filled: reply.filled });
-    else setAccountStep({ status: 'error', filled: reply.filled, message: reply.status === 'password-rejected' ? 'The page did not take the password. Type it on the page.' : 'The account form is gone. Rescan the page.' });
+    if (reply.status === 'done' || reply.status === 'needs-password') setAccountStep({ status: reply.status, want, filled: reply.filled });
+    else setAccountStep({ status: 'error', want, filled: reply.filled, message: reply.status === 'password-rejected' ? 'The page did not take the password. Type it on the page.' : 'The account form is gone. Rescan the page.' });
   } catch (error) {
-    setAccountStep({ status: 'error', message: error?.message || 'Could not fill the account form.' });
+    setAccountStep({ status: 'error', want, message: error?.message || 'Could not fill the account form.' });
   }
 }
 
@@ -786,7 +809,8 @@ function drawAutofill() {
     return;
   }
   if (scan?.account) {
-    if (paint(host, `${pageCard()}${accountView()}${autofillCvCard()}${coverLetterCard()}`, 'account')) $('account-fill').addEventListener('click', () => void fillAccount());
+    if (paint(host, `${pageCard()}${accountView()}${autofillCvCard()}${coverLetterCard()}`, 'account'))
+      for (const button of host.querySelectorAll('[data-account-want]')) button.addEventListener('click', () => void fillAccount(button.dataset.accountWant));
     return;
   }
   if (scan?.canOpenForm && !scan.fields?.length) {
@@ -1532,6 +1556,11 @@ async function refresh() {
     else pageWaking = false;
     const settled = !nextScan || nextScan.fields?.length || nextScan.canOpenForm || nextScan.context?.isJobPosting;
     if (!settled && Date.now() - settleFrom < (nextScan.jobPage ? SETTLE_JOB_MS : SETTLE_MS)) { pageWaking = true; if (latest) setTimeout(() => void refresh(), SETTLE_EVERY); }
+    // An account page: whether you have an account on this site, read once per site before drawing.
+    if (nextScan?.account && hostOf(pageTab?.url) && accountSites.host !== hostOf(pageTab.url)) {
+      const host = hostOf(pageTab.url);
+      try { accountSites = { host, known: (await siteAccounts()).includes(host) }; } catch { accountSites = { host, known: false }; }
+    }
     const tab = pageTab ? { ...pageTab, jobUrl: nextScan?.context?.jobUrl || pageTab.url } : null;
     // Scanning may outlast a backend refresh. Read the latest library after
     // it finishes, so an earlier empty list cannot replace the fresh one.

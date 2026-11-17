@@ -50,7 +50,33 @@
     const agreement = kind === 'create'
       ? [...box.querySelectorAll('input[type="checkbox"]')].find((element) => /agree|consent|privacy|terms/.test(`${describe(element)} ${element.closest('label')?.textContent ?? ''} ${element.closest('[data-automation-id]')?.getAttribute('data-automation-id') ?? ''}`.toLowerCase())) ?? null
       : null;
-    return { kind, email, name, password: passwords[0], verify: passwords[1] ?? null, agreement, submit: submitOf(box, kind) };
+    const submit = submitOf(box, kind);
+    return { kind, email, name, password: passwords[0], verify: passwords[1] ?? null, agreement, submit, other: otherSide(kind, submit) };
+  }
+
+  /**
+   * The link to the other form: Workday's Create Account page has "Sign In" for
+   * someone who already has an account there, its Sign In page "Create Account".
+   */
+  const OTHER = {
+    create: { id: 'signInLink', text: /^\s*(sign ?in|log ?in)\s*$/i },
+    signin: { id: 'createAccountLink', text: /^\s*(create (an )?account|sign ?up|register)\s*$/i },
+  };
+  function otherSide(kind, submit) {
+    const { id, text } = OTHER[kind];
+    const own = document.querySelector(`[data-automation-id="${id}"]`);
+    if (own && visible(own)) return own;
+    return [...document.querySelectorAll('a, button, [role="button"]')]
+      .find((link) => link !== submit && !submit?.contains(link) && !link.contains(submit) && visible(link) && text.test(link.textContent || link.getAttribute('aria-label') || '')) ?? null;
+  }
+
+  /** Opens the other form ("Sign In" on Create Account); true when there was one to press. */
+  function switchForm() {
+    const other = find()?.other;
+    if (!other) return false;
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) other.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+    other.click();
+    return true;
   }
 
   /** The button the person presses next, shown for a few seconds. */
@@ -158,5 +184,5 @@
   document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.isTrusted && onJobSite() && event.target?.type === 'password') sent(); }, true);
   void confirmAfterLoad();
 
-  window.CVAutofillAccount = { find, fill };
+  window.CVAutofillAccount = { find, fill, switchForm };
 })();
