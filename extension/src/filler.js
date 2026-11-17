@@ -455,6 +455,10 @@ async function fillField(field, value, resumeFileName) {
     case 'pick':
       return pickFile(field.element, value, resumeFileName ?? 'Resume.pdf');
     case 'combobox': {
+      // Workday's multiselect with an item already chosen ("Canada (+1)"): left as it is, as Simplify leaves it.
+      const chosenItem = field.element.closest('[data-automation-id="multiSelectContainer"], [data-uxi-widget-type="multiselect"], [data-automation-id^="formField"]')
+        ?.querySelector('[data-automation-id="selectedItem"]');
+      if (chosenItem && chosenItem.textContent.trim() && !/no items/i.test(chosenItem.textContent)) return { filled: true, already: chosenItem.textContent.trim() };
       const result = await fillCombobox(field.element, value);
       // A school, degree or subject a site's fixed list does not have: its "Other", as a person
       // would choose. Typed text with nothing chosen does not count: react-select drops it on leaving.
@@ -833,6 +837,7 @@ function valueFor(field, profile) {
   if (field.key === 'location') return profile.location?.trim() || [profile.city, profile.state, profile.country].filter(part => part?.trim()).join(', ');
   if (field.key === 'state') return provinceOf(profile);
   if (field.key === 'phoneType') return profile.phoneType || 'Mobile';
+  if (field.key === 'phoneCountryCode') return profile.country;
   // A form that asks for the country code apart (Workday) wants the number without it.
   if (field.key === 'phone' && profile.phone && countryCodeApart(field.element)) return nationalNumber(profile.phone);
   return profile[field.key];
@@ -888,6 +893,7 @@ function markFor(field, result, profile) {
       ? { status: 'ok', reason: `Your cover letter attached: ${profile.coverLetterFileName ?? 'Cover_Letter.pdf'}` }
       : { status: 'check', reason: `Your cover letter: ${result.note}` };
   }
+  if (result.already) return { status: 'ok', reason: `Already set on the page: ${result.already}` };
   if (result.note) return { status: 'check', reason: `Check this: ${result.note}` };
   // Worked here before: answered from the CV's employers, which may be incomplete.
   if (field.key === 'workedHereBefore') return { status: profile.workedHereBeforeSaved ? 'ok' : 'check', reason: profile.workedHereBeforeReason || 'From your CV. Check it.' };

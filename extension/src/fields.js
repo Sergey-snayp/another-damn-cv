@@ -25,6 +25,8 @@ const CATEGORIES = [
   { key: 'fullName', group: 'Personal', match: ['full name', 'your name', 'candidate name', 'legal name', 'name'] },
   { key: 'email', group: 'Personal', match: ['email', 'e-mail', 'email address'] },
   { key: 'phone', group: 'Personal', match: ['phone', 'mobile', 'telephone', 'cell', 'contact number'] },
+  // Workday's "Country Phone Code": the country, never the Country field ("Canada (+1)").
+  { key: 'phoneCountryCode', group: 'Personal', match: ['country phone code', 'phone country code', 'country code', 'dial code', 'dialing code', 'calling code'] },
   // Workday's "Phone Device Type": Mobile, as Simplify chooses it.
   { key: 'phoneType', group: 'Personal', match: ['phone device type', 'phone type', 'device type', 'type of phone'] },
   { key: 'pronouns', group: 'Personal', match: ['pronouns'] },

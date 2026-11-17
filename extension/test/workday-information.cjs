@@ -36,12 +36,12 @@ const MENUS = `<script>
     window.opened.textContent = text; option.closest('[data-automation-activepopup]').remove();
   });
 </script>`;
-const page = `<!doctype html><title>Apply</title>${MENUS}<main><h2>My Information</h2>
+const page = `<!doctype html><title>Apply</title>${MENUS}<style>[data-automation-id^="formField"] > label { display: block; }</style><main><h2>My Information</h2>
   <section><h3>Legal Name</h3>${text('legalName--firstName', 'First Name*')}${text('legalName--lastName', 'Last Name*')}</section>
   <div data-automation-id="formField-source"><button type="button" aria-haspopup="listbox" aria-label="How Did You Hear About Us? Select One Required" data-automation-id="source">Select One</button></div>
   <section><h3>Address</h3>${text('addressLine1', 'Address Line 1')}${text('addressSection_city', 'City')}${menu('addressSection_countryRegion', 'Province or Territory')}${text('postalCode', 'Postal Code')}</section>
   <section><h3>Phone</h3>${menu('phone-device-type', 'Phone Device Type*')}
-    <div data-automation-id="formField-countryPhoneCode"><label for="cpc">Country Phone Code*</label><input id="cpc" placeholder="Search" role="combobox"></div>
+    <div data-automation-id="formField-countryPhoneCode"><label for="cpc">Country Phone Code*</label><div data-automation-id="multiSelectContainer"><div data-automation-id="selectedItem">Canada (+1)</div><input id="cpc" placeholder="Search" role="combobox"></div></div>
     ${text('phoneNumber', 'Phone Number*')}${text('phoneExtension', 'Phone Extension')}</section></main>`;
 const profile = { firstName: 'Sergey', lastName: 'Proniuk', fullName: 'Sergey Proniuk', phone: '+1 (672) 888-0334', city: 'Vancouver', state: 'Canada', country: 'Canada', postalCode: 'V5K 1A1', heardAbout: 'https://anotherdamn.cv/' };
 
@@ -62,12 +62,39 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', fullName: 'Sergey Pr
     assert.deepEqual(by['phone-device-type'], ['phoneType', 'Mobile'], "Phone Device Type: Mobile, Simplify's first choice");
     assert.deepEqual(by['addressSection_countryRegion'], ['state', 'British Columbia'], 'the province from the postal code (V…) when the profile says only "Canada"');
     assert.deepEqual(by.postalCode, ['postalCode', 'V5K 1A1']);
+    assert.deepEqual(by.cpc, ['phoneCountryCode', 'Canada'], 'Country Phone Code is its own field, never the Country');
 
     // The text fields, filled: the last name and the phone as Workday accepts them.
     await tab.evaluate(async profile => {
       const { found } = window.CVAutofillFields.detectFields();
-      await window.CVAutofillFiller.fillAll(found.filter(field => ['text', 'listbox'].includes(field.kind)), profile);
+      window.__result = await window.CVAutofillFiller.fillAll(found.filter(field => ['text', 'listbox', 'combobox'].includes(field.kind)), profile);
     }, profile);
+    const phoneCode = await tab.evaluate(() => window.__result.marks.find(mark => mark.element.id === 'cpc'));
+    assert.deepEqual([phoneCode?.status, phoneCode?.reason], ['ok', 'Already set on the page: Canada (+1)'], 'a code Workday already chose is left as it is, as Simplify leaves it');
+    assert.equal(await tab.$eval('#cpc', input => input.value), '', 'nothing typed into its search box');
+
+    // The icons sit right after the words each field is named by ("Phone Number* ✓"), not beside its box.
+    const places = await tab.evaluate(async () => {
+      await window.CVAutofillMarks.show(window.__result.marks);
+      const end = (label) => { const range = document.createRange(); range.selectNodeContents(label); return [...range.getClientRects()].at(-1); };
+      return ['phoneNumber', 'addressSection_countryRegion', 'cpc'].map((id) => {
+        const element = document.getElementById(id) ?? document.querySelector(`[data-automation-id="${id}"]`);
+        const label = element.closest('[data-automation-id^="formField"]').querySelector('label');
+        const at = window.CVAutofillMarks.placeOf(element), text = end(label), box = element.getBoundingClientRect();
+        return { id, gap: Math.round(at.left - scrollX - text.right), level: Math.abs(at.top - scrollY + 9 - (text.top + text.height / 2)) <= 3, aboveTheBox: at.top - scrollY < box.top };
+      });
+    });
+    for (const place of places) assert.ok(place.gap >= 4 && place.gap <= 8 && place.level && place.aboveTheBox, `${place.id}: the icon follows its label's text, level with it (${JSON.stringify(place)})`);
+    // A label on its field's line: the icon never covers the field (it goes beside the box instead).
+    const covers = await tab.evaluate(async () => {
+      const input = document.getElementById('phoneNumber');
+      input.closest('[data-automation-id^="formField"]').querySelector('label').style.display = 'inline';
+      await window.CVAutofillMarks.show(window.__result.marks);
+      const at = window.CVAutofillMarks.placeOf(input), box = input.getBoundingClientRect();
+      const left = at.left - scrollX, top = at.top - scrollY;
+      return left < box.right && left + 18 > box.left && top < box.bottom && top + 18 > box.top;
+    });
+    assert.equal(covers, false, 'the icon never covers its own field');
     const values = await tab.evaluate(() => Object.fromEntries([...document.querySelectorAll('input[type="text"]')].map(input => [input.id, input.value])));
     assert.deepEqual([values['legalName--lastName'], values.phoneNumber, values.phoneExtension], ['Proniuk', '6728880334', '']);
     const menus = await tab.evaluate(() => [...document.querySelectorAll('button[aria-haspopup="listbox"]')].map(button => button.textContent));
