@@ -909,7 +909,7 @@ async function runFill() {
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     // Groups switched off, by field, so a still-empty field can say which setting left it empty.
     const offKeys = Object.fromEntries(FILL_GROUPS.filter(group => group.keys.length && !groupOn(group.keys[0])).flatMap(group => group.keys.map(key => [key, group.label])));
-    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, ...coverLetter, eligibility, acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}) };
+    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, ...coverLetter, eligibility, acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}), history: formHistory() };
     // Each frame holding the form fills in turn; their results add up to one report.
     let result = null;
     for (const frameId of formFrames.length ? formFrames : [0]) {
@@ -1018,6 +1018,28 @@ function activeCareer() {
 }
 /** Current company, title, years and education for Autofill, from the active source. */
 function careerAutofill() { return activeCareer()?.fields ?? {}; }
+/**
+ * Jobs, schools, skills and links for a form's own lists (Workday's My
+ * Experience), from the source Autofill uses. Settings → Fields to fill decides
+ * which go; unticked Profile bullets and **emphasis** marks stay out.
+ */
+function formHistory() {
+  const view = activeCareer();
+  const clean = (text) => String(text ?? '').replace(/\*\*/g, '').trim();
+  const links = ['linkedin', 'github', 'portfolio', 'website'].filter((key) => groupOn(key)).map((key) => profile[key]).filter(Boolean);
+  if (!view && !links.length) return null;
+  const work = groupOn('currentCompany');
+  return {
+    source: activeSource(),
+    experiences: work ? (view?.experiences ?? []).slice(0, 10).map((role) => ({
+      company: role.company, title: role.title, location: role.location, from: role.from, to: role.to, current: Boolean(role.current),
+      description: [clean(role.description), ...(role.bullets ?? []).filter((bullet) => !(role.excluded ?? []).includes(bullet)).map((bullet) => `• ${clean(bullet)}`)].filter(Boolean).join('\n').slice(0, 4000),
+    })) : [],
+    educations: groupOn('school') ? (view?.educations ?? []).slice(0, 5).map(({ institution, degree, field, from, to }) => ({ institution, degree, field, from, to })) : [],
+    skills: work ? (view?.skills ?? []).slice(0, 30) : [],
+    websites: links,
+  };
+}
 
 async function loadCareer() {
   const resumeId = resumes.chosen?.id;

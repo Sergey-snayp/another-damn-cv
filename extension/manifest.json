@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Another Damn CV",
-  "version": "0.67.2",
+  "version": "0.68.0",
   "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -50,6 +50,7 @@
         "src/fields.js",
         "src/filler.js",
         "src/account-form.js",
+        "src/workday-history.js",
         "src/marks.js",
         "src/launcher.js",
         "src/panel-host.js",

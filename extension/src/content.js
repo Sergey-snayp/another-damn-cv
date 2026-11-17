@@ -254,7 +254,16 @@ async function fill(profile, answers = []) {
   lastFill = { profile, failed: new Map(), answers: new Map(answers.map((item) => [String(item.id), item])) };
   // Settings → "Animate filling": the page follows each field as it fills. Icons appear as each field is done either way.
   const hooks = Marks?.fillHooks(await Marks.animationMode());
-  const result = await runPass({ found: lastScan.found, profile, answers, hooks });
+  // Workday's My Experience: its job, school and website lists and its skills box are filled
+  // from the CV's own jobs below, never as the current employer or home location.
+  const lists = profile.history && window.CVAutofillHistory?.here();
+  const found = lists ? lastScan.found.filter((field) => !window.CVAutofillHistory.owns(field.element)) : lastScan.found;
+  const result = await runPass({ found, profile, answers, hooks });
+  if (lists) {
+    const history = await window.CVAutofillHistory.fill(profile.history);
+    result.filled = (result.filled ?? 0) + history.filled;
+    if (history.marks.length) await Marks?.show(history.marks);
+  }
   await hooks?.finish?.(lastScan.found);
   hooks?.end();
   rememberStep();
