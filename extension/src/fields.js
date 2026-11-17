@@ -468,7 +468,10 @@ function isFillable(element) {
   if (element.type === 'hidden') return false;
   if (['password', 'submit', 'button', 'reset', 'image'].includes(element.type)) return false;
   if (element.closest('[hidden], [aria-hidden="true"]')) return false;
-  if (element.type === 'file') return element.offsetParent !== null || !!element.closest('form')?.getClientRects().length || hasUploadButton(element);
+  if (element.type === 'file') return element.offsetParent !== null || !!element.closest('form')?.getClientRects().length || hasUploadButton(element)
+    // Workday's upload box: its input sits hidden inside, beside its visible "Select files" button.
+    || (element.getAttribute('data-automation-id') === 'file-upload-input-ref'
+      && Boolean([...(element.parentElement?.closest('[data-automation-id^="formField"], [data-automation-id*="upload" i], [data-automation-id*="attachment" i]') ?? document).querySelectorAll('[data-automation-id="select-files"], button')].find((button) => button.getClientRects().length && /select files|upload/i.test(button.textContent))));
   return element.offsetParent !== null;
 }
 

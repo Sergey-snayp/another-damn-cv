@@ -16,8 +16,9 @@ const page = `<!doctype html><title>My Experience</title>
   <div role="group" aria-labelledby="Education-section"><h3 id="Education-section">Education</h3><div id="education"></div>
     <button type="button" data-automation-id="add-button" aria-label="Add Education" onclick="addEducation(this)">Add</button></div>
   <div data-automation-id="formField-skills"><label for="skills">Skills</label><div data-automation-id="multiSelectContainer"><div id="chips"></div><input id="skills" placeholder="Search" data-picks="skills"></div></div>
-  <div role="group" aria-labelledby="Websites-section"><h3 id="Websites-section">Websites</h3><div id="websites"></div>
-    <button type="button" data-automation-id="add-button" aria-label="Add Websites" onclick="addWebsite(this)">Add</button></div>
+  <div data-automation-id="formField-resume"><label>Application Documents</label><div class="drop"><div style="display:none"><input type="file" data-automation-id="file-upload-input-ref" id="cv"></div><button type="button" data-automation-id="select-files">Select files</button></div></div>
+  <section><h3>Websites</h3><div id="websites"></div>
+    <button type="button" onclick="addWebsite(this)">Add</button></section>
 </main>
 <script>
   let works = 0, schools = 0, sites = 0;
@@ -50,7 +51,7 @@ const page = `<!doctype html><title>My Experience</title>
     button.setAttribute('aria-label', 'Add Another Websites');
   }
   // Workday's search boxes: Enter shows the known items that match; choosing one makes a chip.
-  const CATALOG = { skills: ['TypeScript', 'Node.js', 'PostgreSQL', 'JavaScript'], schools: ['Original University', 'Other University'], studies: ['Computer Science', 'Computer Engineering'] };
+  const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript'], schools: ['Original University', 'Other University'], studies: ['Computer Science', 'Software Engineering'] };
   const DEGREES = ["Associate's Degree", "Bachelor's Degree", "Master's Degree"];
   let searching = null;
   const popup = (texts, prompt) => {
@@ -60,7 +61,7 @@ const page = `<!doctype html><title>My Experience</title>
       : '<li role="option">' + t + '</li>').join('') + '</ul></div>');
   };
   document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || !event.target.dataset?.picks) return;
+    if (event.keyCode !== 13 || !event.target.dataset?.picks) return;
     searching = event.target;
     const typed = searching.value.toLowerCase();
     popup(CATALOG[searching.dataset.picks].filter((t) => t.toLowerCase().includes(typed)), true);
@@ -83,14 +84,19 @@ const history = {
   source: 'resume',
   experiences: [
     { company: 'Ciklum', title: 'Senior Software Engineer', location: 'Canada (Remote)', from: '2024-10', to: '', current: true, description: 'Card payment platform.\n• Built the Discover integration.' },
-    { company: 'EPAM', title: 'Software Engineer', location: 'Kyiv, Ukraine', from: '2021-03', to: '2024-09', current: false, description: 'High-load ad tech.' },
+    { company: 'EPAM', title: 'Software Engineer', location: 'Kyiv, Ukraine', from: '2021-12', to: '2024-09', current: false, description: 'High-load ad tech.' },
   ],
-  educations: [{ institution: 'Original University', degree: 'BSc', field: 'Computer Science', from: '2013', to: '2017' }],
+  educations: [
+    { institution: 'Original University', degree: 'BSc', field: 'Computer Engineering', from: '2013', to: '2017' },
+    // A course: no degree, so no Education panel (Workday would demand a degree).
+    { institution: 'EPAM', degree: '', field: 'Advanced Node.js', from: '', to: '' },
+  ],
   skills: ['TypeScript', 'Node.js', 'Rust'],
   websites: ['https://www.linkedin.com/in/sergey', 'https://github.com/sergey'],
 };
 // A home location and current employer that must never land in an older job's panel.
-const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.com', location: 'Vancouver, BC', city: 'Vancouver', currentCompany: 'Ciklum', currentTitle: 'Senior Software Engineer', history };
+const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.com', location: 'Vancouver, BC', city: 'Vancouver', currentCompany: 'Ciklum', currentTitle: 'Senior Software Engineer', history,
+  resumeDataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0YK', resumeFileName: 'Sergey_Proniuk_CV.pdf' };
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, timeout: 90_000 });
@@ -103,14 +109,16 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     const read = (ids) => Promise.all(ids.map(value));
 
     assert.deepEqual(await read(['jobTitle-1', 'company-1', 'location-1', 'current-1', 'startDate-month-1', 'startDate-year-1', 'endDate-year-1']),
-      ['Senior Software Engineer', 'Ciklum', 'Canada (Remote)', true, '10', '2024', ''], 'the current job: "I currently work here" ticked, no end date');
+      ['Senior Software Engineer', 'Ciklum', 'Canada (Remote)', true, '10', '2024', ''], 'the current job: "I currently work here" ticked, no end date; a two-digit month and its year both set');
     assert.match(await value('description-1'), /^Card payment platform\.\n• Built the Discover integration\.$/);
     assert.deepEqual(await read(['jobTitle-2', 'company-2', 'current-2', 'startDate-month-2', 'startDate-year-2', 'endDate-month-2', 'endDate-year-2']),
-      ['Software Engineer', 'EPAM', false, '03', '2021', '09', '2024'], 'each job its own panel, added with "Add"');
+      ['Software Engineer', 'EPAM', false, '12', '2021', '9', '2024'], 'each job its own panel, added with "Add"; months as Workday shows them');
     const chips = (id) => tab.$$eval(`#${id} [data-automation-id="selectedItem"]`, (items) => items.map((item) => item.textContent));
     assert.deepEqual([await chips('school-chip-1'), await tab.$eval('#degree-1', (button) => button.textContent), await chips('study-chip-1'), await value('school-from-1'), await value('school-to-1')],
-      [['Original University'], "Bachelor's Degree", ['Computer Science'], '2013', '2017'], 'the school: found, its degree as Workday names it ("BSc" → Bachelor\'s Degree)');
-    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js'], 'skills Workday knows; Rust is not in its list, so it is left out');
+      [['Original University'], "Bachelor's Degree", ['Software Engineering'], '2013', '2017'], 'the school: found, its degree as Workday names it ("BSc" → Bachelor\'s Degree), the closest field of study when the exact one is not listed');
+    assert.equal(await tab.$$eval('[data-automation-id^="education-"]', (panels) => panels.length), 1, 'a course (no degree) gets no Education panel');
+    assert.equal(await tab.$eval('#cv', (input) => input.files.length), 1, "the CV attached to Workday's hidden upload input");
+    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)'], 'skills Workday knows (searched with a real Enter); Rust is not in its list, so it is left out');
     assert.deepEqual(await read(['website-1', 'website-2']), history.websites);
     console.log('PASS Workday My Experience: each job, school and website added and filled, its degree and known skills chosen');
 
@@ -123,7 +131,7 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.deepEqual(counts, [2, 1, 2], 'a second Autofill adds no second copy');
     assert.equal(await value('jobTitle-1'), 'Senior Engineer (edited)', 'and never overwrites what is there');
     assert.deepEqual(await read(['company-2', 'location-2']), ['EPAM', 'Kyiv, Ukraine'], "an older job's emptied fields get that job's, never the current employer or home location");
-    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js']);
+    assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)']);
     console.log('PASS a second Autofill: no job, school, website or skill twice, and nothing typed over');
   } finally {
     await browser.close();

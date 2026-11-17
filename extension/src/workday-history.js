@@ -27,14 +27,17 @@
     work: {
       add: 'button[aria-label^="Add Another Work Experience"], button[aria-label^="Add Work Experience"], button[aria-label^="Add Another Work History"], button[aria-label^="Add Work History"], [data-automation-id="workExperienceSection"] button[data-automation-id="add-button"], [role="group"][aria-labelledby*="Experience-section"] button[data-automation-id="add-button"], [role="group"][aria-labelledby*="Work-History-section"] button[data-automation-id="add-button"], [role="group"][aria-labelledby*="Employment-History-section"] button[data-automation-id="add-button"]',
       panel: /^workExperience-\d+$|(Experience|Work-History|Employment-History|Employment-Detail)-\d+-panel/,
+      heading: /^(work experience|work history|employment history|employment|experience)$/i,
     },
     education: {
       add: 'button[aria-label^="Add Another Education"], button[aria-label^="Add Education"], [data-automation-id="educationSection"] button[data-automation-id="add-button"], [role="group"][aria-labelledby*="Education-section"] button[data-automation-id="add-button"]',
       panel: /^education-\d+$|Education-\d+-panel/,
+      heading: /^(education|schooling|schools attended)$/i,
     },
     websites: {
-      add: 'button[aria-label^="Add Another Websites"], button[aria-label^="Add Websites"], [role="group"][aria-labelledby*="Websites-section"] button[data-automation-id="add-button"]',
-      panel: /^websitePanelSet-\d+$|Websites-\d+-panel/,
+      add: 'button[aria-label^="Add Another Website"], button[aria-label^="Add Website"], [role="group"][aria-labelledby*="Websites-section"] button[data-automation-id="add-button"], [role="group"][aria-labelledby*="Website-section"] button[data-automation-id="add-button"]',
+      panel: /^websitePanelSet-\d+$|Websites?-\d+-panel/,
+      heading: /^websites?( \(optional\))?$/i,
     },
   };
 
@@ -44,10 +47,26 @@
       .filter((node) => node.querySelector('input, textarea, button') && !node.parentElement?.closest?.('[data-automation-id^="workExperience-"], [data-automation-id^="education-"], [data-automation-id^="websitePanelSet-"]'));
   }
 
+  /**
+   * The list's Add button: Workday's own names first, else the "Add" or "Add Another"
+   * button under the section's heading ("Websites"), as Jobright finds it.
+   */
+  function addButton(list) {
+    const named = first(document, LISTS[list].add);
+    if (named) return named;
+    const heading = [...document.querySelectorAll('h2, h3, h4, [role="heading"], legend')]
+      .find((node) => shown(node) && LISTS[list].heading.test(normal(node.textContent).replace(/\*$/, '').trim()));
+    for (let box = heading?.parentElement, depth = 0; box && depth < 5; box = box.parentElement, depth++) {
+      const add = [...box.querySelectorAll('button, [role="button"]')].find((button) => shown(button) && /^add( another)?$/i.test(normal(button.textContent)));
+      if (add) return add;
+    }
+    return null;
+  }
+
   /** The list's panel number `index` (0-based), pressing Add until it is there. */
   async function panelAt(list, index) {
     for (let tries = 0; panels(list).length <= index && tries < 3; tries++) {
-      const add = first(document, LISTS[list].add);
+      const add = addButton(list);
       if (!add) return null;
       const before = panels(list).length;
       press(add);
@@ -74,8 +93,23 @@
     return true;
   }
 
-  /** A Workday date: its Month and Year boxes (or one box) from "2023-04". */
-  function date(panel, which, value, reason) {
+  /**
+   * A value set straight into a box, as Simplify sets Workday's dates: focus, the
+   * value, input, change, blur. Typing would set off Workday's own jump from a
+   * two-digit month to the year, and the year would be lost.
+   */
+  async function setDirect(element, value, reason) {
+    if (!element || !Fields().isEmpty(element)) return false;
+    element.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
+    Filler().setValue(element, String(value));
+    element.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    filledMark(element, reason);
+    await wait(200);
+    return true;
+  }
+
+  /** A Workday date: its Month and Year boxes (or one box) from "2023-04", month first, as Simplify. */
+  async function date(panel, which, value, reason) {
     const match = String(value ?? '').match(/^(\d{4})(?:-(\d{2}))?/);
     if (!match) return 0;
     const box = panel.querySelector(`[data-automation-id="formField-${which}"], [id*="${which}"], [id*="${which === 'startDate' ? 'firstYear' : 'lastYear'}"]`) ?? null;
@@ -83,8 +117,8 @@
     const month = first(box, 'input[aria-label="Month"], input[data-automation-id="dateSectionMonth-input"]');
     const year = first(box, 'input[aria-label="Year"], input[data-automation-id="dateSectionYear-input"]') ?? (month ? null : first(box, 'input'));
     let count = 0;
-    if (month && match[2] && type(month, match[2], reason)) count++;
-    if (year && type(year, match[1], reason)) count++;
+    if (month && match[2] && await setDirect(month, String(Number(match[2])), reason)) count++;
+    if (year && await setDirect(year, match[1], reason)) count++;
     return count;
   }
 
@@ -96,14 +130,21 @@
     if (!input || !text) return null;
     input.focus({ preventScroll: true });
     Filler().typeText(input, text);
-    input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
+    // A real Enter: Chrome drops keyCode from a made-up key event, and Workday searches on keyCode 13.
+    for (const type of ['keydown', 'keypress', 'keyup']) {
+      const key = new KeyboardEvent(type, { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter' });
+      Object.defineProperty(key, 'keyCode', { get: () => 13 });
+      Object.defineProperty(key, 'which', { get: () => 13 });
+      input.dispatchEvent(key);
+    }
     let options = [];
     for (let waited = 0; waited < 3000 && !options.length; waited += 150) {
       await wait(150);
       options = [...document.querySelectorAll('[data-automation-activepopup="true"] [data-automation-id="promptOption"], [data-automation-activepopup="true"] [role="option"], [role="listbox"] [role="option"]')].filter(shown);
     }
     const label = (option) => normal(option.getAttribute('data-automation-label') || option.textContent);
-    const pick = options.find((option) => matches(label(option)));
+    // Several tests, best first: the first that any option passes picks it.
+    const pick = [].concat(matches).map((test) => options.find((option) => test(label(option)))).find(Boolean);
     if (!pick) {
       input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
       Filler().typeText(input, '');
@@ -139,8 +180,8 @@
       count += Number(type(field(panel, 'input[data-automation-id="location"], input[name="location"]', /location/i), role.location, source));
       const current = first(panel, 'input[data-automation-id="currentlyWorkHere"], input[name="currentlyWorkHere"]');
       if (current && role.current && !current.checked) { press(current); filledMark(current, source); count++; }
-      count += date(panel, 'startDate', role.from, source);
-      if (!role.current) count += date(panel, 'endDate', role.to, source);
+      count += await date(panel, 'startDate', role.from, source);
+      if (!role.current) count += await date(panel, 'endDate', role.to, source);
       count += Number(type(field(panel, 'textarea[data-automation-id="description"], textarea[id*="roleDescription"]', /description/i), role.description, source));
     }
     return count;
@@ -166,13 +207,20 @@
         if (result.filled) { filledMark(degree, source); count++; } else checkMark(degree, `"${school.degree}" is not one of its degrees. Choose the closest.`);
       }
       const study = first(panel, '[data-automation-id="formField-field-of-study"] input, [data-automation-id="formField-fieldOfStudy"] input, [data-automation-id*="fieldOfStudy" i] input');
-      if (study && school.field && Fields().isEmpty(study)) {
+      if (study && school.field && Fields().isEmpty(study) && !Fields().chosenItem(study)) {
         const wanted = normal(school.field);
-        const got = await searchPick(study, school.field, (option) => option === wanted || option.startsWith(wanted) || wanted.startsWith(option));
+        // The same name first, then the option sharing most of its words ("Software Engineering" ~ "Engineering, Software").
+        const words = (text) => normal(text).split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !['and', 'the', 'for', 'with'].includes(word));
+        const close = (option) => { const want = words(school.field), have = words(option); const shared = want.filter((word) => have.includes(word)).length; return shared > 0 && shared >= Math.ceil(want.length / 2); };
+        const tests = [(option) => option === wanted, (option) => option.startsWith(wanted) || wanted.startsWith(option), close];
+        let got = await searchPick(study, school.field, tests);
+        // Nothing for the whole name: its main word ("Computer Engineering" → "Engineering").
+        const main = words(school.field).sort((a, b) => b.length - a.length)[0];
+        if (!got && main && main !== wanted) got = await searchPick(study, main, tests.slice(2));
         if (got) { filledMark(study, source); count++; } else checkMark(study, `"${school.field}" is not in its list. Choose the closest.`);
       }
-      count += date(panel, 'startDate', school.from, source);
-      count += date(panel, 'endDate', school.to, source);
+      count += await date(panel, 'startDate', school.from, source);
+      count += await date(panel, 'endDate', school.to, source);
     }
     return count;
   }
@@ -185,8 +233,9 @@
     let added = 0;
     for (const skill of skills.slice(0, 30)) {
       const wanted = normal(skill);
-      if (!wanted || have.has(wanted)) continue;
-      const got = await searchPick(input, skill, (option) => option === wanted);
+      // Already chosen, by the same name or Workday's longer one ("Node.js (Programming)").
+      if (!wanted || [...have].some((item) => item === wanted || item.startsWith(`${wanted} (`))) continue;
+      const got = await searchPick(input, skill, [(option) => option === wanted, (option) => option.startsWith(`${wanted} (`)]);
       if (got) { have.add(got); added++; }
     }
     if (added) filledMark(input, `${added} skill${added === 1 ? '' : 's'} added from ${source.replace(/^From /, '')}`);
@@ -222,7 +271,8 @@
     const source = history.source === 'resume' ? 'From your CV' : 'From your Profile';
     let filled = 0;
     filled += await fillWork(history.experiences ?? [], source);
-    filled += await fillEducation(history.educations ?? [], source);
+    // Schools with a degree: a course (no degree) would leave Workday's required Degree empty.
+    filled += await fillEducation((history.educations ?? []).filter((school) => String(school.degree ?? '').trim()), source);
     filled += await fillSkills(history.skills ?? [], source);
     filled += await fillWebsites(history.websites ?? [], 'From your Profile');
     return { filled, marks: [...marks] };
