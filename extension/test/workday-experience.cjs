@@ -64,6 +64,8 @@ const page = `<!doctype html><title>My Experience</title>
   }
   // Workday's search boxes: Enter shows the known items that match; choosing one makes a chip.
   const STUDIES = ${JSON.stringify(STUDIES)};
+  // A chosen item's delete mark, as Workday draws it.
+  const CHARM = '<div data-automation-id="DELETE_charm" onclick="this.parentElement.remove()"></div>';
   const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript', 'Java', 'SQL Server', 'Amazon Web Services (AWS)'], schools: ['Original University', 'Other University'], studies: STUDIES };
   const DEGREES = ["Associate's Degree", "Bachelor's Degree", "Master's Degree"];
   let searching = null;
@@ -88,7 +90,7 @@ const page = `<!doctype html><title>My Experience</title>
     document.querySelector('[data-automation-activepopup]').remove();
     if (searching.tagName === 'BUTTON') { searching.textContent = chosen; return; }
     const chips = searching.dataset.picks === 'skills' ? document.getElementById('chips') : searching.previousElementSibling;
-    chips.insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem">' + chosen + (searching.dataset.picks === 'skills' ? '<div data-automation-id="DELETE_charm" onclick="this.parentElement.remove()"></div>' : '') + '</div>');
+    chips.insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem">' + chosen + CHARM + '</div>');
     searching.value = '';
   });
 </script>`;
@@ -159,6 +161,8 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
       const work = document.querySelector('[aria-label="Add Work Experience"]'), school = document.querySelector('[aria-label="Add Education"]');
       addWork(work);
       for (let i = 0; i < 4; i++) addEducation(i ? document.querySelector('[aria-label="Add Another Education"]') : school);
+      // Chosen before, but not the CV's: another school and another field of study.
+      for (const [id, text] of [['school-chip-1', 'Other University'], ['study-chip-1', 'Computer Science']]) document.getElementById(id).insertAdjacentHTML('beforeend', '<div data-automation-id="selectedItem" title="' + text + '">' + text + CHARM + '</div>');
       document.getElementById('startDate-month-1').value = '10';
       document.querySelector('[data-automation-id="workExperience-1"] [data-automation-id="formField-startDate"]').insertAdjacentHTML('beforeend', '<p data-automation-id="errorMessage">Error: Invalid Date: 10/</p>');
     });
@@ -166,7 +170,8 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.equal(await tab.$$eval('[data-automation-id^="education-"]', (panels) => panels.length), 1, 'Education panels beyond the CV\'s one school are deleted');
     assert.ok(cleaned.notes.includes('Removed 3 Education entries not in your CV.'), `the panel is told (${JSON.stringify(cleaned.notes)})`);
     assert.deepEqual(await read(['startDate-month-1', 'startDate-year-1']), ['10', '2024'], 'a date Workday called invalid is set again');
-    console.log('PASS clean-up: extra Education panels deleted (and said so), an invalid date set again');
+    assert.deepEqual([await chips('school-chip-1'), await chips('study-chip-1')], [['Original University'], ['Computer Engineering, General']], 'a school and field of study that are not the CV\'s replaced, as Simplify replaces them');
+    console.log('PASS clean-up: extra Education panels deleted (and said so), an invalid date set again, a wrong school and field of study replaced');
 
     // Degree names as different Workday sites list them, picked the way Simplify picks.
     const pick = (texts, degree, field) => tab.evaluate((texts, degree, field) => { const index = window.CVAutofillHistory.degreeOption(texts, degree, field); return index === null ? null : texts[index]; }, texts, degree, field);

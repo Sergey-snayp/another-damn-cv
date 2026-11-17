@@ -315,6 +315,28 @@
     return count;
   }
 
+  /**
+   * As Simplify does on Workday: a school or field of study already chosen
+   * that is not the CV's is removed (its chip's delete mark), so the CV's can
+   * be chosen. One that matches is kept. True when the box is now empty.
+   */
+  async function clearWrong(input, keeps) {
+    const box = input.closest('[data-automation-id="multiSelectContainer"], [data-uxi-widget-type="multiselect"], [data-automation-id^="formField"]');
+    const chips = () => [...(box?.querySelectorAll('[data-automation-id="selectedItem"]') ?? [])].filter((chip) => !/^no items/i.test(chip.textContent.trim()));
+    for (const chip of chips()) {
+      const text = chip.getAttribute('title') || chip.textContent;
+      if (keeps(text)) continue;
+      const remove = chip.querySelector('[data-automation-id="DELETE_charm"]');
+      if (!remove) continue;
+      press(remove);
+      for (let waited = 0; chip.isConnected && waited < 1500; waited += 100) await wait(100);
+    }
+    return !chips().length;
+  }
+  // "The University of X - Main Campus" is "University of X", as Simplify compares schools.
+  const campus = (text) => key(text).replace(/^the /, '').replace(/\s*-?\s*main campus$/, '').trim();
+  const sameSchool = (chip, institution) => { const have = campus(chip), want = campus(institution); return !!have && !!want && (have === want || have.startsWith(want) || want.startsWith(have)); };
+
   async function fillEducation(educations, source) {
     let count = 0;
     for (const [index, school] of educations.entries()) {
@@ -324,7 +346,7 @@
       if (named) count += Number(type(named, school.institution, source));
       else {
         const search = first(panel, '[data-automation-id="formField-schoolItem"] input, [data-automation-id="formField-school"] input, [data-automation-id*="school" i] input[placeholder]');
-        if (search && Fields().isEmpty(search) && school.institution) {
+        if (search && school.institution && await clearWrong(search, (chip) => sameSchool(chip, school.institution))) {
           const got = await searchPick(search, school.institution, (option) => option === normal(school.institution) || option.startsWith(normal(school.institution)));
           if (got) { filledMark(search, source); count++; } else checkMark(search, `"${school.institution}" is not in its list. Choose it yourself.`);
         }
@@ -336,14 +358,16 @@
         if (result?.text) { filledMark(degree, source); count++; } else checkMark(degree, seen.length ? `"${school.degree}" matches none of its degrees (${seen.slice(0, 8).join(', ')}${seen.length > 8 ? '…' : ''}). Choose the closest.` : 'Its list of degrees did not open. Choose one.');
       }
       const study = first(panel, '[data-automation-id="formField-field-of-study"] input, [data-automation-id="formField-fieldOfStudy"] input, [data-automation-id*="fieldOfStudy" i] input');
+      // The same name, one that starts with it, then the one sharing most of its words ("Software Engineering" ~ "Engineering, Software").
+      const wanted = key(school.field);
+      const close = (option) => { const want = words(school.field), have = words(option); const shared = want.filter((word) => have.includes(word)).length; return shared > 0 && shared >= Math.ceil(want.length / 2); };
+      const tests = [(option) => key(option) === wanted, (option) => key(option).startsWith(wanted) || wanted.startsWith(key(option)), close];
+      // As Simplify does: Workday's own name for it from its list, typed as it is and chosen exactly.
+      const name = study && school.field ? studyName(await workdayList('/values/educations/fieldsOfStudy'), school.field) : null;
+      // A choice already made is kept only when it is that name, or the CV's (or starts with it); a closest guess is not enough.
+      if (study && school.field && Fields().chosenItem(study)) await clearWrong(study, (chip) => (name ? key(chip) === key(name) : false) || tests.slice(0, 2).some((test) => test(normal(chip))));
       if (study && school.field && Fields().isEmpty(study) && !Fields().chosenItem(study)) {
-        const wanted = key(school.field);
-        // The same name, one that starts with it, then the one sharing most of its words ("Software Engineering" ~ "Engineering, Software").
-        const close = (option) => { const want = words(school.field), have = words(option); const shared = want.filter((word) => have.includes(word)).length; return shared > 0 && shared >= Math.ceil(want.length / 2); };
-        const tests = [(option) => key(option) === wanted, (option) => key(option).startsWith(wanted) || wanted.startsWith(key(option)), close];
         let got = null;
-        // As Simplify does: Workday's own name for it from its list, typed as it is and chosen exactly.
-        const name = studyName(await workdayList('/values/educations/fieldsOfStudy'), school.field);
         if (name) got = await searchPick(study, name, [(option) => key(option) === key(name)]);
         // No list, or the name not found by its search: search with the CV's words.
         if (!got) for (const term of searchTerms(school.field)) if ((got = await searchPick(study, term, tests))) break;
