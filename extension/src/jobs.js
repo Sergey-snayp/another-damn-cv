@@ -1,4 +1,6 @@
 import { API_URL, signOut } from './auth.js';
+import { captureWithDescription } from './job-capture.js';
+import { linkedInJobForTab } from './linkedin-handoff.js';
 
 /**
  * "Send this job to the app".
@@ -38,16 +40,32 @@ export function requestSiteAccess(tab) {
 }
 
 export async function captureTab(tabId) {
+  const tab = await chrome.tabs?.get?.(tabId).catch(() => null);
+  const carried = tab ? await linkedInJobForTab(tab) : null;
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ['src/linkedin.js', 'src/capture-sites.js', 'src/capture.js'],
+    files: ['src/linkedin.js', 'src/job-details.js', 'src/capture-sites.js', 'src/capture.js'],
   });
   const [result] = await chrome.scripting.executeScript({
     target: { tabId },
-    func: async () => {
+    args: [Boolean(carried?.description)],
+    func: async haveOriginalDescription => {
       // Chrome can turn a rejected injected promise into an empty result.
       // Return the error explicitly so loading failures can be retried.
-      try { return { ok: true, capture: await globalThis.__cvCapture() }; }
+      try {
+        const pageUrl = globalThis.location?.href;
+        const capture = await globalThis.__cvCapture();
+        if (capture.matched === 'LinkedIn') return { ok: true, capture };
+        const reader = globalThis.CVAutofillJobDetails;
+        const details = reader ? {
+          title: reader.title?.(), company: reader.company?.(), url: reader.jobUrl?.() || capture.url,
+          ...await Promise.resolve(haveOriginalDescription ? reader.read?.() ?? {} : reader.readAsync?.() ?? reader.read?.() ?? {}).catch(() => ({})),
+        } : {};
+        if (globalThis.location?.href !== pageUrl) throw new Error('The job changed while its description was being read. Try again on the selected job.');
+        const fields = globalThis.CVAutofillFields?.detectFields?.().found ?? [];
+        const applicationForm = globalThis.CVAutofillJobForm?.assess?.(fields)?.show || Boolean(globalThis.document?.querySelector('form input[type="file"]'));
+        return { ok: true, capture, details, applicationForm };
+      }
       catch (error) { return { ok: false, error: error?.message || 'The job description is not ready.' }; }
     },
   });
@@ -55,14 +73,16 @@ export async function captureTab(tabId) {
   if (reading?.ok === false) throw new Error(reading.error);
   const capture = reading?.ok === true ? reading.capture : reading;
   if (!capture?.url) throw new Error(result?.error?.message || 'The job description is not ready.');
-  return capture;
+  const details = reading?.details ?? {};
+  const linkedIn = await linkedInJobForTab({ id: tabId, url: details.url || capture.url });
+  return captureWithDescription(capture, details, linkedIn, reading?.applicationForm);
 }
 
 export async function sendCapture(capture) {
   const { auth } = await chrome.storage.local.get('auth');
   if (!auth?.syncToken) throw new NotSignedInError();
 
-  const { matched: _matched, description: _description, ...payload } = capture;
+  const { matched: _matched, description: _description, descriptionMissing: _missing, ...payload } = capture;
 
   let response;
   try {

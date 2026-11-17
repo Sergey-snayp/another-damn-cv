@@ -459,6 +459,14 @@ description, and compares its keywords with your selected CV. **Quick Tailor**
 and **Full Tailoring** use that posting through the existing backend flow.
 Opening Quick Tailor keeps the CV as a draft; **Save** creates the CV and PDF.
 
+Clicking **Apply** to open a company site keeps the original LinkedIn posting
+in browser session storage for that application tab. Quick Tailor saves its
+description as the backend job description immediately, with clean text,
+HTML and structured data. Application field labels and state/country options
+never replace that posting. Jobvite can also read the description from its
+job overview when the application page has none. The handoff is bound to the
+destination posting, so another job on the same ATS cannot reuse it.
+
 The selected job description is read automatically. Its keyword match and
 missing skills appear in the existing **Resume** card. Reading and analysis
 create no job, CV or PDF.

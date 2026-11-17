@@ -70,11 +70,12 @@ async function pageFixture(browser, html, url = searchUrl, publicHtml = null) {
 const capture = page => page.evaluate(() => window.__cvCapture());
 const scan = page => page.evaluate(() => window.__ask({ type: 'scan' }));
 
-async function panelFixture(browser, jobPage) {
+async function panelFixture(browser, jobPage, linkedIn = null) {
   const page = await browser.newPage();
   await page.exposeFunction('readJobPage', message => jobPage.evaluate(message => window.__ask(message), message));
   await page.exposeFunction('captureJobPage', () => capture(jobPage));
-  await page.exposeFunction('executeJobScript', source => jobPage.evaluate(source => (0, eval)(`(${source})`)(), source));
+  await page.exposeFunction('executeJobScript', (source, args) => jobPage.evaluate(({source, args}) => (0, eval)(`(${source})`)(...(args ?? [])), {source, args}));
+  await page.exposeFunction('parseCapturedJob', input => new JsonLdJobReader().read(captureSchema.parse(input).jsonLd ?? []));
   await page.setRequestInterception(true);
   page.on('request', request => {
     const file = path.join(extension, new URL(request.url()).pathname);
@@ -83,20 +84,22 @@ async function panelFixture(browser, jobPage) {
       void request.respond({ contentType, body: fs.readFileSync(file) });
     } else void request.respond({ status: 404, body: '' });
   });
-  await page.evaluateOnNewDocument(url => {
-    window.__listeners = []; window.__requests = []; window.__opened = [];
+  await page.evaluateOnNewDocument(({url, linkedIn}) => {
+    window.__listeners = []; window.__storageListeners = []; window.__requests = []; window.__opened = [];
     const store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile: {}, chosenResumeId: 'cv1' };
     const event = { addListener() {}, removeListener() {} };
+    window.__session = linkedIn ? { 'fromLinkedIn:1': {job: linkedIn, at: Date.now(), host: null} } : {};
     window.chrome = {
       runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: { addListener: listener => window.__listeners.push(listener) }, sendMessage: async message => message.type === 'panel-tab' ? { tabId: 1 } : {} },
-      storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async keys => [].concat(keys).forEach(key => delete store[key]) }, onChanged: event },
+      storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async keys => [].concat(keys).forEach(key => delete store[key]) }, session: { get: async key => ({[key]: window.__session[key]}), set: async value => Object.assign(window.__session, value) }, onChanged: {addListener: listener => window.__storageListeners.push(listener), removeListener() {}} },
       tabs: { get: async () => ({ id: 1, url }), sendMessage: async (_, message) => (message?.type === 'tailor-open' ? (window.__opened.push(message.path), { ok: true }) : window.readJobPage(message)), onUpdated: event, create: async options => window.__opened.push(options.url) },
-      scripting: { executeScript: async ({ func }) => {
+      scripting: { executeScript: async ({ func, args }) => {
         if (!func) return [];
         if (window.__captureFailure) { const message = window.__captureFailure; window.__captureFailure = ''; throw new Error(message); }
-        return [{ result: await window.executeJobScript(func.toString()) }];
+        return [{ result: await window.executeJobScript(func.toString(), args) }];
       } },
       permissions: { request: async () => true },
+      identity: { getRedirectURL: () => 'https://fixture.chromiumapp.org/' },
       windows: { getCurrent: async () => ({ width: 1400, height: 900 }), create: async options => { window.__opened.push(options.url); return { id: 7 }; }, onRemoved: event },
     };
     const nativeFetch = window.fetch.bind(window);
@@ -112,11 +115,12 @@ async function panelFixture(browser, jobPage) {
       else if (pathname === '/api/jobs/lookup') body = { job: null };
       else if (pathname === '/api/jobs/capture') {
         const input = JSON.parse(options.body);
-        body = { job: { id: `saved-${input.url.split('/').pop()}`, title: input.hints.title, company: input.hints.company }, created: true };
+        body = { job: { id: `saved-${input.url.split('/').pop()}`, ...await window.parseCapturedJob(input) }, created: true };
+        window.__savedJob = body.job;
       }
       return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
     };
-  }, jobPage.url());
+  }, {url: jobPage.url(), linkedIn});
   await page.goto('http://extension.test/src/sidepanel.html');
   return page;
 }
@@ -170,8 +174,43 @@ async function panelFixture(browser, jobPage) {
     assert.ok(!requests.some(request => request.method === 'POST' && /\/resumes(?:\/|$)/.test(request.path)), 'opening Quick Tailor creates no CV or PDF');
     console.log('PASS: real panel analyzes the selected job and opens the existing unsaved Quick Tailor flow inside the job page');
 
+    // The Varonis application form has no posting. Only the original LinkedIn
+    // description may reach Quick Tailor, in both backend sources and keyword matching.
+    const carried = {title: 'Senior Software Engineer (Python)', company: 'Varonis', location: 'Vancouver, Canada', description: 'About the role\n\nBuild the Secure AI Platform using Python and AWS.\n\nRequirements\n\nDesign secure distributed services and work with our security engineering team.', url: 'https://www.linkedin.com/jobs/view/123'};
+    const apply = await pageFixture(browser, '<!doctype html>' + fs.readFileSync(path.join(__dirname, 'fixtures/jobvite-varonis-apply.html'), 'utf8'), 'https://jobs.jobvite.com/careers/varonis/job/oitNzfwR/apply');
+    const applicationPanel = await panelFixture(browser, apply, carried);
+    await applicationPanel.waitForSelector('[data-tailor="quick"]');
+    await applicationPanel.click('[data-tailor="quick"]');
+    await applicationPanel.waitForFunction(() => window.__opened.length === 1);
+    const saved = await applicationPanel.evaluate(() => ({job: window.__savedJob, request: window.__requests.find(request => request.path === '/api/jobs/capture').body, path: window.__opened[0]}));
+    assert.equal(saved.job.description, carried.description);
+    assert.equal(saved.job.title, carried.title);
+    assert.match(saved.path, /saved-oitNzfwR\/quick-tailor/);
+    assert.equal(saved.request.url, 'https://jobs.jobvite.com/careers/varonis/job/oitNzfwR');
+    assert.doesNotMatch(saved.request.text + saved.request.html + saved.job.description, /Thank you for considering|Personal Information|First Name|Add Resume|Alaska|SELECT/);
+    assert.equal(saved.request.jsonLd[0].isBasedOn, carried.url);
+    assert.ok(!await applicationPanel.evaluate(() => window.__requests.some(request => request.method === 'POST' && /\/resumes(?:\/|$)/.test(request.path))), 'opening still creates no CV or PDF');
+    await applicationPanel.close();
+
+    // The handoff can arrive after the panel's first scan; capture reads it again.
+    const latePanel = await panelFixture(browser, apply);
+    await latePanel.waitForSelector('#job-card');
+    await latePanel.evaluate(job => {
+      const value = {job, at: Date.now(), host: null};
+      window.__session['fromLinkedIn:1'] = value;
+      window.__storageListeners.forEach(listener => listener({'fromLinkedIn:1': {newValue: value}}, 'session'));
+    }, carried);
+    await latePanel.waitForSelector('[data-tailor="quick"]');
+    await latePanel.click('[data-tailor="quick"]');
+    await latePanel.waitForFunction(() => window.__opened.length === 1);
+    assert.equal(await latePanel.evaluate(() => window.__savedJob.description), carried.description);
+    await latePanel.close();
+    await apply.close();
+    console.log('PASS: LinkedIn Apply preserves Varonis’s description for Quick Tailor immediately, even when the handoff arrives after the panel opens; form labels are excluded');
+
     await page.evaluate(html => { document.querySelector('.jobs-search__job-details--container').outerHTML = html; }, details('222', 'Platform Engineer', 'Beta'));
     await panel.waitForFunction(() => document.getElementById('job-card')?.textContent.includes('Platform Engineer'));
+    await panel.waitForSelector('[data-tailor="quick"]');
     await panel.click('[data-tailor="quick"]');
     await panel.waitForFunction(() => window.__opened.length === 2);
     assert.match(await panel.evaluate(() => window.__opened[1]), /\/jobs\/saved-222\/quick-tailor/);
@@ -185,7 +224,8 @@ async function panelFixture(browser, jobPage) {
       document.getElementById('job-details').innerHTML = '<p>Help customers solve problems, communicate clearly, and collaborate with colleagues. Bring empathy, patience, and practical experience supporting people.</p>';
     });
     await panel.waitForFunction(() => document.getElementById('job-card')?.textContent.includes('Customer Support Specialist'));
-    assert.ok(await panel.$('[data-tailor="quick"]'), 'tailoring is available without three recognized technical skills');
+    // The match is worked out after the card: wait for it.
+    assert.ok(await panel.waitForSelector('[data-tailor="quick"]', { timeout: 8000 }).catch(() => null), 'tailoring is available without three recognized technical skills');
     await panel.click('[data-tailor="full"]');
     await panel.waitForFunction(() => window.__opened.length === 3);
     assert.match(await panel.evaluate(() => window.__opened[2]), /\/documents\/cv1\?job=saved-333$/);
