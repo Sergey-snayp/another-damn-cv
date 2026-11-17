@@ -295,6 +295,40 @@ function highlighted(element) {
 }
 
 /**
+ * Sets a Workday date part (a month or year number) as Simplify does: from the
+ * page's own world, every typing step as an event and a call to the box's
+ * React handler, ending with blur. Without that script (or when the box has
+ * no React handlers) the same steps as events from here, with focusin and
+ * focusout, which React listens to for focus and blur.
+ */
+let fillCount = 0;
+function reactFill(element, value) {
+  return new Promise((resolve) => {
+    const token = `fill-${++fillCount}`;
+    element.setAttribute('data-adcv-fill', token);
+    const finish = (ok) => {
+      document.removeEventListener('adcv:react-filled', onReply);
+      clearTimeout(timer);
+      element.removeAttribute('data-adcv-fill');
+      if (!ok) {
+        element.dispatchEvent(new FocusEvent('focus'));
+        element.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+        keyboardSequence(element, value);
+        element.dispatchEvent(new FocusEvent('blur'));
+        element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      }
+      resolve(true);
+    };
+    const onReply = (event) => {
+      try { const reply = JSON.parse(event.detail); if (reply.token === token) finish(Boolean(reply.ok)); } catch { /* not ours */ }
+    };
+    document.addEventListener('adcv:react-filled', onReply);
+    const timer = setTimeout(() => finish(false), 400);
+    document.dispatchEvent(new CustomEvent('adcv:react-fill', { detail: JSON.stringify({ token, value: String(value) }) }));
+  });
+}
+
+/**
  * Last resort for React dropdowns: asks the page-world script (page-world.js)
  * to call the option's own React click handler. Only a tag on the option
  * element is sent. Resolves whether the handler was found and called.
@@ -1132,4 +1166,4 @@ function diversityChoiceFor(key, optionText) {
   return (DIVERSITY_VOCABULARY[key] ?? []).find((choice) => diversityOptionMatches(key, choice, optionText)) ?? null;
 }
 
-window.CVAutofillFiller = { fillListbox, chooseInListbox, setValue, workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile, pickFile };
+window.CVAutofillFiller = { fillListbox, chooseInListbox, reactFill, setValue, workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile, pickFile };

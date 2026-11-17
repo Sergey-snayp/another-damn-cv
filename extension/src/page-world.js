@@ -6,7 +6,8 @@
  * It is the last resort, after highlight-and-Enter and a simulated click.
  *
  * The request is a DOM event carrying only a tag the page script put on the
- * option element. No profile data reaches this world, and it does nothing the
+ * option element (and, to fill a Workday date, a month or year number). No
+ * other profile data reaches this world, and it does nothing the
  * page could not do itself. The page script checks the result on screen, so
  * a page faking the reply gains nothing.
  *
@@ -98,6 +99,49 @@
       return Promise.resolve([{ kind: 'file', name: file.name, getFile: () => Promise.resolve(file) }]);
     };
   }
+
+  /**
+   * Fills a text box the way Simplify does on Workday: each step of a person's
+   * typing as a browser event and as a call to the box's own React handler,
+   * ending with blur, which is when Workday takes a date's month or year.
+   * Only Workday date parts come here: a month or year number.
+   */
+  function reactFill(token, value) {
+    const element = document.querySelector(`[data-adcv-fill="${CSS.escape(token)}"]`);
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) return false;
+    const props = reactProps(element);
+    const fire = (Type, type, handler) => {
+      try {
+        const event = new Type(type, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, 'target', { value: element });
+        Object.defineProperty(event, 'currentTarget', { value: element });
+        element.dispatchEvent(event);
+        if (typeof props?.[handler] === 'function') { event.nativeEvent = event; props[handler](event); }
+      } catch { /* a handler that throws on a made-up event: the next step still runs */ }
+    };
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')?.set;
+    fire(FocusEvent, 'focus', 'onFocus');
+    element.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    fire(MouseEvent, 'click', 'onClick');
+    fire(KeyboardEvent, 'keydown', 'onKeyDown');
+    fire(KeyboardEvent, 'keypress', 'onKeyPress');
+    if (setter) setter.call(element, value); else element.value = value;
+    fire(InputEvent, 'input', 'onInput');
+    fire(KeyboardEvent, 'keyup', 'onKeyUp');
+    fire(Event, 'change', 'onChange');
+    fire(FocusEvent, 'blur', 'onBlur');
+    element.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    return true;
+  }
+
+  document.addEventListener('adcv:react-fill', (event) => {
+    let request;
+    try { request = JSON.parse(String(event.detail)); } catch { return; }
+    if (typeof request?.token !== 'string' || typeof request.value !== 'string' || !/^\d{1,4}$/.test(request.value)) return;
+    let ok = false;
+    try { ok = reactFill(request.token, request.value); } catch { ok = false; }
+    document.dispatchEvent(new CustomEvent('adcv:react-filled', { detail: JSON.stringify({ token: request.token, ok }) }));
+  });
 
   document.addEventListener('adcv:react-pick', (event) => {
     const token = String(event.detail ?? '');

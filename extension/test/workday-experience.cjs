@@ -64,6 +64,8 @@ const page = `<!doctype html><title>My Experience</title>
   }
   // Workday's search boxes: Enter shows the known items that match; choosing one makes a chip.
   const STUDIES = ${JSON.stringify(STUDIES)};
+  // Workday keeps a date part only when its box loses focus (React's blur, from focusout): what Save checks.
+  document.addEventListener('focusout', (event) => { if (/^(Month|Year)$/.test(event.target.getAttribute?.('aria-label') ?? '')) event.target.dataset.saved = event.target.value; });
   // A chosen item's delete mark, as Workday draws it.
   const CHARM = '<div data-automation-id="DELETE_charm" onclick="this.parentElement.remove()"></div>';
   const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript', 'Java', 'SQL Server', 'Amazon Web Services (AWS)'], schools: ['Original University', 'Other University'], studies: STUDIES };
@@ -119,7 +121,9 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     const tab = await pageWithScripts(browser, { [URL]: page, [LIST]: JSON.stringify(STUDIES.map((descriptor, index) => ({ id: String(index), descriptor }))) });
     let listAsked = 0;
     tab.on('request', (request) => { if (request.url() === LIST) listAsked++; });
-    await tab.open(URL);
+    const pageWorld = require('node:fs').readFileSync(path.join(__dirname, '../src/page-world.js'), 'utf8');
+    const open = async () => { await tab.open(URL); await tab.addScriptTag({ content: pageWorld }); };
+    await open();
     const fill = () => tab.evaluate((profile) => window.__ask({ type: 'fill', profile, answers: [] }), profile);
     await fill();
     const value = (id) => tab.$eval(`#${id}`, (input) => (input.type === 'checkbox' ? input.checked : input.value));
@@ -127,6 +131,8 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
 
     assert.deepEqual(await read(['jobTitle-1', 'company-1', 'location-1', 'current-1', 'startDate-month-1', 'startDate-year-1', 'endDate-year-1']),
       ['Senior Software Engineer', 'Ciklum', 'Canada (Remote)', true, '10', '2024', ''], 'the current job: "I currently work here" ticked, no end date; a two-digit month and its year both set');
+    const unsaved = await tab.$$eval('input[aria-label="Month"], input[aria-label="Year"]', (inputs) => inputs.filter((input) => input.value && input.dataset.saved !== input.value).map((input) => input.id));
+    assert.deepEqual(unsaved, [], 'every date part left with a blur, so Workday keeps it (Save said "required" without it)');
     assert.match(await value('description-1'), /^Card payment platform\.\n• Built the Discover integration\.$/);
     assert.deepEqual(await read(['jobTitle-2', 'company-2', 'current-2', 'startDate-month-2', 'startDate-year-2', 'endDate-month-2', 'endDate-year-2']),
       ['Software Engineer', 'EPAM', false, '12', '2021', '9', '2024'], 'each job its own panel, added with "Add"; months as Workday shows them');
@@ -156,7 +162,7 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     console.log('PASS a second Autofill: no job, school, website, skill or CV twice, and nothing typed over');
 
     // Clean-up: a page left with extra panels and an invalid date, as Workday showed it.
-    await tab.open(URL);
+    await open();
     await tab.evaluate(() => {
       const work = document.querySelector('[aria-label="Add Work Experience"]'), school = document.querySelector('[aria-label="Add Education"]');
       addWork(work);
@@ -196,6 +202,14 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.equal(await skill(['Microsoft SQL Server'], 'SQL'), 'Microsoft SQL Server', 'a short name: one of its words');
     assert.equal(await skill(['Amazon Web Services (AWS)'], 'Amazon Web Services'), 'Amazon Web Services (AWS)');
     assert.equal(await skill(['Ruby on Rails'], 'Ruby'), null, 'a longer single word: the same name only');
+    // UBC's own lists (its public Workday values), as they are.
+    const UBC_DEGREES = ['Bachelor of Dental Surgery', 'Grade 10', 'High School', 'Diploma', 'Associates', 'Undergraduate Level Coursework', 'Bachelors', 'Bachelor of Arts', 'Bachelor of Applied Sciences', 'Bachelor of Science', 'Post-Baccalaureate Degree', 'Masters', 'Master of Science', 'Doctorate'];
+    assert.equal(await pick(UBC_DEGREES, "Bachelor's", 'Computer and Information Systems Security'), 'Bachelors');
+    assert.equal(await pick(['Bachelor of Dental Surgery', 'Bachelor of Arts'], "Bachelor's", 'Computer and Information Systems Security'), null, 'never another discipline\'s degree');
+    const UBC_STUDIES = ['Accounting and computer science', 'Computer and information sciences and support services', 'Computer and information sciences and support services, general', 'Computer and information sciences and support services, other', 'Computer engineering', 'Computer science', 'Computer systems analysis or analyst', 'Computer systems networking and telecommunications', 'Management information systems and services', 'Security and protective services'];
+    const studyIn = (names, field) => tab.evaluate((names, field) => window.CVAutofillHistory.studyName(names, field), names, field);
+    assert.equal(await studyIn(UBC_STUDIES, 'Computer and Information Systems Security'), 'Computer and information sciences and support services', 'a tie on shared words: the one that starts like the CV\'s');
+    assert.equal(await studyIn(UBC_STUDIES, 'Computer Engineering'), 'Computer engineering');
     const study = (names, field) => tab.evaluate((names, field) => window.CVAutofillHistory.studyName(names, field), names, field);
     assert.equal(await study(STUDIES, 'Computer and Information Systems Security'), 'Computer and Information Systems Security/Information Assurance');
     assert.equal(await study(['Computer Science', 'Engineering, Software', 'Software Testing'], 'Software Engineering'), 'Engineering, Software', 'the most words shared');

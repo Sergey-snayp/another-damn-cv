@@ -121,15 +121,13 @@
    */
   async function setDirect(element, value, reason, again = false) {
     if (!element || (!again && !Fields().isEmpty(element))) return false;
-    element.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
-    Filler().setValue(element, String(value));
-    element.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    await Filler().reactFill(element, String(value));
     filledMark(element, reason);
     await wait(200);
     return true;
   }
 
-  /** A Workday date: its Month and Year boxes (or one box) from "2023-04", month first, as Simplify. */
+  /** A Workday date: its Month and Year boxes (or one box) from "2023-04", year first, as Simplify fills them. */
   async function date(panel, which, value, reason) {
     const match = String(value ?? '').match(/^(\d{4})(?:-(\d{2}))?/);
     if (!match) return 0;
@@ -140,8 +138,8 @@
     const month = first(box, 'input[aria-label="Month"], input[data-automation-id="dateSectionMonth-input"]');
     const year = first(box, 'input[aria-label="Year"], input[data-automation-id="dateSectionYear-input"]') ?? (month ? null : first(box, 'input'));
     let count = 0;
-    if (month && match[2] && await setDirect(month, String(Number(match[2])), reason, again)) count++;
     if (year && await setDirect(year, match[1], reason, again)) count++;
+    if (month && match[2] && await setDirect(month, String(Number(match[2])), reason, again)) count++;
     return count;
   }
 
@@ -243,7 +241,8 @@
     if (!named.length) return null;
     const science = SCIENCE.test(field ?? '') && !NOT_SCIENCE.test(field ?? '');
     const branch = named.filter((index) => (science ? /\b(science|sc|bsc|msc|bs|ms)\b/ : /\b(art|ba|ma)\b/).test(key(texts[index])));
-    return shortest(branch.length ? branch : named);
+    // Never another discipline's degree ("Bachelor of Dental Surgery"): the person chooses.
+    return shortest(branch);
   }
 
   /**
@@ -286,13 +285,17 @@
     if (same) return same;
     const longer = names.filter((name) => key(name).startsWith(wanted) && /^($|[^a-z0-9])/.test(key(name).slice(wanted.length)));
     if (longer.length) return longer.sort((a, b) => a.length - b.length)[0];
-    const want = words(field);
-    let best = null, most = 0, extra = Infinity;
+    const want = words(field), lead = key(field).split(/[^a-z0-9]+/).filter(Boolean);
+    // How many of the CV's first words the name starts with: "Computer and information sciences…" over "Computer systems analysis…".
+    const start = (name) => { const have = key(name).split(/[^a-z0-9]+/).filter(Boolean); let same = 0; while (same < lead.length && have[same] === lead[same]) same++; return same; };
+    let best = null, score = null;
     for (const name of names) {
       const have = words(name), shared = want.filter((word) => have.includes(word)).length;
-      if (shared > most || (shared === most && shared && have.length - shared < extra)) { best = name; most = shared; extra = have.length - shared; }
+      if (!shared) continue;
+      const mine = [shared, start(name), -(have.length - shared)];
+      if (!score || mine[0] > score[0] || (mine[0] === score[0] && (mine[1] > score[1] || (mine[1] === score[1] && mine[2] > score[2])))) { best = name; score = mine; }
     }
-    return most && most >= Math.ceil(want.length / 2) ? best : null;
+    return score && score[0] >= Math.ceil(want.length / 2) ? best : null;
   }
 
   /** Simplify's search terms for a long name: the whole of it, then its longest words, three searches at most. */
