@@ -8,6 +8,9 @@ const { pageWithScripts } = require('./panel-fixture.cjs');
 // item), Skills a search box that adds one known skill at a time, school and
 // field of study search boxes, the degree a menu. Synthetic page; no account used.
 const URL = 'https://ubc.wd10.myworkdayjobs.com/en-US/ubcstaffjobs/job/x/Programmer-Analyst-I-2_JR26638/apply/applyManually';
+// Workday's list of fields of study, as its jobapplication values endpoint returns it.
+const STUDIES = ['Computer and Information Systems Security/Information Assurance', 'Computer Engineering, General', 'Computer Science', 'Software Engineering'];
+const LIST = 'https://ubc.wd10.myworkdayjobs.com/wday/calypso/cxs/jobapplication/ubc/values/educations/fieldsOfStudy';
 const page = `<!doctype html><title>My Experience</title>
 <style>label { display: block; }</style>
 <main><h2>My Experience</h2>
@@ -60,7 +63,8 @@ const page = `<!doctype html><title>My Experience</title>
     button.setAttribute('aria-label', 'Add Another Websites');
   }
   // Workday's search boxes: Enter shows the known items that match; choosing one makes a chip.
-  const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript'], schools: ['Original University', 'Other University'], studies: ['Computer Science', 'Software Engineering'] };
+  const STUDIES = ${JSON.stringify(STUDIES)};
+  const CATALOG = { skills: ['TypeScript', 'Node.js (Programming)', 'PostgreSQL', 'JavaScript'], schools: ['Original University', 'Other University'], studies: STUDIES };
   const DEGREES = ["Associate's Degree", "Bachelor's Degree", "Master's Degree"];
   let searching = null;
   const popup = (texts, prompt) => {
@@ -110,7 +114,9 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
 (async () => {
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, timeout: 90_000 });
   try {
-    const tab = await pageWithScripts(browser, { [URL]: page });
+    const tab = await pageWithScripts(browser, { [URL]: page, [LIST]: JSON.stringify(STUDIES.map((descriptor, index) => ({ id: String(index), descriptor }))) });
+    let listAsked = 0;
+    tab.on('request', (request) => { if (request.url() === LIST) listAsked++; });
     await tab.open(URL);
     const fill = () => tab.evaluate((profile) => window.__ask({ type: 'fill', profile, answers: [] }), profile);
     await fill();
@@ -124,8 +130,9 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
       ['Software Engineer', 'EPAM', false, '12', '2021', '9', '2024'], 'each job its own panel, added with "Add"; months as Workday shows them');
     const chips = (id) => tab.$$eval(`#${id} [data-automation-id="selectedItem"]`, (items) => items.map((item) => item.textContent));
     assert.deepEqual([await chips('school-chip-1'), await tab.$eval('#degree-1', (button) => button.textContent), await chips('study-chip-1'), await value('school-from-1'), await value('school-to-1')],
-      [['Original University'], "Bachelor's Degree", ['Software Engineering'], '2013', '2017'], 'the school: found, its degree as Workday names it ("BSc" → Bachelor\'s Degree), the closest field of study when the exact one is not listed');
+      [['Original University'], "Bachelor's Degree", ['Computer Engineering, General'], '2013', '2017'], 'the school: found, its degree as Workday names it ("BSc" → Bachelor\'s Degree), the field of study by Workday\'s own name for it');
     assert.equal(await tab.$$eval('[data-automation-id^="education-"]', (panels) => panels.length), 1, 'a course (no degree) gets no Education panel');
+    assert.equal(listAsked, 1, "Workday's list of fields of study read once, as Simplify reads it");
     const uploaded = () => tab.$$eval('[data-automation-id="file-upload-item"]', (items) => items.map((item) => item.firstChild.textContent.trim()));
     assert.deepEqual(await uploaded(), ['Sergey_Proniuk_CV.pdf'], "the CV attached to Workday's hidden upload input");
     assert.deepEqual(await chips('chips'), ['TypeScript', 'Node.js (Programming)'], 'skills Workday knows (searched with a real Enter); Rust is not in its list, so it is left out');
@@ -172,6 +179,10 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sam@example.
     assert.equal(await pick(named, "Master's", 'Software Engineering'), 'MSc - Master of Science', 'no MBA for a CV that does not say MBA');
     assert.equal(await pick(['Undergraduate Degree', 'Graduate Degree'], "Bachelor's", ''), 'Undergraduate Degree');
     assert.equal(await pick(['High School', 'College Diploma'], "Bachelor's", ''), null, 'nothing of its kind: left to the person');
+    const study = (names, field) => tab.evaluate((names, field) => window.CVAutofillHistory.studyName(names, field), names, field);
+    assert.equal(await study(STUDIES, 'Computer and Information Systems Security'), 'Computer and Information Systems Security/Information Assurance');
+    assert.equal(await study(['Computer Science', 'Engineering, Software', 'Software Testing'], 'Software Engineering'), 'Engineering, Software', 'the most words shared');
+    assert.equal(await study(['History', 'Biology'], 'Software Engineering'), null);
     assert.deepEqual(await tab.evaluate(() => window.CVAutofillHistory.searchTerms('Computer and Information Systems Security')), ['Computer and Information Systems Security', 'Information', 'Computer']);
     console.log('PASS degree names as different sites list them (Bachelor\'s Degree, Bachelors, BSc - Bachelor of Science, Undergraduate Degree) and Simplify\'s search terms');
   } finally {

@@ -221,6 +221,55 @@
     return shortest(branch.length ? branch : named);
   }
 
+  /**
+   * Workday's own list behind a box (fields of study, degrees), read the way
+   * the page reads it, with the person's session. Simplify and Jobright do the
+   * same. [] when it cannot be read.
+   */
+  const lists = new Map();
+  function apiBase() {
+    const seen = (performance.getEntriesByType?.('resource') ?? []).map((entry) => entry.name.match(/^https?:\/\/[^/]+\/wday\/calypso\/cxs\/jobapplication\/[A-Za-z0-9_-]+/)?.[0]).find(Boolean);
+    if (seen) return seen;
+    const tenant = location.pathname.match(/\/recruiting\/([A-Za-z0-9_-]+)/)?.[1] ?? location.hostname.match(/^([A-Za-z0-9-]+)\.wd\d+\.myworkday(?:jobs|site)\.com$/i)?.[1];
+    return tenant ? `${location.origin}/wday/calypso/cxs/jobapplication/${tenant}` : null;
+  }
+  function workdayList(path) {
+    const base = apiBase();
+    if (!base) return Promise.resolve([]);
+    if (!lists.has(base + path)) {
+      lists.set(base + path, fetch(base + path, { credentials: 'include', headers: { accept: 'application/json' } })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          const items = Array.isArray(data) ? data : data?.data ?? data?.items ?? data?.results ?? [];
+          return [...new Set(items.map((item) => String(typeof item === 'string' ? item : item?.descriptor ?? item?.label ?? item?.name ?? '').replace(/\s+/g, ' ').trim()).filter(Boolean))];
+        })
+        .catch(() => []));
+    }
+    return lists.get(base + path);
+  }
+
+  const words = (text) => key(text).split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !['and', 'the', 'for', 'with'].includes(word));
+  /**
+   * The name in Workday's list for a CV's field of study: the same name, one
+   * that starts with it ("Computer and Information Systems Security/Information
+   * Assurance"), else the one sharing most of its words (at least half).
+   */
+  function studyName(names, field) {
+    const wanted = key(field);
+    if (!wanted) return null;
+    const same = names.find((name) => key(name) === wanted);
+    if (same) return same;
+    const longer = names.filter((name) => key(name).startsWith(wanted) && /^($|[^a-z0-9])/.test(key(name).slice(wanted.length)));
+    if (longer.length) return longer.sort((a, b) => a.length - b.length)[0];
+    const want = words(field);
+    let best = null, most = 0, extra = Infinity;
+    for (const name of names) {
+      const have = words(name), shared = want.filter((word) => have.includes(word)).length;
+      if (shared > most || (shared === most && shared && have.length - shared < extra)) { best = name; most = shared; extra = have.length - shared; }
+    }
+    return most && most >= Math.ceil(want.length / 2) ? best : null;
+  }
+
   /** Simplify's search terms for a long name: the whole of it, then its longest words, three searches at most. */
   const searchTerms = (text) => [...new Set([String(text).trim(), ...String(text).split(/\s+/).filter((word) => word.length >= 3 && !/^(and|the|for|with)$/i.test(word)).sort((a, b) => b.length - a.length)])].slice(0, 3);
 
@@ -265,11 +314,14 @@
       if (study && school.field && Fields().isEmpty(study) && !Fields().chosenItem(study)) {
         const wanted = key(school.field);
         // The same name, one that starts with it, then the one sharing most of its words ("Software Engineering" ~ "Engineering, Software").
-        const words = (text) => key(text).split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !['and', 'the', 'for', 'with'].includes(word));
         const close = (option) => { const want = words(school.field), have = words(option); const shared = want.filter((word) => have.includes(word)).length; return shared > 0 && shared >= Math.ceil(want.length / 2); };
         const tests = [(option) => key(option) === wanted, (option) => key(option).startsWith(wanted) || wanted.startsWith(key(option)), close];
         let got = null;
-        for (const term of searchTerms(school.field)) if ((got = await searchPick(study, term, tests))) break;
+        // As Simplify does: Workday's own name for it from its list, typed as it is and chosen exactly.
+        const name = studyName(await workdayList('/values/educations/fieldsOfStudy'), school.field);
+        if (name) got = await searchPick(study, name, [(option) => key(option) === key(name)]);
+        // No list, or the name not found by its search: search with the CV's words.
+        if (!got) for (const term of searchTerms(school.field)) if ((got = await searchPick(study, term, tests))) break;
         if (got) { filledMark(study, source); count++; } else checkMark(study, `"${school.field}" is not in its list. Choose the closest.`);
       }
       count += await date(panel, 'startDate', school.from, source);
@@ -350,5 +402,5 @@
     return false;
   };
 
-  window.CVAutofillHistory = { fill, here, owns, degreeOption, searchTerms };
+  window.CVAutofillHistory = { fill, here, owns, degreeOption, searchTerms, studyName };
 })();

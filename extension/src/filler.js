@@ -453,7 +453,7 @@ async function pickFile(button, fileUrl, fileName) {
  */
 async function removeUploaded(input) {
   if (input.getAttribute('data-automation-id') !== 'file-upload-input-ref') return input;
-  const box = input.parentElement?.closest('[data-automation-id^="formField"], [data-automation-id*="upload" i], [data-automation-id*="attachment" i]');
+  const box = window.CVAutofillFields.uploadBox(input);
   const buttons = () => [...(box?.querySelectorAll('button[data-automation-id="delete-file"], button[title="Delete file"]') ?? [])].filter(visible);
   let removed = false;
   for (let tries = 0; buttons().length && tries < 5; tries++) { press(buttons()[0]); removed = true; await wait(400); }
@@ -464,10 +464,29 @@ async function removeUploaded(input) {
   return fresh() ?? input;
 }
 
+/**
+ * Workday takes a file in the background and then lists it in the box. Waits
+ * for it there, as Simplify does (up to 10 s); false when it never shows.
+ */
+async function workdayTook(input, box) {
+  if (input.getAttribute('data-automation-id') !== 'file-upload-input-ref') return true;
+  const ITEMS = '[data-automation-id="file-upload-item"], [data-automation-id="file-upload-successful"]';
+  for (let waited = 0; waited < 10000; waited += 200) {
+    if ((box?.isConnected ? box : document).querySelector(ITEMS)) return true;
+    await wait(200);
+  }
+  return false;
+}
+
 async function fillField(field, value, resumeFileName) {
   switch (field.kind) {
     case 'file':
-      return { filled: await attachFile(await removeUploaded(field.element), value, resumeFileName ?? 'Resume.pdf') };
+    {
+      const input = await removeUploaded(field.element);
+      const box = window.CVAutofillFields.uploadBox(input);
+      if (!(await attachFile(input, value, resumeFileName ?? 'Resume.pdf'))) return { filled: false };
+      return (await workdayTook(input, box)) ? { filled: true } : { filled: false, note: 'Workday did not take the file. Upload it with Select files.' };
+    }
     case 'drop':
       return dropFile(field.element, value, resumeFileName ?? 'Resume.pdf');
     case 'pick':

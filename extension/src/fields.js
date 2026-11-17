@@ -725,13 +725,28 @@ function chosenItem(element) {
   return /^no items/i.test(text) ? '' : text;
 }
 
+/**
+ * Workday's upload box around its hidden file input: the box that also lists
+ * the uploaded files (Simplify's "resumeUpload" container).
+ */
+function uploadBox(input) {
+  const from = input.parentElement;
+  return from?.closest('[data-automation-id="resumeUpload"], [data-automation-id="quickApplyUpload"], [data-automation-id^="formField"], [role="group"], section')
+    ?? from?.closest('[data-automation-id*="upload" i], [data-automation-id*="attachment" i]') ?? null;
+}
+/** The files Workday shows as uploaded in that box. Its input is emptied once a file is taken. */
+function uploadedFiles(input) {
+  if (input?.getAttribute?.('data-automation-id') !== 'file-upload-input-ref') return [];
+  return [...(uploadBox(input)?.querySelectorAll('[data-automation-id="file-upload-item"], [data-automation-id="file-upload-successful"]') ?? [])];
+}
+
 function isEmpty(element) {
   // Workday's chosen chip fills the field; its search box stays empty.
   if (chosenItem(element)) return false;
   if (isCombobox(element)) return !comboboxValue(element);
   if (element.type === 'checkbox') return !element.checked;
   if (element.type === 'radio') return !groupRadios(element).some((radio) => radio.checked);
-  if (element.type === 'file') return !element.files?.length;
+  if (element.type === 'file') return !element.files?.length && !uploadedFiles(element).length;
   if (isUploadButton(element)) return !element.dataset.adcvPicked;
   return !String(element.value ?? '').trim();
 }
@@ -906,6 +921,8 @@ function groupOf(key) {
 // Content scripts cannot be ES modules, so the API hangs off window.
 window.CVAutofillFields = {
   chosenItem,
+  uploadBox,
+  uploadedFiles,
   detectFields,
   isRequired,
   findMissingRequired,

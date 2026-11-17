@@ -629,7 +629,7 @@ function rememberStep() {
 function isBlank(field) {
   const element = field.element;
   if (field.kind === 'drop') return !Fields.zoneDone(element);
-  if (field.kind === 'file') return !element.files?.length;
+  if (field.kind === 'file') return !element.files?.length && !Fields.uploadedFiles(element).length;
   if (field.kind === 'radio') return !Fields.radiosOf(element).some((radio) => radio.checked);
   if (field.kind === 'checkbox') return !element.checked;
   return Fields.isEmpty(element);
