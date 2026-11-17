@@ -376,3 +376,10 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 
 /* A short notice at the bottom of the panel (a changed job-site password, saved). */
 .toast { position: fixed; left: 16px; right: 16px; bottom: 44px; z-index: 20; padding: 10px 14px; border-radius: 10px; background: var(--color-text); color: var(--color-surface); font-size: 13px; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); }
+
+/* "Update your job-site password?": above whichever tab is open. */
+.login-offer { margin: 0 0 16px; }
+.login-offer-card { padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-background); }
+.login-offer-card strong { display: block; font-size: 14px; }
+.login-offer-card p { margin: 6px 0 10px; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }
+.login-offer-card .site-login-actions button { flex: 1 1 auto; width: auto; min-height: 38px; padding: 8px 12px; font-size: 13px; }

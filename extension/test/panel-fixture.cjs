@@ -8,7 +8,7 @@ const extension = path.resolve(__dirname, '..');
  * passes its messages. `silentFor`: the page does not answer at first, as one
  * still loading. `server`: the account's job-site login ({ login, saves }).
  */
-async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, server = { login: null, saves: [] } } = {}) {
+async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, server = { login: null, saves: [] }, offer = null } = {}) {
   const page = await browser.newPage();
   await page.setViewport({ width: 420, height: 900 });
   await page.exposeFunction('readJobPage', message => jobPage.evaluate(message => window.__ask(message), message));
@@ -32,7 +32,16 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
     } else if (address.origin === 'http://localhost:3001') json([]);
     else void request.respond({ status: 404, body: '' });
   });
-  await page.evaluateOnNewDocument(({ url, silentFor, profile }) => {
+  await page.evaluateOnNewDocument(({ url, silentFor, profile, offer }) => {
+    // The background's side: an "Update your job-site password?" offer, and what the panel answered.
+    window.__offer = offer; window.__answers = [];
+    const background = message => {
+      if (message.type === 'panel-tab') return { tabId: 1 };
+      if (message.type === 'site-login-offer?') return window.__offer;
+      if (message.type === 'site-login-offer-accept') { window.__answers.push('accept'); window.__offer = null; return { result: 'saved' }; }
+      if (message.type === 'site-login-offer-dismiss') { window.__answers.push('dismiss'); window.__offer = null; return { ok: true }; }
+      return {};
+    };
     // A page still loading: its scripts do not answer for a moment, as Chrome says it.
     const answersFrom = Date.now() + silentFor;
     // Every view the panel shows, to prove it never flashed a wrong one.
@@ -46,7 +55,7 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
     const store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile, chosenResumeId: 'cv1' };
     const event = { addListener() {}, removeListener() {} };
     window.chrome = {
-      runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async message => (message.type === 'panel-tab' ? { tabId: 1 } : {}) },
+      runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: event, sendMessage: async message => background(message) },
       storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async () => {} }, session: { get: async () => ({}), set: async () => {} }, onChanged: event },
       tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message) => { if (Date.now() < answersFrom) throw new Error('Could not establish connection. Receiving end does not exist.'); return window.readJobPage(message); }, onUpdated: event, onActivated: event, create: async () => ({}) },
       webNavigation: { getAllFrames: async () => [{ frameId: 0, url }] },
@@ -55,7 +64,7 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       identity: { getRedirectURL: () => 'https://fixture.chromiumapp.org/' },
       windows: { getCurrent: async () => ({ width: 1400, height: 900 }), onRemoved: event },
     };
-  }, { url: jobPage.url(), silentFor, profile });
+  }, { url: jobPage.url(), silentFor, profile, offer });
   await page.goto('http://extension.test/src/sidepanel.html');
   return page;
 }

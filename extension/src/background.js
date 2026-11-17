@@ -2,7 +2,7 @@ import { matchAnswers, saveAnswers } from './answers.js';
 import { LINKEDIN_PAIRING_MS, tabOpenedBy } from './linkedin-handoff.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
 import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
-import { attemptFor, confirmAttempt, dropAttempt, noteAttempt, rememberSiteLogin } from './site-login.js';
+import { acceptOffer, attemptFor, confirmAttempt, dismissOffer, dropAttempt, noteAttempt, offerFor, offerSiteLogin } from './site-login.js';
 
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
@@ -164,14 +164,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })().catch((error) => sendResponse({ ok: false, message: error instanceof NotSignedInError ? 'Sign in from the panel first.' : error.message }));
     return true;
   }
-  // A job-site login that just worked and is not the saved one (a changed password): kept on the account.
-  // The attempt is held in memory as it is sent; the same page, or the next one, says whether it worked.
+  // A job-site login that just worked and is not the saved one (a changed password): the panel asks
+  // "Update your job-site password?" before it is kept. The attempt is held in memory as it is sent;
+  // the same page, or the next one, says whether it worked.
   const host = (() => { try { return new URL(sender.url ?? sender.tab.url ?? '').host; } catch { return ''; } })();
-  // What happened, for chrome://extensions → service worker (never the password).
-  const saved = (result) => {
-    console.info(`[Another Damn CV] Job-site login on ${host}: ${{ saved: 'saved on your account', same: 'already the saved one', skipped: 'nothing to save' }[result] ?? result}.`);
-    if (result === 'saved') chrome.runtime.sendMessage({ type: 'site-login-saved' }).catch(() => {});
+  const logged = (what) => console.info(`[Another Damn CV] Job-site login on ${host}: ${what}.`);
+  const offered = (result) => {
+    // What happened, for chrome://extensions → service worker (never the password).
+    logged({ offered: 'a new password, the panel asks to update it', same: 'already the saved one', skipped: 'nothing to save' }[result] ?? result);
+    if (result === 'offered') chrome.runtime.sendMessage({ type: 'site-login-offer' }).catch(() => {});
   };
+  const failed = (error) => logged(`not offered (${error?.message ?? error})`);
   if (message?.type === 'site-login-attempt' && fromContent) {
     void noteAttempt(tabId, host, message.email, message.password).catch(() => {});
     return false;
@@ -181,18 +184,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'site-login-confirmed' && fromContent) {
-    void confirmAttempt(tabId, host).then(saved).catch((error) => console.info(`[Another Damn CV] Job-site login on ${host}: not saved (${error?.message ?? error}).`));
+    void confirmAttempt(tabId, host).then(offered).catch(failed);
     return false;
   }
   if (message?.type === 'site-login-failed' && fromContent) {
     void dropAttempt(tabId).catch(() => {});
-    console.info(`[Another Damn CV] Job-site login on ${host}: the sign-in did not work, nothing saved.`);
+    logged('the sign-in did not work, nothing kept');
     return false;
   }
   if (message?.type === 'site-login-used' && fromContent) {
     void dropAttempt(tabId).catch(() => {});
-    void rememberSiteLogin(message.email, message.password).then(saved).catch((error) => console.info(`[Another Damn CV] Job-site login on ${host}: not saved (${error?.message ?? error}).`));
+    void offerSiteLogin(tabId, host, message.email, message.password).then(offered).catch(failed);
     return false;
+  }
+  // The panel's card: what to ask (never the password), and the answer.
+  if (message?.type === 'site-login-offer?' && fromPanel) {
+    void offerFor(tabId).then(sendResponse, () => sendResponse(null));
+    return true;
+  }
+  if (message?.type === 'site-login-offer-accept' && fromPanel) {
+    void acceptOffer(tabId).then((result) => { logged(result === 'saved' ? 'updated on your account' : 'the offer had expired'); sendResponse({ result }); }, (error) => sendResponse({ error: error?.message || 'Could not save it.' }));
+    return true;
+  }
+  if (message?.type === 'site-login-offer-dismiss' && fromPanel) {
+    void dismissOffer(tabId).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
+    return true;
   }
   // The person submitted the application form: the saved job moves to Applied.
   if (message?.type === 'application-submitted' && fromContent) {

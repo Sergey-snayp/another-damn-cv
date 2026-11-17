@@ -142,6 +142,26 @@ const value = (page, id) => page.$eval(`#${id}`, input => input.value);
     assert.equal(await page.$('h1') && await page.$eval('h1', h => h.textContent), 'Inbox');
     assert.deepEqual(await sentLogins(), [], 'never on a site that is not a job site');
     console.log('PASS other sites: a sign-in is never watched');
+
+    // 6) The panel asks before a changed password is kept: "Update password", or "Not now".
+    await page.open(`${JOB}/home`);
+    let asking = await panelFixture(browser, page, { profile, offer: { host: 'ubc.wd10.myworkdayjobs.com', email: 'sam@example.com', update: true } });
+    await asking.waitForSelector('#login-offer-accept', { timeout: 10000 });
+    assert.match(await asking.$eval('#login-offer', box => box.textContent), /Update your job-site password\?.*ubc\.wd10\.myworkdayjobs\.com.*sam@example\.com/s);
+    assert.doesNotMatch(await asking.$eval('#login-offer', box => box.textContent), /pass-/, 'never the password');
+    await asking.screenshot({ path: '/private/tmp/login-offer.png' });
+    await asking.click('#login-offer-accept');
+    await asking.waitForFunction(() => document.getElementById('login-offer').hidden && !document.getElementById('panel-toast').hidden, { timeout: 5000, polling: 100 });
+    assert.equal(await asking.$eval('#panel-toast', toast => toast.textContent), 'Saved your new job-site password to your account.');
+    assert.deepEqual(await asking.evaluate(() => window.__answers), ['accept']);
+    await asking.close();
+    asking = await panelFixture(browser, page, { profile, offer: { host: 'ubc.wd10.myworkdayjobs.com', email: 'sam@example.com', update: true } });
+    await asking.waitForSelector('#login-offer-dismiss', { timeout: 10000 });
+    await asking.click('#login-offer-dismiss');
+    await asking.waitForFunction(() => document.getElementById('login-offer').hidden, { timeout: 5000, polling: 100 });
+    assert.deepEqual(await asking.evaluate(() => window.__answers), ['dismiss']);
+    await asking.close();
+    console.log('PASS the panel asks "Update your job-site password?": Update saves it, Not now drops it, the password never shown');
   } finally {
     await browser.close();
   }

@@ -1618,12 +1618,37 @@ function toast(text) {
   box.textContent = text; box.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { box.hidden = true; }, 4000);
 }
+// "Update your job-site password?": a login that worked on a job site and is not
+// the saved one waits in the background until the person answers here. The
+// panel sees the site and the email, never the password.
+let loginOffer = null;
+async function checkLoginOffer() {
+  try { loginOffer = await chrome.runtime.sendMessage({ type: 'site-login-offer?' }); } catch { loginOffer = null; }
+  renderLoginOffer();
+}
+function renderLoginOffer() {
+  const box = $('login-offer');
+  if (!loginOffer?.email) { box.hidden = true; box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="login-offer-card"><strong>${loginOffer.update ? 'Update your job-site password?' : 'Save this job-site login?'}</strong><p>You signed in to ${esc(loginOffer.host)} as ${esc(loginOffer.email)} with ${loginOffer.update ? 'a different password from the saved one' : 'a login that is not saved yet'}. ${loginOffer.update ? 'Updating' : 'Saving'} keeps it on your account, encrypted.</p><div class="site-login-actions"><button class="primary" type="button" id="login-offer-accept">${loginOffer.update ? 'Update password' : 'Save login'}</button><button class="ghost" type="button" id="login-offer-dismiss">Not now</button></div></div>`;
+  box.hidden = false;
+  $('login-offer-accept').addEventListener('click', async (event) => {
+    event.target.disabled = true;
+    const reply = await chrome.runtime.sendMessage({ type: 'site-login-offer-accept' }).catch(() => null);
+    loginOffer = null; renderLoginOffer();
+    if (reply?.result === 'saved') toast('Saved your new job-site password to your account.');
+    else toast(reply?.error || 'It was not saved: the offer had expired. Sign in again to be asked.');
+    if ($('settings-dialog').open) void renderSiteLogin();
+  });
+  $('login-offer-dismiss').addEventListener('click', () => {
+    void chrome.runtime.sendMessage({ type: 'site-login-offer-dismiss' }).catch(() => {});
+    loginOffer = null; renderLoginOffer();
+  });
+}
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type !== 'site-login-saved') return false;
-  toast('Saved your new job-site password to your account.');
-  if ($('settings-dialog').open) void renderSiteLogin();
+  if (message?.type === 'site-login-offer') void checkLoginOffer();
   return false;
 });
+void checkLoginOffer();
 function renderDisabledSites(hosts) {
   $('disabled-sites').hidden = !hosts.length;
   $('disabled-sites-list').innerHTML = hosts.map(host => `<li><span>${esc(host)}</span><button data-enable-host="${esc(host)}">Turn back on</button></li>`).join('');

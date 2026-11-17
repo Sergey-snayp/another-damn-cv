@@ -45,17 +45,49 @@ export function newSitePassword() {
   return characters.map((character, index) => ({ character, sort: order[index] })).sort((a, b) => a.sort - b.sort).map(({ character }) => character).join('');
 }
 
-/**
- * A login that just worked on a job site (src/account-form.js): kept when it is
- * not the saved one, after a password change on the site. 'saved', 'same' or 'skipped'.
- */
-export async function rememberSiteLogin(email, password) {
-  if (typeof email !== 'string' || typeof password !== 'string' || !/^[^\s@]+@[^\s@]+$/.test(email.trim()) || password.length < 8 || password.length > 128) return 'skipped';
+const validLogin = (email, password) => typeof email === 'string' && typeof password === 'string' && /^[^\s@]+@[^\s@]+$/.test(email.trim()) && password.length >= 8 && password.length <= 128;
+
+// ─── "Update your job-site password?" ───────────────────────────────────
+// A login that worked on a job site and is not the saved one (a password
+// changed on the site) is not saved by itself: the panel asks first, as a
+// password manager does. Until then it waits in memory (chrome.storage.session)
+// for ten minutes; the panel learns only the site and the email.
+const OFFER_MS = 10 * 60_000;
+const offerKey = (tabId) => `siteLoginOffer:${tabId}`;
+
+/** 'offered' (the panel will ask), 'same' (already the saved login) or 'skipped'. */
+export async function offerSiteLogin(tabId, host, email, password) {
+  if (!validLogin(email, password)) return 'skipped';
   const login = await readSiteLogin();
   if (login && login.email === email.trim() && login.password === password) return 'same';
-  await saveSiteLogin(email.trim(), password);
+  await chrome.storage.session.set({ [offerKey(tabId)]: { host, email: email.trim(), password, update: Boolean(login), at: Date.now() } });
+  return 'offered';
+}
+
+async function storedOffer(tabId) {
+  const key = offerKey(tabId);
+  const offer = (await chrome.storage.session.get(key))[key];
+  if (!offer) return null;
+  if (Date.now() - offer.at > OFFER_MS) { await chrome.storage.session.remove(key); return null; }
+  return offer;
+}
+
+/** What the panel shows: the site, the email and whether it replaces a saved login. Never the password. */
+export async function offerFor(tabId) {
+  const offer = await storedOffer(tabId);
+  return offer ? { host: offer.host, email: offer.email, update: offer.update } : null;
+}
+
+/** "Update password": the login is saved on the account. 'saved' or 'skipped'. */
+export async function acceptOffer(tabId) {
+  const offer = await storedOffer(tabId);
+  await chrome.storage.session.remove(offerKey(tabId));
+  if (!offer) return 'skipped';
+  await saveSiteLogin(offer.email, offer.password);
   return 'saved';
 }
+
+export const dismissOffer = (tabId) => chrome.storage.session.remove(offerKey(tabId));
 
 // ─── A sign-in in flight ──────────────────────────────────────────────────
 // What was sent on a job site's account form, kept by the background in memory
@@ -79,9 +111,9 @@ export async function attemptFor(tabId, host) {
 
 export const dropAttempt = (tabId) => chrome.storage.session.remove(attemptKey(tabId));
 
-/** The next page says the sign-in worked: the login is kept if it is new. 'saved', 'same' or 'skipped'. */
+/** The next page says the sign-in worked: offered if it is not the saved login. 'offered', 'same' or 'skipped'. */
 export async function confirmAttempt(tabId, host) {
   const attempt = await attemptFor(tabId, host);
   await dropAttempt(tabId);
-  return attempt ? rememberSiteLogin(attempt.email, attempt.password) : 'skipped';
+  return attempt ? offerSiteLogin(tabId, host, attempt.email, attempt.password) : 'skipped';
 }

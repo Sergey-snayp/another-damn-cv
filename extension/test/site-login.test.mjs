@@ -20,51 +20,76 @@ function setup(context, saved) {
 }
 const load = (context) => import(`../src/site-login.js?test=${encodeURIComponent(context.name)}`);
 
-test('the saved login again: nothing is written', async (context) => {
+const SITE = 'ubc.wd10.myworkdayjobs.com';
+
+test('the saved login again: nothing is offered or written', async (context) => {
   const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
-  assert.equal(await (await load(context)).rememberSiteLogin('sam@example.com', 'Old-pass-123'), 'same');
+  const { offerSiteLogin, offerFor } = await load(context);
+  assert.equal(await offerSiteLogin(7, SITE, 'sam@example.com', 'Old-pass-123'), 'same');
+  assert.equal(await offerFor(7), null);
   assert.deepEqual(calls, ['GET']);
 });
 
-test('a changed password that worked is saved on the account', async (context) => {
+test('a changed password that worked is offered, not saved, and the panel never sees it', async (context) => {
   const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
-  assert.equal(await (await load(context)).rememberSiteLogin('sam@example.com', 'New-pass-456'), 'saved');
-  assert.deepEqual(calls, ['GET', 'PUT']);
+  const { offerSiteLogin, offerFor } = await load(context);
+  assert.equal(await offerSiteLogin(7, SITE, 'sam@example.com', 'New-pass-456'), 'offered');
+  assert.deepEqual(await offerFor(7), { host: SITE, email: 'sam@example.com', update: true });
+  assert.deepEqual(calls, ['GET'], 'nothing written before the person answers');
 });
 
-test('no saved login yet: the one that worked becomes it', async (context) => {
-  const calls = setup(context, null);
-  assert.equal(await (await load(context)).rememberSiteLogin(' sam@example.com ', 'New-pass-456'), 'saved');
+test('"Update password" saves it on the account once; "Not now" drops it', async (context) => {
+  const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
+  const { offerSiteLogin, acceptOffer, dismissOffer, offerFor } = await load(context);
+  await offerSiteLogin(7, SITE, 'sam@example.com', 'New-pass-456');
+  assert.equal(await acceptOffer(7), 'saved');
   assert.deepEqual(calls, ['GET', 'PUT']);
+  assert.equal(await acceptOffer(7), 'skipped', 'once');
+  await offerSiteLogin(8, SITE, 'sam@example.com', 'Other-pass-789');
+  await dismissOffer(8);
+  assert.equal(await offerFor(8), null);
+  assert.deepEqual(calls, ['GET', 'PUT', 'GET']);
 });
 
-test('not an email or too short a password: nothing is read or written', async (context) => {
+test('no saved login yet: offered as a new login', async (context) => {
+  setup(context, null);
+  const { offerSiteLogin, offerFor } = await load(context);
+  assert.equal(await offerSiteLogin(7, SITE, ' sam@example.com ', 'New-pass-456'), 'offered');
+  assert.deepEqual(await offerFor(7), { host: SITE, email: 'sam@example.com', update: false });
+});
+
+test('not an email or too short a password: nothing is read or offered', async (context) => {
   const calls = setup(context, null);
-  const { rememberSiteLogin } = await load(context);
-  assert.equal(await rememberSiteLogin('sam', 'New-pass-456'), 'skipped');
-  assert.equal(await rememberSiteLogin('sam@example.com', 'short'), 'skipped');
+  const { offerSiteLogin } = await load(context);
+  assert.equal(await offerSiteLogin(7, SITE, 'sam', 'New-pass-456'), 'skipped');
+  assert.equal(await offerSiteLogin(7, SITE, 'sam@example.com', 'short'), 'skipped');
   assert.deepEqual(calls, []);
 });
 
-test('a sign-in in flight: kept in memory, saved when the next page confirms it, then forgotten', async (context) => {
+test('a sign-in in flight: kept in memory, offered when the next page confirms it, then forgotten', async (context) => {
   const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
-  const { noteAttempt, attemptFor, confirmAttempt } = await load(context);
-  await noteAttempt(7, 'ubc.wd10.myworkdayjobs.com', 'sam@example.com', 'New-pass-456');
-  assert.equal((await attemptFor(7, 'ubc.wd10.myworkdayjobs.com')).password, 'New-pass-456');
+  const { noteAttempt, attemptFor, confirmAttempt, offerFor } = await load(context);
+  await noteAttempt(7, SITE, 'sam@example.com', 'New-pass-456');
+  assert.equal((await attemptFor(7, SITE)).password, 'New-pass-456');
   assert.equal(await attemptFor(7, 'accounts.example-mail.com'), null, 'only the same site can confirm it');
-  await noteAttempt(7, 'ubc.wd10.myworkdayjobs.com', 'sam@example.com', 'New-pass-456');
-  assert.equal(await confirmAttempt(7, 'ubc.wd10.myworkdayjobs.com'), 'saved');
-  assert.deepEqual(calls, ['GET', 'PUT']);
-  assert.equal(await attemptFor(7, 'ubc.wd10.myworkdayjobs.com'), null, 'forgotten once used');
+  await noteAttempt(7, SITE, 'sam@example.com', 'New-pass-456');
+  assert.equal(await confirmAttempt(7, SITE), 'offered');
+  assert.equal((await offerFor(7)).email, 'sam@example.com');
+  assert.deepEqual(calls, ['GET']);
+  assert.equal(await attemptFor(7, SITE), null, 'forgotten once used');
 });
 
-test('an attempt older than a minute is never used', async (context) => {
-  const calls = setup(context, null);
-  const { noteAttempt, confirmAttempt } = await load(context);
-  const now = Date.now;
-  context.mock.method(Date, 'now', () => now() - 61_000);
-  await noteAttempt(7, 'ubc.wd10.myworkdayjobs.com', 'sam@example.com', 'New-pass-456');
-  context.mock.restoreAll();
-  assert.equal(await confirmAttempt(7, 'ubc.wd10.myworkdayjobs.com'), 'skipped');
-  assert.deepEqual(calls, []);
+test('an attempt older than a minute, or an offer older than ten, is never used', async (context) => {
+  const calls = setup(context, { email: 'sam@example.com', password: 'Old-pass-123' });
+  const { noteAttempt, confirmAttempt, offerSiteLogin, acceptOffer } = await load(context);
+  const now = Date.now();
+  context.mock.method(Date, 'now', () => now - 61_000);
+  await noteAttempt(7, SITE, 'sam@example.com', 'New-pass-456');
+  context.mock.method(Date, 'now', () => now);
+  assert.equal(await confirmAttempt(7, SITE), 'skipped');
+  context.mock.method(Date, 'now', () => now - 11 * 60_000);
+  await offerSiteLogin(9, SITE, 'sam@example.com', 'New-pass-456');
+  context.mock.method(Date, 'now', () => now);
+  assert.equal(await acceptOffer(9), 'skipped');
+  assert.deepEqual(calls, ['GET']);
 });
