@@ -388,6 +388,10 @@ render after load and change as you scroll.
   or "legal". **Legal First Name** gets your first name, as Simplify and Jobright do.
 - **Read back.** After a fill, each field is read again. A value the site cleared or
   calls invalid gets a yellow icon. `test/fill-checks.cjs`.
+- **Current job.** "Company", "employer" and "title" count only when the label just
+  names that field. "Why do you want to join our company?", "Previous employer" and
+  "Desired job title" are the company's questions, and "Company website" is not your
+  website. `test/company-questions.cjs`.
 - **CV first.** Sites that read your CV into the form (Lever, iCIMS and others) get
   the CV first; the other fields are filled when the site has finished reading it.
 - **Consent questions** are never answered, whether checkbox or dropdown.

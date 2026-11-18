@@ -417,7 +417,20 @@ const YES_NO = /^\s*(are|do|does|did|have|has|had|will|would|is|was|were|can|cou
 
 const NAME_PARTS = new Set(['firstName', 'lastName', 'middleName', 'preferredName']);
 
-function categorise(signals, { long = false, yesNo = false } = {}) {
+/**
+ * "Company", "employer" and "title" turn up in labels about something else: "Why
+ * do you want to join our company?", "Previous employer", "Desired job title". A
+ * label counts for the current job only when it just names the field, as
+ * Simplify's rule wants the label to start with "current company".
+ */
+const CURRENT_JOB_KEYS = new Set(['currentCompany', 'currentTitle']);
+const CURRENT_JOB_WORDS = new Set(['your', 'my', 'the', 'current', 'present', 'latest', 'recent', 'most', 'last', 'company', 'employer', 'organization', 'organisation', 'job', 'title', 'role', 'position', 'professional', 'name', 'of', 'or', 'and', 'what', 'who', 'is', 's', 'please', 'enter', 'provide', 'optional', 'required']);
+const namesCurrentJob = (label) => (label.match(/\p{L}+/gu) ?? []).every((word) => CURRENT_JOB_WORDS.has(word));
+/** "Company website", "Employer phone": about the company, never the person's own website or phone. */
+const ABOUT_THE_EMPLOYER = /^(?:(?:current|previous|former|your)\s+)*(?:company|employer)\b/;
+
+function categorise(signals, { long = false, yesNo = false, label = '' } = {}) {
+  const labelText = label.toLowerCase();
   if (NEVER_FILL.some((term) => mentions(signals, term))) {
     return { key: null, sensitive: true };
   }
@@ -463,6 +476,7 @@ function categorise(signals, { long = false, yesNo = false } = {}) {
       // A yes/no question is never a profile field: it asks for yes or no, not the employer's name.
       if (yesNo && !QUESTION_KEYS.has(category.key)) continue;
       if (long && !phrase.includes(' ') && !QUESTION_KEYS.has(category.key)) continue;
+      if (CURRENT_JOB_KEYS.has(category.key) && mentions(labelText, phrase) && !namesCurrentJob(labelText)) continue;
       if (!mentions(words, phrase)) continue;
       if (!best || phrase.length > best.length) {
         best = { key: category.key, length: phrase.length };
@@ -472,6 +486,7 @@ function categorise(signals, { long = false, yesNo = false } = {}) {
   }
   // Workday's "Last Name" sits under "Legal Name": the part asked for, never the whole name.
   if (best?.key === 'fullName' && part) best = part;
+  if (best && !CURRENT_JOB_KEYS.has(best.key) && !QUESTION_KEYS.has(best.key) && ABOUT_THE_EMPLOYER.test(labelText)) best = null;
 
   return { key: best?.key ?? null, sensitive: false };
 }
@@ -646,7 +661,7 @@ function detectFields() {
     const autocomplete = element.getAttribute('autocomplete')?.trim().toLowerCase().split(/\s+/).at(-1);
     const fromAutocomplete = ['text', 'search', 'tel', ''].includes(element.type ?? '') && autocomplete ? addressTokens[autocomplete] ?? null : null;
     const label = labelOf(element);
-    const { key: guessed, sensitive, compound, office } = categorise(signals, { long: label.length > LONG_LABEL, yesNo: YES_NO.test(label) });
+    const { key: guessed, sensitive, compound, office } = categorise(signals, { long: label.length > LONG_LABEL, yesNo: YES_NO.test(label), label });
     let key = fromSite ?? fromAutocomplete ?? guessed;
     // UBC's "Please enter expiry date" follows its SIN question: the permit's expiry, by its place.
     if (!key && /\bexpir(y|ation)\b/.test(signals) && STATUS_KEYS.has(found.at(-1)?.key)) key = 'workPermitExpiry';
