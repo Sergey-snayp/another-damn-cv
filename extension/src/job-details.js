@@ -13,7 +13,7 @@
   // [type, words in any case, the structured data's own code]. Never "contract" or "temporary" alone
   // in a sentence: "service contract" and "temporary workers" are not a job type.
   const TYPES = [
-    ['Internship', /\binternships?\b|\b(?:summer|student|paid|unpaid|software|engineering|marketing|data|design)\s+interns?\b|^\s*intern\s*$/i, /\bINTERN\b/],
+    ['Internship', /^\s*intern(?:ship)?\s*$|\binternship\s+(?:position|role|program|programme|opportunity)\b|\b(?:summer|student|paid|unpaid|software|engineering|marketing|data|design)\s+intern(?:ship)?s?\b/i, /\bINTERN\b/],
     ['Part-time', /\bpart[- ]?time\b/i, /PART_TIME/],
     ['Full-time', /\bfull[- ]?time\b|\bpermanent\s+(?:position|role|job|contract)\b|^\s*permanent\s*$/i, /FULL_TIME/],
     ['Contract', /^\s*contract(or)?\s*$|\bcontract(?:or)?\s+(?:position|role|job|basis|assignment|opportunity|employee)\b|\bcontract[- ]to[- ]hire\b|\bfixed[- ]term\b|\bfreelance\b/i, /\bCONTRACTOR\b/],
@@ -190,6 +190,8 @@
     descriptionHtml: '#react-root-directory div:has(> .content-pay-transparency)',
   }, {
     host: /^careers\.ibm\.com$/i,
+    // Its structured data's title is only the grade ("AM").
+    title: () => clean(document.querySelector('meta[property="og:title"]')?.content),
     location: 'span.card-item-location',
     description: '#jobDetailWidget .section__content',
   }, {
@@ -204,6 +206,7 @@
     host: /^jobs\.uber\.com$/i,
     checkPosting: true,
     title: 'h1',
+    company: () => 'Uber',
     location: '[data-testid="job-page"] dl dd',
     description: 'div.shrink-0 div.wysiwyg',
   }, {
@@ -584,7 +587,7 @@
       location: linkedin ? selected?.location || locationFrom(job) : ask(board()?.location) || locationFrom(job) || locationOnPage(),
       ...salary,
       // What the posting states wins; its text is read only when it states nothing.
-      employmentType: typeOf(ask(board()?.type)) || (types ? typeOf(types) : typeFromText(linkedin ? `${clean(document.querySelector('.description__job-criteria-list')?.innerText)} ${bodyText}` : bodyText)),
+      employmentType: typeOf(ask(board()?.type)) || (types ? typeOf(types) : /\bintern(?:ship)?\b/i.test(title()) ? 'Internship' : typeFromText(linkedin ? `${clean(document.querySelector('.description__job-criteria-list')?.innerText)} ${bodyText}` : bodyText)),
       description,
       country: window.CVAutofillFields?.jobCountry?.() ?? null,
     };

@@ -135,6 +135,12 @@ How each one decides (read from their code):
 Done: the panel's Continue / Submit button after Autofill (2026-11-17), with Avature's
 own rule and word rules for other sites.
 
+### Reading job pages (2026-11-18, extension 0.88)
+
+Every system on Simplify's and Jobright's lists has a rule for reading its job page.
+Each was checked on one real public posting, except SEEK, Tesla and JobDiva (bot check).
+Filling each system's forms is separate work: see phases 3 to 5.
+
 ### Next, from reading all of Simplify's and Jobright's rules
 
 **First**

@@ -459,8 +459,12 @@ The title, company, location, job type, salary, description and logo come from t
 job system's own places where it has them (`BOARDS` in `src/job-details.js`), then
 the page's JSON-LD or microdata, then its text. Bad values such as "-" or a continent
 are dropped. A job type comes from what the posting states, never from "contract"
-alone in a sentence. Apply buttons are in `APPLY_BUTTONS` in `src/sites.js`.
-`test/job-boards.cjs`.
+alone in a sentence. Apply buttons are in `APPLY_BUTTONS` in `src/sites.js`. A job
+shown inside a frame (iCIMS) is read from that frame. `test/job-boards.cjs`,
+`test/job-frame.cjs`.
+
+These rules were checked on a real public posting for each system Simplify and Jobright
+list, except SEEK, Tesla and JobDiva, which showed a bot check to the test browser.
 
 ## Job systems with their own steps
 
