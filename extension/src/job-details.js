@@ -93,8 +93,27 @@
     title: () => textOf('h2.job-description-title'),
   }, {
     host: /(^|\.)taleo\.net$/i,
+    // The employer's banner at the top of the page names it.
+    company: () => clean([...document.images].find((image) => image.alt.trim() && image.naturalWidth > 100)?.alt),
     title: () => textOf('[id="requisitionDescriptionInterface.reqTitleLinkAction.row1"]') || clean(document.querySelector('meta[property="og:title"]')?.content),
     description: '#taleo_holder',
+  }, {
+    host: /^jobs\.ashbyhq\.com$/i,
+    // Every place the job lists; its structured data has only the first.
+    location: () => clean([...document.querySelectorAll('.ashby-job-posting-left-pane h2, [class*="ashby-job"] h2')].find((heading) => /^location$/i.test(clean(heading.textContent)))?.nextElementSibling?.textContent).split(/\s*;\s*/).filter(Boolean).join(' · '),
+  }, {
+    host: /^apply\.workable\.com$/i,
+    location: () => [textOf('[data-ui="job-location"]'), textOf('[data-ui="job-workplace"]')].filter(Boolean).join(' · '),
+  }, {
+    host: /(^|\.)pinpointhq\.com$/i,
+    location: () => textOf('dd.pinpoint-job-sidebar--location'),
+  }, {
+    // Its header logo is often drawn for a dark header: the site's icon is the company's own.
+    host: /(^|\.)recruitee\.com$/i,
+    logo: (page) => page.querySelector('link[rel~="icon"]')?.getAttribute('href') || null,
+  }, {
+    host: /(^|\.)comeet\.com?$/i,
+    logo: (page) => page.querySelector('meta[property="og:image"]')?.content || null,
   }, {
     host: /^jobs\.gem\.com$/i,
     location: () => textOf('[class*="iconLabel"] > span').split(/\s*•\s*/).join(' · '),

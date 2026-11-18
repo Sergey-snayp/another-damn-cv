@@ -90,6 +90,7 @@
     const width = (image.complete && image.naturalWidth) || Number(image.getAttribute('width')) || 0;
     const height = (image.complete && image.naturalHeight) || Number(image.getAttribute('height')) || 0;
     if ((width && width < 16) || (height && height < 16)) return { score: 0 };
+    if (width && height && width / height > BANNER) return { score: 0 };
     const label = [image.getAttribute('alt'), image.getAttribute('title'), image.getAttribute('aria-label')].filter(Boolean).join(' ');
     const file = decodeURIComponent(src.pathname.split('/').pop() || '');
     if (/powered/i.test(label) || namesBoard(label, company) || namesBoard(file, company)) return { score: 0 };
@@ -108,6 +109,8 @@
 
   /** A logo with the name written out: unreadable in the job card's small square. */
   const WIDE = 3;
+  /** A page-wide banner, never a logo. */
+  const BANNER = 7;
 
   function fromImages(company) {
     let best = null;
