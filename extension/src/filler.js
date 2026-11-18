@@ -313,8 +313,8 @@ function highlighted(element) {
  * world (page-world.js), its upload box switched to "upload a file", as
  * Simplify does before the CV goes into the box's input.
  */
-function avatureResume() {
-  document.querySelector('a#methodButton--file, a.tpt_uploadResumeTriggerFile, a.uploadResumeTriggerFile')?.click();
+function avatureResume({ press = true } = {}) {
+  if (press) document.querySelector('a#methodButton--file, a.tpt_uploadResumeTriggerFile, a.uploadResumeTriggerFile')?.click();
   return new Promise((resolve) => {
     const done = () => { document.removeEventListener('adcv:avature-resume-ready', done); clearTimeout(timer); resolve(); };
     const timer = setTimeout(done, 600);
@@ -555,6 +555,8 @@ async function fillField(field, value, resumeFileName) {
       const input = await removeUploaded(field.element);
       const box = window.CVAutofillFields.uploadBox(input);
       if (!(await attachFile(input, value, resumeFileName ?? 'Resume.pdf'))) return { filled: false };
+      // Avature checks its Continue button again, now with the CV in.
+      if (/^(tpt_)?resumeFile$/.test(input.id) && document.querySelector('meta[name="avature.portal.id"]')) await avatureResume({ press: false });
       return (await workdayTook(input, box)) ? { filled: true } : { filled: false, note: 'Workday did not take the file. Upload it with Select files.' };
     }
     case 'drop':

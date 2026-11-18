@@ -202,6 +202,24 @@ function isJobPage(url = location.href) {
   return JOB_PAGES.some((pattern) => pattern.test(url)) || (Boolean(siteForPage()) && Boolean(formOpener()));
 }
 
+/**
+ * Sites that read the uploaded CV and fill the form from it, as Simplify and
+ * Jobright wait for them (Jobright's "resume gate"): the CV goes in first,
+ * then Autofill waits until the site says it is done, so the site's reading
+ * never overwrites what Autofill fills after. `before`: a box to untick
+ * first; `busy`: shown while it reads; `done`: shown when it has; `reading`:
+ * an element whose text says it is still reading.
+ */
+const RESUME_GATES = {
+  lever: { busy: 'span.resume-upload-working', done: '.resume-upload-success, .resume-upload-failure', timeout: 20000 },
+  icims: { done: '[id="PortalProfileFields.Resume_FileNameLabel"]:not(.iCIMS_NoDisplay)', reading: ['[id="PortalProfileFields.Resume_Content"]', /parsing resume/i], timeout: 15000 },
+  smartrecruiters: { done: 'spl-dropzone[data-test="resume-upload"][files*="RESUME"]', timeout: 15000 },
+  dayforcehcm: { done: '.ant-notification-notice-success', timeout: 60000 },
+  paylocity: { before: '#useAttachedResumeToFillOutApplication', done: 'button#remove-resume', timeout: 60000 },
+  jobscore: { done: '#resume_doc .files-list span.file.preview', timeout: 20000 },
+};
+const resumeGate = () => RESUME_GATES[siteForPage()?.name] ?? null;
+
 /** The second step's button (Workday's "Apply Manually"), once it is on screen. */
 function applyOption() {
   const selector = APPLY_OPTIONS[siteForPage()?.name];
@@ -244,4 +262,4 @@ function siteKeyFor(element, hostname = location.hostname) {
   return null;
 }
 
-window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, isJobPage, applyOption, SITES };
+window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, isJobPage, applyOption, resumeGate, SITES };

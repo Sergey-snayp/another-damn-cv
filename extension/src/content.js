@@ -286,11 +286,24 @@ async function fill(profile, answers = []) {
   // Workday's My Experience: its job, school and website lists and its skills box are filled
   // from the CV's own jobs, in the same pass and page order, never as the current employer or home location.
   const lists = profile.history && window.CVAutofillHistory?.here();
-  const found = lists ? lastScan.found.filter((field) => !window.CVAutofillHistory.owns(field.element)) : lastScan.found;
+  const own = () => (lists ? lastScan.found.filter((field) => !window.CVAutofillHistory.owns(field.element)) : lastScan.found);
+  let found = own();
   const sections = lists ? window.CVAutofillHistory.sections(profile.history) : [];
   let result;
   try {
+    // A site that reads the uploaded CV into the form: the CV first, then wait for it, then the rest.
+    const gate = Sites.resumeGate?.();
+    const cv = gate && found.find((field) => field.key === 'resume' && ['file', 'drop', 'pick'].includes(field.kind) && isBlank(field) && Filler.valueFor(field, profile));
+    let first = null;
+    if (cv) {
+      if (gate.before) { const box = document.querySelector(gate.before); if (box?.checked) box.click(); }
+      first = await runPass({ found: [cv], profile, hooks, explainIf: () => false });
+      await resumeRead(gate);
+      scan();
+      found = own().filter((field) => field.key !== 'resume');
+    }
     result = await runPass({ found, profile, answers, hooks, onProgress: progress, sections });
+    if (first) { result.filled += first.filled; result.notes.unshift(...first.notes); result.failures.unshift(...first.failures); }
     // Questions that appear only after an answer (an expiry date under "SIN begins with 9? Yes"):
     // looked for again, as Jobright does, and filled in the same way.
     const asked = new Set(found.map((field) => field.element));
@@ -298,7 +311,10 @@ async function fill(profile, answers = []) {
       await new Promise((resolve) => setTimeout(resolve, 400));
       scan();
       const fresh = lastScan.found.filter((field) => !asked.has(field.element) && isBlank(field) && Filler.valueFor(field, profile) && !(lists && window.CVAutofillHistory.owns(field.element)));
-      if (!fresh.length) break;
+      // A required acknowledgement that came with an answer (Avature's privacy notice beside its CV upload).
+      const acks = profile.acknowledgeRequired ? Fields.detectAcknowledgements(lastScan.found).filter((ack) => !asked.has(ack.element) && !ack.element.checked) : [];
+      acks.forEach((ack) => asked.add(ack.element));
+      if (!fresh.length && !acks.length) break;
       fresh.forEach((field) => asked.add(field.element));
       const more = await runPass({ found: fresh, profile, hooks, explainIf: () => false });
       result.filled += more.filled;
@@ -606,6 +622,27 @@ function workEditor(element, field, defaults, profile) {
   };
 }
 Marks?.setEditor(editorFor);
+
+/**
+ * Waits while the site reads the CV just uploaded (its `busy` shown, its
+ * `done` not yet, its `reading` text still there), up to its time limit,
+ * then until the form stops changing for half a second.
+ */
+async function resumeRead(gate) {
+  const shown = (selector) => [...document.querySelectorAll(selector)].some((node) => node.getClientRects().length);
+  const reading = () => (gate.busy && shown(gate.busy)) || (gate.done && !shown(gate.done))
+    || (gate.reading && gate.reading[1].test(document.querySelector(gate.reading[0])?.textContent ?? ''));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  for (let waited = 300; reading() && waited < (gate.timeout ?? 15000); waited += 200) await new Promise((resolve) => setTimeout(resolve, 200));
+  // The site's own filling settles: no change to the page for half a second (at most 3 s more).
+  await new Promise((resolve) => {
+    let quiet = setTimeout(done, 500);
+    const stop = setTimeout(done, 3000);
+    const watch = new MutationObserver(() => { clearTimeout(quiet); quiet = setTimeout(done, 500); });
+    watch.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    function done() { watch.disconnect(); clearTimeout(quiet); clearTimeout(stop); resolve(); }
+  });
+}
 
 /**
  * Keeps the page where the person left it while Autofill fills it: a scroll the
