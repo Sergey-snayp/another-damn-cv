@@ -6,6 +6,7 @@ export const EEO_QUESTIONS = [
   { key: "eeoVeteran", label: "Are you a veteran?", choices: ["Yes", "No", "Prefer not to answer"] },
   { key: "eeoGender", label: "What is your gender?", choices: ["Man", "Woman", "Non-binary", "Prefer not to answer"] },
   { key: "eeoLgbtq", label: "Do you identify as LGBTQ+?", choices: ["Yes", "No", "Prefer not to answer"] },
+  { key: "eeoHispanic", label: "Are you Hispanic or Latino?", choices: ["Yes", "No", "Prefer not to answer"] },
   {
     key: "eeoRace",
     label: "How would you identify your race?",

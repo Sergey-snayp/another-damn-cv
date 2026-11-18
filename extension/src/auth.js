@@ -95,8 +95,11 @@ export async function currentUser() {
   return auth?.user ?? null;
 }
 
-/** Pulls the profile using the stored bearer token. */
-export async function pullProfile() {
+/**
+ * Pulls the profile using the stored bearer token. `onlyIfChanged` is for the
+ * reads the panel makes by itself: every write to storage redraws the panel.
+ */
+export async function pullProfile({ onlyIfChanged = false } = {}) {
   const { auth } = await chrome.storage.local.get('auth');
   if (!auth?.syncToken) throw new Error('Not signed in.');
 
@@ -115,6 +118,7 @@ export async function pullProfile() {
   // Merge: local-only details edited in the panel must survive a pull.
   const { profile: existing = {} } = await chrome.storage.local.get('profile');
   const profile = { ...existing, ...incoming };
+  if (onlyIfChanged && JSON.stringify(profile) === JSON.stringify(existing)) return profile;
 
   await chrome.storage.local.set({
     profile,

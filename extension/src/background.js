@@ -293,7 +293,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
 });
 const DEFAULT_KINDS = new Set(['workAuthorization', 'requiresSponsorship', 'workedHereBefore', 'willingToRelocate']);
 // Same list as the server's (EXTENSION_PROFILE_KEYS): name and email stay in the app.
-const PROFILE_KEYS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod', 'workArrangements']);
+const PROFILE_KEYS = new Set(['preferredName', 'phone', 'location', 'city', 'state', 'country', 'postalCode', 'linkedin', 'github', 'portfolio', 'website', 'telegram', 'workAuthorization', 'requiresSponsorship', 'salaryExpectation', 'noticePeriod', 'workArrangements', 'eeoGender', 'eeoHispanic', 'eeoRace', 'eeoVeteran', 'eeoDisability']);
 
 /**
  * Saves or forgets one default on the account. `target` says where it lives:

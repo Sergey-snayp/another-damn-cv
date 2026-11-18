@@ -521,5 +521,16 @@ test('Personal info saves explicit employment details and country defaults share
     '',
     'a saved answer can be cleared',
   );
+  const answers = { eeoHispanic: 'No', eeoVeteran: 'Yes', eeoRace: 'Prefer not to answer' };
+  assert.equal((await call('/extension/profile', { method: 'PATCH', body: answers })).status, 401);
+  assert.equal((await call('/extension/profile', { method: 'PATCH', token, body: answers })).status, 200);
+  const pulled = (await (await call('/profile/sync', { token })).json()) as Record<string, string>;
+  for (const [key, value] of Object.entries(answers)) assert.equal(pulled[key], value);
+  assert.equal(pulled.eeoLgbtq, 'Prefer not to answer', 'the extension reads what the Profile saved');
+  assert.equal(
+    (await call('/extension/profile', { method: 'PATCH', token, body: { eeoLgbtq: 'No' } })).status,
+    400,
+    'the extension never changes the LGBTQ+ answer',
+  );
   assert.equal(await prisma.resume.count({ where: { profileId: fresh.profile.id } }), 0);
 });

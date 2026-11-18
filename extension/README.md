@@ -129,6 +129,15 @@ the application, the panel says to check your answers first. It is found by the
 site's own rule or by its words, never in the page's header, menu or footer, and
 never Back, Cancel or Sign in (`advanceButton` in `src/sites.js`, `test/advance.cjs`).
 
+## Your profile stays current
+
+The server holds your profile. The panel reads your profile, default answers and work
+history when it is about to use them: when it opens, when it is shown again, when you
+come back to its tab, and right before **Autofill This Page**. As in Simplify and
+Jobright, there is no timer, and a read from the last 5 seconds is reused. If the
+server does not answer within 3 seconds, Autofill uses the saved copy.
+`test/profile-sync.cjs` covers this.
+
 ## CVs
 
 The **Resume** tab shows the CV that **Autofill This Page** uploads, as
@@ -573,13 +582,15 @@ for Chrome's APIs.
 
 Voluntary self-identification (gender, Hispanic/Latino, race or ethnicity,
 veteran status, disability) is filled only when **Diversity questions** is
-ticked under Settings → Fields to fill (off by default). **Edit my diversity
-answers** sets each answer; all start as "Prefer not to answer". The answers are
-kept in this browser only (`diversityAnswers` in `chrome.storage.local`) and are
-never sent to the app or to Claude. Each choice matches the form's own wording
-("Decline to self-identify", "Female", "No, I do not have a disability"), and a
-race question listing "Hispanic or Latino" stays the race question.
-`test/diversity.html` covers this.
+ticked under Settings → Fields to fill (off by default). The answers are the ones
+in the app's Profile, saved on your account, and are not sent to Claude. **Edit my
+diversity answers** and a field's icon change them there too. A question with no
+answer uses "Prefer not to answer". An answer chosen in this browser before 0.82.0
+(`diversityAnswers` in `chrome.storage.local`) still counts until the Profile has
+one; it is not uploaded unless you save it. The Profile's LGBTQ+ answer is never put
+on a form. Each choice matches the form's own wording ("Decline to self-identify",
+"Female", "No, I do not have a disability"), and a race question listing "Hispanic
+or Latino" stays the race question. `test/diversity.html`, `test/profile-sync.cjs`.
 
 ## What it does not do yet
 

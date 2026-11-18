@@ -8,7 +8,7 @@ import { findKeywords, jobFromCapture, looksLikeJobPosting, matchLabel, scoreCv 
 import { matchAnswers } from './answers.js';
 import { coverLetterFor, coverLetterPdf, generateCoverLetter, saveCoverLetter } from './cover-letters.js';
 import { CAREER_KEYS, cachedCareer, fetchProfileCareer, fetchResumeCareer } from './career.js';
-import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, syncDefaults, workedBeforeFor, workStatusMap } from './defaults.js';
+import { eligibilityMap, moveLocalEligibility, relocationMap, removeDefaultById, saveDefault, saveProfileValues, syncDefaults, workedBeforeFor, workStatusMap } from './defaults.js';
 import { forgetSiteOwnLogin, newSitePassword, readSiteLogin, saveSiteLogin, siteState } from './site-login.js';
 
 const FIELD_LABELS = {
@@ -29,15 +29,15 @@ const FILL_GROUPS = [
   { id: 'heardAbout', label: '"How did you hear" → anotherdamn.cv', keys: ['heardAbout'] },
   // The company's own questions, from answers saved in the app. Not a profile field group.
   { id: 'answers', label: 'Saved answers', keys: [] },
-  // Off unless switched on: answers live only in this browser (diversityAnswers).
+  // Off unless switched on. The answers are the Profile's, on the account.
   { id: 'diversity', label: 'Diversity questions', keys: ['eeoGender', 'eeoHispanic', 'eeoRace', 'eeoVeteran', 'eeoDisability'] },
 ];
-/** Choices per diversity question. Each starts as "Prefer not to answer". */
+/** Choices per diversity question, in the Profile's words. Each starts as "Prefer not to answer". */
 const DIVERSITY_CHOICES = {
   eeoGender: { label: 'Gender', choices: ['Prefer not to answer', 'Woman', 'Man', 'Non-binary'] },
   eeoHispanic: { label: 'Hispanic or Latino', choices: ['Prefer not to answer', 'Yes', 'No'] },
   eeoRace: { label: 'Race or ethnicity', choices: ['Prefer not to answer', 'American Indian or Alaska Native', 'Asian', 'Black or African American', 'Hispanic or Latino', 'Native Hawaiian or Other Pacific Islander', 'White', 'Two or more races'] },
-  eeoVeteran: { label: 'Veteran status', choices: ['Prefer not to answer', 'I am not a protected veteran', 'I am a protected veteran'] },
+  eeoVeteran: { label: 'Veteran', choices: ['Prefer not to answer', 'No', 'Yes'] },
   eeoDisability: { label: 'Disability', choices: ['Prefer not to answer', 'No', 'Yes'] },
 };
 /** What "How did you hear about this job?" is answered with. */
@@ -141,7 +141,10 @@ async function workedHereBefore() {
   if (!text) return {};
   return { workedHereBefore: 'No', workedHereBeforeReason: `${company} is not among the employers in your CV, so "No". Check it, or click to save one answer for every company.` };
 }
-const diversityValue = key => diversityAnswers[key] ?? 'Prefer not to answer';
+// "I am not a protected veteran", from a save before these answers used the Profile's words, is "No".
+const diversityChoice = (key, text) => key === 'eeoVeteran' && /protected veteran/i.test(text) ? (/\bnot\b/i.test(text) ? 'No' : 'Yes') : text;
+// The Profile's answer. One chosen in this browser before answers moved there counts until the Profile has one.
+const diversityValue = key => diversityChoice(key, String(profile[key] ?? '').trim() || diversityAnswers[key] || 'Prefer not to answer');
 const GROUP_OF_KEY = new Map(FILL_GROUPS.flatMap(group => group.keys.map(key => [key, group.id])));
 let fillGroups = {};
 // Every group starts on, except diversity questions, which start off.
@@ -868,6 +871,9 @@ async function runFill() {
   const wantsLetter = () => groupOn('coverLetter') && Boolean(scan?.fields.some(field => field.key === 'coverLetter'));
   const letterAccess = wantsLetter() && !(savedJob.url === jobAddress(target) && savedJob.job) ? requestSiteAccess(target) : Promise.resolve(true);
   try {
+    // The account as it is now. A slow or unreachable server does not hold up the fill: the saved copy is used.
+    await Promise.race([syncAccount(), new Promise(resolve => setTimeout(resolve, ACCOUNT_WAIT_MS))]);
+    profile = (await chrome.storage.local.get('profile')).profile ?? profile;
     // The fields on the page now, not at the last scan: a multi-step form may be on another step.
     const fresh = target ? await scanFrames(target) : null;
     if (fresh) scan = fresh;
@@ -922,6 +928,7 @@ async function runFill() {
     // Fields in groups switched off in Settings are sent empty, so they stay as they are.
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
+    delete allowed.eeoLgbtq; // Stays in the app: never put on a form.
     allowed.heardAbout = groupOn('heardAbout') ? HEARD_ABOUT_ANSWER : '';
     // Current role, years and education from the Profile or the selected CV ("Autofill uses" in the Profile tab).
     for (const key of CAREER_KEYS) { const value = careerAutofill()[key]; if (value) allowed[key] = groupOn(key) ? value : ''; }
@@ -1115,14 +1122,37 @@ function formHistory() {
   };
 }
 
-async function loadCareer() {
+async function loadCareer({ quiet = false } = {}) {
   const resumeId = resumes.chosen?.id;
-  careerLoading = true; careerProblem = ''; renderProfileOverview();
+  // Quiet, with something to show: what is on screen stays, and is redrawn only if it changed.
+  const inBackground = quiet && Boolean(career.profile), before = JSON.stringify(career);
+  if (!inBackground) { careerLoading = true; careerProblem = ''; renderProfileOverview(); }
   try {
     const [profileView, resumeView] = await Promise.all([fetchProfileCareer(), resumeId ? fetchResumeCareer(resumeId) : Promise.resolve(null)]);
     career = { profile: profileView, resumes: { ...career.resumes, ...(resumeView && resumeId && resumes.chosen?.id === resumeId && { [resumeId]: resumeView }) } };
-  } catch (error) { careerProblem = error instanceof NotSignedInError ? 'Sign in to see your Profile from the app.' : error.message; }
-  finally { careerLoading = false; renderProfileOverview(); renderAutofill(); }
+  } catch (error) { if (!inBackground) careerProblem = error instanceof NotSignedInError ? 'Sign in to see your Profile from the app.' : error.message; }
+  finally {
+    if (!inBackground) careerLoading = false;
+    if (!inBackground || JSON.stringify(career) !== before) { renderProfileOverview(); renderAutofill(); }
+  }
+}
+
+/**
+ * The account's profile, default answers and work history, read when they are
+ * about to be used: the panel shown, back on this tab, Autofill. As Simplify and
+ * Jobright do, there is no timer, and a read from the last few seconds is reused.
+ * Signed out or offline, the saved copy stays.
+ */
+const ACCOUNT_FRESH_MS = 5000, ACCOUNT_WAIT_MS = 3000;
+let accountReadAt = 0, accountRead = null;
+function syncAccount() {
+  if (accountRead) return accountRead;
+  if (Date.now() - accountReadAt < ACCOUNT_FRESH_MS) return Promise.resolve();
+  accountRead = Promise.allSettled([pullProfile({ onlyIfChanged: true }), loadDefaults(), loadCareer({ quiet: true })]).then(([pulled]) => {
+    if (pulled.status === 'fulfilled') accountReadAt = Date.now();
+    accountRead = null;
+  });
+  return accountRead;
 }
 
 const formatMonth = value => {
@@ -1382,7 +1412,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 });
 // Back on the job's tab (or the panel shown again): fetch the list if it is not fresh, in case a message was missed.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && Date.now() - resumesLoadedAt > 15000) void reloadResumes(false);
+  if (document.visibilityState !== 'visible') return;
+  void syncAccount();
+  if (Date.now() - resumesLoadedAt > 15000) void reloadResumes(false);
 });
 // The page keeps the iframe alive while the panel is collapsed. Reopening it
 // must read the backend again, even when no app-change message arrived.
@@ -1390,7 +1422,7 @@ let panelVisible = true;
 window.addEventListener('message', event => {
   if (event.source !== window.parent || event.data?.type !== 'adcv-panel-visible') return;
   panelVisible = event.data.visible === true;
-  if (panelVisible) void reloadResumes(false);
+  if (panelVisible) { void reloadResumes(false); void syncAccount(); }
 });
 setInterval(() => {
   if (panelVisible && document.visibilityState === 'visible') void reloadResumes(false);
@@ -1831,7 +1863,7 @@ $('disabled-sites-list').addEventListener('click', async event => {
 function renderFillGroups() {
   $('fill-groups').innerHTML = FILL_GROUPS.map(group => {
     const on = group.id === 'diversity' ? fillGroups.diversity === true : fillGroups[group.id] !== false;
-    const row = `<label class="toggle-row compact"><span>${esc(group.label)}${group.id === 'diversity' ? '<small>Off by default. Your answers stay in this browser.</small>' : ''}</span><input type="checkbox" data-fill-group="${group.id}" ${on ? 'checked' : ''}></label>`;
+    const row = `<label class="toggle-row compact"><span>${esc(group.label)}${group.id === 'diversity' ? '<small>Off by default. Your answers come from your Profile.</small>' : ''}</span><input type="checkbox" data-fill-group="${group.id}" ${on ? 'checked' : ''}></label>`;
     return group.id === 'diversity' ? `${row}<button type="button" class="ghost small" id="edit-diversity">Edit my diversity answers</button>` : row;
   }).join('');
 }
@@ -1843,8 +1875,12 @@ function openDiversity() {
 $('fill-groups').addEventListener('click', event => { if (event.target.closest('#edit-diversity')) openDiversity(); });
 $('save-diversity').addEventListener('click', async () => {
   const next = Object.fromEntries([...$('diversity-form').querySelectorAll('select')].map(select => [select.name, select.value]));
-  try { await chrome.storage.local.set({ diversityAnswers: next }); diversityAnswers = next; status('diversity-status', 'Saved in this browser.', 'success'); }
-  catch { status('diversity-status', 'Could not save. Try again.', 'error'); }
+  try {
+    await saveProfileValues(next);
+    profile = { ...profile, ...next };
+    await chrome.storage.local.remove('diversityAnswers'); diversityAnswers = {}; // The Profile has them all now.
+    status('diversity-status', 'Saved to your Profile.', 'success');
+  } catch (error) { status('diversity-status', error instanceof NotSignedInError ? 'Sign in on the Profile tab first.' : 'Could not save. Try again.', 'error'); }
 });
 $('acknowledge-required').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ acknowledgeRequired: box.checked }); acknowledgeRequired = box.checked; } catch { box.checked = !box.checked; } });
 $('eligibility-answers-list').addEventListener('click', async event => {
@@ -1897,5 +1933,4 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.tabs.onUpdated.addListener((id, info) => { if (id === currentTab?.id && (info.status === 'complete' || info.url)) void refresh(); });
 void refresh();
 void loadResumes();
-void loadDefaults();
-void loadCareer();
+void syncAccount();

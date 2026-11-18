@@ -62,7 +62,8 @@ export class ProfilesController {
 
 /**
  * Profile values the extension may set when a form asks for one the profile
- * lacks, from the field's icon. Name and email stay in the app.
+ * lacks, from the field's icon. Name and email stay in the app. The diversity
+ * answers are the ones forms ask; the LGBTQ+ answer is not filled on forms.
  */
 export const EXTENSION_PROFILE_KEYS = [
   'preferredName',
@@ -83,6 +84,11 @@ export const EXTENSION_PROFILE_KEYS = [
   'salaryExpectation',
   'noticePeriod',
   'workArrangements',
+  'eeoGender',
+  'eeoHispanic',
+  'eeoRace',
+  'eeoVeteran',
+  'eeoDisability',
 ] as const;
 export const extensionProfileSchema = z
   .object(

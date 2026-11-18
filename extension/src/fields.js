@@ -92,7 +92,7 @@ const ALWAYS_SKIP = ['sexual orientation', 'date of birth', 'age'];
 /**
  * Voluntary self-identification ("diversity") questions. Legally sensitive and
  * always optional, so they are filled only when the person switched them on in
- * Settings, from answers kept in this browser. Hispanic/Latino comes first: a
+ * Settings, from the Profile's answers. Hispanic/Latino comes first: a
  * race question that lists "Hispanic or Latino" as an option is still race.
  */
 const DIVERSITY = [

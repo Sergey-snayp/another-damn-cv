@@ -103,10 +103,12 @@ Prep page (`/interview-prep`).
   extension uses them on forms that ask, such as Avature's Languages list.
 - **Profile → Saved answers** lists answers saved from application forms in
   the extension, with when each was last used. Edit or delete them here.
-  **Personal info → Employment Information** shows editable ethnicity, US/Canada/UK
-  work authorization, sponsorship, disability, LGBTQ+, gender and veteran answers.
-  Unanswered values stay blank. Country authorization uses the same saved defaults
-  as the extension, so an answer for Canada is never substituted for the US or UK.
+  **Personal info → Employment Information** shows editable ethnicity, Hispanic or
+  Latino, US/Canada/UK work authorization, sponsorship, disability, LGBTQ+, gender and
+  veteran answers. Unanswered values stay blank. Country authorization uses the same
+  saved defaults as the extension, so an answer for Canada is never substituted for the
+  US or UK. The extension fills the diversity answers only when its setting is on, and
+  never the LGBTQ+ one.
 - **Interview** (the Interview Prep page) collects active jobs in Screening or Interviewing, with
   search, status filters, job details and the saved application CV version.
   Jobs appear automatically from Dashboard; archived and other statuses stay out.

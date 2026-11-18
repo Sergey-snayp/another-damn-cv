@@ -337,6 +337,7 @@ model Profile {
 
   workAuthorization   String?
   eeoRace             String?
+  eeoHispanic         String?
   eeoGender           String?
   eeoVeteran          String?
   eeoDisability       String?

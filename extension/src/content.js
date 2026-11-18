@@ -499,27 +499,30 @@ async function editorFor(element) {
   }
 
   if (field?.diversity) {
-    const current = diversityAnswers[field.key] ?? '';
-    const store = async (choice) => {
-      const { diversityAnswers: saved = {} } = await chrome.storage.local.get('diversityAnswers');
-      await chrome.storage.local.set({ diversityAnswers: { ...saved, [field.key]: choice } });
-      return { ok: true };
-    };
     const canonical = (text) => Filler.diversityChoiceFor(field.key, text) ?? String(text).trim();
+    // The Profile's answer, or one chosen in this browser before answers moved there.
+    const current = canonical(String(profile[field.key] ?? '').trim() || diversityAnswers[field.key] || '');
+    const store = async (choice) => {
+      const result = await saveRemotely('default-save', { type: 'profile', key: field.key }, choice);
+      if (result.ok) {
+        const { diversityAnswers: saved = {} } = await chrome.storage.local.get('diversityAnswers');
+        const { [field.key]: _moved, ...rest } = saved;
+        await chrome.storage.local.set({ diversityAnswers: rest });
+      }
+      return result;
+    };
     return {
       heading: Fields.labelOf(element).slice(0, 60),
       current,
       choices: formChoices,
       fromForm: kind === 'combobox',
-      canReset: Boolean(current),
-      note: 'Kept in this browser only. Diversity answers fill only when switched on in Settings → Fields to fill.',
+      canReset: Boolean(current) && current !== 'Prefer not to answer',
+      note: 'Saved in your Profile. Diversity answers fill only when switched on in Settings → Fields to fill.',
       choose: async (value) => finishChoice(element, await fillChosen(element, value), await store(canonical(value)), 'From your diversity answers'),
       saveFromForm: async () => { const value = inForm(); return value ? finishChoice(element, { filled: true }, await store(canonical(value)), 'From your diversity answers') : { ok: false, message: 'Choose an option in the form first.' }; },
       reset: async () => {
-        const { diversityAnswers: saved = {} } = await chrome.storage.local.get('diversityAnswers');
-        const { [field.key]: _gone, ...rest } = saved;
-        await chrome.storage.local.set({ diversityAnswers: rest });
-        return { ok: true, message: 'Forgotten. "Prefer not to answer" is used again.' };
+        const result = await store('Prefer not to answer');
+        return result.ok ? { ok: true, message: 'Forgotten. "Prefer not to answer" is used again.' } : result;
       },
     };
   }

@@ -8,8 +8,10 @@ const extension = path.resolve(__dirname, '..');
  * passes its messages. `silentFor`: the page does not answer at first, as one
  * still loading. `server`: the account's job-site login ({ login, saves }).
  * `session`: what the background keeps in chrome.storage.session (a LinkedIn hand-off).
+ * `stored`: more of chrome.storage.local. `server.account`: the profile on the server
+ * (`server.down`: its read fails; `server.patches`: what the panel saved to it).
  */
-async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, server = { login: null, saves: [] }, offer = null, session = {} } = {}) {
+async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, server = { login: null, saves: [] }, offer = null, session = {}, stored = {} } = {}) {
   const page = await browser.newPage();
   await page.setViewport({ width: 420, height: 900 });
   await page.exposeFunction('readJobPage', message => jobPage.evaluate(message => window.__ask(message), message));
@@ -18,7 +20,7 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
     const address = new URL(request.url());
     const file = path.join(extension, address.pathname);
     // A real extension may call the app across sites; this page needs CORS for it.
-    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'GET, PUT, POST, DELETE' };
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'GET, PUT, POST, PATCH, DELETE' };
     const json = body => void request.respond({ contentType: 'application/json', headers: cors, body: JSON.stringify(body) });
     if (address.origin === 'http://localhost:3001' && request.method() === 'OPTIONS') return void request.respond({ status: 204, headers: cors, body: '' });
     if (request.url().startsWith('http://extension.test/') && fs.existsSync(file)) {
@@ -45,10 +47,17 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       const id = decodeURIComponent(address.pathname.split('/').pop());
       (server.requests ??= []).push(`job ${id}`);
       if (server.jobs?.[id]) json(server.jobs[id]); else void request.respond({ status: 404, headers: cors, contentType: 'application/json', body: '{}' });
+    } else if (address.origin === 'http://localhost:3001' && address.pathname === '/api/profile/sync') {
+      (server.requests ??= []).push('profile');
+      if (server.down) void request.respond({ status: 500, headers: cors, contentType: 'application/json', body: '{}' }); else json(server.account ?? {});
+    } else if (address.origin === 'http://localhost:3001' && address.pathname === '/api/extension/profile' && request.method() === 'PATCH') {
+      const values = JSON.parse(request.postData());
+      (server.patches ??= []).push(values);
+      json(Object.assign(server.account ??= {}, values));
     } else if (address.origin === 'http://localhost:3001') json([]);
     else void request.respond({ status: 404, body: '' });
   });
-  await page.evaluateOnNewDocument(({ url, silentFor, profile, offer, session }) => {
+  await page.evaluateOnNewDocument(({ url, silentFor, profile, offer, session, stored }) => {
     // The background's side: an "Update your job-site password?" offer, and what the panel answered.
     window.__offer = offer; window.__answers = [];
     const background = message => {
@@ -70,12 +79,12 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       if (view === 'placeholder') window.__placeholder = [host.querySelector('.job-context').getBoundingClientRect().top, host.querySelector('.fill-block').getBoundingClientRect().top];
     }).observe(document, { subtree: true, childList: true });
     window.__deliver = message => { for (const listener of window.__panelListeners ?? []) listener(message, { tab: { id: 1 }, frameId: 0 }, () => {}); };
-    const store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile, chosenResumeId: 'cv1' };
+    const store = window.__store = { auth: { syncToken: 'fixture', user: { name: 'Sam Lee', email: 'sam@example.com' } }, profile, chosenResumeId: 'cv1', ...stored };
     const event = { addListener() {}, removeListener() {} };
     window.chrome = {
       // Messages from the page reach the panel through window.__deliver(message), as Chrome passes them.
       runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: { addListener: listener => (window.__panelListeners ??= []).push(listener), removeListener() {} }, sendMessage: async message => background(message) },
-      storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async () => {} }, session: { get: async key => (key in session ? { [key]: session[key] } : {}), set: async value => Object.assign(session, value) }, onChanged: event },
+      storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async keys => { for (const key of [].concat(keys)) delete store[key]; } }, session: { get: async key => (key in session ? { [key]: session[key] } : {}), set: async value => Object.assign(session, value) }, onChanged: event },
       tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message) => { if (Date.now() < answersFrom) throw new Error('Could not establish connection. Receiving end does not exist.'); return window.readJobPage(message); }, onUpdated: event, onActivated: event, create: async () => ({}) },
       webNavigation: { getAllFrames: async () => [{ frameId: 0, url }] },
       scripting: { executeScript: async () => [] },
@@ -83,7 +92,7 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       identity: { getRedirectURL: () => 'https://fixture.chromiumapp.org/' },
       windows: { getCurrent: async () => ({ width: 1400, height: 900 }), onRemoved: event },
     };
-  }, { url: jobPage.url(), silentFor, profile, offer, session });
+  }, { url: jobPage.url(), silentFor, profile, offer, session, stored });
   await page.goto('http://extension.test/src/sidepanel.html');
   return page;
 }

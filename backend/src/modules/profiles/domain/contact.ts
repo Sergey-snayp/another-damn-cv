@@ -22,6 +22,7 @@ export interface ContactFields {
   yearsExperience: string;
   workAuthorization: string;
   eeoRace: string;
+  eeoHispanic: string;
   eeoGender: string;
   eeoVeteran: string;
   eeoDisability: string;
@@ -56,6 +57,7 @@ export const EMPTY_CONTACT: ContactFields = {
   yearsExperience: '',
   workAuthorization: '',
   eeoRace: '',
+  eeoHispanic: '',
   eeoGender: '',
   eeoVeteran: '',
   eeoDisability: '',

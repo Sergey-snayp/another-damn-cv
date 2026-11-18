@@ -93,7 +93,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     // Not a citizen: authorized (Yes, carried over) and sponsorship (No) are shown, and the basis is asked.
     assert.deepEqual(await page.$$eval('.work-card[aria-label="Canada"] [aria-pressed="true"]', (buttons) => buttons.map((button) => button.textContent)), ['No', 'Yes', 'No']);
     await page.select('.work-card[aria-label="Canada"] select', 'PERMANENT_RESIDENT');
-    for (const [question, value] of [['Do you have a disability?', 'No'], ['Are you a veteran?', 'No'], ['What is your gender?', 'Man'], ['Do you identify as LGBTQ+?', 'No'], ['How would you identify your race?', 'White']]) {
+    for (const [question, value] of [['Do you have a disability?', 'No'], ['Are you a veteran?', 'No'], ['What is your gender?', 'Man'], ['Do you identify as LGBTQ+?', 'No'], ['Are you Hispanic or Latino?', 'No'], ['How would you identify your race?', 'White']]) {
       const select = await page.$(`dialog.complete-profile ::-p-aria([name="${question}"][role="combobox"])`);
       assert.ok(select, question);
       await select.select(value);
@@ -103,7 +103,7 @@ const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resol
     await page.waitForSelector('.complete-done h2');
     assert.equal(await page.$eval('.complete-done h2', (node) => node.textContent), 'Just One Last Important Step!', 'no extension here: install it');
     assert.deepEqual(defaultWrites.sort(), ['authorizationBasis:Canada=PERMANENT_RESIDENT', 'citizenship:Canada=No', 'workCountry:Canada=Yes'], 'only what changed: authorized and sponsorship were already saved');
-    assert.deepEqual(profileWrites.at(-1), { eeoDisability: 'No', eeoVeteran: 'No', eeoGender: 'Man', eeoLgbtq: 'No', eeoRace: 'White' });
+    assert.deepEqual(profileWrites.at(-1), { eeoDisability: 'No', eeoVeteran: 'No', eeoGender: 'Man', eeoLgbtq: 'No', eeoHispanic: 'No', eeoRace: 'White' });
     await page.screenshot({ path: '/private/tmp/complete-profile-done.png' });
     await page.click('.complete-done .complete-next');
 

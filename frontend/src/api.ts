@@ -51,7 +51,7 @@ export interface ContactFields {
   linkedin: string; github: string; portfolio: string; website: string; telegram: string;
   currentCompany: string; currentTitle: string; yearsExperience: string;
   workAuthorization: string; requiresSponsorship: string;
-  eeoRace?: string; eeoGender?: string; eeoVeteran?: string; eeoDisability?: string; eeoLgbtq?: string;
+  eeoRace?: string; eeoHispanic?: string; eeoGender?: string; eeoVeteran?: string; eeoDisability?: string; eeoLgbtq?: string;
   salaryExpectation: string; noticePeriod: string;
   /** Types of work accepted: "remote,hybrid,onsite" or any of them. */
   workArrangements: string;

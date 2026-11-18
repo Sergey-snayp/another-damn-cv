@@ -703,7 +703,9 @@ function diversityOptionMatches(key, choice, optionText) {
     case 'eeoGender:Non-binary': return /non.?binary|genderqueer|gender queer/.test(text);
     case 'eeoHispanic:Yes': return yes;
     case 'eeoHispanic:No': return no;
+    case 'eeoVeteran:No':
     case 'eeoVeteran:I am not a protected veteran': return no || (/\bnot\b/.test(text) && /veteran/.test(text));
+    case 'eeoVeteran:Yes':
     case 'eeoVeteran:I am a protected veteran': return yes || (/veteran/.test(text) && !/\bnot\b/.test(text));
     case 'eeoDisability:No': return no || /do not have|don.?t have/.test(text);
     case 'eeoDisability:Yes': return yes || (/have a disability/.test(text) && !/do not|don.?t/.test(text));
@@ -1308,7 +1310,7 @@ const DIVERSITY_VOCABULARY = {
   eeoGender: ['Prefer not to answer', 'Woman', 'Man', 'Non-binary'],
   eeoHispanic: ['Prefer not to answer', 'Yes', 'No'],
   eeoRace: ['Prefer not to answer', 'American Indian or Alaska Native', 'Asian', 'Black or African American', 'Hispanic or Latino', 'Native Hawaiian or Other Pacific Islander', 'White', 'Two or more races'],
-  eeoVeteran: ['Prefer not to answer', 'I am not a protected veteran', 'I am a protected veteran'],
+  eeoVeteran: ['Prefer not to answer', 'No', 'Yes'],
   eeoDisability: ['Prefer not to answer', 'No', 'Yes'],
 };
 function diversityChoiceFor(key, optionText) {
