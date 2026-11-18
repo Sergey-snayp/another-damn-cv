@@ -36,6 +36,15 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       const host = decodeURIComponent(address.pathname.split('/')[5]);
       if (server.own) delete server.own[host];
       json({ ownLogins: Object.keys(server.own ?? {}) });
+    } else if (address.origin === 'http://localhost:3001' && address.pathname === '/api/jobs/lookup') {
+      // `server.lookup(url)`: the saved job the server finds for a page address, or null.
+      (server.requests ??= []).push(`lookup ${address.searchParams.get('url')}`);
+      json({ job: server.lookup?.(address.searchParams.get('url')) ?? null });
+    } else if (address.origin === 'http://localhost:3001' && /^\/api\/extension\/jobs\/[^/]+$/.test(address.pathname) && request.method() === 'GET') {
+      // `server.jobs[id]`: one saved job with its description.
+      const id = decodeURIComponent(address.pathname.split('/').pop());
+      (server.requests ??= []).push(`job ${id}`);
+      if (server.jobs?.[id]) json(server.jobs[id]); else void request.respond({ status: 404, headers: cors, contentType: 'application/json', body: '{}' });
     } else if (address.origin === 'http://localhost:3001') json([]);
     else void request.respond({ status: 404, body: '' });
   });

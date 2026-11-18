@@ -1,5 +1,5 @@
 import { signIn, signOut, currentUser, pullProfile, redirectUri } from './auth.js';
-import { linkedInJobForTab } from './linkedin-handoff.js';
+import { linkedInJobForTab, postingOf } from './linkedin-handoff.js';
 import { captureTab, getSavedJob, lookupJob, postingDatesFor, NotSignedInError, recordApplication, requestSiteAccess, sendCapture, updateSavedJob, unsendableReason, APP_URL } from './jobs.js';
 import { icon, escapeHtml as esc } from './icons.js';
 import { observeTextPreviews, previewCvName } from './text-display.js';
@@ -323,8 +323,9 @@ const APPLIED = new Set(['applied', 'screening', 'interview', 'offer', 'accepted
 /** The logo to show and save: the page's, the saved job's, or the company site's icon. */
 function jobLogo() {
   const context = scan?.context ?? {};
-  if (context.logo) return context.logo;
+  // The saved job's logo first: the same on every page of its application.
   if (savedJob.url === jobAddress() && savedJob.job?.companyLogo) return savedJob.job.companyLogo;
+  if (context.logo) return context.logo;
   return context.logoDomain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(context.logoDomain)}&sz=128` : null;
 }
 /** Whether this page's job is saved: on a new page, and again at most once a minute. */
@@ -346,7 +347,7 @@ async function checkSaved(url) {
   }
   savedJob.checkedAt = Date.now();
   const pending = savedJob;
-  try { const job = await lookupJob(url); if (savedJob === pending) savedJob.job = job; }
+  try { const job = await lookupJob(url) ?? await jobOfThisTab(url); if (savedJob === pending) savedJob.job = job; rememberTabJob(url, job); }
   catch { /* signed out or offline: the button offers saving, which explains */ }
   // A saved job may have its own tailored CV: that one is offered on its page.
   if (savedJob === pending && jobAddress() === url) {
@@ -645,7 +646,7 @@ async function generateLetter(access) {
   clearInterval(letterTicker);
   letterTicker = setInterval(() => { const text = $('cover-working'); if (text) text.textContent = letterWorkingText(); }, 1000);
   try {
-    let job = savedJob.url === jobAddress(tab) ? savedJob.job : null;
+    let job = await knownJob(tab);
     if (!job) {
       const reason = unsendableReason(tab);
       if (reason) throw new Error(reason);
@@ -1032,6 +1033,33 @@ async function advance() {
   if (!reply?.ok) status('fill-status', 'The form’s button is gone. Press it on the page.', 'error');
   // The next step may load in place or as a new page: read it again as it comes.
   for (const delay of [800, 1500, 2500]) setTimeout(() => void refresh(), delay);
+}
+
+/** This page's saved job: known to the panel, else found by the server (address or job number), else this tab's. */
+async function knownJob(tab = currentTab) {
+  const url = jobAddress(tab);
+  if (savedJob.url === url && savedJob.job) return savedJob.job;
+  return (await lookupJob(url).catch(() => null)) ?? await jobOfThisTab(url);
+}
+
+/**
+ * The job this tab is applying for, kept as Simplify keeps one per tab: a
+ * saved job found for a page is remembered for the tab, and a later page of
+ * the same site that names no other job number (Avature's "More about me")
+ * is that job's application. Another number, or another site, is not.
+ */
+async function jobOfThisTab(url) {
+  const tabId = currentTab?.id;
+  if (tabId == null) return null;
+  const key = `tabJob:${tabId}`, posting = postingOf(url);
+  const { [key]: last } = await chrome.storage.session.get(key).catch(() => ({}));
+  if (!last || !posting || last.host !== posting.host || (posting.id && posting.id !== last.posting)) return null;
+  return getSavedJob(last.jobId).catch(() => null);
+}
+function rememberTabJob(url, job) {
+  const tabId = currentTab?.id, posting = postingOf(url);
+  if (tabId == null || !job?.id || !posting) return;
+  void chrome.storage.session.set({ [`tabJob:${tabId}`]: { host: posting.host, posting: posting.id, jobId: job.id } }).catch(() => {});
 }
 
 /** Presses the job page's Apply button, then rescans once the form has loaded. */
@@ -1475,13 +1503,24 @@ async function updateMatch({ force = false } = {}) {
       matchReading = true; matchProblem = ''; clearTimeout(matchRetryTimer);
       matchCapture = { promise: (async () => {
         try {
-          const capture = await captureTab(tab.id), job = jobFromCapture(capture), keywords = findKeywords(job.text);
-          if (looksLikeJobPosting(capture, job, keywords)) return { keywords, error: '' };
+          // The page itself; a form step that cannot be read still has its saved job.
+          let capture = null, readError = '';
+          try { capture = await captureTab(tab.id); } catch (error) { readError = error.message || 'The job description is not ready.'; }
+          if (capture) {
+            const job = jobFromCapture(capture), keywords = findKeywords(job.text);
+            if (looksLikeJobPosting(capture, job, keywords)) return { keywords, error: '' };
+          }
           // An apply page without the description: the job's own, from its job page (Jobvite) or
           // from the LinkedIn posting this tab came from.
           const details = await askPage({ type: 'job-details' }, tab).catch(() => null);
-          const description = String(details?.description || linkedInJob?.description || '').trim();
-          if (description.length < 200) return { keywords: null, error: '' };
+          let description = String(details?.description || linkedInJob?.description || '').trim();
+          // A form step that links to no job page (Avature after sign-in): the saved job's description.
+          if (description.length < 200) {
+            const saved = await knownJob(tab).catch(() => null);
+            if (saved?.id) description = String((await getSavedJob(saved.id).catch(() => null))?.description ?? '').trim();
+          }
+          if (description.length < 200) return { keywords: null, error: readError };
+          capture ??= { url: jobAddress(tab), text: '', html: '', jsonLd: [] };
           const fuller = { ...capture, text: `${details?.title ?? ''}\n${description}`, matched: 'job description' };
           const found = findKeywords(jobFromCapture(fuller).text);
           return { keywords: looksLikeJobPosting(fuller, jobFromCapture(fuller), found) ? found : null, error: '' };
@@ -1579,9 +1618,11 @@ function improveMatch(mode) {
       if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
       const logo = jobLogo();
       const capture = await captureTab(tab.id);
-      if (capture.descriptionMissing) throw new Error('The job description is not available on this form yet. Open the job posting and try Quick Tailoring again.');
+      // A form step without the description: the job saved from its job page, never the form.
+      const known = capture.descriptionMissing ? await knownJob(tab) : null;
+      if (capture.descriptionMissing && !known) throw new Error('The job description is not available on this form yet. Open the job posting and try Quick Tailoring again.');
       if (tab.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) throw new Error('The selected job changed. Try Quick Tailoring on the current job.');
-      const { job } = await sendCapture({ ...capture, ...(logo && { companyLogo: logo }) });
+      const job = known ?? (await sendCapture({ ...capture, ...(logo && { companyLogo: logo }) })).job;
       savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() };
       if (mode === 'quick') await openQuickTailor(`${APP_URL}/popup/jobs/${encodeURIComponent(job.id)}/quick-tailor?from=${encodeURIComponent(chosen.id)}`);
       else await chrome.tabs.create({ url: `${APP_URL}/documents/${encodeURIComponent(chosen.id)}?job=${encodeURIComponent(job.id)}` });

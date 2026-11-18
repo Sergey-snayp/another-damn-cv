@@ -16,6 +16,8 @@ export interface StatusChange {
 export interface JobRepository {
   findOwned(userId: string, id: string): Promise<Job | null>;
   findByCanonicalUrl(userId: string, canonicalUrl: string): Promise<Job | null>;
+  /** The user's jobs saved from one site (by host), newest first, at most 50. */
+  findOnHost(userId: string, host: string): Promise<Job[]>;
   list(userId: string, status?: JobStatus): Promise<JobSummary[]>;
   history(userId: string, jobId: string): Promise<JobStatusEvent[]>;
   create(input: NewJob): Promise<Job>;

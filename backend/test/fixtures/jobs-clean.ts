@@ -68,6 +68,16 @@ export class MemoryJobs implements JobRepository, JobReadingRepository {
     return Promise.resolve(job?.userId === userId ? structuredClone(job) : null);
   }
 
+  findOnHost(userId: string, host: string): Promise<Job[]> {
+    return Promise.resolve(
+      structuredClone(
+        [...this.rows.values()].filter(
+          (job) => job.userId === userId && (job.canonicalUrl ?? '').replace(/^https?:\/\//, '').startsWith(`${host}/`),
+        ),
+      ),
+    );
+  }
+
   findByCanonicalUrl(userId: string, canonicalUrl: string): Promise<Job | null> {
     return Promise.resolve(
       structuredClone(

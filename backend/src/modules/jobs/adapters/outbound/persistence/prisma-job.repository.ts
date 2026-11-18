@@ -33,6 +33,15 @@ export class PrismaJobRepository implements JobRepository, JobReadingRepository,
     return row ? jobFromRow(row) : null;
   }
 
+  async findOnHost(userId: string, host: string) {
+    const rows = await this.database.job.findMany({
+      where: { userId, OR: [{ canonicalUrl: { startsWith: `https://${host}/` } }, { canonicalUrl: { startsWith: `http://${host}/` } }] },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+    });
+    return rows.map(jobFromRow);
+  }
+
   async list(userId: string, status?: JobStatus) {
     const rows = await this.database.job.findMany({
       where: { userId, ...(status && { status: statusToRow(status) }) },
