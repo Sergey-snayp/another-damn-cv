@@ -85,10 +85,27 @@
       const found = location.pathname.match(/^(.*?\/(?:job|details)\/.+?)\/apply(?:\/|$)/);
       return found ? `${location.origin}${found[1]}` : null;
     },
+  }, {
+    // Avature, also on a company's own domain (Lululemon's careers site), as Simplify reads it (its
+    // jobTitlePath, jobDescriptionPath…): the title in og:title (the job page's banner says "We've been
+    // waiting for you."), the description in the rich-text article, the company in the header logo. Its
+    // apply pages (ApplicationMethods, the form) have no description: that is on the job page, their "Back".
+    host: /(^|\.)avature\.net$/i,
+    marker: 'meta[name="avature.portal.id"]',
+    title: () => clean(document.querySelector('meta[property="og:title"]')?.content).replace(/\s+[-|]\s+(careers|jobs)$/i, '')
+      || clean(document.querySelector('.banner--main .banner__text__title')?.textContent),
+    location: () => [...document.querySelectorAll('p')].map((node) => node.textContent.replace(/\s+/g, ' ').trim().match(/^Location:\s*(.+)$/i)?.[1]).find(Boolean) ?? '',
+    company: () => hiringOrganization() || clean(document.querySelector('.header__logo h1, [class*="logo"] h1')?.textContent).slice(0, 100),
+    description: '.article__content--rich-text',
+    logo: (page) => page.querySelector('meta[property="og:image"]')?.content || null,
+    jobUrl: () => {
+      if (/\/JobDetail\//.test(location.pathname)) return `${location.origin}${location.pathname}`;
+      return document.querySelector('a.back[href*="/JobDetail/"], a[href*="/JobDetail/"]')?.href ?? null;
+    },
   }];
   /** "ubc" → "UBC" (a short tenant is an acronym); "salesforce" → "Salesforce". */
   const tenantName = (slug) => (slug && slug.length <= 4 ? slug.toUpperCase() : slugName(slug));
-  const board = () => BOARDS.find((item) => item.host.test(location.hostname)) ?? null;
+  const board = () => BOARDS.find((item) => item.host.test(location.hostname)) ?? BOARDS.find((item) => item.marker && document.querySelector(item.marker)) ?? null;
   /** "varonis" → "Varonis"; "acme-corp" → "Acme Corp". */
   function slugName(slug) {
     if (!slug) return '';

@@ -387,7 +387,7 @@ function canDraft(element) {
 async function askDraft(element, question, kind) {
   const linkedin = window.CVAutofillLinkedIn?.isPage() ? window.CVAutofillLinkedIn.read() : null;
   const job = {
-    title: linkedin?.title || (document.querySelector('h1')?.innerText || document.title || '').trim(),
+    title: linkedin?.title || (window.CVAutofillJobDetails?.title?.() || document.querySelector('h1')?.innerText || document.title || '').trim(),
     company: linkedin?.company || companyName(),
     text: String(linkedin?.description || document.body?.innerText || '').slice(0, 20000),
   };
