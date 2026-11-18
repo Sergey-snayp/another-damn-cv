@@ -162,7 +162,23 @@ const APPLY_BUTTONS = {
   avature: 'a[href*="ApplicationMethods"], a[href*="ApplyRegister"]',
   brassring: 'button#applyFromDetailBtn',
   phenompeople: 'a[data-ph-at-id="apply-link"]',
+  recruitee: 'button[data-cy="apply-button"], a[data-cy="apply-button"]',
+  rippling: 'button[data-testid="Apply now"], a[data-testid="Apply now"]',
+  adp: 'button#recruitment_jobDescription_apply',
+  adp2: 'button#recruitment_jobDescription_apply',
+  taleo: 'input[id$="UP_APPLY_ON_REQ.row1"], a[id$="UP_APPLY_ON_REQ.row1"]',
+  indeed: 'a[data-testid="viewjob-indeed-apply"], button#indeedApplyButton',
+  welcometothejungle: 'a[data-testid="job_header-button-apply"]',
+  personio: 'a.action-form-toggle[href$="/apply"], a[href$="/apply"]',
+  naukri: 'button#apply-button, button#company-site-button',
+  dayforcehcm: { selector: 'button.ant-btn-primary', text: /^apply\b/i },
+  bamboohr: { selector: 'button', text: /^apply for this job$/i },
+  ultipro: { selector: '.job-banner-right a, .job-banner-right button, .job-banner-right ukg-button', text: /^apply\b/i },
 };
+
+/** Sites whose job pages keep a search box in the page: its fields are not the application. */
+const APPLY_OVER_FIELDS = new Set(['indeed']);
+const applyOverFields = () => APPLY_OVER_FIELDS.has(siteForPage()?.name);
 
 /**
  * A second step some sites show after Apply: Workday asks how to apply, and
@@ -229,8 +245,10 @@ function applyOption() {
 /** The button that opens this site's application form, when it is still closed. */
 function formOpener() {
   const site = siteForPage();
-  const selector = site?.openForm ?? APPLY_BUTTONS[site?.name];
-  return selector ? [...document.querySelectorAll(selector)].find((button) => button.getClientRects().length) ?? null : null;
+  // A selector, or a selector and the button's words where its classes say nothing.
+  const rule = site?.openForm ?? APPLY_BUTTONS[site?.name];
+  const [selector, words] = typeof rule === 'object' && rule ? [rule.selector, rule.text] : [rule, null];
+  return selector ? [...document.querySelectorAll(selector)].find((button) => button.getClientRects().length && (!words || words.test(button.textContent.trim()))) ?? null : null;
 }
 
 /**
@@ -317,4 +335,4 @@ function siteKeyFor(element, hostname = location.hostname) {
   return null;
 }
 
-window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, isJobPage, applyOption, resumeGate, advanceButton, advanceKind, SITES };
+window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, applyOverFields, isJobPage, applyOption, resumeGate, advanceButton, advanceKind, SITES };

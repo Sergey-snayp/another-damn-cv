@@ -268,7 +268,7 @@ async function scanFrames(tab) {
   const total = (name) => scans.reduce((sum, entry) => sum + (entry.reply[name] ?? 0), 0);
   // The page's own Continue / Submit, in the frame that has the form (the top page's first).
   const next = scans.find(entry => entry.frameId === 0 && entry.reply.advance) ?? scans.find(entry => entry.reply.advance);
-  return { ...top, fields, skippedSensitive: total('skippedSensitive'), consentCount: total('consentCount'), canOpenForm: Boolean(top.canOpenForm) && !fields.length, frames: formFrames.length, advance: next?.reply.advance ?? null, advanceFrame: next?.frameId ?? 0 };
+  return { ...top, fields, skippedSensitive: total('skippedSensitive'), consentCount: total('consentCount'), canOpenForm: Boolean(top.canOpenForm) && !scans.some(entry => entry.reply !== top && entry.reply.fields?.length >= 2), frames: formFrames.length, advance: next?.reply.advance ?? null, advanceFrame: next?.frameId ?? 0 };
 }
 /** The form's questions from every frame, with frame-qualified ids. */
 async function questionsFromFrames(tab = currentTab) {
@@ -833,7 +833,7 @@ function drawAutofill() {
   }
   // A job page with its Apply button, as Simplify shows it: the job, then Start Application.
   // Before the plain job-posting view: a posting that has Apply always offers it.
-  if (scan?.canOpenForm && !scan.fields?.length && !scan.account) {
+  if (scan?.canOpenForm && !scan.account) {
     if (paint(host, `${pageCard()}<div class="fill-block"><button class="primary fill-action" id="open-form">Start Application${icon('arrow', 18)}</button></div>${autofillCvCard()}${coverLetterCard()}`, 'job'))
       $('open-form').addEventListener('click', openForm);
     return;

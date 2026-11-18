@@ -37,6 +37,7 @@ globalThis.__cvCaptureSites = [
       '.jobsearch-ViewJobLayout-jobDisplay',
       '.jobsearch-JobComponent',
       '#viewJobSSRRoot',
+      '#jobDescriptionText',
     ],
     expand: [],
   },

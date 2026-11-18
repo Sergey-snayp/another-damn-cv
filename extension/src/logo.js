@@ -20,7 +20,7 @@
   const BOARDS = new Set(['adp', 'applytojob', 'ashby', 'ashbyhq', 'avature', 'bamboohr', 'brassring', 'breezy', 'breezyhr', 'comeet', 'dayforce', 'dayforcehcm', 'eightfold', 'freshteam', 'greenhouse', 'homerun', 'icims', 'jazzhr', 'jobscore', 'jobvite', 'lever', 'myworkday', 'myworkdayjobs', 'oraclecloud', 'paylocity', 'personio', 'phenompeople', 'pinpointhq', 'recruitee', 'rippling', 'smartrecruiters', 'successfactors', 'taleo', 'teamtailor', 'workable', 'workday',
     'builtin', 'dice', 'glassdoor', 'indeed', 'linkedin', 'licdn', 'monster', 'otta', 'simplify', 'wellfound', 'ziprecruiter', 'welcometothejungle']);
   const LEGAL = /\b(incorporated|inc|llc|ltd|limited|corp|corporation|company|gmbh|plc|sa|ag|bv|nv|pty|pte|holdings?|group)\b\.?/g;
-  const TRACKER = /(^|\.)(doubleclick\.net|google-analytics\.com|googletagmanager\.com|facebook\.(com|net)|bat\.bing\.com|ads\.linkedin\.com)$/i;
+  const TRACKER = /(^|\.)(cookielaw\.org|onetrust\.com|doubleclick\.net|google-analytics\.com|googletagmanager\.com|facebook\.(com|net)|bat\.bing\.com|ads\.linkedin\.com)$/i;
   const PIXEL = /(^|[./_-])(pixel|beacon|collect|tracking|analytics|spacer|blank|placeholder|1x1)($|[./_?-])/i;
 
   /** "The Box, Inc." → "box": for comparing a company name with alt text and domains. */
@@ -93,7 +93,9 @@
     const label = [image.getAttribute('alt'), image.getAttribute('title'), image.getAttribute('aria-label')].filter(Boolean).join(' ');
     const file = decodeURIComponent(src.pathname.split('/').pop() || '');
     if (/powered/i.test(label) || namesBoard(label, company) || namesBoard(file, company)) return { score: 0 };
-    if (image.closest('footer, [role="contentinfo"]') || near(image, /footer|powered/i, 5)) return { score: 0 };
+    if (image.closest('footer, [role="contentinfo"]') || near(image, /footer|powered|cookie|onetrust|consent/i, 5)) return { score: 0 };
+    // A "your browser is not supported" notice.
+    if (/\/browsers?\//i.test(src.pathname) || /^(firefox|chrome|safari|edge|opera|ie)\b/i.test(file)) return { score: 0 };
     if (onDarkBackground(image)) return { score: 0 };
     let points = 0;
     const alt = key(label.replace(/\blogo(type)?\b|\bimage\b|\bicon\b/gi, ' '));

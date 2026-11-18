@@ -123,7 +123,7 @@
       ['id', 'jobPostingApplication_personalInfo_postalCode', 'postalCode'],
       ['id', 'jobPostingApplication_personalInfo_stateCode', 'state'],
     ] },
-    { name: 'dover', hosts: [/^app\.dover\.com$/], fields: [
+    { name: 'dover', hosts: [/^app\.dover\.com$/, /^jobs\.dover\.com$/], fields: [
       ['name', 'email', 'email'],
       ['name', 'firstName', 'firstName'],
       ['name', 'lastName', 'lastName'],
@@ -268,7 +268,7 @@
       ['name', 'icims_f_authorized_us', 'workAuthorization'],
       ['name', 'icims_f_workUS', 'workAuthorization'],
     ] },
-    { name: 'indeed', hosts: [/^smartapply\.indeed\.com$/], fields: [
+    { name: 'indeed', pages: [/^https?:\/\/([^\/]+\.)?indeed\.[a-z.]+\/(?:viewjob|m\/basecamp\/viewjob)/], hosts: [/^smartapply\.indeed\.com$/], fields: [
       ['data-testid', 'name-fields-first-name-input', 'firstName'],
       ['data-testid', 'name-fields-last-name-input', 'lastName'],
       ['data-testid', 'resume-selection-file-resume-upload-button-file-input', 'resume'],
@@ -739,6 +739,12 @@
     { name: 'xcompany', pages: [/^https?:\/\/x\.company\/.*$/], hosts: [], fields: [
     ] },
     { name: 'ycombinator', hosts: [/(^|\.)www\.ycombinator\.com$/], fields: [
+    ] },
+    { name: 'naukri', hosts: [/(^|\.)naukri\.com$/], fields: [
+    ] },
+    { name: 'welcometothejungle', hosts: [/(^|\.)welcometothejungle\.com$/], fields: [
+    ] },
+    { name: 'handshake', hosts: [/(^|\.)joinhandshake\.com$/], fields: [
     ] },
     { name: 'zohorecruit', pages: [/^https?:\/\/([^\/]+\.)?zohorecruit\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?zohorecruit\.ca(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?zohorecruit\.eu(?=[\/?#]|$)/], hosts: [], fields: [
     ] },

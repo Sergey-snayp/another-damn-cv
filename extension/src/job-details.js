@@ -10,15 +10,17 @@
 (() => {
   if (window.CVAutofillJobDetails) return;
 
+  // [type, words in any case, the structured data's own code]. Never "contract" or "temporary" alone
+  // in a sentence: "service contract" and "temporary workers" are not a job type.
   const TYPES = [
-    ['Internship', /\binterns?(hip)?\b|\bINTERN\b/i],
-    ['Part-time', /\bpart[- ]?time\b|PART_TIME/i],
-    ['Contract', /\bcontract(or)?\b|\bfreelance\b|CONTRACTOR/i],
-    ['Temporary', /\btemporary\b|TEMPORARY/i],
-    ['Full-time', /\bfull[- ]?time\b|FULL_TIME|\bpermanent\b/i],
+    ['Internship', /\binternships?\b|\b(?:summer|student|paid|unpaid|software|engineering|marketing|data|design)\s+interns?\b|^\s*intern\s*$/i, /\bINTERN\b/],
+    ['Part-time', /\bpart[- ]?time\b/i, /PART_TIME/],
+    ['Full-time', /\bfull[- ]?time\b|\bpermanent\s+(?:position|role|job|contract)\b|^\s*permanent\s*$/i, /FULL_TIME/],
+    ['Contract', /^\s*contract(or)?\s*$|\bcontract(?:or)?\s+(?:position|role|job|basis|assignment|opportunity|employee)\b|\bcontract[- ]to[- ]hire\b|\bfixed[- ]term\b|\bfreelance\b/i, /\bCONTRACTOR\b/],
+    ['Temporary', /\btemporary\s+(?:position|role|job|assignment|employee)\b|^\s*temporary\s*$/i, /\bTEMPORARY\b/],
   ];
-  const SIGNS = { $: 'USD', '€': 'EUR', '£': 'GBP', 'zł': 'PLN', '₹': 'INR', '₴': 'UAH', '¥': 'JPY' };
-  const CODES = 'USD|EUR|GBP|CAD|PLN|AUD|CHF|SEK|NOK|DKK|CZK|UAH|INR|JPY|SGD|ILS|NZD';
+  const SIGNS = { $: 'USD', '€': 'EUR', '£': 'GBP', 'zł': 'PLN', '₹': 'INR', '₴': 'UAH', '¥': 'JPY', 'US$': 'USD', 'HK$': 'HKD', 'CA$': 'CAD', 'C$': 'CAD', 'AU$': 'AUD', 'A$': 'AUD', 'NZ$': 'NZD', 'SG$': 'SGD', 'S$': 'SGD' };
+  const CODES = 'USD|EUR|GBP|CAD|PLN|AUD|CHF|SEK|NOK|DKK|CZK|UAH|INR|JPY|SGD|ILS|NZD|HKD';
   const PERIODS = [
     ['hour', /\b(per|an|\/)\s*h(ou)?r\b|\bhourly\b|\/h\b/i],
     ['day', /\b(per|a|\/)\s*day\b|\bdaily\b/i],
@@ -51,7 +53,55 @@
     for (let at = separators[separators.length - 1].nextSibling; at; at = at.nextSibling) text += at.textContent;
     return clean(text);
   };
+  const textOf = (selector) => clean(document.querySelector(selector)?.textContent);
+  /** The innermost pieces of text in an element, in order. */
+  const leaves = (node) => [...(node?.querySelectorAll('*') ?? [])].filter((item) => !item.children.length).map((item) => clean(item.textContent)).filter((text) => /\p{L}/u.test(text));
+  const microValue = (name) => { const node = document.querySelector(`[itemprop~="${name}" i]`); return clean(node?.getAttribute('content') || node?.textContent); };
+  const capital = (text) => text.replace(/(^|\s)(\p{Ll})/gu, (_, gap, letter) => gap + letter.toUpperCase());
   const BOARDS = [{
+    host: /(^|\.)jobs\.smartrecruiters\.com$/i,
+    title: () => textOf('h1.job-title') || microValue('title'),
+    location: () => [microValue('addressLocality'), microValue('addressRegion'), microValue('addressCountry')].filter(Boolean).map(capital).join(', '),
+  }, {
+    host: /(^|\.)ultipro\.com$/i,
+    location: () => (leaves(document.querySelector('address.custom-address')).at(-1) || textOf('address.custom-address')).replace(/\s+\d{5,}(?=,)/, ''),
+    company: () => clean(document.title).match(/\|\s*(.+?)\s+Career Opportunities$/i)?.[1] ?? '',
+    type: () => textOf('#JobFullTime'),
+  }, {
+    host: /(^|\.)oraclecloud\.com$/i,
+    location: () => textOf('.job-details__subtitle'),
+    description: '.job-details-wrapper',
+  }, {
+    host: /(^|\.)applytojob\.com$/i,
+    title: () => textOf('.job-header h2') || clean(document.title).match(/^(.+?)\s+-\s+.+?\s+-\s+Career Page$/i)?.[1] || '',
+    location: () => [...(document.querySelector('.job-attributes-container')?.children ?? [])].filter((node) => !/^resumator-job-(employment|department)/.test(node.id)).map((node) => clean(node.textContent))[0] ?? '',
+    company: () => clean(document.title).match(/\s+-\s+(.+?)\s+-\s+Career Page$/i)?.[1] ?? '',
+    type: () => textOf('#resumator-job-employment'),
+  }, {
+    host: /(^|\.)indeed\.[a-z.]+$/i,
+    title: () => textOf('[data-testid="vj-job-title"], [data-testid="jobsearch-JobInfoHeader-title"]') || clean(document.title).split(/\s+-\s+/)[0],
+    location: () => leaves(document.querySelector('[data-testid="company-info-metadata"]')).at(-1) ?? '',
+    company: () => textOf('[data-testid="company-info-metadata"]').split('·')[0].trim(),
+  }, {
+    host: /^ats\.rippling\.com$/i,
+    company: () => slugName(location.pathname.match(/\/([^/]+)\/jobs(?:\/|$)/)?.[1]),
+  }, {
+    host: /\.jobs\.personio\.(?:de|com)$/i,
+    company: () => hiringOrganization() || slugName(location.hostname.split('.')[0]),
+  }, {
+    host: /(^|\.)adp\.com$/i,
+    title: () => textOf('h2.job-description-title'),
+  }, {
+    host: /(^|\.)taleo\.net$/i,
+    title: () => textOf('[id="requisitionDescriptionInterface.reqTitleLinkAction.row1"]') || clean(document.querySelector('meta[property="og:title"]')?.content),
+    description: '#taleo_holder',
+  }, {
+    host: /^jobs\.gem\.com$/i,
+    location: () => textOf('[class*="iconLabel"] > span').split(/\s*•\s*/).join(' · '),
+  }, {
+    host: /(^|\.)bamboohr\.com$/i,
+    location: () => textOf('div[class*="fabric"][class$="-description"]'),
+  }, {
     host: /(^|\.)jobs\.jobvite\.com$/i,
     title: () => clean(document.querySelector('h2.jv-header, h1.jv-header')?.textContent),
     location: () => clean(document.querySelector('h3.jv-job-detail-location')?.textContent) || textAfterLastSeparator(document.querySelector('p.jv-apply-meta, p.jv-job-detail-meta')),
@@ -73,7 +123,8 @@
     // served from the Workday site itself.
     host: /(^|\.)myworkday(?:jobs|site)\.com$/i,
     title: () => clean(document.querySelector('[data-automation-id="jobPostingHeader"]')?.textContent),
-    location: () => [...document.querySelectorAll('[data-automation-id="locations"] dd')].map((node) => clean(node.textContent)).filter(Boolean).join(' · '),
+    // Its list ends with counts for the other places ("4 Locations").
+    location: () => [...document.querySelectorAll('[data-automation-id="locations"] dd')].map((node) => clean(node.textContent)).filter((text) => text && !/^\d+\s+locations?$/i.test(text)).join(' · '),
     // The posting's own name for the employer; else the Workday tenant ("ubc" → "UBC").
     company: () => hiringOrganization() || tenantName(location.hostname.split('.')[0]),
     description: '[data-automation-id="jobPostingDescription"]',
@@ -123,14 +174,16 @@
    * tab's title without "X Careers - Apply for".
    */
   function title() {
-    return board()?.title() || clean(posting()?.title) || clean(document.querySelector('h1')?.innerText) || tabParts()?.title || clean(document.title);
+    // The first h1 on screen: a page can keep a hidden one ("Internet Explorer is no longer supported").
+    const heading = [...document.querySelectorAll('h1')].find((node) => node.getClientRects().length && clean(node.innerText));
+    return board()?.title?.() || clean(posting()?.title) || clean(heading?.innerText) || tabParts()?.title || clean(document.title);
   }
   /**
    * The company: the board's own place for it, else the posting's structured
    * data (JobPosting.hiringOrganization.name, which most job boards include).
    */
   function company() {
-    return board()?.company() || hiringOrganization();
+    return board()?.company?.() || hiringOrganization();
   }
   /** The employer the posting's structured data names. */
   function hiringOrganization() {
@@ -197,11 +250,14 @@
     return null;
   }
 
+  const CONTINENT = /^(north america|south america|latin america|europe|asia|africa|oceania|emea|apac|latam)$/i;
   function locationFrom(job) {
     const places = [].concat(job?.jobLocation ?? []).map((place) => {
       const address = place?.address ?? place;
       const country = typeof address?.addressCountry === 'string' ? address.addressCountry : address?.addressCountry?.name;
-      return [address?.addressLocality, address?.addressRegion, country].map(clean).filter(Boolean).filter((part, index, all) => all.indexOf(part) === index).join(', ');
+      // Boards write "-", "30", "BC,CA" or "North America" here: only real place names stay.
+      const parts = [address?.addressLocality, address?.addressRegion, country].flatMap((part) => clean(part).split(/\s*,\s*/)).filter((part) => /\p{L}/u.test(part) && !CONTINENT.test(part));
+      return parts.filter((part, index) => parts.findIndex((other) => other.toLowerCase() === part.toLowerCase()) === index).join(', ');
     }).filter(Boolean);
     if (job?.jobLocationType === 'TELECOMMUTE') places.unshift('Remote');
     return [...new Set(places)].join(' · ');
@@ -213,7 +269,7 @@
     for (const node of nodes) {
       if (node.closest('form, footer, nav')) continue;
       const text = clean(node.textContent);
-      if (text.length >= 2 && text.length <= 120 && !/^location:?$/i.test(text)) return text.replace(/^location:?\s*/i, '');
+      if (text.length >= 2 && text.length <= 120 && !/^location:?$|^and \d+ more$/i.test(text)) return text.replace(/^location:?\s*/i, '');
     }
     return '';
   }
@@ -239,9 +295,11 @@
   };
   /** A salary range written in the page's text. Needs a currency, so "2015 – 2020" is not a salary. */
   function salaryInText(text) {
-    const sign = `[$€£₹₴¥]|zł|${CODES}`;
+    const sign = `(?:US|HK|CA|AU|NZ|SG|C|A|S)\\$|[$€£₹₴¥]|zł|${CODES}`;
     const number = '(\\d{1,3}(?:[ ,.\\u00a0]\\d{3})+|\\d+(?:[.,]\\d+)?)\\s*([kK])?';
-    const pattern = new RegExp(`(${sign})?\\s?${number}\\s*(?:-|–|—|to|do)\\s*(${sign})?\\s?${number}\\s*(${sign})?`, 'g');
+    // "$156,000 USD - $234,000 USD", "HK$20,159 to HK$24,503", "$14.71 To $15.21 Hourly".
+    const pattern = new RegExp(`(${sign})?\\s?${number}(?:\\s*(?:${CODES}))?\\s*(?:-|–|—|to|do)\\s*(${sign})?\\s?${number}\\s*(${sign})?`, 'gi');
+    const currencyOf = (found) => SIGNS[found.toUpperCase()] ?? SIGNS[found] ?? found.toUpperCase();
     for (const match of text.matchAll(pattern)) {
       const currencyText = match[1] || match[4] || match[7];
       if (!currencyText) continue;
@@ -252,15 +310,27 @@
       return {
         salaryMin: min,
         salaryMax: max,
-        salaryCurrency: SIGNS[currencyText] ?? currencyText.toUpperCase(),
+        salaryCurrency: currencyOf(currencyText),
         salaryPeriod: PERIODS.find(([, period]) => period.test(after))?.[0] ?? null,
       };
+    }
+    // One rate with its period: "$32.90 USD per hour".
+    const single = text.match(new RegExp(`(${sign})\\s?${number}(?:\\s*(?:${CODES}))?\\s*(?:per|an|a|/)\\s*(?:hour|hr|day|week|month|year|yr)\\b`, 'i'));
+    if (single) {
+      const value = amount(single[2], single[3]);
+      if (Number.isFinite(value) && value >= 1) return { salaryMin: value, salaryMax: value, salaryCurrency: currencyOf(single[1]), salaryPeriod: PERIODS.find(([, period]) => period.test(single[0]))?.[0] ?? null };
     }
     return null;
   }
 
   function typeOf(text) {
-    return TYPES.find(([, pattern]) => pattern.test(text))?.[0] ?? '';
+    return TYPES.find(([, words, code]) => words.test(text) || code.test(text))?.[0] ?? '';
+  }
+
+  /** A page's "Employment type: …" line, else the job's first words. */
+  function typeFromText(text) {
+    const stated = text.match(/\bemployment type:?\s+([a-z]+(?:[- ]time)?)/i)?.[1];
+    return typeOf(stated ?? text.slice(0, 3000));
   }
 
   /** The job's own text: a description element, else the main content without the application form. */
@@ -272,13 +342,18 @@
       return node ? htmlText(node.innerHTML).slice(0, 20000) : '';
     }
     const selectors = ['.job__description', '#job-description', '[data-qa="job-description"]', '[class*="job-description" i]', '[class*="jobDescription"]', '[class*="description" i]', 'article', 'main', '[role="main"]'];
-    for (const selector of selectors) {
+    // A short "article" is usually a side note: the page's main part comes first, then anything.
+    const broad = (selector) => /^(article|main|\[role=)/.test(selector);
+    for (const longest of [600, 200]) for (const selector of selectors) {
       for (const node of document.querySelectorAll(selector)) {
         if (node.closest('form') || !node.getClientRects().length) continue;
+        // A cookie notice has a "description" too.
+        const notice = node.closest('[class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="consent" i], [class*="onetrust" i], [id*="onetrust" i], [class*="cmplz" i]');
+        if (notice && notice !== document.body && notice !== document.documentElement) continue;
         const copy = node.cloneNode(true);
         copy.querySelectorAll('form, input, select, textarea, button, script, style, nav, footer').forEach((child) => child.remove());
         const text = htmlText(copy.innerHTML);
-        if (text.length >= 200) return text.slice(0, 20000);
+        if (text.length >= (broad(selector) ? longest : 200)) return text.slice(0, 20000);
       }
     }
     return '';
@@ -296,9 +371,11 @@
     const salary = salaryFrom(job) ?? salaryInText(bodyText) ?? { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null };
     const types = [].concat(job?.employmentType ?? []).join(' ');
     return {
-      location: linkedin ? selected?.location || locationFrom(job) : locationFrom(job) || board()?.location() || locationOnPage(),
+      // A board's own place first: its structured data can be thinner than its page (Gem's "USA").
+      location: linkedin ? selected?.location || locationFrom(job) : board()?.location?.() || locationFrom(job) || locationOnPage(),
       ...salary,
-      employmentType: typeOf(types) || typeOf(bodyText.slice(0, 3000)),
+      // What the posting states wins; its text is read only when it states nothing.
+      employmentType: typeOf(board()?.type?.() ?? '') || (types ? typeOf(types) : typeFromText(linkedin ? `${clean(document.querySelector('.description__job-criteria-list')?.innerText)} ${bodyText}` : bodyText)),
       description,
       country: window.CVAutofillFields?.jobCountry?.() ?? null,
     };

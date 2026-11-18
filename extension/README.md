@@ -453,6 +453,15 @@ Teamtailor-shaped form with stand-in widgets:
   --dump-dom "file://$PWD/test/teamtailor.html" | grep -o '<pre id="result">.*</pre>'
 ```
 
+## Reading job pages
+
+The title, company, location, job type, salary, description and logo come from the
+job system's own places where it has them (`BOARDS` in `src/job-details.js`), then
+the page's JSON-LD or microdata, then its text. Bad values such as "-" or a continent
+are dropped. A job type comes from what the posting states, never from "contract"
+alone in a sentence. Apply buttons are in `APPLY_BUTTONS` in `src/sites.js`.
+`test/job-boards.cjs`.
+
 ## Job systems with their own steps
 
 - **Workday.** My Information is filled, including phone type and "How did you hear".

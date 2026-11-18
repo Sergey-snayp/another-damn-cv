@@ -24,7 +24,8 @@ let lastScan = { found: [], skipped: [] };
  * or the domain ("careers.zexter.com" → "Zexter"). A job board's own domain
  * (job-boards.greenhouse.io) never names the employer.
  */
-const BOARD_HOST = /(^|\.)(successfactors\.(?:com|eu)|sapsf\.(?:com|eu)|greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
+const BOARD_HOST = /(^|\.)(successfactors\.(?:com|eu)|sapsf\.(?:com|eu)|adp\.com|ultipro\.com|taleo\.net|rippling\.com|oraclecloud\.com|comeet\.com?|brassring\.com|applytojob\.com|personio\.(?:de|com)|hibob\.com|dayforcehcm\.com|indeed\.[a-z.]+|greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
+const PLATFORM_NAME = /\b(rippling|comeet|workday|greenhouse|lever|ashby|taleo|icims|ultipro|ukg|jobvite|smartrecruiters|successfactors|indeed|recruiting|recruitment|career center)\b/i;
 function companyName() {
   if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.company ?? '';
   // A job board's own place for it (Jobvite's header logo).
@@ -32,12 +33,14 @@ function companyName() {
   if (fromBoard) return fromBoard.slice(0, 100);
   const named = document.querySelector('.company-name, [data-testid="company-name"]')?.textContent?.trim()
     || document.querySelector('meta[property="og:site_name"]')?.content?.trim();
-  if (named) return named.slice(0, 100);
+  // A job system's own name ("Rippling Recruiting", "Comeet") is not the employer.
+  if (named && !PLATFORM_NAME.test(named)) return named.slice(0, 100);
   if (BOARD_HOST.test(location.hostname)) {
-    const fromTitle = document.title.match(/^.*\bat\s+([^|–—]+?)\s*(?:[|–—].*)?$/i)?.[1]?.trim();
-    if (fromTitle) return fromTitle.slice(0, 100);
+    const fromTitle = document.title.match(/^.*\bat\s+([^|–—]+?)\s*(?:[|–—].*)?$/i)?.[1]?.trim()
+      || document.title.match(/[|–—]\s*([^|–—]+?)\s+(?:career opportunities|careers?|jobs)\s*$/i)?.[1]?.trim();
+    if (fromTitle && !PLATFORM_NAME.test(fromTitle)) return fromTitle.slice(0, 100);
     const logo = document.querySelector('img[alt$=" logo" i]')?.alt.replace(/\s+logo$/i, '').trim();
-    if (logo) return logo.slice(0, 100);
+    if (logo && !/^(company|employer|our|your)$/i.test(logo)) return logo.slice(0, 100);
     // SAP SuccessFactors: the career site's own menu ("Careers at EY").
     for (const link of [...document.querySelectorAll('a')].slice(0, 40)) {
       const named = link.textContent.replace(/\s+/g, ' ').trim().match(/^careers at (.{2,40})$/i)?.[1];
@@ -94,7 +97,8 @@ function scan() {
     // The page's own Continue / Next / Submit, for the panel's button after Autofill (as Simplify's).
     advance: (() => { const next = lastScan.found.length ? Sites.advanceButton?.() : null; return next ? { kind: next.kind, text: next.text.slice(0, 40) } : null; })(),
     // The job page has an Apply button that opens a form not loaded yet.
-    canOpenForm: Boolean(Sites.formOpener()) && !lastScan.found.length,
+    // One stray field on a job page (a newsletter box), or the site's search, is not the form.
+    canOpenForm: Boolean(Sites.formOpener()) && (Sites.applyOverFields() || lastScan.found.filter((field) => !field.element.closest('header, nav, [role="search"], [role="banner"]')).length < 2),
     // A job posting by its address (Workday's job page): its Apply button may still be on its way.
     jobPage: window === window.top && Sites.isJobPage(),
     // An application form that also makes an account (Avature's Password and Confirm): the panel sends the login.
