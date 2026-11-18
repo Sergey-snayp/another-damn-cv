@@ -18,10 +18,9 @@ The account menu contains Profile, Settings, Give feedback, Help & support, and
 Sign out. Settings opens an account overview; feedback can be drafted and copied,
 with no automatic submission.
 
-Profile uses the supplied career-hub layout with a left sidebar and section
-cards. Personal Info and Job Preferences save the existing autofill fields.
-Experience, education, and skills currently come from the primary CV; edit them
-in that CV. Unsupported sections are marked as coming soon.
+Profile has four tabs: Career, Personal info, Job preferences and Autofill
+answers. Edit your experience, education and skills directly in Profile. These
+edits do not change your CVs.
 
 ## Logo
 
