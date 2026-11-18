@@ -60,6 +60,8 @@
       ['id', 'resumeFile', 'resume'],
       ['id', 'tpt_resumeFile', 'resume'],
       ['id', 'methodButton--file', 'resume'],
+      ['id', 'resumeFile', 'resume'],
+      ['id', 'tpt_resumeFile', 'resume'],
     ] },
     { name: 'bamboohr', pages: [/^https?:\/\/([^\/]+\.)?bamboohr\.com\/jobs.*$/, /^https?:\/\/([^\/]+\.)?bamboohr\.com\/careers.*$/], hosts: [/(^|\.)bamboohr\.com$/], fields: [
       ['id', 'city', 'city'],

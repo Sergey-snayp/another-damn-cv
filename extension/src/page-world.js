@@ -143,6 +143,27 @@
     document.dispatchEvent(new CustomEvent('adcv:react-filled', { detail: JSON.stringify({ token: request.token, ok }) }));
   });
 
+  /**
+   * Avature's "UPLOAD RESUME" (Lululemon's careers site): its own page script
+   * shows the upload box and its Next button, as Simplify asks it to (its
+   * tptEnableResume); then the CV goes into the box's file input. Only the
+   * page's own functions are called; nothing is read from the page.
+   */
+  document.addEventListener('adcv:avature-resume', () => {
+    let ok = false;
+    try {
+      const upload = window.tpt?.uploadResume;
+      if (upload) {
+        upload.updateAcceptedFieldMode?.('file');
+        upload.uploadResumeInputShower?.('file');
+        upload.showUploadFileError?.(false);
+        upload.toggleUploadResumeNextButton?.(Boolean(upload.checkFilledResumeFile?.()));
+        ok = true;
+      }
+    } catch { ok = false; }
+    document.dispatchEvent(new CustomEvent('adcv:avature-resume-ready', { detail: JSON.stringify({ ok }) }));
+  });
+
   document.addEventListener('adcv:react-pick', (event) => {
     const token = String(event.detail ?? '');
     let ok = false;

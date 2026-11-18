@@ -498,6 +498,8 @@ function isFillable(element) {
     && Boolean(element.getAttribute('aria-labelledby') || element.labels?.length || element.closest('[data-automation-id^="formField"]'));
   if (element.disabled || element.readOnly) return false;
   if (element.type === 'hidden') return false;
+  // Avature's CV input (Lululemon): hidden until its upload box is switched on, which Autofill does.
+  if (element.type === 'file' && /^(tpt_)?resumeFile$/.test(element.id) && document.querySelector('meta[name="avature.portal.id"]')) return true;
   if (['password', 'submit', 'button', 'reset', 'image'].includes(element.type)) return false;
   if (element.closest('[hidden], [aria-hidden="true"]')) return false;
   if (element.type === 'file') return element.offsetParent !== null || !!element.closest('form')?.getClientRects().length || hasUploadButton(element)

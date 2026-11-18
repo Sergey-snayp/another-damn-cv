@@ -295,6 +295,21 @@ function highlighted(element) {
 }
 
 /**
+ * Avature's "UPLOAD RESUME": its trigger pressed and, from the page's own
+ * world (page-world.js), its upload box switched to "upload a file", as
+ * Simplify does before the CV goes into the box's input.
+ */
+function avatureResume() {
+  document.querySelector('a#methodButton--file, a.tpt_uploadResumeTriggerFile, a.uploadResumeTriggerFile')?.click();
+  return new Promise((resolve) => {
+    const done = () => { document.removeEventListener('adcv:avature-resume-ready', done); clearTimeout(timer); resolve(); };
+    const timer = setTimeout(done, 600);
+    document.addEventListener('adcv:avature-resume-ready', done);
+    document.dispatchEvent(new CustomEvent('adcv:avature-resume'));
+  });
+}
+
+/**
  * Sets a Workday date part (a month or year number) as Simplify does: from the
  * page's own world, every typing step as an event and a call to the box's
  * React handler, ending with blur. Without that script (or when the box has
@@ -521,6 +536,8 @@ async function fillField(field, value, resumeFileName) {
   switch (field.kind) {
     case 'file':
     {
+      // Avature (Lululemon): its upload box is shown in "upload a file" mode first, as Simplify does.
+      if (/^(tpt_)?resumeFile$/.test(field.element.id) && document.querySelector('meta[name="avature.portal.id"]')) await avatureResume();
       const input = await removeUploaded(field.element);
       const box = window.CVAutofillFields.uploadBox(input);
       if (!(await attachFile(input, value, resumeFileName ?? 'Resume.pdf'))) return { filled: false };
