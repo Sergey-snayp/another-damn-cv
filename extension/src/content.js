@@ -198,9 +198,19 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
   stops.sort(stopOrder);
 
   let done = 0;
+  // One answer, one field: a contact or address value goes into the first field of a form that asks
+  // for it, never a second one ("Address Line 2" taken for the street), unless that one says "confirm".
+  const written = new Map();
+  result.kept = [];
   for (const stop of stops) {
     onProgress(done++, stops.length);
     if (stop.kind === 'explain' && !Fields.isEmpty(stop.element)) continue;
+    if (stop.kind === 'field' && ONCE_PER_FORM.has(stop.field.key)) {
+      const form = stop.element.closest('form') ?? Fields.rootOf?.(stop.element) ?? document;
+      const id = `${stop.field.key}|${form === document ? '' : [...document.querySelectorAll('form')].indexOf(form)}`;
+      if (written.has(id) && !CONFIRM_LABEL.test(Fields.labelOf(stop.element))) continue;
+      written.set(id, stop.element);
+    }
     if (stop.kind === 'section') {
       // Its fields one by one, top to bottom, each visited and marked like any other field.
       try {
@@ -223,6 +233,8 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
         const done = await Filler.fillOne(stop.field, profile, state);
         also = done.also ?? []; // The "If other, please specify" box filled with it.
         if (done.filled) result.filled++;
+        // Read back once the pass is done: the site may clear it or call it invalid.
+        if (done.filled && done.mark?.status === 'ok' && stop.element.matches?.('input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select')) result.kept.push(done.mark.element ?? stop.element);
         if (done.note) result.notes.push(done.note);
         if (done.failure) result.failures.push(done.failure);
         mark = done.mark;
@@ -326,6 +338,7 @@ async function fill(profile, answers = []) {
   }
   await hooks?.finish?.(lastScan.found);
   hooks?.end();
+  await checkKept(result.kept);
   rememberStep();
   // A last check for anything the pass could not reach (fields that appeared meanwhile).
   const missing = missingWithReasons();
@@ -622,6 +635,33 @@ function workEditor(element, field, defaults, profile) {
   };
 }
 Marks?.setEditor(editorFor);
+
+/** Kinds of value a form asks for once; a second field for one of them is left empty. */
+const ONCE_PER_FORM = new Set(['firstName', 'lastName', 'middleName', 'preferredName', 'fullName', 'email', 'phone', 'addressLine', 'city', 'state', 'postalCode', 'location', 'linkedin', 'github', 'portfolio', 'website', 'twitter', 'telegram']);
+const CONFIRM_LABEL = /\b(confirm|re-?enter|re-?type|repeat|verify|again)\b/i;
+
+/**
+ * After the pass, each field Autofill filled is read again, as Jobright checks
+ * a value stuck: one the site cleared, or called invalid (aria-invalid, or an
+ * error message beside it), gets a yellow icon saying so, not a green one.
+ */
+const ERROR_TEXT = /\b(invalid|not valid|required|error|must|please (enter|provide|correct)|incorrect|too (long|short))\b/i;
+async function checkKept(elements = []) {
+  if (!elements.length) return;
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const marks = [];
+  for (const element of elements) {
+    if (!element.isConnected) continue;
+    const empty = element.tagName === 'SELECT' ? !element.value : !String(element.value ?? '').trim();
+    const said = [...(element.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)),
+      ...[...(element.parentElement?.parentElement?.querySelectorAll('[class*="error" i], [class*="invalid" i], [role="alert"]') ?? [])]]
+      .filter((node) => node && node !== element && !node.contains(element) && node.getClientRects().length && ERROR_TEXT.test(node.textContent))
+      .map((node) => node.textContent.replace(/\s+/g, ' ').trim())[0];
+    if (empty) marks.push({ element, status: 'check', reason: 'The site cleared this after Autofill filled it. Fill it yourself.' });
+    else if (element.getAttribute('aria-invalid') === 'true' || said) marks.push({ element, status: 'check', reason: `The site says this needs a look${said ? `: "${said.slice(0, 120)}"` : ''}. Check it.` });
+  }
+  if (marks.length) await Marks?.show(marks);
+}
 
 /**
  * Waits while the site reads the CV just uploaded (its `busy` shown, its
