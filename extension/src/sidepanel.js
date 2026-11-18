@@ -861,12 +861,15 @@ async function runFill() {
   // A form with a cover letter box, required or not, gets one written when this job has none yet,
   // as Jobright fills Avature's. Saving the job for it may need the site's permission, which
   // Chrome only grants inside the click.
-  const letterAsked = groupOn('coverLetter') && scan?.fields.some(field => field.key === 'coverLetter');
-  const letterAccess = letterAsked && !(savedJob.url === jobAddress(target) && savedJob.job) ? requestSiteAccess(target) : Promise.resolve(true);
+  const wantsLetter = () => groupOn('coverLetter') && Boolean(scan?.fields.some(field => field.key === 'coverLetter'));
+  const letterAccess = wantsLetter() && !(savedJob.url === jobAddress(target) && savedJob.job) ? requestSiteAccess(target) : Promise.resolve(true);
   try {
     // The fields on the page now, not at the last scan: a multi-step form may be on another step.
     const fresh = target ? await scanFrames(target) : null;
     if (fresh) scan = fresh;
+    // Decided on the page as it is now: a form that changes step in place (Avature) shows its
+    // cover letter box only on a later step, after the panel's last scan.
+    const letterAsked = wantsLetter();
     // Autofill uploads the CV chosen at the moment of the click, as a PDF of its
     // latest saved version. A missing PDF does not stop the other fields.
     let file = null, cvProblem = '';
