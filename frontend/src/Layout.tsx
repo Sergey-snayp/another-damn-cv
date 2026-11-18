@@ -9,9 +9,11 @@ import {
 import { DashboardIcon } from "./jobs/DashboardIcon";
 
 const NAV = [
+  { to: "/", label: "Home", end: true },
   { to: "/dashboard", label: "Dashboard", end: true },
-  { to: "/documents", label: "Documents" },
-  { to: "/interview-prep", label: "Interview Prep" },
+  { to: "/documents", label: "Resume" },
+  { to: "/interview-prep", label: "Interview" },
+  { to: "/profile", label: "Profile" },
 ];
 
 export function Layout() {
