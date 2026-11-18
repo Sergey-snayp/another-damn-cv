@@ -221,6 +221,14 @@ test('a captured job keeps its logo, and the extension can tell it is saved', as
   });
   const { job } = (await saved.json()) as { job: { id: string; companyLogo: string } };
   assert.equal(job.companyLogo, logo);
+  const pageAsLogo = (await (
+    await call('/jobs/capture', {
+      method: 'POST',
+      token: ownerToken,
+      body: { url, text: 'Engineer at Acme', companyLogo: `${url}&utm_source=x` },
+    })
+  ).json()) as { job: { companyLogo: string } };
+  assert.equal(pageAsLogo.job.companyLogo, logo, 'the page itself is not a logo');
   // Saved again without a logo: the one found before stays.
   const again = (await (
     await call('/jobs/capture', {

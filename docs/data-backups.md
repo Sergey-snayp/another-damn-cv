@@ -22,7 +22,7 @@ was left in place. `manifest.json` records table counts, migrations and checksum
 
 A database dump is also taken before each database change. These files are named
 `backups/cv_platform-before-<change>-<date>.dump`, each with a `.sha256` file to check
-it. The newest is from 17 November 2026 (`cv_platform-before-eeo-hispanic`).
+it. The newest is from 17 November 2026 (`cv_platform-before-clear-page-logos`).
 They were not test-restored like the snapshot above. The steps below describe that
 snapshot; its `RESTORE.md` is the reference for how to restore a dump.
 

@@ -12,6 +12,8 @@ import { JobInputError } from '../errors';
 import type { JobReadScheduler, StructuredJobReader } from '../ports/job-page-reader';
 import type { JobChanges, JobRepository } from '../ports/job-repository';
 
+const withoutQuery = (address: string) => address.split(/[?#]/)[0];
+
 export interface CaptureInput {
   url: string;
   pageTitle?: string;
@@ -61,6 +63,8 @@ export class CaptureJob {
     const pageText = input.text ? normalizeJobText(input.text) : '';
     const existing = await this.jobs.findByCanonicalUrl(userId, canonical);
     const read = this.firstRead(input.jsonLd, pageText);
+    // Extensions before 0.83.2 could send the page's own address as its logo.
+    const logo = input.companyLogo && withoutQuery(input.companyLogo) !== withoutQuery(input.url) ? input.companyLogo : null;
     const changes: JobChanges = {
       url: input.url,
       pageTitle: input.pageTitle ?? null,
@@ -71,7 +75,7 @@ export class CaptureJob {
       extractionError: read.extraction === 'failed' ? 'Nothing readable was captured from that page.' : null,
       capturedAt: this.now(),
       // A save without a logo keeps the one found before.
-      ...(input.companyLogo ? { companyLogo: input.companyLogo } : {}),
+      ...(logo ? { companyLogo: logo } : {}),
       ...(existing && read.extraction === 'pending'
         ? {}
         : unprotectedFields(read.fields, new Set(existing?.editedFields))),

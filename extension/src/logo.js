@@ -6,7 +6,8 @@
  *   2. an image on the page that looks like the company's logo: "logo" in its
  *      name, class or address, or alt text naming the company ("Box Logo")
  *   3. a page preview image (og:image) whose address says "logo"
- *   4. on the company's own site, its large site icon
+ *   4. on the company's own site, its large site icon (before a wide logo
+ *      with the name written out)
  *
  * Footer and "powered by" images, tracking pixels, tiny images and images
  * that name a job board (Greenhouse, Lever…) are never chosen. When nothing
@@ -24,7 +25,8 @@
 
   /** "The Box, Inc." → "box": for comparing a company name with alt text and domains. */
   const key = (text) => String(text ?? '').toLowerCase().replace(/&/g, ' and ').replace(LEGAL, ' ').replace(/^\s*the\s+/, '').replace(/[^a-z0-9]/g, '');
-  const url = (value) => { try { const parsed = new URL(String(value ?? '').trim(), location.href); return /^https?:$/.test(parsed.protocol) ? parsed : null; } catch { return null; } };
+  // Nothing is no address: new URL('', page) would be the page itself.
+  const url = (value) => { const text = String(value ?? '').trim(); if (!text) return null; try { const parsed = new URL(text, location.href); return /^https?:$/.test(parsed.protocol) ? parsed : null; } catch { return null; } };
   /** "careers.box.com" → "box.com"; "jobs.example.co.uk" → "example.co.uk". */
   function siteOf(hostname) {
     const parts = hostname.toLowerCase().split('.').filter(Boolean);
@@ -99,8 +101,11 @@
     if (/logo/i.test(label) || /logo/i.test(src.pathname) || near(image, /logo|brand/i, 4)) points += 4;
     if (image.closest('header, nav, [role="banner"]')) points += 2;
     if (index < 20) points += 1;
-    return { score: points, url: src.href };
+    return { score: points, url: src.href, wide: width > 0 && height > 0 && width / height > WIDE };
   }
+
+  /** A logo with the name written out: unreadable in the job card's small square. */
+  const WIDE = 3;
 
   function fromImages(company) {
     let best = null;
@@ -109,7 +114,7 @@
       const candidate = score(image, company, index);
       if (candidate.score >= 4 && (!best || candidate.score > best.score)) best = candidate;
     });
-    return best?.url ?? null;
+    return best;
   }
 
   function fromPreview(company) {
@@ -145,7 +150,10 @@
     const company = key(companyName);
     const own = companySite(company);
     try {
-      const logo = fromStructuredData() ?? fromImages(company) ?? fromPreview(company) ?? (own ? siteIcon() : null);
+      const image = fromImages(company);
+      // On the company's own site its square icon reads better than the name written out.
+      const fromPage = image && !(own && image.wide) ? image.url : null;
+      const logo = fromStructuredData() ?? fromPage ?? fromPreview(company) ?? (own ? siteIcon() : null);
       return { logo, domain: own ? siteOf(location.hostname) : null };
     } catch {
       return { logo: null, domain: own ? siteOf(location.hostname) : null };

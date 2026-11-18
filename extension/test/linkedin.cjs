@@ -166,7 +166,7 @@ async function panelFixture(browser, jobPage, linkedIn = null) {
     assert.doesNotMatch(await panel.$eval('#resume-keywords', node => node.textContent), /Python|Django|React|Angular/);
     assert.match(await panel.$eval('#job-card', node => node.textContent), /Senior Backend Engineer.*Acme/s);
     assert.doesNotMatch(await panel.$eval('#panel-autofill', node => node.textContent), /No application fields found/);
-    await panel.$eval('[data-tailor="quick"]', (button) => button.click()); // the button as it is at the click: the panel may have redrawn it
+    await panel.evaluate(() => document.querySelector('[data-tailor="quick"]').click()); // found and clicked at once: the panel may redraw it
     await panel.waitForFunction(() => window.__opened.length === 1);
     const requests = await panel.evaluate(() => window.__requests);
     assert.match(await panel.evaluate(() => window.__opened[0]), /\/popup\/jobs\/saved-111\/quick-tailor\?from=cv1$/);
@@ -180,7 +180,7 @@ async function panelFixture(browser, jobPage, linkedIn = null) {
     const apply = await pageFixture(browser, '<!doctype html>' + fs.readFileSync(path.join(__dirname, 'fixtures/jobvite-varonis-apply.html'), 'utf8'), 'https://jobs.jobvite.com/careers/varonis/job/oitNzfwR/apply');
     const applicationPanel = await panelFixture(browser, apply, carried);
     await applicationPanel.waitForSelector('[data-tailor="quick"]');
-    await applicationPanel.$eval('[data-tailor="quick"]', (button) => button.click()); // the button as it is at the click: the panel may have redrawn it
+    await applicationPanel.evaluate(() => document.querySelector('[data-tailor="quick"]').click()); // found and clicked at once: the panel may redraw it
     await applicationPanel.waitForFunction(() => window.__opened.length === 1);
     const saved = await applicationPanel.evaluate(() => ({job: window.__savedJob, request: window.__requests.find(request => request.path === '/api/jobs/capture').body, path: window.__opened[0]}));
     assert.equal(saved.job.description, carried.description);
@@ -201,7 +201,7 @@ async function panelFixture(browser, jobPage, linkedIn = null) {
       window.__storageListeners.forEach(listener => listener({'fromLinkedIn:1': {newValue: value}}, 'session'));
     }, carried);
     await latePanel.waitForSelector('[data-tailor="quick"]');
-    await latePanel.$eval('[data-tailor="quick"]', (button) => button.click()); // the button as it is at the click: the panel may have redrawn it
+    await latePanel.evaluate(() => document.querySelector('[data-tailor="quick"]').click()); // found and clicked at once: the panel may redraw it
     await latePanel.waitForFunction(() => window.__opened.length === 1);
     assert.equal(await latePanel.evaluate(() => window.__savedJob.description), carried.description);
     await latePanel.close();
@@ -211,7 +211,7 @@ async function panelFixture(browser, jobPage, linkedIn = null) {
     await page.evaluate(html => { document.querySelector('.jobs-search__job-details--container').outerHTML = html; }, details('222', 'Platform Engineer', 'Beta'));
     await panel.waitForFunction(() => document.getElementById('job-card')?.textContent.includes('Platform Engineer'));
     await panel.waitForSelector('[data-tailor="quick"]');
-    await panel.$eval('[data-tailor="quick"]', (button) => button.click()); // the button as it is at the click: the panel may have redrawn it
+    await panel.evaluate(() => document.querySelector('[data-tailor="quick"]').click()); // found and clicked at once: the panel may redraw it
     await panel.waitForFunction(() => window.__opened.length === 2);
     assert.match(await panel.evaluate(() => window.__opened[1]), /\/jobs\/saved-222\/quick-tailor/);
     assert.equal((await scan(page)).context.jobUrl, 'https://www.linkedin.com/jobs/view/222');
