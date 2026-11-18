@@ -562,7 +562,7 @@
   function scrolled() {
     return new Promise((resolve) => {
       const done = () => { removeEventListener('scrollend', done); clearTimeout(timer); resolve(); };
-      const timer = setTimeout(done, 650);
+      const timer = setTimeout(done, 300);
       addEventListener('scrollend', done, { once: true });
     });
   }
@@ -628,7 +628,7 @@
         if (!mark) return;
         glow(mark.element ?? field.element, mark.status);
         await show([{ element: mark.element ?? field.element, status: mark.status, reason: mark.reason }]);
-        if (motion.mode === 'full' && !motion.tookOver) await wait(180);
+        if (motion.mode === 'full' && !motion.tookOver) await wait(40);
       },
       /**
        * The end of a fill: scroll on to the form's Submit button (or Next /
@@ -645,7 +645,7 @@
         const target = buttons.filter((button) => button.type === 'submit' || /\b(submit|send application|apply now|finish)\b/i.test(text(button))).at(-1)
           ?? buttons.filter((button) => /\b(next|continue|review)\b/i.test(text(button))).at(-1);
         if (!target) return;
-        await wait(250);
+        await wait(80);
         if (!onScreen(target.getBoundingClientRect())) {
           target.scrollIntoView({ behavior: 'smooth', block: 'center' });
           await scrolled();

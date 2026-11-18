@@ -578,7 +578,7 @@ leaves the icons visible for a screenshot.
 Settings → **Animate filling** (on by default). Fields fill in page order. The
 page scrolls smoothly to each field that is off screen (fields already on
 screen do not make it jump), and the field glows in its result colour; a CV
-upload pulses until it finishes. Each field takes about a quarter of a second.
+upload pulses until it finishes. Each field takes about 50 milliseconds.
 At the end the page scrolls on to the form's Submit button (Next or Continue
 on a step without one) and rings it in blue; it is only shown, never pressed.
 Only buttons inside the form count, so a page's "Apply" button at the top is
