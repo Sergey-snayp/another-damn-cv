@@ -203,7 +203,7 @@
         `Autofill uploads the default CV's PDF, downloaded from the server (got ${fillMessage?.profile.resumeFileName})`);
       document.querySelector('.tab[data-panel="autofill"]').click();
       await wait(100);
-      expect(!document.querySelector('.tab[data-panel="resume"]') && document.querySelector('#panel-autofill .resume-card [data-open-documents]'), 'no Resume tab: the Resume card has the CV and Open Documents');
+      expect(!document.querySelector('.tab[data-panel="resume"]') && document.querySelector('#panel-autofill .resume-card [data-open-cv]') && !document.querySelector('#panel-autofill .resume-card [data-open-documents]'), 'no Resume tab: the Resume card has the CV and its eye button, and no Open Documents');
       const select = document.getElementById('autofill-cv-select');
       expect(/Master CV/.test(select.textContent), `the dropdown shows the chosen CV (got "${select.textContent.trim()}")`);
       expect(document.querySelector('#autofill-cv-picker [data-open-cv]')?.getAttribute('aria-label') === 'Preview resume', 'with a labelled Preview resume icon');

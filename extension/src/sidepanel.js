@@ -1370,7 +1370,7 @@ function cvPicker(id) {
     ${long ? `<details class="cv-full-name"><summary>Full CV name</summary><p>${esc(chosen.name)}</p></details>` : ''}`;
 }
 function autofillCvCard() {
-  return `<details class="card resume-card" data-keep-open="resume" ${keptOpen.has('resume') ? 'open' : ''}><summary>${icon('file', 20)}Resume</summary><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div>${!groupOn('resume') ? '<p class="cv-note">CV uploads are off in Settings.</p>' : ''}<div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div>${resumes.chosen ? `${matchCard()}<button type="button" class="ghost small" data-open-documents>Open Documents</button>` : ''}</details>`;
+  return `<details class="card resume-card" data-keep-open="resume" ${keptOpen.has('resume') ? 'open' : ''}><summary>${icon('file', 20)}Resume</summary><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div>${!groupOn('resume') ? '<p class="cv-note">CV uploads are off in Settings.</p>' : ''}<div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div>${resumes.chosen ? matchCard() : ''}</details>`;
 }
 function renderResume() {
   if (cvMenu.open) { renderCvOptions(); placeCvMenu(); }

@@ -158,8 +158,8 @@ server does not answer within 3 seconds, Autofill uses the saved copy.
 The **Resume** card on the **Autofill** tab shows the CV that **Autofill This Page** uploads, as
 `<CV name>.pdf` (sign in on the Profile tab first). **Change** opens the list
 of CVs from the app's Documents to pick another. Your primary CV is chosen
-until you pick another. **Open Documents** opens your CVs in the app. Text fields still come
-from your profile, not from the CV.
+until you pick another. The eye button opens the chosen CV's PDF. With no CVs yet, the card
+offers **Open Documents**. Text fields still come from your profile, not from the CV.
 
 The list comes from `GET /api/extension/resumes`, the same backend collection
 as Documents, including job-tailored copies. Each panel fetches it before
