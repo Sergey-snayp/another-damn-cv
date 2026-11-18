@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Autofill test — address lines</title>
+<!-- "Address Line 2" and "Address Line 3" (apartment, suite) are not the street address: left empty. -->
+<form>
+  <label for="a1">Address Line 1 *</label><input id="a1" name="address1">
+  <label for="a2">Address Line 2</label><input id="a2" name="address2">
+  <label for="a3">Address Line 3</label><input id="a3" name="address3">
+  <label for="apt">Apartment, suite or unit (address)</label><input id="apt">
+  <label for="city">City</label><input id="city" name="city">
+</form>
+<script src="../src/sites.js"></script>
+<script src="../src/fields.js"></script>
+<script>
+addEventListener('DOMContentLoaded', () => {
+  const keys = Object.fromEntries(window.CVAutofillFields.detectFields().found.map((field) => [field.element.id, field.key]));
+  const problems = [];
+  if (keys.a1 !== 'addressLine') problems.push(`line 1 is the street (${keys.a1})`);
+  for (const id of ['a2', 'a3', 'apt']) if (keys[id]) problems.push(`${id} is not the street (${keys[id]})`);
+  if (keys.city !== 'city') problems.push('city');
+  const out = document.createElement('pre');
+  out.id = 'result';
+  out.textContent = JSON.stringify({ passed: problems.length === 0, problems });
+  document.body.append(out);
+});
+</script>

@@ -441,6 +441,9 @@ function categorise(signals, { long = false, yesNo = false } = {}) {
     return { key: 'location', sensitive: false, compound: true };
   }
 
+  // A second or third address line (apartment, suite) is not the street address: the Profile has one line.
+  if (/\b(address|addr|street)\s*(line\s*)?[23]\b|\baddress[23]\b|\bline\s*[23]\b/.test(signals)
+    || (/\b(apt|apartment|suite|unit)\b/.test(signals) && /\b(address|street)\b/.test(signals) && !/\bline\s*1\b/.test(signals))) return { key: null, sensitive: false };
   // "Name pronunciation: how do you pronounce your name?" asks how, not the name.
   if (/\bpronounc/.test(signals)) return { key: null, sensitive: false };
   // A phone extension stays empty, as Simplify leaves it: never the phone number again.
