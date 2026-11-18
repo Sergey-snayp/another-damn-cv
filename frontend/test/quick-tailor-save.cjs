@@ -736,7 +736,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
           await page.$$eval('.ra-kw.have', chips => chips.map(chip => chip.textContent)),
           ['✓ Node.js', 'TypeScript', 'Docker'],
         );
-        assert.equal(await page.$eval('.qt-skills-only', line => line.textContent.trim()), 'Only in Skills: TypeScript, Docker. Add them to a bullet where you used them.');
+        assert.equal(await page.$eval('.qt-skills-only', line => line.textContent.trim()), 'Not in your work yet: TypeScript, Docker. Add them to a bullet where you used them.');
         await page.screenshot({ path: '/private/tmp/job-agent-qt-profile-choice.png' });
         await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Swap').click());
         await page.waitForFunction(() => /Mentored two engineers/.test(document.querySelectorAll('.qt-unit .qt-slot')[1]?.textContent)); await typed(page);
@@ -771,7 +771,7 @@ async function check(browser, failure, fullEditor = false, historyMode = false) 
         await page.screenshot({ path: '/private/tmp/job-agent-qt-compose.png', clip: await page.$eval('.qt-unit', node => { const box = node.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; }) });
         await page.click('.qt-unit .qt-generate');
         await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 3);
-        assert.equal(roleRequests.at(-1).position, 0, 'the whole job says where it is on the CV');
+        assert.equal(roleRequests.at(-1).room.min, 2, 'a CV that fits two pages keeps every bullet of the job');
         await typed(page);
         const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
         await page.screenshot({ path: '/private/tmp/job-agent-qt-job-lines.png' });

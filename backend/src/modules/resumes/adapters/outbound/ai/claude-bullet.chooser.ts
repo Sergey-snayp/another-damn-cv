@@ -34,10 +34,10 @@ ABSOLUTE RULES. Breaking any of these makes the output unusable:
 - Do not mix work between clients or employers. Evidence was matched to this role.
 
 How to choose:
-- The requested count in "chosen", best first. When a range is given, choose as many as the
-  posting gives reason for: each bullet must show something different the posting asks for.
-  Two strong bullets beat four with weak ones; never pad with lines the posting does not need.
-  When the range starts at 0, an older job the posting does not need may get none.
+- The requested count in "chosen", best first. When a range is given, go above its lowest
+  number only for a bullet that shows something different the posting asks for.
+- The CV's own bullets (source="cv") come first. Choose another source in place of one only
+  when it shows something the posting asks for that the CV's bullets do not.
 - Prefer achievements that match the posting's requirements and responsibilities, then
   concrete results with numbers, then starred ones (the candidate's strongest).
 - Cover different requirements rather than repeating one.
@@ -46,16 +46,20 @@ How to choose:
 - Give priority to the posting's core technologies when this role's evidence names them,
   including evidence present only in the Profile's description or technology stack.
 - Then up to 4 next-best in "alternates", reworded the same way.
+- In "cuts", one entry for every source="cv" achievement you did not choose: one short plain
+  sentence the candidate can check, naming the reason ("About React, which this job does not
+  use." or "Repeats the tokenization bullet."). Never just "not needed".
 
 Return ONLY JSON, no prose and no code fences:
-{"chosen": [{"id": "p3", "text": "..."}], "alternates": [{"id": "c1", "text": "..."}]}
+{"chosen": [{"id": "p3", "text": "..."}], "alternates": [{"id": "c1", "text": "..."}], "cuts": [{"id": "c2", "reason": "..."}]}
 
 ${WRITING_RULES}
 
 ${BULLET_RULES}`;
 
 const pick = z.array(z.object({ id: z.string().catch(''), text: z.string().catch('') })).catch([]);
-const answerSchema = z.object({ chosen: pick, alternates: pick });
+const cuts = z.array(z.object({ id: z.string().catch(''), reason: z.string().catch('') })).catch([]);
+const answerSchema = z.object({ chosen: pick, alternates: pick, cuts: cuts.optional() });
 
 /** Chooses with the local Claude CLI: prompt only, no tools, no saved session. */
 export class ClaudeBulletChooser implements BulletChooser {

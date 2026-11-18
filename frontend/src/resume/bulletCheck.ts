@@ -46,7 +46,9 @@ export const usesKeyword = (line: string, keyword: string) => {
   const name = flat(keyword).trim();
   if (!name) return false;
   const text = flat(line);
-  return [name, name.replace(/\s+/g, '')].some((form) => text.includes(` ${form} `) || text.includes(` ${form}s `));
+  // "Payments" is shown by "payment services" too; short names (AWS) are left whole.
+  const one = name.length > 4 ? name.replace(/s$/, '') : name;
+  return [name, name.replace(/\s+/g, ''), one].some((form) => text.includes(` ${form} `) || text.includes(` ${form}s `));
 };
 
 export function checkBullet(text: string, keywords?: string[]): BulletCheck {

@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { DashboardIcon } from '../jobs/DashboardIcon';
 import { MarkedLine } from '../text/Marked';
 import { boldOnly } from '../text/marks';
-import { withTechStacks } from '../resume/techStack';
+import { stackLine, withTechStacks } from '../resume/techStack';
+import { bulletBudget } from '../resume/bulletBudget';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { jobName, jobsApi, type JobDetail } from '../jobsApi';
 import { resumeApi, type QuickTailoringDraft, type RenderedResume } from '../resumeApi';
@@ -12,7 +13,7 @@ import { lineDiff } from '../resume/lineDiff';
 import { recruiterFlags } from '../resume/readability';
 import { closeEmbed, downloadFromApi, embedded } from '../embed';
 import { ResumeDocument, type RewriteTarget } from '../resume/ResumeDocument';
-import { PagedDocument, ScaledPage } from '../resume/PagedDocument';
+import { PagedDocument, ScaledPage, spareOnTwoPages } from '../resume/PagedDocument';
 import { designOf } from '../resume/theme';
 import { DraftHistory } from '../resume/draftHistory';
 import { assistantApi, type ResumeScore } from '../resume/studio/assistantApi';
@@ -77,6 +78,8 @@ interface Suggestion {
   choiceGroup?: string;
   /** A bullet the job gains for this posting: shown after this line of the page. */
   insertAfter?: string;
+  /** Why this bullet is suggested for removal. */
+  cutReason?: string;
 }
 
 /** A job's bullet the posting does not need: "Use" takes it off. */
@@ -275,6 +278,8 @@ interface Tailoring {
   notes?: string[];
   /** A job's next-best achievements, for Swap. */
   alternates?: Record<string, ChosenBullet[]>;
+  /** "What should change?" was opened again after the results came back. */
+  asking?: boolean;
 }
 
 /** One-click requests for the card's box. */
@@ -342,6 +347,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   /** The window this runs in: a popup window, or Another Damn CV's window inside a job page. */
   const closeWindow = () => { if (embedded) closeEmbed(); else window.close(); };
   const [tailoring, setTailoring] = useState<Tailoring | null>(null);
+  /** The line whose "⋯" is open: its Swap and Tailor again show. */
+  const [moreOpen, setMoreOpen] = useState<string | null>(null);
   const [cardTop, setCardTop] = useState(0);
   /** One line's card sits over that line: its left edge, width and the CV's type at this zoom. */
   const [cardBox, setCardBox] = useState<{ left: number; width: number; font: React.CSSProperties; window: number } | null>(null);
@@ -748,7 +755,9 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         ...(target.kind === 'bullet' && target.role ? { others: neighboursOf(target) } : {}),
         job: { jobId },
       });
-      updateItem(run, item.key, { busy: false, after: result.suggestion, value: result.suggestion, cannotDo: result.cannotDo });
+      // A tech stack comes back as a list: written as the CV writes it, only real changes show.
+      const suggestion = target.kind === 'techStack' ? stackLine(result.suggestion) : result.suggestion;
+      updateItem(run, item.key, { busy: false, after: suggestion, value: suggestion, cannotDo: result.cannotDo });
     } catch (err) {
       updateItem(run, item.key, { busy: false, error: (err as Error).message });
     }
@@ -791,6 +800,20 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     setTailoring({ run, anchor, items, stage: 'compose', request: '' });
   }
 
+  /** How many bullets the CV's two pages leave this job, measured on the page as drawn. */
+  function roomFor(position: number, shown: number) {
+    const page = canvas.current?.querySelector<HTMLElement>('.qt-zoom .page');
+    const fallback = { min: shown, max: shown };
+    if (!page) return fallback;
+    const scale = page.getBoundingClientRect().height / page.offsetHeight || 1;
+    const roles = [...page.querySelectorAll<HTMLElement>('[data-section="experience"] article')].map((role) => {
+      const rows = [...role.querySelectorAll<HTMLElement>('.doc-bullets > li')];
+      return { bullets: rows.length, height: rows.reduce((sum, row) => sum + row.getBoundingClientRect().height / scale, 0) };
+    });
+    const room = bulletBudget(roles, spareOnTwoPages(page))[position];
+    return room && room.min > 0 ? room : fallback;
+  }
+
   /**
    * One role's selected bullets, chosen from Profile facts and matching saved CVs.
    * Selected CV bullets keep their positions; other evidence fills the remaining slots.
@@ -800,18 +823,17 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     const role = items[0]?.target.role;
     if (!role) return false;
     const choiceGroup = items.map(item => item.key).join('|');
-    for (const item of items) updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, chosenId: undefined, fromProfile: undefined, fromSavedCv: undefined, original: undefined });
+    for (const item of items) updateItem(run, item.key, { busy: true, error: undefined, after: undefined, value: undefined, chosenId: undefined, fromProfile: undefined, fromSavedCv: undefined, original: undefined, cutReason: undefined });
     try {
-      // The whole job: the posting decides how many bullets it gets.
+      // The whole job: as many bullets as the CV's two pages leave it.
       const { position, ...roleFields } = role;
       const whole = items.length > 1 && position !== undefined;
-      const result = await post<{ matched: boolean; chosen: ChosenBullet[]; alternates: ChosenBullet[] }>('tailor-role', {
+      const result = await post<{ matched: boolean; chosen: ChosenBullet[]; alternates: ChosenBullet[]; cuts?: { cvIndex: number; reason: string }[] }>('tailor-role', {
         role: { ...roleFields, bullets: items.map((item) => item.target.text) },
         ...(request.trim() ? { instruction: request.trim().slice(0, 500) } : {}),
         job: { jobId },
-        ...(whole ? { position } : {}),
+        ...(whole ? { room: roomFor(position, items.length) } : {}),
       });
-      // An older job the posting does not need may get none: each of its bullets is offered for removal.
       if (!result.matched || (!result.chosen.length && !whole)) return false;
       const slots: (ChosenBullet | undefined)[] = items.map(() => undefined);
       for (const chosen of result.chosen)
@@ -836,7 +858,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         const chosen = slots[i];
         // Fewer than the CV shows: the bullets left over are offered for removal.
         updateItem(run, item.key, chosen ? picked(chosen)
-          : whole ? { busy: false, after: '', value: '', choiceGroup }
+          : whole ? { busy: false, after: '', value: '', choiceGroup, cutReason: result.cuts?.find((cut) => cut.cvIndex === i)?.reason }
           : { busy: false, after: item.before, value: item.before });
       });
       return true;
@@ -859,7 +881,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         ...current,
         alternates: { ...current.alternates, [item.choiceGroup!]: [...rest, ...back] },
         items: current.items.map((row) => row.key === item.key
-          ? { ...row, after: next!.text, value: next!.text, chosenId: next!.id, fromProfile: next!.source === 'profile', fromSavedCv: next!.source === 'saved-cv', original: next!.original, cannotDo: undefined, error: undefined }
+          ? { ...row, after: next!.text, value: next!.text, chosenId: next!.id, fromProfile: next!.source === 'profile', fromSavedCv: next!.source === 'saved-cv', original: next!.original, cannotDo: undefined, error: undefined, cutReason: undefined }
           : row),
       };
     });
@@ -871,7 +893,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     const { run, request } = current;
     // New bullets not yet added are chosen again with their job.
     const open = current.items.filter((item) => !item.decided && !isAddition(item));
-    setTailoring({ ...current, stage: 'generated', notes: undefined, items: current.items.filter((item) => item.decided || !isAddition(item)) });
+    setMoreOpen(null);
+    setTailoring({ ...current, stage: 'generated', asking: false, notes: undefined, items: current.items.filter((item) => item.decided || !isAddition(item)) });
     const skills = open.filter((item) => item.target.kind === 'skills');
     const lines = open.filter((item) => item.target.kind !== 'skills');
     // Keep each employer/client's evidence separate, including when tailoring the whole section.
@@ -990,6 +1013,12 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     ...Object.values(draft.summaries ?? {}),
     ...draft.experiences.flatMap((role) => [role.blurb ?? '', role.techStack ?? '', ...role.achievements.map((item) => item.bullet)]),
   ].join('\n') : ''), [draft]);
+  // Words a recruiter for this job has already met: no need to flag them.
+  const familiar = useMemo(() => (draft ? [
+    job?.description ?? '',
+    ...draft.experiences.flatMap((role) => [role.company, role.client ?? '', role.techStack ?? '']),
+    ...draft.skills.map((skill) => skill.name),
+  ].join('\n') : ''), [draft, job]);
   const working = Boolean(tailoring?.items.some((item) => item.busy));
   const elapsed = useElapsed(working);
 
@@ -1030,6 +1059,13 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const waiting = tailoring?.items.filter((item) => item.busy).length ?? 0;
   // "Use all" takes the changes; removing a bullet is always its own click.
   const ready = tailoring?.items.filter((item) => isReady(item) && !isRemoval(item)) ?? [];
+  const cuts = tailoring?.items.filter((item) => isReady(item) && isRemoval(item)) ?? [];
+  const keptAsWritten = tailoring?.items.filter((item) => !item.busy && !item.decided && unchanged(item)).length ?? 0;
+  const lineHints = (text: string) => recruiterFlags(text, cvText, { countTerms: false, familiar });
+  const cutNote = (item: Suggestion) => `Suggested cut: ${item.cutReason ?? 'Not needed for this job.'}`;
+  const decidedNote = (item: Suggestion) => isRemoval(item)
+    ? item.decided === 'used' ? '✓ Removed' : 'Kept'
+    : item.decided === 'used' ? '✓ Used' : 'Skipped';
   const many = (tailoring?.items.length ?? 0) > 1;
   /** Asked for (or queued) and not back yet. */
   const pending = (item: Suggestion) => !item.decided && item.after === undefined && !item.error;
@@ -1044,18 +1080,33 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     if (item.decided) return extra ? <div className="ra-row qt-actions">{extra}</div> : null;
     const same = item.after !== undefined && (item.after.trim() === item.before.trim() || unchanged(item));
     const waits = item.busy || pending(item);
-    return (
+    const main = !same && (item.after !== undefined || waits) && (
+      <button className="primary" disabled={saving || waits} onClick={() => use([item])}>{isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : 'Use'}</button>
+    );
+    const swapButton = (item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
+      <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
+    );
+    const againButton = !isAddition(item) && <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Tailor again</button>;
+    if (!many) return (
       <div className="ra-row qt-actions">
         {/* Nothing to change is said, not offered as a button. */}
-        {same ? <span className="qt-fits">{item.target.kind === 'skills' ? 'Nothing new to add' : 'No change needed'}</span>
-          : (item.after !== undefined || waits) && (
-            <button className="primary" disabled={saving || waits} onClick={() => use([item])}>{isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : 'Use'}</button>
-          )}
-        {many && item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>Skip</button>}
-        {(item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
-          <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
+        {same ? <span className="qt-fits">{item.target.kind === 'skills' ? 'Nothing new to add' : 'Kept as written'}</span> : main}
+        {swapButton}{againButton}{extra}
+      </div>
+    );
+    // Many lines: the decision stays in view, the rest waits behind "⋯". A line that stays
+    // as written shows no buttons until it is pointed at.
+    const open = moreOpen === item.key;
+    return (
+      <div className={`ra-row qt-actions${same ? ' is-quiet' : ''}`}>
+        {main}
+        {item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>{isRemoval(item) ? 'Keep' : 'Skip'}</button>}
+        {(swapButton || againButton) && (
+          <>
+            <button type="button" className="qt-more" aria-label="More options" aria-expanded={open} title="More options" onClick={() => setMoreOpen(open ? null : item.key)}>⋯</button>
+            <span className="qt-more-items" hidden={!open}>{swapButton}{againButton}</span>
+          </>
         )}
-        {!isAddition(item) && <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Tailor again</button>}
         {extra}
       </div>
     );
@@ -1097,10 +1148,10 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             <DashboardIcon name="file" size={15} />{status}
           </span>
           {!resumeId
-            ? <button className="ghost" disabled title="Save this CV before opening the full editor.">Open full editor</button>
+            ? <button className="ghost qt-editor-link" disabled title="Save this CV before opening the full editor.">Open full editor</button>
             : popup
-              ? <a className="ghost" href={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`} target="_blank" rel="noreferrer">Open full editor</a>
-              : <Link className="ghost" to={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`}
+              ? <a className="ghost qt-editor-link" href={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`} target="_blank" rel="noreferrer">Open full editor</a>
+              : <Link className="ghost qt-editor-link" to={`/documents/${resumeId}?job=${encodeURIComponent(jobId)}`}
                   onClick={(event) => { if (dirty && !confirm('You have unsaved changes. Discard them?')) event.preventDefault(); }}>Open full editor</Link>}
           <button className="primary" disabled={saving} onClick={() => void save()}>
             {saving ? creatingPdf ? 'Creating PDF…' : 'Saving…' : 'Save'}
@@ -1185,15 +1236,15 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         if (!slot) return null;
                         const back = item.after !== undefined && !item.busy;
                         return createPortal(
-                          <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}`}>
+                          <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}${back && isRemoval(item) ? ' is-cut' : ''}`}>
                             {back && !unchanged(item) ? <DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /> : withBold(item.before.trim())}
-                            {back && isRemoval(item) && <span className="qt-slot-note qt-cut">Not needed for this job.</span>}
-                            {back && READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after!, cvText).map((note, index) => (
+                            {back && isRemoval(item) && !item.decided && <span className="qt-slot-note qt-cut">{cutNote(item)}</span>}
+                            {back && !isRemoval(item) && !unchanged(item) && READ_AS_PROSE.has(item.target.kind) && lineHints(item.after!).map((note, index) => (
                               <span key={`r${index}`} className="qt-slot-note qt-hint">{note}</span>
                             ))}
                             {item.error && !item.busy && <span className="qt-slot-note ra-error">{item.error}</span>}
                             {item.decided
-                              ? <span className="qt-slot-note">{item.decided === 'used' ? '✓ Used' : 'Skipped'}</span>
+                              ? <span className="qt-slot-note">{decidedNote(item)}</span>
                               : itemActions(item, back ? sourceTag(item) : null)}
                             {back && item.cannotDo?.map((note, index) => <span key={index} className="qt-slot-note">⚠ {note}</span>)}
                           </span>,
@@ -1205,19 +1256,19 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                   ) : wrapLines(tailoring.items.map((item) => {
                     const back = item.after !== undefined && !item.busy;
                     return (
-                      <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}${LISTED.has(item.target.kind) ? ' is-listed' : ''}`}>
-                        {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {item.decided === 'used' ? 'Used' : 'Skipped'}</span>}</p>}
+                      <div key={item.key} className={`qt-screen-line${item.decided ? ` is-${item.decided}` : ''}${LISTED.has(item.target.kind) ? ' is-listed' : ''}${back && isRemoval(item) ? ' is-cut' : ''}`}>
+                        {many && <p className="qt-screen-line-label">{item.target.label ?? 'Line'}{item.decided && <span> · {decidedNote(item).replace('✓ ', '')}</span>}</p>}
                         {/* Back: the change, red out and green in. Still waiting: the line as it is. */}
                         {back && !unchanged(item) ? <div className="qt-screen-text qt-change"><DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} instant={item.streamed} /></div>
                           : back ? <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>
                           : item.busy && item.streaming ? <div className="qt-screen-text qt-streaming" aria-live="polite">{withBold(closedMarks(item.streaming))}<span className="qt-caret" aria-hidden="true" /></div>
                           : <div className="qt-screen-before is-current">{withBold(item.before.trim())}</div>}
                         {item.error && !item.busy && <p className="ra-error">{item.error}</p>}
-                        {many && !item.busy && item.after !== undefined && isRemoval(item) && <p className="qt-note qt-cut">Not needed for this job.</p>}
+                        {many && !item.busy && item.after !== undefined && isRemoval(item) && !item.decided && <p className="qt-note qt-cut">{cutNote(item)}</p>}
                         {many && itemActions(item, !item.busy && item.after !== undefined ? sourceTag(item) : null)}
                         {many && !item.busy && item.after !== undefined && (
                           <>
-                            {READ_AS_PROSE.has(item.target.kind) && recruiterFlags(item.after, cvText).map((note, index) => (
+                            {!isRemoval(item) && !unchanged(item) && READ_AS_PROSE.has(item.target.kind) && lineHints(item.after).map((note, index) => (
                               <p key={`r${index}`} className="qt-note qt-hint">{note}</p>
                             ))}
                             {item.added?.length ? <p className="qt-note">Added from your CV: {item.added.join(', ')}</p> : null}
@@ -1251,6 +1302,14 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                     if (many) return (
                       <div className="ra-row qt-actions">
                         <button className="primary" disabled={!ready.length || saving} onClick={() => use(ready)}>Use all{ready.length ? ` ${ready.length}` : ''}</button>
+                        {cuts.length > 0 && <button className="ghost" disabled={saving} onClick={() => use(cuts)}>Remove {cuts.length} {cuts.length === 1 ? 'cut' : 'cuts'}</button>}
+                        {waiting === 0 && !composing && (
+                          <span className="qt-tally">{[
+                            `${ready.length} ${ready.length === 1 ? 'change' : 'changes'}`,
+                            cuts.length ? `${cuts.length} suggested ${cuts.length === 1 ? 'cut' : 'cuts'}` : '',
+                            keptAsWritten ? `${keptAsWritten} kept as written` : '',
+                          ].filter(Boolean).join(' · ')}</span>
+                        )}
                         {status}{close}
                       </div>
                     );
@@ -1265,29 +1324,37 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                       {solo.cannotDo?.map((note, index) => <p key={index} className="qt-note">⚠ {note}</p>)}
                     </>
                   )}
-                  <div className="qt-request">
-                    {/* The request and the button that uses it, on one row. */}
-                    <div className="qt-request-head">
-                      <label htmlFor="qt-request-text">What should change? <small>{composing || many ? '(optional)' : '(optional, then Tailor again)'}</small></label>
-                      {many && !composing && (
-                        <button type="button" className="qt-ai-button qt-again" disabled={waiting > 0 || saving} onClick={() => void generate()}>Tailor again <AiBadge /></button>
-                      )}
-                    </div>
-                    {/* Once the lines are back the box is one line, so they get the room. */}
-                    <textarea id="qt-request-text" rows={many && !composing ? 1 : 2} maxLength={500} value={tailoring.request}
-                      placeholder="e.g. shorter, lead with the payments work"
-                      onChange={(e) => { const request = e.target.value; setTailoring((t) => t && { ...t, request }); }}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || waiting > 0) return;
-                        e.preventDefault();
-                        if (composing || many) void generate(); else retry(solo!);
-                      }} />
-                  </div>
-                  <div className="chips">
-                    {REQUESTS.map((request) => (
-                      <button key={request} type="button" onClick={() => setTailoring((t) => t && { ...t, request: t.request.trim() ? `${t.request.trim()}; ${request.toLowerCase()}` : request })}>{request}</button>
-                    ))}
-                  </div>
+                  {/* Once the versions are back, the request waits until it is asked for. */}
+                  {!composing && !tailoring.asking && (
+                    <button type="button" className="qt-ask" onClick={() => setTailoring((t) => t && { ...t, asking: true })}>What should change?</button>
+                  )}
+                  {(composing || tailoring.asking) && (
+                    <>
+                      <div className="qt-request">
+                        {/* The request and the button that uses it, on one row. */}
+                        <div className="qt-request-head">
+                          <label htmlFor="qt-request-text">What should change? <small>{composing || many ? '(optional)' : '(optional, then Tailor again)'}</small></label>
+                          {many && !composing && (
+                            <button type="button" className="qt-ai-button qt-again" disabled={waiting > 0 || saving} onClick={() => void generate()}>Tailor again <AiBadge /></button>
+                          )}
+                        </div>
+                        {/* Once the lines are back the box is one line, so they get the room. */}
+                        <textarea id="qt-request-text" autoFocus={!composing} rows={many && !composing ? 1 : 2} maxLength={500} value={tailoring.request}
+                          placeholder="e.g. shorter, lead with the payments work"
+                          onChange={(e) => { const request = e.target.value; setTailoring((t) => t && { ...t, request }); }}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || waiting > 0) return;
+                            e.preventDefault();
+                            if (composing || many) void generate(); else retry(solo!);
+                          }} />
+                      </div>
+                      <div className="chips">
+                        {REQUESTS.map((request) => (
+                          <button key={request} type="button" onClick={() => setTailoring((t) => t && { ...t, request: t.request.trim() ? `${t.request.trim()}; ${request.toLowerCase()}` : request })}>{request}</button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -1313,29 +1380,35 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             </h3>
             {keywordStatus ? (
               <>
-                <div className="ra-keywords">
-                  {matched.map((kw) => skillsOnly.includes(kw)
-                    ? <span key={kw} className="ra-kw have only" tabIndex={0} {...keywordCard(kw)}>{kw}</span>
-                    : <span key={kw} className="ra-kw have" tabIndex={0} {...keywordCard(kw)}>✓ {kw}</span>)}
-                  {missing.map((kw) => <span key={kw} className="ra-kw miss" tabIndex={0} {...keywordCard(kw)}>{kw}</span>)}
-                </div>
-                {skillsOnly.length > 0 && (
-                  <p className="qt-skills-only">
-                    Only in Skills: {skillsOnly.join(', ')}. Add {skillsOnly.length === 1 ? 'it' : 'them'} to a bullet where you used {skillsOnly.length === 1 ? 'it' : 'them'}.
-                  </p>
-                )}
-                {missing.some((kw) => !skills.has(kw.toLowerCase())) && (
-                  <div className="qt-missing">
-                    <p>Add to Skills the ones you have used:</p>
-                    <div className="sf-chips">
-                      {missing.filter((kw) => !skills.has(kw.toLowerCase())).map((kw) => (
-                        <button key={kw} className="qt-add-skill" disabled={saving}
-                          onClick={() => change((d) => { d.skills.push({ lineageId: newId(), name: kw, category: '' }); })}>
-                          + {kw}
-                        </button>
-                      ))}
+                {missing.length > 0 && (
+                  <div className="qt-kw-group">
+                    <p className="qt-kw-label">Missing. Add the ones you have used to Skills.</p>
+                    <div className="ra-keywords">
+                      {missing.map((kw) => skills.has(kw.toLowerCase())
+                        ? <span key={kw} className="ra-kw miss" tabIndex={0} {...keywordCard(kw)}>{kw}</span>
+                        : (
+                          <button key={kw} type="button" className="ra-kw miss qt-add-skill" disabled={saving} title={`Add ${kw} to Skills`} {...keywordCard(kw)}
+                            onClick={() => change((d) => { d.skills.push({ lineageId: newId(), name: kw, category: '' }); })}>
+                            + {kw}
+                          </button>
+                        ))}
                     </div>
                   </div>
+                )}
+                {matched.length > 0 && (
+                  <div className="qt-kw-group">
+                    <p className="qt-kw-label">In this CV</p>
+                    <div className="ra-keywords">
+                      {matched.map((kw) => skillsOnly.includes(kw)
+                        ? <span key={kw} className="ra-kw have only" tabIndex={0} {...keywordCard(kw)}>{kw}</span>
+                        : <span key={kw} className="ra-kw have" tabIndex={0} {...keywordCard(kw)}>✓ {kw}</span>)}
+                    </div>
+                  </div>
+                )}
+                {skillsOnly.length > 0 && (
+                  <p className="qt-skills-only">
+                    Not in your work yet: {skillsOnly.join(', ')}. Add {skillsOnly.length === 1 ? 'it' : 'them'} to a bullet where you used {skillsOnly.length === 1 ? 'it' : 'them'}.
+                  </p>
                 )}
               </>
             ) : <p className="qt-keywords-empty">{score ? 'The job names no skills this check knows.' : 'Checking the job’s keywords…'}</p>}

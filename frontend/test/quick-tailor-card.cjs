@@ -98,6 +98,7 @@ async function check(browser) {
           alternates: [
             { id: 'p5', text: 'Mentored two engineers on code review.', original: 'Mentored two engineers on code review.', source: 'profile', cvIndex: null, starred: false },
           ],
+          cuts: roleCount === 1 ? [{ cvIndex: 1, reason: 'About reliability, which this job does not ask for.' }] : [],
         });
       }
       if (pathname.endsWith('/tailor-line')) {
@@ -279,7 +280,7 @@ async function check(browser) {
         await page.$$eval('.ra-kw.have', chips => chips.map(chip => chip.textContent)),
         ['✓ Node.js', 'TypeScript'],
       );
-      assert.equal(await page.$eval('.qt-skills-only', line => line.textContent.trim()), 'Only in Skills: TypeScript. Add it to a bullet where you used it.');
+      assert.equal(await page.$eval('.qt-skills-only', line => line.textContent.trim()), 'Not in your work yet: TypeScript. Add it to a bullet where you used it.');
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Swap').click());
       await typedIn();
       assert.match(await page.$$eval('.qt-unit .qt-slot', rows => rows[1].textContent), /Mentored two engineers on code review\./, 'Swap brings the next best');
@@ -313,7 +314,8 @@ async function check(browser) {
       assert.ok(offCentre.every(gap => gap <= 1), `the × and the wand sit in the middle of their buttons (off by ${offCentre.join(', ')}px)`);
       await page.click('.qt-unit .qt-generate');
       await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 3);
-      assert.equal(roleRequests.at(-1).position, 0, 'the whole job says where it is on the CV');
+      assert.equal(roleRequests.at(-1).room.min, 2, 'a CV that fits two pages keeps every bullet of the job');
+      assert.ok(roleRequests.at(-1).room.max >= 2);
       await typedIn();
       const more = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
       assert.match(more[2], /Ran the payments on-call rotation for 2 years\..*New bullet, from your Profile/);
@@ -337,7 +339,8 @@ async function check(browser) {
       await page.waitForFunction(() => document.querySelectorAll('.qt-unit .qt-slot .qt-actions .primary:not([disabled])').length === 2);
       await typedIn();
       const fewer = await page.$$eval('.qt-unit .qt-slot', rows => rows.map(row => row.textContent));
-      assert.match(fewer[1], /Not needed for this job/);
+      assert.match(fewer[1], /Suggested cut: About reliability, which this job does not ask for\./, 'a cut says why');
+      assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].some(button => button.textContent === 'Keep')), 'and can be kept');
       assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].some(button => button.textContent === 'Swap')), 'Swap keeps a bullet in its place');
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Remove').click());
       assert.deepEqual(await listed(), [bulletsBefore[0]], 'Remove takes the bullet off, the others stay');
@@ -357,7 +360,11 @@ async function check(browser) {
       const before = await listed();
       assert.equal(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent.startsWith('Use all'))?.disabled), true, 'with only removals, Use all has nothing to use');
       assert.deepEqual(await listed(), before);
-      await page.evaluate(() => document.querySelector('.qt-unit .qt-close').click());
+      await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-menu > .qt-actions button')].find(button => button.textContent === 'Remove 2 cuts').click());
+      assert.deepEqual(await listed(), [], 'the cuts can be taken together');
+      await page.click(undo);
+      assert.deepEqual(await listed(), before, 'and come back with one Undo');
+      await page.evaluate(() => document.querySelector('.qt-unit .qt-close')?.click());
       roleCount = 2;
       profileChoice = false;
       done.push('Remove');

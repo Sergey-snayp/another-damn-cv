@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   bulletRange,
+  settleCuts,
   checkChoice,
   openingVerb,
   repeatsAny,
@@ -74,7 +75,10 @@ test('the choice is checked: real ids once, numbers kept, exactly the count', ()
       chosen: [
         { id: 'p3', text: 'Ran payment APIs handling ~25,000 transactions a day.' },
         { id: 'zz', text: 'Invented line.' },
-        { id: 'p2', text: 'Automated TLS certificate renewals with ACME and Route53.' },
+        {
+          id: 'p2',
+          text: 'With ACME and Route53, built a TLS certificate service, replacing manual renewals.',
+        },
         { id: 'p2', text: 'Twice.' },
         { id: 'p4', text: 'Mentored two junior engineers through code review, supporting team growth.' },
       ],
@@ -87,7 +91,7 @@ test('the choice is checked: real ids once, numbers kept, exactly the count', ()
     result.chosen.map((item) => [item.id, item.text]),
     [
       ['p3', 'Ran payment APIs handling ~20,000 transactions a day.'],
-      ['p2', 'Automated TLS certificate renewals with ACME and Route53.'],
+      ['p2', 'With ACME and Route53, built a TLS certificate service, replacing manual renewals.'],
       ['p4', 'Mentored two junior engineers through code review.'],
     ],
     'a changed number or words tacked onto the end fall back to the achievement as written',
@@ -160,11 +164,11 @@ test("choosing a job's bullets: from the Profile when it has more, otherwise eac
   assert.match(asked[0].items.find((item) => item.id === 'c2')!.hint, /security/);
   assert.equal(result.chosen.length, 2);
   assert.equal(result.chosen[0].source, 'profile');
-  await use([profile]).execute('u', 'cv', { role: cv, job: { jobId: 'j' }, position: 0 });
+  await use([profile]).execute('u', 'cv', { role: cv, job: { jobId: 'j' }, room: { min: 3, max: 5 } });
   assert.equal(
     asked.at(-1)!.count,
     Math.min(5, asked.at(-1)!.items.length),
-    'a whole job: the posting decides',
+    'a whole job: the room its CV has',
   );
   assert.equal((asked.at(-1) as { min?: number }).min, Math.min(3, asked.at(-1)!.items.length));
 });
@@ -351,16 +355,15 @@ test('single-bullet generation uses the matching client facts and the account’
   assert.ok(!seen.some((item) => item.text.includes('card tokenization')));
 });
 
-test('a whole job gets as many bullets as the posting needs: more for recent jobs, fewer for old ones', () => {
-  assert.deepEqual(bulletRange(0, 12), { min: 3, max: 5 }, 'the latest jobs: 3 to 5');
-  assert.deepEqual(bulletRange(3, 12), { min: 1, max: 3 });
+test('a whole job gets the room the CV leaves it, never more than there is', () => {
+  assert.deepEqual(bulletRange({ min: 3, max: 5 }, 12), { min: 3, max: 5 });
   assert.deepEqual(
-    bulletRange(6, 12),
-    { min: 0, max: 2 },
-    'an old job: none when the posting does not need it',
+    bulletRange({ min: 2, max: 2 }, 12),
+    { min: 2, max: 2 },
+    'over two pages: an exact number',
   );
-  assert.deepEqual(bulletRange(0, 2), { min: 2, max: 2 }, 'never more than there is');
-  assert.deepEqual(bulletRange(0, 1), { min: 1, max: 1 });
+  assert.deepEqual(bulletRange({ min: 3, max: 5 }, 2), { min: 2, max: 2 }, 'never more than there is');
+  assert.deepEqual(bulletRange({ min: 3, max: 5 }, 4), { min: 3, max: 4 });
   const lines = [
     'Built the card tokenization service.',
     'Automated TLS certificate renewals with Step Functions.',
@@ -493,7 +496,8 @@ test('a bullet that says again what the job description above it says is dropped
 });
 
 test("a pick thrown out gives its place to the AI's next best, so a strong bullet is not offered for removal", () => {
-  const description = 'Card payment platform processing 15,000–20,000 transactions a day across tokenization and 3-D Secure.';
+  const description =
+    'Card payment platform processing 15,000–20,000 transactions a day across tokenization and 3-D Secure.';
   const role = {
     company: 'Ciklum',
     title: 'Senior Software Engineer',
@@ -511,7 +515,10 @@ test("a pick thrown out gives its place to the AI's next best, so a strong bulle
     {
       chosen: [
         { id: 'c1', text: role.bullets[0] },
-        { id: 'cf1', text: 'Supported a card payment platform processing 15,000 to 20,000 transactions a day across tokenization and 3-D Secure.' },
+        {
+          id: 'cf1',
+          text: 'Supported a card payment platform processing 15,000 to 20,000 transactions a day across tokenization and 3-D Secure.',
+        },
         { id: 'c3', text: role.bullets[2] },
       ],
       alternates: [
@@ -524,6 +531,85 @@ test("a pick thrown out gives its place to the AI's next best, so a strong bulle
     2,
     [description],
   );
-  assert.deepEqual(result.chosen.map((item) => item.id), ['c1', 'c3', 'c2'], 'the Discover bullet takes the dropped place');
-  assert.deepEqual(result.alternates.map((item) => item.id), ['c4']);
+  assert.deepEqual(
+    result.chosen.map((item) => item.id),
+    ['c1', 'c3', 'c2'],
+    'the Discover bullet takes the dropped place',
+  );
+  assert.deepEqual(
+    result.alternates.map((item) => item.id),
+    ['c4'],
+  );
+});
+
+test('a reworded achievement keeps its own words: the posting cannot change what happened', () => {
+  const text =
+    'Built the Discover integration, adding 4,000+ transactions a day, secured with JWE encryption.';
+  const pool = [{ id: 'c1', text, source: 'cv' as const, cvIndex: 0, starred: false }];
+  const changed = checkChoice(
+    {
+      chosen: [
+        {
+          id: 'c1',
+          text: 'Built the Discover integration, scaling to 4,000+ transactions a day, secured with authentication methods.',
+        },
+      ],
+      alternates: [],
+    },
+    pool,
+    1,
+  );
+  assert.equal(changed.chosen[0].text, text, 'the achievement as written');
+  const named = checkChoice(
+    { chosen: [{ id: 'c1', text: `Observability work: ${text}` }], alternates: [] },
+    pool,
+    1,
+    1,
+    [],
+    () => ['observability', 'work'],
+  );
+  assert.match(
+    named.chosen[0].text,
+    /^Observability/,
+    'a posting word the line is known to show may be used',
+  );
+});
+
+test('a cut says why; a starred bullet and the only proof of a skill are never cut', () => {
+  const item = (id: string, cvIndex: number, text: string, starred = false) => ({
+    id,
+    text,
+    source: 'cv' as const,
+    cvIndex,
+    starred,
+  });
+  const pool = [
+    item('c1', 0, 'Built payment APIs on Node.js.'),
+    item('c2', 1, 'Mentored two engineers through code review.', true),
+    item('c3', 2, 'Deployed the service with Docker images.'),
+    item('c4', 3, 'Organised the office book club.'),
+    item('c5', 4, 'Ran team retrospectives every sprint.'),
+    item('c6', 5, 'Built payment APIs on Node.js for cards.'),
+  ];
+  const first = { ...pool[0], original: pool[0].text };
+  const settled = settleCuts(
+    { chosen: [first], alternates: [] },
+    pool,
+    [
+      { id: 'c4', reason: 'About office life, which this job does not ask for.' },
+      { id: 'c5', reason: 'Not needed for this job.' },
+    ],
+    ['Docker', 'Node.js'],
+    (skill, text) => text.includes(skill),
+  );
+  assert.deepEqual(
+    settled.chosen.map((line) => line.id),
+    ['c1', 'c2', 'c3'],
+    'the starred bullet and the only Docker bullet stay',
+  );
+  assert.deepEqual(settled.cuts, [
+    { cvIndex: 3, reason: 'About office life, which this job does not ask for.' },
+    { cvIndex: 4, reason: 'The bullets kept show more of what this job asks for.' },
+    { cvIndex: 5, reason: 'Says much the same as a bullet this job keeps.' },
+  ]);
 });

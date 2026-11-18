@@ -3,14 +3,20 @@
 Written 2026-11-13, after Quick Tailor proposed removing a key bullet (the TLS
 certificate service) for Varonis and showed every bullet with score chips.
 
-**Status, checked 2026-11-17:**
+**Status, checked 2026-11-18:**
 
-- Phase 1 is partly built. Quick Tailor's review no longer shows the meter, and each
-  line has one main button. Hiding punctuation-only changes was not found in the app.
-- Phase 2 is partly built. You can star bullets on the Profile, and the AI that chooses
-  bullets is told about them. A starred bullet is not yet guaranteed to stay.
-- Phase 3 is not built. `bulletRange()` still uses fixed counts per job.
-- Phases 4 and 5 were not re-checked.
+- Fact check is built. A rewrite may use only the line's own words, plain verbs such as
+  "built" or "developed", and posting words the line is known to show. It is written
+  once more if it breaks this, and then the line stays as it is.
+- Phase 1 is built. Many-line reviews have one solid button (Use all), quiet line buttons,
+  Swap and Tailor again under "⋯", and no notes unless the person typed a request.
+- Phase 2 is partly built. A starred bullet is never cut. Starring is still the only way
+  to mark a key bullet; the app does not guess key bullets.
+- Phase 3 is built. The page measures the room left on two pages (`bulletBudget`). A CV
+  that fits loses nothing. One that does not gives up bullets from its oldest jobs first,
+  down to 3, 3, 2, 2, then 1 per job. Each cut has a reason, and the only bullet showing
+  a skill the posting names stays.
+- Phases 4 and 5 are not built.
 
 ## 1. Why a CV has bullets at all
 

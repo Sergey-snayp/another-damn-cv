@@ -3,12 +3,13 @@
  * keeps about that job in their Profile and saved CVs.
  *
  * The AI chooses and rewords; this file decides what may be shown. A reworded
- * line keeps only the numbers its own achievement has. One bullet keeps one
- * bullet; a whole job gets as many as the posting gives reason for, within
- * bulletRange.
+ * line keeps the words and numbers of its own achievement. One bullet keeps one
+ * bullet; a whole job gets the room the CV's two pages leave it (bulletRange),
+ * and every bullet it gives up says why (settleCuts).
  */
 import { withoutAddedPurpose, withoutDashPunctuation } from './cv-writing-guide';
 import { unsupportedClaims } from './tailoring/claims';
+import { rewriteProblems } from './tailoring/rewrite-guard';
 import { withoutMarks } from './text-marks';
 
 export interface CvRole {
@@ -47,10 +48,14 @@ export interface RoleBulletChoice {
   chosen: ChosenBullet[];
   /** Next best, for Swap. */
   alternates: ChosenBullet[];
+  /** The CV's bullets this job gives up, and why. Only when a whole job is chosen. */
+  cuts: { cvIndex: number; reason: string }[];
 }
 export interface ChooserAnswer {
   chosen: { id: string; text: string }[];
   alternates: { id: string; text: string }[];
+  /** Why each of the CV's bullets was left out. */
+  cuts?: { id: string; reason: string }[];
 }
 
 const SUFFIX = /\b(?:inc|llc|ltd|limited|gmbh|corp|corporation|co|plc|ag|sa|bv|oy)\b\.?/g;
@@ -188,15 +193,65 @@ export function rolePool(cv: CvRole, profile: ProfileRole | null, otherCvs: CvRo
   return items;
 }
 
+/** The room the CV's two pages leave a whole job, within what there is to choose from. */
+export function bulletRange(room: { min: number; max: number }, available: number) {
+  const min = Math.min(room.min, available);
+  return { min, max: Math.max(min, Math.min(room.max, available)) };
+}
+
+const GENERIC_REASON = /^(?:not (?:needed|relevant|required)|less relevant|irrelevant)\b/i;
+const REPEATS = 'Says much the same as a bullet this job keeps.';
+const WEAKER = 'The bullets kept show more of what this job asks for.';
+
 /**
- * How many bullets a whole job may get, by its place on the CV (0 = the latest
- * job): the two latest 3 to 5, the two before 1 to 3, older ones 0 to 2 (none
- * when the posting does not need them). Never more than there is.
+ * The CV bullets a whole job gives up, each with its reason. A starred bullet
+ * stays, and so does the only one that shows a skill the posting names.
  */
-export function bulletRange(position: number, available: number): { min: number; max: number } {
-  const [least, most] = position < 2 ? [3, 5] : position < 4 ? [1, 3] : [0, 2];
-  const min = Math.min(least, available);
-  return { min, max: Math.max(min, Math.min(most, available)) };
+export function settleCuts(
+  choice: Pick<RoleBulletChoice, 'chosen' | 'alternates'>,
+  pool: PoolItem[],
+  reasons: { id: string; reason: string }[],
+  /** The skills the posting names, and whether a text shows one. */
+  skills: string[],
+  shows: (skill: string, text: string) => boolean,
+): Pick<RoleBulletChoice, 'chosen' | 'alternates' | 'cuts'> {
+  const chosen = [...choice.chosen];
+  const kept = new Set(chosen.map((item) => item.id));
+  const dropped = pool.filter(
+    (item) => item.source === 'cv' && item.cvIndex !== null && item.kind !== 'context' && !kept.has(item.id),
+  );
+  const keep = (item: PoolItem) => {
+    kept.add(item.id);
+    chosen.push({ ...item, text: withoutDashPunctuation(item.text), original: item.text });
+  };
+  for (const item of dropped) {
+    const repeated = repeatsAny(
+      item.text,
+      chosen.map((line) => line.text),
+    );
+    const onlyProof = skills.some(
+      (skill) => shows(skill, item.text) && !chosen.some((line) => shows(skill, line.text)),
+    );
+    if (!repeated && (item.starred || onlyProof)) keep(item);
+  }
+  const cuts = dropped
+    .filter((item) => !kept.has(item.id))
+    .map((item) => {
+      const given =
+        reasons
+          .find(({ id }) => id === item.id)
+          ?.reason.replace(/\s+/g, ' ')
+          .trim() ?? '';
+      const usable = given.length >= 12 && given.length <= 180 && !GENERIC_REASON.test(given);
+      const fallback = repeatsAny(
+        item.text,
+        chosen.map((line) => line.text),
+      )
+        ? REPEATS
+        : WEAKER;
+      return { cvIndex: item.cvIndex!, reason: usable ? withoutDashPunctuation(given) : fallback };
+    });
+  return { chosen, alternates: choice.alternates.filter((item) => !kept.has(item.id)), cuts };
 }
 
 /** Numbers as values ("20k" is 20,000); digits inside names (Route53, EC2) are not numbers. */
@@ -237,6 +292,8 @@ export function checkChoice(
   min = count,
   /** The job's description as the CV shows it above the bullets: no bullet may say it again. */
   shown: string[] = [],
+  /** Posting words an achievement is known to show: the only new words its rewording may use. */
+  wordsFor: (item: PoolItem) => string[] = () => [],
 ): Pick<RoleBulletChoice, 'chosen' | 'alternates'> {
   const byId = new Map(pool.map((item) => [item.id, item]));
   const above = shown.filter((text) => text.trim());
@@ -260,6 +317,9 @@ export function checkChoice(
         reworded.length <= 400 &&
         keepsNumbers(reworded, item.text) &&
         !unsupportedClaims(reworded, item.text).length &&
+        // Context is turned into a new bullet; an achievement keeps its own words.
+        (item.kind === 'context' ||
+          !rewriteProblems(reworded, item.text, { allowed: wordsFor(item), keepNumbers: true }).length) &&
         !tackedOn(reworded, item.text);
       if (!fine && item.kind === 'context') {
         used.delete(id);
@@ -282,7 +342,10 @@ export function checkChoice(
   };
   const chosen = take(answer.chosen, count);
   // A pick thrown out above leaves its place to the AI's own next best, not to an empty slot.
-  const wanted = Math.min(count, new Set(answer.chosen.map(({ id }) => id).filter((id) => byId.has(id))).size);
+  const wanted = Math.min(
+    count,
+    new Set(answer.chosen.map(({ id }) => id).filter((id) => byId.has(id))).size,
+  );
   if (chosen.length < wanted) chosen.push(...take(answer.alternates, wanted - chosen.length, chosen));
   const rest = pool
     .filter((item) => !used.has(item.id) && item.kind !== 'context')

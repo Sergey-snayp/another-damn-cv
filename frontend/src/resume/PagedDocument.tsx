@@ -12,6 +12,19 @@ const BLOCKS = '.doc-head, .doc-section > h2, .doc-summary, .doc-roleline, .doc-
 const KEEP_WITH_NEXT = '.doc-section > h2, .doc-roleline, .doc-subline, .doc-role-desc';
 
 /**
+ * Room left at the end of the CV's second sheet, in the page's own pixels; below
+ * zero when the CV runs past two pages.
+ */
+export function spareOnTwoPages(page: HTMLElement): number {
+  const sheet = sheetHeight(page);
+  const margin = parseFloat(getComputedStyle(page).paddingTop) || 45.35;
+  const box = page.getBoundingClientRect();
+  const scale = box.height / page.offsetHeight || 1;
+  const end = Math.max(0, ...[...page.querySelectorAll<HTMLElement>(BLOCKS)].map((block) => (block.getBoundingClientRect().bottom - box.top) / scale));
+  return 2 * sheet + GAP - margin - end;
+}
+
+/**
  * The CV drawn as the sheets of its PDF: a part that would cross the bottom
  * margin moves to the next sheet, as Chrome does when it prints the CV with
  * the same rules (document.css, @media print). A heading or a job's title

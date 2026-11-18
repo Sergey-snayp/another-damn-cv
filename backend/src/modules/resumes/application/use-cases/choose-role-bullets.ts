@@ -1,10 +1,12 @@
 import type { ResumesApi } from '../../contracts';
-import { practiceHints } from '../../domain/job-practices';
+import { findKeywords, keywordIn } from '../../domain/job-keywords';
+import { wordsForLine } from '../../domain/job-practices';
 import {
   bulletRange,
   checkChoice,
   matchProfileRole,
   rolePool,
+  settleCuts,
   type CvRole,
   type RoleBulletChoice,
 } from '../../domain/role-bullets';
@@ -13,7 +15,7 @@ import type { BulletChooser, ProfileRolesReader, SavedCvRolesReader } from '../p
 import type { TailoringJobReader } from '../ports/tailoring';
 import type { JobChoice } from './resume-assistant';
 
-const NONE: RoleBulletChoice = { matched: false, profileRole: null, chosen: [], alternates: [] };
+const NONE: RoleBulletChoice = { matched: false, profileRole: null, chosen: [], alternates: [], cuts: [] };
 
 /**
  * Choose one or more bullets using the matching role in Profile and saved CVs.
@@ -31,8 +33,8 @@ export class ChooseRoleBullets {
   async execute(
     userId: string,
     id: string,
-    /** `position`: the job's place on the CV, sent when the whole job is tailored. */
-    input: { role: CvRole; instruction?: string; job: JobChoice; position?: number },
+    /** `room`: how many bullets the CV's two pages leave this job, sent when the whole job is tailored. */
+    input: { role: CvRole; instruction?: string; job: JobChoice; room?: { min: number; max: number } },
   ): Promise<RoleBulletChoice> {
     await this.resumes.assertOwned(userId, id);
     const job = await this.job(userId, input.job);
@@ -50,16 +52,16 @@ export class ChooseRoleBullets {
     const pool = rolePool(input.role, profileRole, matchingCvs);
     if (!pool.some((item) => item.source === 'profile' || item.cvIndex === null)) return NONE;
     const shown = input.role.bullets.filter((bullet) => bullet.trim()).length;
-    // A whole job: the posting decides how many. One bullet: one bullet.
-    const { min, max: count } =
-      input.position !== undefined && shown > 1
-        ? bulletRange(input.position, pool.length)
-        : { min: Math.min(pool.length, shown || 5), max: Math.min(pool.length, shown || 5) };
+    // A whole job: the room its CV has. One bullet: one bullet.
+    const whole = input.room !== undefined && shown > 1;
+    const { min, max: count } = whole
+      ? bulletRange(input.room!, pool.length)
+      : { min: Math.min(pool.length, shown || 5), max: Math.min(pool.length, shown || 5) };
     const answer = await this.chooser.choose({
       job: `${job.title}${job.company ? ` at ${job.company}` : ''}\n${job.description.slice(0, 30_000)}`,
       items: pool.map((item) => ({
         ...item,
-        hint: practiceHints(job.description, item.text)
+        hint: wordsForLine(job.description, item.text)
           .map((hint) => `${hint.term} (${hint.evidence.join(', ')})`)
           .join('; '),
       })),
@@ -67,10 +69,21 @@ export class ChooseRoleBullets {
       ...(min < count ? { min } : {}),
       instruction: input.instruction,
     });
+    const choice = checkChoice(answer, pool, count, min, [input.role.description ?? ''], (item) =>
+      wordsForLine(job.description, item.text).map((hint) => hint.term),
+    );
     return {
       matched: true,
       profileRole: profileRole ? { title: profileRole.title, company: profileRole.company } : null,
-      ...checkChoice(answer, pool, count, min, [input.role.description ?? '']),
+      ...(whole
+        ? settleCuts(
+            choice,
+            pool,
+            answer.cuts ?? [],
+            findKeywords(job.description).map((keyword) => keyword.name),
+            keywordIn,
+          )
+        : { ...choice, cuts: [] }),
     };
   }
 

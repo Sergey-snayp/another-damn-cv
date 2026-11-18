@@ -19,8 +19,10 @@ const ACRONYM = /\b[A-Z][A-Z0-9]{1,6}s?\b/g;
  * `countTerms: false` for the Profile, which keeps every achievement in full technical
  * detail; a CV line, chosen for one posting, is held to fewer.
  */
-export function recruiterFlags(line: string, context = '', options: { countTerms?: boolean } = {}): string[] {
+export function recruiterFlags(line: string, context = '', options: { countTerms?: boolean; familiar?: string } = {}): string[] {
   const text = line.replace(/\*\*/g, '');
+  // Words the reader has already met: the posting's own, and the CV's companies and tool lists.
+  const familiar = options.familiar ?? '';
   const terms = new Set([...text.matchAll(TOOLS), ...text.matchAll(SHAPED)].map((match) => match[0].toLowerCase()));
   const notes: string[] = [];
   // A bullet may show its mechanism (the standard), but a line that is mostly names loses a recruiter.
@@ -29,10 +31,12 @@ export function recruiterFlags(line: string, context = '', options: { countTerms
   const spelled = `${context}\n${text}`;
   const unknown = [
     ...new Set(
-      [...text.matchAll(ACRONYM)]
+      [...text.replace(/\bPCI DSS\b/g, 'PCI').matchAll(ACRONYM)]
         .map((match) => match[0])
         .filter((word) => !/\d/.test(word) && !KNOWN.has(word.toUpperCase()) && !KNOWN.has(word.replace(/s$/, '').toUpperCase()))
-        .filter((word) => !new RegExp(`\\(${word}\\)|\\b${word}\\s*\\(`).test(spelled)),
+        // Spelled out in brackets, or introduced in the CV: "HYPT, a platform for venues".
+        .filter((word) => !new RegExp(`\\(${word}\\)|\\b${word}\\s*\\(|\\b${word}\\s*[,:—–-]\\s*(?:a|an|the)\\s`).test(spelled))
+        .filter((word) => !new RegExp(`\\b${word}\\b`).test(familiar)),
     ),
   ].slice(0, 2);
   if (unknown.length)

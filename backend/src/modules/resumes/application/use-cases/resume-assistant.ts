@@ -1,7 +1,8 @@
 import type { ResumesApi } from '../../contracts';
-import { practiceHintText, practiceHints } from '../../domain/job-practices';
+import { practiceHintText, wordsForLine } from '../../domain/job-practices';
 import type { TailoringJobReader } from '../ports/tailoring';
 import { repeatsAny } from '../../domain/role-bullets';
+import { rewriteProblems } from '../../domain/tailoring/rewrite-guard';
 import { ResumeError } from '../errors';
 import { scoreResume, type ResumeScore } from '../../domain/resume-score';
 import {
@@ -36,17 +37,18 @@ import {
 
 const TAILOR_LINE = `Tailor this line for the job below, so a recruiter for this job sees the match at once:
 - Lead with the part of the line this job cares about most.
-- Use the job's own words for what the line already shows (if the job says "event-driven"
-  and the line describes services fed by Kafka events, say event-driven; if it says
-  "observability" and the line has CloudWatch alarms and dashboards, say observability).
-  Name the practice; keep the line's own tools and numbers next to it.
-- Keep it as written where it already shows the work: swap in the job's word only where it
-  means the same thing, and never shorten away its mechanism, reason, before and after,
-  ownership or counts. Tighten only filler.
+- Use the line's own words. A new word is allowed only when it is listed below as a posting
+  word this line shows (if the job says "observability" and the line has CloudWatch alarms
+  and dashboards, say observability). Keep the line's own tools and numbers next to it.
+- Never change what happened: "adding" is not "scaling to", "encryption" is not
+  "authentication", and an ad auction is not a payment.
+- Never shorten away its mechanism, reason, before and after, ownership or counts. Tighten
+  only filler.
 - Keep every number, technology and fact the line has. Add none it does not have:
-  no new technology, number, scale or responsibility.
-Return your best tailored version. Return the line unchanged only if no honest
-improvement for this job exists, and say why in cannotDo.`;
+  no new technology, number, scale, domain or responsibility.
+If the job has nothing this line honestly shows, return the line unchanged. Leave cannotDo
+empty unless the candidate's own request could not be followed. Never comment on whether
+the candidate fits the job.`;
 
 /** A job's tech stack is a list of tools, not a line of prose. */
 const TAILOR_TECH_STACK = `This is the job's tech stack: a list of the tools it used, printed under its bullets.
@@ -57,8 +59,12 @@ Tailor it for the job below:
 - Keep every tool the list has, spelled as it is, unless the candidate asks for a shorter list.
 - You may add a tool only when this job's own lines in <cv_facts> name it. Never add a tool
   the job posting asks for that those lines do not show, and never a tool from another job.
-Return the list unchanged only if no honest improvement for this job exists, and say why
-in cannotDo.`;
+Return the list unchanged if no honest improvement for this job exists. Leave cannotDo empty
+unless the candidate's own request could not be followed.`;
+
+/** A note for the person: in their words, never the names used inside the prompt. */
+const cleanNotes = (notes: string[]) =>
+  notes.map((note) => note.replace(/(?:the\s+)?<?\bcv_facts\b>?/gi, "this job's lines"));
 
 /** What each kind of line is told: the shared tailoring rules, then the guide for that kind. */
 const TAILOR_BY_KIND = {
@@ -217,7 +223,11 @@ export class ResumeAssistant {
           .join('\n\n'),
       });
       const checked = checkedStack(result.suggestion, input.text, own);
-      return { ...result, suggestion: checked.list, cannotDo: [...result.cannotDo, ...checked.notes] };
+      return {
+        ...result,
+        suggestion: checked.list,
+        cannotDo: input.instruction ? cleanNotes([...result.cannotDo, ...checked.notes]) : [],
+      };
     }
     const others = (input.others ?? [])
       .map((line) => line.trim())
@@ -229,29 +239,56 @@ export class ResumeAssistant {
       .filter(Boolean)
       .join('\n\n');
     // The posting's words for practices this line already shows ("observability" for CloudWatch alarms).
-    const hints = practiceHintText(practiceHints(job.description, input.text));
-    const result = await this.rewriter.rewrite({
-      text: input.text,
-      kind: input.kind,
-      instruction: withRequest(
-        hints ? `${TAILOR_BY_KIND[input.kind]}\n\n${hints}` : TAILOR_BY_KIND[input.kind],
-        input.instruction,
-      ),
-      context,
-    });
-    // A benefit the line and its job do not state ("…to reduce risk") is cut.
-    const suggestion = withoutAddedPurpose(result.suggestion, `${input.text}\n${input.context ?? ''}`);
+    const shown = wordsForLine(job.description, input.text);
+    const hints = practiceHintText(shown);
+    const facts = `${input.text}\n${input.context ?? ''}`;
+    const instruction = withRequest(
+      hints ? `${TAILOR_BY_KIND[input.kind]}\n\n${hints}` : TAILOR_BY_KIND[input.kind],
+      input.instruction,
+    );
+    const write = async (extra = '') => {
+      const result = await this.rewriter.rewrite({
+        text: input.text,
+        kind: input.kind,
+        instruction: `${instruction}${extra}`,
+        context,
+      });
+      // A benefit the line and its job do not state ("…to reduce risk") is cut.
+      const suggestion = withoutAddedPurpose(result.suggestion, facts);
+      // A headline is reworded towards the job's title; a bullet or a description keeps to its facts.
+      const problems =
+        input.kind === 'headline'
+          ? []
+          : rewriteProblems(suggestion, facts, {
+              allowed: shown.map((hint) => hint.term),
+              keepNumbers: !input.instruction,
+            });
+      return { result, suggestion, problems };
+    };
+    let written = await write();
+    if (written.problems.length)
+      written = await write(
+        `\n\nYour last version was refused because the line does not support: ${written.problems.join(', ')}. Write it again without them. If that leaves nothing better, return the line unchanged.`,
+      );
+    const { result, suggestion, problems } = written;
+    // Notes answer a request the person typed; without one, the line simply stays as it is.
+    const notes = (extra: string) => (input.instruction ? [...cleanNotes(result.cannotDo), extra] : []);
+    if (problems.length)
+      return {
+        ...result,
+        suggestion: input.text,
+        cannotDo: notes(
+          'That change would have added something this line does not say, so it is kept as it is.',
+        ),
+      };
     // A rewrite that says what another line of the job already says is not offered.
     if (repeatsAny(suggestion, others) && !repeatsAny(input.text, others))
       return {
         ...result,
         suggestion: input.text,
-        cannotDo: [
-          ...result.cannotDo,
-          'The rewrite repeated another bullet of this job, so the line is kept as it is.',
-        ],
+        cannotDo: notes('The rewrite repeated another bullet of this job, so the line is kept as it is.'),
       };
-    return { ...result, suggestion };
+    return { ...result, suggestion, cannotDo: input.instruction ? cleanNotes(result.cannotDo) : [] };
   }
 
   async score(

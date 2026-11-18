@@ -325,7 +325,10 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
     404,
   );
 
-  answer = JSON.stringify({ suggestion: 'Built payment APIs on Node.js and PostgreSQL.', cannotDo: [] });
+  answer = JSON.stringify({
+    suggestion: 'Built Node.js APIs.',
+    cannotDo: ['This job wants a different profile.'],
+  });
   const line = await call(`/resumes/${resumeId}/tailor-line`, {
     method: 'POST',
     user: owner.user.id,
@@ -339,7 +342,7 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
   assert.equal(line.status, 200);
   assert.deepEqual(await line.json(), {
     original: 'Responsible for Node.js APIs.',
-    suggestion: 'Built payment APIs on Node.js and PostgreSQL.',
+    suggestion: 'Built Node.js APIs.',
     cannotDo: [],
   });
   const prompt = prompts.at(-1)!;
@@ -370,21 +373,21 @@ test('Quick tailoring: one copy per job with the source design, and lines tailor
   );
 
   // A bullet's neighbours: the AI sees them, and a rewrite that repeats one is not offered.
-  answer = JSON.stringify({ suggestion: 'Built Node.js payment APIs for card tokenization.', cannotDo: [] });
+  answer = JSON.stringify({ suggestion: 'Built Node.js APIs.', cannotDo: [] });
   const repeated = await call(`/resumes/${resumeId}/tailor-line`, {
     method: 'POST',
     user: owner.user.id,
     body: {
       text: 'Responsible for Node.js APIs.',
       kind: 'bullet',
-      others: ['Built Node.js APIs for card tokenization payments.', 'Mentored two engineers.'],
+      others: ['Built Node.js APIs.', 'Mentored two engineers.'],
       job: { jobId: job.id },
     },
   });
   assert.equal(repeated.status, 200);
   const kept = (await repeated.json()) as { suggestion: string; cannotDo: string[] };
   assert.equal(kept.suggestion, 'Responsible for Node.js APIs.');
-  assert.match(kept.cannotDo.join(' '), /repeated another bullet/);
+  assert.deepEqual(kept.cannotDo, [], 'the line simply stays: no note nobody asked for');
   assert.match(prompts.at(-1)!, /<other_lines>[\s\S]*Do not repeat[\s\S]*- Mentored two engineers\./);
 });
 
