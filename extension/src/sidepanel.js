@@ -908,6 +908,10 @@ async function runFill() {
       } catch (error) { letterProblem = `Cover letter not attached: ${error.message}`; }
       status('fill-status', 'Filling…');
     }
+    // The jobs, schools and languages for the form's own lists (Avature's Work History, Workday's
+    // My Experience): still loading, or never loaded for this CV, they are waited for, not skipped.
+    for (let waited = 0; careerLoading && waited < 100; waited++) await new Promise(resolve => setTimeout(resolve, 100));
+    if (!activeCareer() || !career.profile) await loadCareer();
     // Fields in groups switched off in Settings are sent empty, so they stay as they are.
     const allowed = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, groupOn(key) ? value : '']));
     for (const key of Object.keys(DIVERSITY_CHOICES)) if (groupOn(key)) allowed[key] = diversityValue(key);
