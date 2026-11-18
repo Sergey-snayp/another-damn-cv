@@ -90,6 +90,8 @@ function scan() {
     canOpenForm: Boolean(Sites.formOpener()) && !lastScan.found.length,
     // A job posting by its address (Workday's job page): its Apply button may still be on its way.
     jobPage: window === window.top && Sites.isJobPage(),
+    // An application form that also makes an account (Avature's Password and Confirm): the panel sends the login.
+    passwords: window.CVAutofillAccount?.find() ? 0 : [...document.querySelectorAll('input[type="password"]')].filter((input) => input.getClientRects().length).length,
     // A job site's account step: 'create' (Create Account) or 'signin', as Simplify tells them apart.
     account: window.CVAutofillAccount?.find()?.kind ?? null,
     // It links to the other form: "Sign In" on Create Account, "Create Account" on Sign In.
@@ -335,6 +337,18 @@ async function fill(profile, answers = []) {
     }
   } finally {
     hold.release();
+  }
+  // An application form that also makes an account (Lululemon's Password and Confirm): the saved
+  // job-site login, as Jobright fills Avature's (its fillAvaturePasswordFields).
+  if (profile.siteLogin?.password) {
+    const boxes = [...document.querySelectorAll('input[type="password"]')].filter((input) => input.getClientRects().length && !input.value);
+    const marks = [];
+    for (const box of boxes) {
+      Filler.typeText(box, profile.siteLogin.password, { leave: true });
+      marks.push({ element: box, status: 'ok', reason: 'Your job-site password, saved on your account (Settings → Job-site login).' });
+      result.filled++;
+    }
+    if (marks.length) await Marks?.show(marks);
   }
   await hooks?.finish?.(lastScan.found);
   hooks?.end();

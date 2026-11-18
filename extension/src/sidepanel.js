@@ -918,7 +918,15 @@ async function runFill() {
     const { answers, notes: answerNotes } = await savedAnswersFor(target);
     // Groups switched off, by field, so a still-empty field can say which setting left it empty.
     const offKeys = Object.fromEntries(FILL_GROUPS.filter(group => group.keys.length && !groupOn(group.keys[0])).flatMap(group => group.keys.map(key => [key, group.label])));
-    const payload = { ...allowed, resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, ...coverLetter, eligibility, workStatus: workStatusMap(autofillDefaults), acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}), history: formHistory() };
+    // A form that also makes an account (Password and Confirm): the job-site login, a new one saved first if there is none.
+    let siteLogin = null;
+    if (scan?.passwords && !scan.account) {
+      try {
+        siteLogin = await readSiteLogin(hostOf(currentTab?.url));
+        if (!siteLogin && (profile.email || allowed.email)) siteLogin = await saveSiteLogin(profile.email || allowed.email, newSitePassword());
+      } catch { siteLogin = null; }
+    }
+    const payload = { ...allowed, ...(siteLogin && { siteLogin: { email: siteLogin.email, password: siteLogin.password } }), resumeDataUrl: file?.dataUrl, resumeFileName: file?.fileName, ...coverLetter, eligibility, workStatus: workStatusMap(autofillDefaults), acknowledgeRequired, offKeys, ...(groupOn('workedHereBefore') ? await workedHereBefore() : {}), history: formHistory() };
     // Each frame holding the form fills in turn; their results add up to one report.
     let result = null;
     for (const frameId of formFrames.length ? formFrames : [0]) {

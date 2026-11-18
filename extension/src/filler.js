@@ -123,6 +123,41 @@ function fillSelect(element, value) {
   return true;
 }
 
+/**
+ * A select2 whose options come as you search (Avature's Location, 100 at a
+ * time), as Simplify fills it: open it, type into its search box, wait for
+ * its results (up to 3 s), press the option that is the answer, else one
+ * that starts with it, else one with it as a word. True once the select has it.
+ */
+async function select2Search(select, value) {
+  const container = select.nextElementSibling;
+  const opener = container?.querySelector('.select2-selection');
+  if (!opener) return false;
+  if (opener.getAttribute('aria-expanded') !== 'true') press(opener);
+  await wait(300);
+  const search = document.querySelector('.select2-container--open input.select2-search__field') ?? container.querySelector('input.select2-search__field');
+  if (search) { search.focus({ preventScroll: true }); typeText(search, String(value)); }
+  const wanted = normal(value);
+  const word = new RegExp(`(^|[^a-z0-9])${wanted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`);
+  let pick = null;
+  for (let waited = 0; waited < 3000 && !pick; waited += 150) {
+    await wait(150);
+    const options = [...document.querySelectorAll('.select2-container--open .select2-results__option[role="option"], ul.select2-results__options[aria-expanded="true"] li[role="option"]')]
+      .filter((option) => option.getClientRects().length && !/^(searching|loading|no results)/i.test(option.textContent.trim()) && option.getAttribute('aria-disabled') !== 'true');
+    const text = (option) => normal(option.textContent);
+    pick = options.find((option) => text(option) === wanted) ?? options.find((option) => text(option).startsWith(wanted)) ?? options.find((option) => word.test(text(option)));
+    // Its answer that nothing matches: no more waiting.
+    if (!pick && [...document.querySelectorAll('.select2-container--open .select2-results__message')].some((note) => /no results|no matches/i.test(note.textContent))) break;
+  }
+  if (!pick) {
+    search?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    return false;
+  }
+  press(pick);
+  await wait(250);
+  return Boolean(select.value);
+}
+
 /** Tells a jQuery widget its select changed, from the page's own world (page-world.js). */
 let jqueryCount = 0;
 function jqueryChanged(element) {
@@ -592,8 +627,15 @@ async function fillField(field, value, resumeFileName) {
     }
     case 'listbox':
       return fillListbox(field.element, field.key === 'phoneType' ? [value, 'Mobile with text', 'Mobile', 'Cell', 'Primary'] : [value]);
-    case 'select':
-      return { filled: fillSelect(field.element, value) };
+    case 'select': {
+      // A "Location" list of countries (Lululemon's): the place, else the country, else the city.
+      const tries = [value, ...(field.alternatives ?? [])].filter(Boolean);
+      for (const each of tries) if (fillSelect(field.element, each)) return { filled: true };
+      // select2 that loads its options as you search (Avature): searched on screen, as Simplify does.
+      if (field.element.nextElementSibling?.matches?.('.select2-container'))
+        for (const each of tries) if (await select2Search(field.element, each)) return { filled: true };
+      return { filled: false };
+    }
     case 'checkbox':
     case 'radio':
       return { filled: fillChoice(field.element, value) };
@@ -1097,6 +1139,8 @@ const pageOrder = (a, b) => (a.element.compareDocumentPosition(b.element) & Node
  */
 async function fillOne(field, profile, state = {}) {
   const value = valueFor(field, profile);
+  // A list for "Location" may list countries or cities: those next.
+  if (field.key === 'location' && field.kind === 'select') field.alternatives = [profile.country, profile.city];
   if (!value || (field.key === 'resume' && state.uploaded) || (field.key === 'coverLetter' && state.letterAttached)) return { filled: false, skipped: true };
   const label = window.CVAutofillFields.labelOf(field.element.matches?.('input, select, textarea') ? field.element : field.element.querySelector('label') ?? field.element);
   if (field.key === 'workArrangement' || field.key === 'willingToRelocate') {

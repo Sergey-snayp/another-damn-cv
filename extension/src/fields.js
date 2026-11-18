@@ -437,6 +437,10 @@ function categorise(signals, { long = false, yesNo = false } = {}) {
   if (WORKED_BEFORE.some((pattern) => pattern.test(signals))) {
     return { key: 'workedHereBefore', sensitive: false };
   }
+  // "State/Province/City" (Avature's) is one box for the region, as Simplify's state rule reads it.
+  if (/\b(state|province)\s*\/\s*(province\s*\/\s*)?(city|town)\b/.test(signals) && !/\bcountry\b|\bzip\b|\bpostal\b/.test(signals)) {
+    return { key: 'state', sensitive: false };
+  }
   if (ADDRESS_PARTS.filter((words) => words.some((word) => mentions(signals, word))).length >= 2) {
     return { key: 'location', sensitive: false, compound: true };
   }
