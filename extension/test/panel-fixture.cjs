@@ -2,6 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const extension = path.resolve(__dirname, '..');
+/** The page scripts, in load order (src/page-scripts.js). */
+const pageScripts = () => JSON.parse(fs.readFileSync(path.join(extension, 'src/page-scripts.js'), 'utf8').match(/PAGE_SCRIPTS = (\[[^\]]*\])/)[1].replace(/'/g, '"').replace(/,\s*\]/, ']'));
 
 /**
  * The real side panel (src/sidepanel.html), reading a job page the way Chrome
@@ -117,7 +119,7 @@ async function pageWithScripts(browser, pages) {
     };
     window.__ask = message => new Promise(resolve => { for (const listener of window.__listeners) listener(message, { url: chrome.runtime.getURL('src/sidepanel.html'), id: 'test' }, resolve); });
   });
-  const scripts = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json'))).content_scripts.find(entry => entry.js.includes('src/content.js')).js;
+  const scripts = pageScripts();
   page.open = async (url, setup) => {
     await page.goto(url);
     if (setup) await page.evaluate(setup);
@@ -126,4 +128,4 @@ async function pageWithScripts(browser, pages) {
   return page;
 }
 
-module.exports = { panelFixture, pageWithScripts };
+module.exports = { panelFixture, pageWithScripts, pageScripts };

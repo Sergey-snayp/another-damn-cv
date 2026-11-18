@@ -60,7 +60,7 @@ Fill job application forms with the user's own profile and CVs from their Anothe
 | `storage` | Keeps the user's sign-in token, settings, a copy of their profile and which CV is chosen on the device, so forms can be filled without asking the server each time. |
 | `unlimitedStorage` | The text of the user's CVs is kept on the device for keyword matching; several CVs can exceed the default storage quota. |
 | `activeTab` | Reads the current page when the user clicks the toolbar icon, to open the panel and find the application form. |
-| `scripting` | Injects the form-filling panel and filler into the page (and its frames) where the user opens it, including pages opened before the extension was installed. |
+| `scripting` | Injects the form-filling panel and filler into the page (and its frames) where the user opens it or where the page looks like a job posting or form, including pages opened before the extension was installed. Only a small check runs on other pages. |
 | `tabs` | Reads the current tab's address and title to check whether that job is already saved, and opens the user's job in the Another Damn CV app. |
 | `identity` | Signs the user in with Google (chrome.identity.launchWebAuthFlow) so the extension can reach their own account. |
 | `webNavigation` | Follows multi-step application forms and forms inside frames, so each step is filled as it loads. |

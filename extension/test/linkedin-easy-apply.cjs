@@ -66,7 +66,7 @@ const resumeStep = `<div role="dialog"><h2>Apply to Conexiom</h2>
     await page.goto(url);
     const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json')));
     await page.addScriptTag({ path: path.join(extension, 'src/page-world.js') });
-    for (const file of manifest.content_scripts.find(entry => entry.js.includes('src/content.js')).js) await page.addScriptTag({ path: path.join(extension, file) });
+    for (const file of require('./panel-fixture.cjs').pageScripts()) await page.addScriptTag({ path: path.join(extension, file) });
 
     const showStep = step => page.evaluate(markup => {
       const host = document.getElementById('interop-outlet');

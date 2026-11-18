@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Another Damn CV",
-  "version": "0.83.2",
+  "version": "0.84.0",
   "description": "Fills job application forms from your profile, and sends job postings to your app.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -44,39 +44,8 @@
         "http://localhost:3001/*"
       ],
       "js": [
-        "src/top-layer.js",
-        "src/site-fields.js",
-        "src/sites.js",
-        "src/fields.js",
-        "src/filler.js",
-        "src/account-form.js",
-        "src/workday-history.js",
-        "src/marks.js",
-        "src/launcher.js",
-        "src/panel-host.js",
-        "src/job-form.js",
-        "src/linkedin.js",
-        "src/logo.js",
-        "src/job-details.js",
-        "src/content.js"
+        "src/page-check.js"
       ],
-      "all_frames": true,
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "http://*/*",
-        "https://*/*",
-        "file:///*"
-      ],
-      "exclude_matches": [
-        "http://localhost:5173/*",
-        "http://localhost:3001/*"
-      ],
-      "js": [
-        "src/page-world.js"
-      ],
-      "world": "MAIN",
       "all_frames": true,
       "run_at": "document_idle"
     },

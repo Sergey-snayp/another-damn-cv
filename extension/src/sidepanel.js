@@ -223,12 +223,21 @@ function splitKey(key) {
   const text = String(key), at = text.indexOf(':');
   return at < 0 ? [0, text] : [Number(text.slice(0, at)), text.slice(at + 1)];
 }
-async function frameIdsOf(tab) {
+async function framesOf(tab) {
   if (!tab?.id) return [];
   try {
     const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
-    return frames.filter(frame => /^(https?|file):/.test(frame.url)).map(frame => frame.frameId).sort((a, b) => a - b);
-  } catch { return [0]; }
+    return frames.filter(frame => /^(https?|file):/.test(frame.url)).sort((a, b) => a.frameId - b.frameId);
+  } catch { return [{ frameId: 0, url: tab.url ?? '' }]; }
+}
+const frameIdsOf = async tab => (await framesOf(tab)).map(frame => frame.frameId);
+/** The page scripts load by themselves only where a form or a job shows: the open panel needs them in every frame. */
+let framesAsked = '';
+async function loadFrames(tab, frames) {
+  const asked = JSON.stringify([tab.id, frames.map(frame => [frame.frameId, frame.url])]);
+  if (asked === framesAsked) return;
+  framesAsked = asked;
+  try { await chrome.runtime.sendMessage({ type: 'load-frames', frameIds: frames.map(frame => frame.frameId) }); } catch { /* the frames that have them still answer */ }
 }
 async function askFrame(frameId, message, tab = currentTab) {
   if (frameId === 0) return askPage(message, tab);
@@ -246,8 +255,9 @@ async function askForms(message, tab = currentTab) {
 }
 /** One scan for the panel: the top page's details, every frame's fields. */
 async function scanFrames(tab) {
-  const scans = [];
-  for (const frameId of await frameIdsOf(tab)) {
+  const scans = [], frames = await framesOf(tab);
+  if (tab?.id) await loadFrames(tab, frames);
+  for (const { frameId } of frames) {
     const reply = await askFrame(frameId, { type: 'scan' }, tab);
     if (reply) scans.push({ frameId, reply });
   }

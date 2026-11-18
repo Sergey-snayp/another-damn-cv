@@ -32,7 +32,7 @@ const JOB = 'https://jobs.jobvite.com/careers/varonis/job/oitNzfwR';
       window.__ask = message => new Promise(resolve => { for (const listener of window.__listeners) if (listener(message, { url: chrome.runtime.getURL('src/sidepanel.html'), id: 'test' }, resolve) === false) {} });
     });
     const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json')));
-    const scripts = manifest.content_scripts.find(entry => entry.js.includes('src/content.js')).js;
+    const scripts = require('./panel-fixture.cjs').pageScripts();
     const open = async url => {
       await page.goto(url);
       for (const file of scripts) await page.addScriptTag({ path: path.join(extension, file) });

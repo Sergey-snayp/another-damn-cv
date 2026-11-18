@@ -35,7 +35,7 @@ const html = `<!doctype html><title>Jobs | LinkedIn</title><main>
     });
     await page.goto('https://www.linkedin.com/jobs/search/?currentJobId=111');
     const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json')));
-    for (const file of manifest.content_scripts.find(entry => entry.js.includes('src/content.js')).js) await page.addScriptTag({ path: path.join(extension, file) });
+    for (const file of require('./panel-fixture.cjs').pageScripts()) await page.addScriptTag({ path: path.join(extension, file) });
     const handed = () => page.evaluate(() => window.__messages.filter(message => message.type === 'linkedin-apply'));
 
     await page.click('[aria-label^="Easy Apply"]');

@@ -41,7 +41,7 @@ const html = `<!doctype html><title>Senior Backend Engineer @ Quo</title><h1>Sen
     });
     await page.goto('https://jobs.ashbyhq.com/quo/1/application');
     const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json')));
-    for (const file of manifest.content_scripts.find(entry => entry.js.includes('src/content.js')).js) await page.addScriptTag({ path: path.join(extension, file) });
+    for (const file of require('./panel-fixture.cjs').pageScripts()) await page.addScriptTag({ path: path.join(extension, file) });
 
     await page.evaluate(() => window.__ask({ type: 'fill', profile: { fullName: 'Sergey Proniuk' }, answers: [] }));
     await new Promise(resolve => setTimeout(resolve, 300));

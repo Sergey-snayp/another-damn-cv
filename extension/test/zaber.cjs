@@ -31,7 +31,7 @@ const pdf = `data:application/pdf;base64,${Buffer.from('%PDF-1.4\n%%EOF').toStri
     });
     await page.goto('https://www.zaber.com/careers/job?job_id=181541CA22');
     const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json')));
-    for (const file of manifest.content_scripts.find(entry => entry.js.includes('src/content.js')).js) await page.addScriptTag({ path: path.join(extension, file) });
+    for (const file of require('./panel-fixture.cjs').pageScripts()) await page.addScriptTag({ path: path.join(extension, file) });
 
     const scan = await page.evaluate(() => window.__ask({ type: 'scan' }));
     assert.deepEqual(scan.fields.map(field => field.key), ['firstName', 'lastName', 'email', 'phone', 'resume', 'coverLetter'], 'the newsletter email is not a field');

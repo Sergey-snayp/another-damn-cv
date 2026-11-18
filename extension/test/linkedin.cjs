@@ -62,7 +62,7 @@ async function pageFixture(browser, html, url = searchUrl, publicHtml = null) {
     });
   });
   await page.goto(url);
-  const scripts = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json'))).content_scripts.find(entry => entry.js.includes('src/content.js')).js;
+  const scripts = require('./panel-fixture.cjs').pageScripts();
   for (const file of scripts) await page.addScriptTag({ path: path.join(extension, file) });
   for (const file of ['src/capture-sites.js', 'src/capture.js']) await page.addScriptTag({ path: path.join(extension, file) });
   return page;

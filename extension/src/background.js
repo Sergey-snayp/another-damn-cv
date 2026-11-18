@@ -1,4 +1,5 @@
 import { matchAnswers, saveAnswers } from './answers.js';
+import { PAGE_SCRIPTS, PAGE_WORLD_SCRIPT } from './page-scripts.js';
 import { LINKEDIN_PAIRING_MS, tabOpenedBy } from './linkedin-handoff.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
 import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
@@ -7,9 +8,8 @@ import { acceptOffer, attemptFor, confirmAttempt, dismissOffer, dropAttempt, not
 /**
  * The toolbar icon toggles the in-page panel (src/panel-host.js).
  *
- * Supported job boards already have the content scripts. On any other site the
- * click grants temporary access to that tab (activeTab), and the same bundle is
- * injected then.
+ * Pages that may hold a job or a form load the page scripts by themselves
+ * (src/page-check.js). On any other page the click loads them.
  *
  * Tabs with the panel open are remembered in session storage, so the panel
  * reopens after the page in that tab changes.
@@ -36,15 +36,7 @@ async function armedSteps(tabId, url) {
   return armed;
 }
 
-const PAGE_SCRIPTS = ['src/top-layer.js', 'src/site-fields.js', 'src/sites.js', 'src/fields.js', 'src/filler.js', 'src/marks.js', 'src/linkedin.js', 'src/logo.js', 'src/job-details.js', 'src/launcher.js', 'src/panel-host.js', 'src/job-form.js', 'src/content.js'];
 const PANEL_URL = chrome.runtime.getURL('src/sidepanel.html');
-
-/** Pages where Chrome loads PAGE_SCRIPTS itself, from the manifest's match patterns. */
-const MANIFEST_PAGES = chrome.runtime.getManifest().content_scripts
-  .filter((entry) => entry.js.includes('src/panel-host.js'))
-  .flatMap((entry) => entry.matches)
-  .map((pattern) => new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`));
-const hasManifestScripts = (url = '') => MANIFEST_PAGES.some((pattern) => pattern.test(url));
 
 async function openTabs() {
   const { panelTabs = [] } = await chrome.storage.session.get('panelTabs');
@@ -62,22 +54,42 @@ function setTabOpen(tabId, open) {
   return writes;
 }
 
-/** True when the page already runs the panel host. */
-async function hasPanelHost(tabId) {
+/**
+ * Puts the page scripts into one frame, once. Chrome loads only src/page-check.js
+ * by itself; it asks for this on a page that may hold a job or a form. The flag is
+ * set inside the frame, so two requests at once cannot both load them. Tiny frames
+ * (adverts) are left out.
+ */
+async function loadPageScripts(tabId, frameId = 0) {
+  const target = { tabId, frameIds: [frameId] };
+  const [claim] = await chrome.scripting.executeScript({
+    target,
+    args: [frameId],
+    func: (id) => {
+      if (window.__adcvPageScripts || (id !== 0 && (innerWidth < 250 || innerHeight < 150))) return false;
+      window.__adcvPageScripts = true;
+      return true;
+    },
+  });
+  if (!claim?.result) return;
   try {
-    const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: () => Boolean(window.CVAutofillPanel) });
-    return Boolean(result?.result);
-  } catch {
-    return false;
+    await chrome.scripting.executeScript({ target, files: PAGE_SCRIPTS });
+    // React dropdown helper, in the page's own world (see page-world.js).
+    await chrome.scripting.executeScript({ target, files: [PAGE_WORLD_SCRIPT], world: 'MAIN' }).catch(() => {});
+  } catch (error) {
+    await chrome.scripting.executeScript({ target, func: () => { window.__adcvPageScripts = false; } }).catch(() => {});
+    throw error;
   }
 }
 
+async function loadAllFrames(tabId) {
+  const frames = await chrome.webNavigation.getAllFrames({ tabId }).catch(() => []);
+  await Promise.allSettled((frames ?? []).filter((frame) => /^(https?|file):/.test(frame.url)).map((frame) => loadPageScripts(tabId, frame.frameId)));
+}
+
 async function injectPanel(tabId) {
-  if (await hasPanelHost(tabId)) return true;
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: PAGE_SCRIPTS });
-    // React dropdown helper, in the page's own world (see page-world.js).
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/page-world.js'], world: 'MAIN' }).catch(() => {});
+    await loadPageScripts(tabId);
     return true;
   } catch {
     return false;
@@ -229,6 +241,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true });
     return false;
   }
+  // A page that may hold a job or a form asks for the page scripts (src/page-check.js).
+  if (message?.type === 'load-page-scripts' && fromContent) {
+    // A form in a frame: the top page first, which shows the D! button and the panel for it.
+    void (sender.frameId ? loadPageScripts(tabId).catch(() => {}) : Promise.resolve())
+      .then(() => loadPageScripts(tabId, sender.frameId)).catch(() => {});
+    return false;
+  }
+  // The open panel needs them in every frame it reads.
+  if (message?.type === 'load-frames' && fromPanel) {
+    const frameIds = (Array.isArray(message.frameIds) ? message.frameIds : []).filter(Number.isInteger);
+    void Promise.allSettled(frameIds.map((frameId) => loadPageScripts(tabId, frameId))).then(() => sendResponse({ ok: true }));
+    return true;
+  }
   if (message?.type === 'panel-tab' && fromPanel) {
     sendResponse({ tabId });
     return false;
@@ -287,9 +312,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (info.url) void chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
   if (info.status !== 'complete') return;
-  if (!(await openTabs()).has(tabId)) return;
-  if (hasManifestScripts(tab.url)) return; // The page's own host reopens the panel.
-  if (!(await injectPanel(tabId))) await setTabOpen(tabId, false);
+  if ((await openTabs()).has(tabId)) {
+    if (!(await injectPanel(tabId))) await setTabOpen(tabId, false);
+  } else if (await armedSteps(tabId, tab.url)) await loadAllFrames(tabId); // "Keep filling the next steps".
 });
 const DEFAULT_KINDS = new Set(['workAuthorization', 'requiresSponsorship', 'workedHereBefore', 'willingToRelocate']);
 // Same list as the server's (EXTENSION_PROFILE_KEYS): name and email stay in the app.
@@ -381,6 +406,7 @@ async function saveJobFromMenu(tab) {
   const tabId = tab.id;
   if (unsendableReason(tab)) { flashBadge(tabId, false); return; }
   try {
+    await loadPageScripts(tabId).catch(() => {});
     const details = await pageDetails(tabId);
     if (await lookupJob(details.jobUrl || tab.url)) { flashBadge(tabId, true); return; }
     const logo = details.logo || (details.domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(details.domain)}&sz=128` : null);

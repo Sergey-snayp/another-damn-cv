@@ -55,6 +55,21 @@ form on a separate panel page. Saved jobs load their current backend details;
 returns to Autofill and keeps an edited draft; **Cancel** discards it. The frame
 also supports Enter and Space. Opening it never redirects to the web app.
 
+## What runs on every page
+
+Chrome puts one small script on every page: `src/page-check.js`, under 6 KB. The
+other page scripts (about 450 KB, listed in `src/page-scripts.js`) load only when one
+of these is true:
+
+- the page or a frame has a file upload, or two fields that are not a password or a
+  search box;
+- the top page has job words in its address or title, a job posting's structured
+  data, or the mark of a known job system;
+- you press the toolbar icon, use the right-click menu, or the panel is open.
+
+The check looks again as the page changes. A form in a frame loads the top page too,
+for the D! button and the panel. `test/lazy-load.cjs`, `test/page-check.test.mjs`.
+
 ## When the panel opens automatically
 
 `src/job-form.js` decides, on every site, whether the page looks like a job
@@ -265,7 +280,10 @@ description, and the job card shows the saved job's logo on every step.
 ## How it works
 
 ```
-On the page
+On every page
+  page-check.js      asks for the scripts below where a job or a form may be
+
+On pages that need them (page-scripts.js)
   fields.js          finds inputs and guesses what each one is
   filler.js          writes values in a way the page accepts
   sites.js           known job systems, their buttons and steps
@@ -336,7 +354,7 @@ render after load and change as you scroll.
   keyboard-like sequence (key down, key press, value, input, key up, change).
   Typing never moves the page; the follow-along decides where it is.
   `test/typing.html` covers both paths.
-- **Forms inside iframes.** The page scripts run in every frame, so a form
+- **Forms inside iframes.** The page scripts load into each frame that needs them, so a form
   embedded from another site (a Greenhouse form on a company's careers page)
   is recognised and filled. The D! button and panel stay on the top page; a
   frame with a form tells the top page to show the button. The panel scans
@@ -361,7 +379,7 @@ render after load and change as you scroll.
   is highlighted and picked with Enter, as with a keyboard, or clicked if that
   does not take, and the box is checked to show it. React dropdowns that
   ignore simulated events get a last resort: `src/page-world.js`, which runs
-  in the page's own world (manifest `"world": "MAIN"`), calls the option's own
+  in the page's own world, calls the option's own
   React click handler. It receives only a tag on the option element, never
   profile data. `test/react-pick.html` covers this. If not, the city alone is
   tried. Address pickers search by "city, country". With no pick, a typed
