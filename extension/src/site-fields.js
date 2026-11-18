@@ -9,8 +9,6 @@
   if (window.CVAutofillSiteFields) return;
   window.CVAutofillSiteFields = [
     { name: 'adp', pages: [/^https?:\/\/recruiting\.adp\.com\/srccar\/public\/.*$/, /^https?:\/\/myjobs\.adp\.com\/.*\/cx$/, /^https?:\/\/myjobs\.adp\.com\/.*\/cx\?.*$/, /^https?:\/\/myjobs\.adp\.com\/.*\/cx\/.*$/, /^https?:\/\/myjobs\.adp\.com\/.*$/], hosts: [/^myjobs\.adp\.com$/, /^recruiting\.adp\.com$/, /(^|\.)workforcenow\.adp\.com$/], fields: [
-      ['name', 'desktopButton', 'coverLetter'],
-      ['name', 'desktopButton', 'resume'],
     ] },
     { name: 'adp2', hosts: [/^workforcenow\.adp\.com$/], fields: [
       ['id', 'PersonalAddress_address_line1', 'addressLine'],
@@ -575,7 +573,6 @@
     ] },
     { name: 'workable', markers: ['meta[name="domain"][content="workable.com"]'], pages: [/^https?:\/\/([^\/]+\.)?careers\.arbor\-education\.com(?=[\/?#]|$)/, /^https?:\/\/apply\.workable\.com\/.*$/, /^https?:\/\/jobs\.workable\.com\/.*$/, /[?&]selectedJobId=/], hosts: [/^apply\.workable\.com$/, /^jobs\.workable\.com$/], fields: [
       ['data-ui', 'headline', 'currentTitle'],
-      ['data-ui', 'resume', 'coverLetter'],
       ['data-ui', 'resume', 'resume'],
       ['id', 'address', 'location'],
       ['id', 'email', 'email'],

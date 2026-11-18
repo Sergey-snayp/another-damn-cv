@@ -88,6 +88,9 @@
   // Choices sit beside their label; a dropdown's icon goes at the right of
   // its visible box, not of react-select's few-pixel input.
   function anchorFor(element) {
+    // A select hidden behind its widget: the icon goes by the widget the person sees.
+    const widget = Fields().selectWidget?.(element);
+    if (widget) return widget;
     return element.type === 'radio' || element.type === 'checkbox' ? element.closest('label') ?? element
       : element.getAttribute('role') === 'combobox' ? Fields().controlFor(element) : element;
   }

@@ -164,6 +164,21 @@
     document.dispatchEvent(new CustomEvent('adcv:avature-resume-ready', { detail: JSON.stringify({ ok }) }));
   });
 
+  /**
+   * A select behind a jQuery widget (Avature's select2, BrassRing's selectmenu):
+   * the widget redraws on jQuery's change, and selectmenu on its refresh.
+   * Only the tagged select is touched; no value comes in.
+   */
+  document.addEventListener('adcv:jquery-change', (event) => {
+    const element = document.querySelector(`[data-adcv-jq="${CSS.escape(String(event.detail ?? ''))}"]`);
+    const $ = window.jQuery;
+    if (!element || typeof $ !== 'function') return;
+    try {
+      $(element).trigger('change');
+      if ($.fn?.selectmenu && $(element).selectmenu('instance')) $(element).selectmenu('refresh');
+    } catch { /* the widget is not there: the select itself has the value */ }
+  });
+
   document.addEventListener('adcv:react-pick', (event) => {
     const token = String(event.detail ?? '');
     let ok = false;

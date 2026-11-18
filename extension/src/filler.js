@@ -103,10 +103,13 @@ function fillSelect(element, value) {
   const exact = options.find((option) =>
     option.value.toLowerCase() === wanted || option.text.toLowerCase().trim() === wanted);
 
-  const loose = options.find((option) => {
-    const text = option.text.toLowerCase();
-    return text.includes(wanted) || wanted.includes(text.trim());
-  });
+  // Close matches, never a blank or placeholder option ("" is in every answer): one that starts
+  // with the answer ("Canada (CA)"), else one containing it, else one the answer contains.
+  const named = options.filter((option) => option.value.trim() && option.text.trim() && !/^(select|choose|please select|--)/i.test(option.text.trim()));
+  const text = (option) => option.text.toLowerCase().replace(/\s+/g, ' ').trim();
+  const loose = named.find((option) => text(option).startsWith(wanted))
+    ?? named.find((option) => text(option).includes(wanted))
+    ?? named.find((option) => text(option).length > 2 && wanted.includes(text(option)));
 
   const chosen = exact ?? loose;
   if (!chosen) return false;
@@ -114,8 +117,19 @@ function fillSelect(element, value) {
   element.focus({ preventScroll: true });
   setValue(element, chosen.value);
   element.blur();
+  // A select behind a jQuery widget (select2, selectmenu): the widget hears it through jQuery.
+  if (window.CVAutofillFields?.selectWidget?.(element)) jqueryChanged(element);
 
   return true;
+}
+
+/** Tells a jQuery widget its select changed, from the page's own world (page-world.js). */
+let jqueryCount = 0;
+function jqueryChanged(element) {
+  const token = `jq-${++jqueryCount}`;
+  element.setAttribute('data-adcv-jq', token);
+  document.dispatchEvent(new CustomEvent('adcv:jquery-change', { detail: token }));
+  element.removeAttribute('data-adcv-jq');
 }
 
 /** Checkboxes and radios need a click, not a value — React listens for it. */
@@ -545,6 +559,18 @@ async function fillField(field, value, resumeFileName) {
     }
     case 'drop':
       return dropFile(field.element, value, resumeFileName ?? 'Resume.pdf');
+    case 'buttons': {
+      // Answers drawn as buttons (Ashby's Yes/No, Oracle's pills): press the one that says the answer.
+      const wanted = normal(value);
+      const buttons = window.CVAutofillFields.choiceButtons(field.element);
+      const text = (button) => normal(button.getAttribute('aria-label') || button.textContent);
+      const pick = buttons.find((button) => text(button) === wanted) ?? buttons.find((button) => text(button).startsWith(wanted));
+      if (!pick) return { filled: false, note: `"${value}" is not one of its answers.` };
+      if (window.CVAutofillFields.choiceChosen(pick)) return { filled: true };
+      press(pick);
+      await wait(150);
+      return { filled: true };
+    }
     case 'pick':
       return pickFile(field.element, value, resumeFileName ?? 'Resume.pdf');
     case 'combobox': {

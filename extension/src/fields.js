@@ -492,7 +492,23 @@ const hasUploadButton = (input) => Boolean(uploadButtonText(input).trim());
 /** Workday's dropdowns: a button that opens a list of options ("Select One"). */
 const isListbox = (element) => element.tagName === 'BUTTON' && element.getAttribute('aria-haspopup') === 'listbox';
 
+/**
+ * The visible widget drawn over a hidden <select>: select2 (Avature, iCIMS)
+ * or jQuery UI selectmenu (BrassRing). The select keeps the value; the widget
+ * shows it. Null for an ordinary select.
+ */
+function selectWidget(element) {
+  if (element?.tagName !== 'SELECT') return null;
+  const next = element.nextElementSibling;
+  if (element.classList.contains('select2-hidden-accessible') || next?.matches?.('.select2-container')) return next?.matches?.('.select2-container') ? next : null;
+  const menu = (element.id && document.getElementById(`${element.id}-button`)) || (next?.matches?.('.ui-selectmenu-button') ? next : null);
+  return menu?.classList?.contains('ui-selectmenu-button') ? menu : null;
+}
+
 function isFillable(element) {
+  // A select hidden behind its widget (select2, selectmenu): fillable while the widget is shown.
+  const widget = selectWidget(element);
+  if (widget) return !element.disabled && widget.getClientRects().length > 0;
   // Only a labelled one in a form field: never a page's language or menu switcher.
   if (isListbox(element)) return !element.disabled && !element.closest('[hidden], [aria-hidden="true"]') && element.offsetParent !== null
     && Boolean(element.getAttribute('aria-labelledby') || element.labels?.length || element.closest('[data-automation-id^="formField"]'));
@@ -665,7 +681,58 @@ function detectFields() {
   // An upload button with no file input behind it, unless that document is already found.
   for (const button of detectUploadButtons())
     if (!found.some((field) => field.key === button.key && (field.kind === 'file' || field.kind === 'drop'))) found.push(button);
+  for (const group of detectChoiceButtons()) if (!found.some((field) => field.element === group.element)) found.push(group);
   return { found, skipped };
+}
+
+// ─── Answers drawn as buttons ─────────────────────────────────────────────
+// Ashby's Yes/No (div._yesno_ > button), Oracle's pills (button.cx-select-pill),
+// Eightfold's radios (i[role=radio]): a question answered by pressing one of a
+// few buttons, with no input to fill. Simplify presses the one whose text is
+// the answer; a group is answered once one of them shows as pressed or chosen.
+const CHOICE_BUTTONS = 'button, [role="button"], [role="radio"]:not(input)';
+const ANSWER_WORD = /^(yes|no|y|n|true|false|maybe|not sure|prefer not to (say|answer)|decline to (state|answer)|i don'?t know)$/i;
+const buttonText = (button) => String(button.getAttribute('aria-label') || button.textContent || '').replace(/\s+/g, ' ').trim();
+
+/** The answer buttons of a group (its own, not a nested group's). */
+function choiceButtons(group) {
+  return [...group.querySelectorAll(CHOICE_BUTTONS)].filter((button) => button.getClientRects().length && ANSWER_WORD.test(buttonText(button)));
+}
+/** Whether a group's button shows as chosen: pressed, checked, selected or active. */
+function choiceChosen(button) {
+  return ['aria-pressed', 'aria-checked', 'aria-selected'].some((name) => button.getAttribute(name) === 'true')
+    || /(^|[\s_-])(selected|active|checked|is-selected|pressed)([\s_-]|$)/i.test(button.className?.baseVal ?? button.className ?? '');
+}
+
+function detectChoiceButtons() {
+  const groups = new Set();
+  for (const button of deepAll(CHOICE_BUTTONS)) {
+    if (!ANSWER_WORD.test(buttonText(button)) || !button.getClientRects().length || button.closest('[hidden], [aria-hidden="true"], nav, header, footer')) continue;
+    // The smallest box holding this button and a second answer button.
+    let group = button.parentElement;
+    for (let depth = 0; group && depth < 3 && choiceButtons(group).length < 2; depth++) group = group.parentElement;
+    if (!group || choiceButtons(group).length < 2 || choiceButtons(group).length > 4) continue;
+    groups.add(group);
+  }
+  const found = [];
+  for (const group of groups) {
+    // The question: the group's own name, else the text of the field box around it without the answers.
+    let question = group.getAttribute('aria-label') || labelledByText(group) || '';
+    for (let box = group.parentElement, depth = 0; !question && box && depth < 4; box = box.parentElement, depth++) {
+      const copy = box.cloneNode(true);
+      copy.querySelectorAll(CHOICE_BUTTONS).forEach((node) => node.remove());
+      const text = copy.textContent.replace(/\s+/g, ' ').trim();
+      if (text.length >= 8) question = text;
+    }
+    if (!question || question.length > 400) continue;
+    const signals = question.toLowerCase().replace(/[_\-[\]]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const { key, sensitive } = categorise(signals, { long: question.length > LONG_LABEL, yesNo: true });
+    if (!key || sensitive) continue;
+    group.setAttribute('data-adcv-choices', '');
+    const country = ['requiresSponsorship', 'workAuthorization'].includes(key) || STATUS_KEYS.has(key) ? countryIn(question) ?? (key === 'sinStartsWith9' ? 'Canada' : null) : null;
+    found.push({ key, element: group, kind: 'buttons', signals, source: 'heuristic', ...(country && { country }), label: question.slice(0, 200) });
+  }
+  return found;
 }
 
 // ─── Required fields left empty ─────────────────────────────────────────────
@@ -780,6 +847,8 @@ function uploadedFiles(input) {
 }
 
 function isEmpty(element) {
+  // Answers drawn as buttons: empty until one shows as chosen.
+  if (element.hasAttribute?.('data-adcv-choices')) return !choiceButtons(element).some(choiceChosen);
   // Workday's chosen chip fills the field; its search box stays empty.
   if (chosenItem(element)) return false;
   // Workday's dropdown button names its choice; "Select One" until one is made.
@@ -963,6 +1032,9 @@ function groupOf(key) {
 // Content scripts cannot be ES modules, so the API hangs off window.
 window.CVAutofillFields = {
   chosenItem,
+  selectWidget,
+  choiceButtons,
+  choiceChosen,
   uploadBox,
   uploadedFiles,
   detectFields,
