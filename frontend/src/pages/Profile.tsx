@@ -354,6 +354,10 @@ export function Profile() {
                 const latest = await careerApi.read();
                 setCareerState(await careerApi.save(latest.revision, { skills, skillTypes }));
               }}
+              onSaveLanguages={async (languages) => {
+                const latest = await careerApi.read();
+                setCareerState(await careerApi.save(latest.revision, { languages }));
+              }}
               />
             </BulletFocusProvider>
           </div>

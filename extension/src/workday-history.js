@@ -530,6 +530,7 @@
   const AVATURE_TITLES = {
     work: /^(work|employment|professional|career) (history|experience)$|^(work|employment|experience)$|^(past|previous) (work|working) experience$/i,
     education: /^(education|academic)( history| background| details)?$/i,
+    languages: /^(languages?|languages spoken|spoken languages|language skills)$/i,
   };
   const titleText = (node) => normal(node.textContent).replace(/\*/g, '').trim();
   function avatureSection(list) {
@@ -632,7 +633,27 @@
     return count;
   }
 
-  const here = () => Boolean(onAvature() && (avatureSection('work') || avatureSection('education'))) || Boolean(window.CVAutofillSites?.siteForPage()?.name === 'workday'
+  // A level as forms word it: the Profile's level first, then the names other lists use for it.
+  const LEVEL_WORDS = {
+    native: ['Native', 'Native or bilingual', 'Mother tongue', 'Bilingual', 'Expert', 'Fluent'],
+    fluent: ['Fluent', 'Full professional', 'Advanced', 'Expert', 'Proficient'],
+    professional: ['Professional', 'Professional working', 'Advanced', 'Proficient', 'Fluent'],
+    conversational: ['Conversational', 'Intermediate', 'Limited working', 'Good'],
+    basic: ['Basic', 'Elementary', 'Beginner', 'Limited'],
+  };
+  async function fillAvatureLanguages(languages, reason) {
+    let count = 0;
+    for (const [index, item] of languages.entries()) {
+      const row = await panelAt('languages', index);
+      if (!row) break;
+      count += await textOrChoice(control(row, /^languages?\b/), [item.language], reason);
+      const level = control(row, /proficiency|level|fluency/);
+      if (level && item.level) count += await textOrChoice(level, LEVEL_WORDS[normal(item.level)] ?? [item.level], reason);
+    }
+    return count;
+  }
+
+  const here = () => Boolean(onAvature() && (avatureSection('work') || avatureSection('education') || avatureSection('languages'))) || Boolean(window.CVAutofillSites?.siteForPage()?.name === 'workday'
     && (first(document, LISTS.work.add) || first(document, LISTS.education.add) || panels('work').length || first(document, '[data-automation-id="formField-skills"] input')));
 
   const SKILLS_BOX = '[data-automation-id="formField-skills"] input, [data-automation-id="skillsSection"] input, [data-automation-id="formField-skillsPrompt"] input';
@@ -674,6 +695,8 @@
     if (onAvature()) {
       if (jobs.length && avatureSection('work')) section(start('work'), async () => ({ notes: removed(await trim('work', jobs.length), 'Work History'), filled: await fillAvatureWork(jobs, source) }));
       if (schools.length && avatureSection('education')) section(start('education'), async () => ({ notes: removed(await trim('education', schools.length), 'Education'), filled: await fillAvatureEducation(schools, source) }));
+      const languages = history.languages ?? [];
+      if (languages.length && avatureSection('languages')) section(start('languages'), async () => ({ notes: removed(await trim('languages', languages.length), 'Language'), filled: await fillAvatureLanguages(languages, 'From your Profile') }));
       return list;
     }
     if (jobs.length) section(start('work'), async () => ({ notes: removed(await trim('work', jobs.length), 'Work Experience'), filled: await fillWork(jobs, source) }));
@@ -697,7 +720,7 @@
   const owns = (element) => {
     if (onAvature()) {
       const row = element.closest?.(ROW);
-      return Boolean(row && ['work', 'education'].some((list) => avatureSection(list)?.contains(row)));
+      return Boolean(row && ['work', 'education', 'languages'].some((list) => avatureSection(list)?.contains(row)));
     }
     for (let node = element; node && node !== document.body; node = node.parentElement) {
       const id = node.getAttribute?.('data-automation-id') ?? '', by = node.getAttribute?.('aria-labelledby') ?? '';

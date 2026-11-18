@@ -1,8 +1,9 @@
 import { DashboardIcon as Icon } from "../jobs/DashboardIcon";
-import type { CareerData, CareerExperience, CollectedJob } from "./careerApi";
+import type { CareerData, CareerExperience, CareerLanguage, CollectedJob } from "./careerApi";
 import { AchievementList } from "./AchievementList";
 import { InlineEdit, InlineText } from "./InlineEdit";
 import { SkillGroups } from "./SkillPanel";
+import { LanguagesPanel } from "./LanguagesPanel";
 import { TagList, splitTags } from "./TagList";
 import { JobFacts } from "./JobFacts";
 import { DescriptionAi } from "./DescriptionAi";
@@ -35,6 +36,7 @@ export function ProfileCareer({
   onSaveRole,
   onSaveSummary,
   onSaveSkills,
+  onSaveLanguages,
   collected,
 }: {
   imported: CareerData;
@@ -53,6 +55,8 @@ export function ProfileCareer({
   onSaveRole(entry: number, patch: (current: CareerExperience) => Partial<CareerExperience>): Promise<void>;
   /** Saves the Profile's skills and each one's group. */
   onSaveSkills(skills: string[], skillTypes: Record<string, string>): Promise<void>;
+  /** Saves the languages spoken. */
+  onSaveLanguages(languages: CareerLanguage[]): Promise<void>;
   /** With `entry`, only that job or education entry is edited, or a new one added. */
   onEditCareer(section: CareerSectionKey, entry?: CareerEntry): void;
 }) {
@@ -255,6 +259,13 @@ export function ProfileCareer({
           <h2 id="profile-skills-heading">Skills</h2>
         </div>
         <SkillGroups skills={skills} types={imported.skillTypes?.value} suggestions={keywords} disabled={importDisabled} onSave={onSaveSkills} />
+      </section>
+
+      <section className="profile-panel" aria-labelledby="profile-languages-heading">
+        <div className="profile-panel-heading">
+          <h2 id="profile-languages-heading">Languages</h2>
+        </div>
+        <LanguagesPanel languages={imported.languages?.value ?? []} disabled={importDisabled} onSave={onSaveLanguages} />
       </section>
     </>
   );

@@ -55,6 +55,12 @@ export interface CareerEducation {
   from: string;
   to: string;
 }
+/** A language the person speaks: "Ukrainian", "Native". */
+export interface CareerLanguage {
+  language: string;
+  /** Native, Fluent, Professional, Conversational or Basic; may be empty. */
+  level: string;
+}
 export interface CareerSections {
   summary: string;
   experiences: CareerExperience[];
@@ -62,6 +68,8 @@ export interface CareerSections {
   skills: string[];
   /** Each skill's group, as a CV writes it ("Core: TypeScript, Node.js"), by the skill's name. A skill without one is ungrouped. */
   skillTypes?: Record<string, string>;
+  /** Languages spoken. Kept in the Profile only; a CV's own Languages section is text. */
+  languages?: CareerLanguage[];
 }
 export type CareerSource =
   | { kind: 'file'; name: string }
@@ -184,6 +192,7 @@ export function fullSections(data: CareerData): CareerSections {
     experiences: data.experiences?.value ?? [],
     educations: data.educations?.value ?? [],
     skills: data.skills?.value ?? [],
+    languages: data.languages?.value ?? [],
   };
 }
 

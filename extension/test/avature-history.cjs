@@ -35,11 +35,19 @@ const page = `<!doctype html><head><meta name="avature.portal.id" content="4"></
       <a role="button" class="removeDatasetRow" href="#">remove</a></div>
     <a role="button" class="addDatasetRow" href="#">add another</a></fieldset>
   <fieldset class="Section" id="lang"><legend class="WizardFieldLabel">Languages</legend>
-    <div id="multipleDatasetEntry_79_1">${select2('language', 'Language', ['English', 'Ukrainian'])}</div>
-    <a role="button" class="addDatasetRow" href="#">add another</a></fieldset>
+    <div id="multipleDatasetEntry_79_sample" class="TableSampleRow" style="display:none">${select2('language_sample', 'Language', ['English', 'French', 'Ukrainian'])}</div>
+    <div id="multipleDatasetEntry_79_1">${select2('language_1', 'Language', ['English', 'French', 'Ukrainian'])}</div>
+    <a role="button" class="addDatasetRow" id="addRowForLanguages" href="#">add another</a></fieldset>
+  <label class="WizardFieldLabel" for="portfolio">URL Portfolio</label><input id="portfolio">
+  <label class="WizardFieldLabel" for="cover">Cover Letter</label><input id="cover" type="file" class="WizardFieldInput">
 </form><script>
   // Avature's "add another": a new row from the hidden sample.
   let next = 2;
+  document.getElementById('addRowForLanguages').addEventListener('click', (event) => {
+    event.preventDefault();
+    const html = document.getElementById('multipleDatasetEntry_79_sample').outerHTML.replaceAll('_sample', '_2').replace('TableSampleRow', '').replace('style="display:none"', '');
+    setTimeout(() => event.target.insertAdjacentHTML('beforebegin', html), 200);
+  });
   document.getElementById('addRowForWork').addEventListener('click', (event) => {
     event.preventDefault();
     const html = document.getElementById('multipleDatasetEntry_77_sample').outerHTML.replaceAll('_sample', '_' + next).replace('TableSampleRow', '').replace('style="display:none"', '');
@@ -57,6 +65,7 @@ const history = {
   ],
   educations: [{ institution: 'DIIT Institute', degree: "Bachelor's", field: 'Computer and Information Systems Security', from: '2012', to: '2016' }],
   skills: [], websites: [],
+  languages: [{ language: 'Ukrainian', level: 'Native' }, { language: 'English', level: 'Professional' }],
 };
 const profile = { firstName: 'Sergey', lastName: 'Proniuk', currentCompany: 'Ciklum', currentTitle: 'Senior Software Engineer', history };
 
@@ -73,9 +82,12 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', currentCompany: 'Cik
     assert.deepEqual(row2, ['EPAM Systems', 'Software Engineer', 'No', '2021-03', '2024-09'], 'the second job in a row added by "add another"');
     assert.equal(await tab.$$eval('#work [id^=multipleDatasetEntry_]:not(.TableSampleRow)', (rows) => rows.length), 2, 'one row per job, no more');
     assert.deepEqual(await Promise.all(['inst', 'qtype', 'qual'].map(value)), ['DIIT Institute', "Bachelor's Degree", "Bachelor's in Computer and Information Systems Security"]);
-    assert.equal(await value('language'), '', 'Languages left alone');
+    assert.deepEqual(await Promise.all(['language_1', 'language_2'].map(value)), ['Ukrainian', 'English'], 'each language in its own row, the second added by "add another"');
+    const kinds = await tab.evaluate(() => Object.fromEntries(window.CVAutofillFields.detectFields().found.map((field) => [field.element.id, field.key])));
+    assert.equal(kinds.cover, 'coverLetter', 'the Cover Letter box is seen, so the panel writes and attaches a letter');
+    assert.equal(kinds.portfolio, 'portfolio');
     assert.deepEqual(await Promise.all(['cur', 'emp'].map(value)), ['Senior Software Engineer', 'Ciklum'], 'Current Position and Employer, as before');
-    console.log('PASS Avature Work History and Education: each job in its own row (added by "add another"), Is Current Position Yes/No, month dates, the degree from Type of Qualification; Languages left alone');
+    console.log('PASS Avature Work History and Education: each job in its own row (added by "add another"), Is Current Position Yes/No, month dates, the degree from Type of Qualification; each language in its own row; Cover Letter and URL Portfolio recognised');
   } finally {
     await browser.close();
   }

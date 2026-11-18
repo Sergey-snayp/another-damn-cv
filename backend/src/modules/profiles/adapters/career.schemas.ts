@@ -51,6 +51,11 @@ const sectionsSchema = z
       .max(50)
       .optional(),
     skills: z.array(z.string().trim().min(1).max(200)).max(400).optional(),
+    // Languages the person speaks, for forms that ask (Avature's Languages list), as Jobright keeps them.
+    languages: z
+      .array(z.object({ language: z.string().trim().min(1).max(80), level: z.string().trim().max(40) }).strict())
+      .max(30)
+      .optional(),
     // Each skill's group ("Core", "AI"), by the skill's name.
     skillTypes: z
       .record(z.string().trim().min(1).max(200), z.string().trim().max(80))
@@ -116,6 +121,9 @@ export const careerDataSchema = z
       .optional(),
     skillTypes: z
       .object({ value: sectionsSchema.shape.skillTypes.unwrap(), source: sourceSchema, importedAt: z.string() })
+      .optional(),
+    languages: z
+      .object({ value: sectionsSchema.shape.languages.unwrap(), source: sourceSchema, importedAt: z.string() })
       .optional(),
   })
   .strict();

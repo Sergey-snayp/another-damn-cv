@@ -478,3 +478,13 @@
 @keyframes skill-sort-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .skill-sort-status svg { animation: none; } }
 .profile-complete-button { width: 100%; justify-content: center; margin-top: 12px; }
+
+/* Languages spoken: a name and its level per row. */
+.languages { display: grid; gap: 8px; }
+.language-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px; align-items: center; }
+.language-row input, .language-row select { min-width: 0; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: 14px; }
+.language-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+@media (max-width: 520px) { .language-row { grid-template-columns: minmax(0, 1fr) 120px auto; } }
+.language-remove { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--color-border); border-radius: 8px; background: none; color: var(--color-text-muted, #6b6b6b); cursor: pointer; }
+.language-remove:hover { color: var(--color-error, #b42318); border-color: currentColor; }
+.language-remove:focus-visible { outline: 2px solid #1e4d45; outline-offset: 2px; }

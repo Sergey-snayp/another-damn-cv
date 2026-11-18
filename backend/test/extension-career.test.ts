@@ -48,7 +48,7 @@ test('Autofill takes the current role, years and the latest education', () => {
 });
 
 test('a profile without imported sections shows empty ones', () => {
-  assert.deepEqual(fullSections({}), { summary: '', experiences: [], educations: [], skills: [] });
+  assert.deepEqual(fullSections({}), { summary: '', experiences: [], educations: [], skills: [], languages: [] });
 });
 
 test('a CV reads as the same sections Profile → Import would take', async () => {
@@ -87,4 +87,14 @@ test('a CV reads as the same sections Profile → Import would take', async () =
   assert.deepEqual(view.skills, ['Node.js']);
   assert.equal(view.fields.currentCompany, 'Acme');
   assert.equal(view.fields.school, 'KPI');
+});
+
+test('languages spoken: kept in the Profile, validated, and shown to the extension', async () => {
+  const { careerUpdateSchema } = await import('../src/modules/profiles/adapters/career.schemas');
+  const saved = careerUpdateSchema.parse({ expectedRevision: 1, sections: { languages: [{ language: 'Ukrainian', level: 'Native' }, { language: 'English', level: 'Professional' }] } });
+  assert.equal(saved.sections.languages?.length, 2);
+  assert.throws(() => careerUpdateSchema.parse({ expectedRevision: 1, sections: { languages: [{ language: '', level: 'Native' }] } }), 'a language needs a name');
+  const sections = fullSections({ languages: { value: [{ language: 'English', level: 'Fluent' }], source: { kind: 'profile' }, importedAt: '2026-11-17' } });
+  assert.deepEqual(sections.languages, [{ language: 'English', level: 'Fluent' }]);
+  assert.deepEqual(fullSections({}).languages, []);
 });

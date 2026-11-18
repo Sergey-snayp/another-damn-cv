@@ -92,6 +92,11 @@ export interface CareerEducation {
   from: string;
   to: string;
 }
+/** A language spoken and its level ("Native", "Fluent"…, or empty). */
+export interface CareerLanguage {
+  language: string;
+  level: string;
+}
 export interface CareerSections {
   summary: string;
   experiences: CareerExperience[];
@@ -99,6 +104,8 @@ export interface CareerSections {
   skills: string[];
   /** Each skill's group, as a CV writes it ("Core: TypeScript, Node.js"), by the skill's name. */
   skillTypes?: Record<string, string>;
+  /** Languages spoken, kept in the Profile only. */
+  languages?: CareerLanguage[];
 }
 export type CareerSource =
   | { kind: "profile" }
