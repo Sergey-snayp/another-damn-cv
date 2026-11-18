@@ -91,6 +91,7 @@
     type: () => textOf('#resumator-job-employment'),
   }, {
     host: /(^|\.)indeed\.[a-z.]+$/i,
+    description: '#jobDescriptionText',
     title: () => textOf('[data-testid="vj-job-title"], [data-testid="jobsearch-JobInfoHeader-title"]') || clean(document.title).split(/\s+-\s+/)[0],
     location: () => leaves(document.querySelector('[data-testid="company-info-metadata"]')).at(-1) ?? '',
     company: () => textOf('[data-testid="company-info-metadata"]').split('·')[0].trim(),
@@ -553,6 +554,11 @@
       // The board's own place: an apply page without it waits for the job page (readAsync).
       if (board().jobUrl) return '';
     }
+    return descriptionBlock()?.text ?? '';
+  }
+
+  /** The page's main job text, by the usual places: { node, text }. */
+  function descriptionBlock() {
     const selectors = ['.job__description', '#job-description', '[data-qa="job-description"]', '[class*="job-description" i]', '[class*="jobDescription"]', '[class*="description" i]', 'article', 'main', '[role="main"]'];
     // A short "article" is usually a side note: the page's main part comes first, then anything.
     const broad = (selector) => /^(article|main|\[role=)/.test(selector);
@@ -565,10 +571,44 @@
         const copy = node.cloneNode(true);
         copy.querySelectorAll('form, input, select, textarea, button, script, style, nav, footer').forEach((child) => child.remove());
         const text = htmlText(copy.innerHTML);
-        if (text.length >= (broad(selector) ? longest : 200)) return text.slice(0, 20000);
+        if (text.length >= (broad(selector) ? longest : 200)) return { node, text: text.slice(0, 20000) };
       }
     }
-    return '';
+    return null;
+  }
+
+  /** The element holding the job's text on the page, for what goes next to it. */
+  function descriptionNode(description = '') {
+    const own = board();
+    const rule = typeof own?.descriptionHtml === 'string' ? own.descriptionHtml : own?.description;
+    const fromBoard = rule ? [...document.querySelectorAll(rule)].find((node) => node.getClientRects().length) : null;
+    if (fromBoard) return fromBoard;
+    // Its first words, when the text came from structured data: the block around them,
+    // but never a block much larger than the job's text (the whole page).
+    const start = clean(String(description).split('\n').find((line) => clean(line).length >= 30)).slice(0, 40);
+    const size = clean(description).length, jobTitle = clean(title()).toLowerCase();
+    const holdsTitle = (node) => Boolean(node.querySelector('h1')) || (jobTitle.length > 3 && clean(node.innerText).slice(0, 400).toLowerCase().includes(jobTitle));
+    if (start) {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+        // Not the title or the page's header, which can start with the same words.
+        if (!clean(text.textContent).includes(start) || !text.parentElement?.getClientRects().length || text.parentElement.closest('script, style, noscript, form, h1, header, nav')) continue;
+        let node = text.parentElement;
+        // Up to the largest block that is still only the job's text, not the title above it.
+        for (let parent = node.parentElement; parent && parent !== document.body && !holdsTitle(parent) && clean(parent.innerText).length <= size * 1.15 + 100; parent = parent.parentElement) node = parent;
+        return node;
+      }
+    }
+    const block = descriptionBlock()?.node ?? null;
+    // A whole page's main part: below its title, not above it.
+    const heading = block?.querySelector('h1');
+    if (!heading) return block;
+    const chain = [];
+    for (let node = heading; node && node !== block; node = node.parentElement) chain.unshift(node);
+    for (const node of chain) {
+      for (let next = node.nextElementSibling; next; next = next.nextElementSibling) if (next.getClientRects().length) return next;
+    }
+    return null;
   }
 
   /** The details found, each '' or null when the page does not say. */
@@ -634,5 +674,5 @@
     try { return found && /^https?:$/.test(new URL(found, location.href).protocol) ? new URL(found, location.href).href : null; } catch { return null; }
   }
 
-  window.CVAutofillJobDetails = { read, readAsync, logo, title, company, jobUrl, postedAt, salaryInText, typeOf, microdata: microdataPosting };
+  window.CVAutofillJobDetails = { read, readAsync, logo, title, company, jobUrl, postedAt, salaryInText, typeOf, microdata: microdataPosting, descriptionNode };
 })();

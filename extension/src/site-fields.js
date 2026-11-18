@@ -746,6 +746,8 @@
     ] },
     { name: 'workatastartup', hosts: [/(^|\.)workatastartup\.com$/], fields: [
     ] },
+    { name: 'coinbase', pages: [/^https?:\/\/(www\.)?coinbase\.com\/careers\/positions\//], hosts: [], fields: [
+    ] },
     { name: 'handshake', hosts: [/(^|\.)joinhandshake\.com$/], fields: [
     ] },
     { name: 'zohorecruit', pages: [/^https?:\/\/([^\/]+\.)?zohorecruit\.com(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?zohorecruit\.ca(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?zohorecruit\.eu(?=[\/?#]|$)/], hosts: [], fields: [

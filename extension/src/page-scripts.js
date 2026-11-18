@@ -14,6 +14,7 @@ export const PAGE_SCRIPTS = [
   'src/linkedin.js',
   'src/logo.js',
   'src/job-details.js',
+  'src/match-card.js',
   'src/content.js',
 ];
 /** Runs in the page's own world (see page-world.js). */

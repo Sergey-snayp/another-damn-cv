@@ -293,6 +293,7 @@ On pages that need them (page-scripts.js)
   account-form.js    finds and fills a job site's Create Account or Sign In form
   job-form.js        decides whether a page looks like a job application form
   job-details.js     reads the job's title, company and description on a page
+  match-card.js      the keyword match card above a job's description
   logo.js            finds the company logo
   linkedin.js        reads the selected LinkedIn job
   marks.js           the icons beside fields, and the fill animation
@@ -319,6 +320,7 @@ The panel and background
   defaults.js        default answers, per country or company
   site-login.js      your job-site login
   match.js           keyword match between a posting and your CVs
+  match-card-data.js what the match card on a job page shows
   text-display.js    shortens long text for display
   icons.js           the icon set
   tailor.js          holds Quick Tailor in a window over the job page
@@ -465,6 +467,16 @@ shown inside a frame (iCIMS) is read from that frame. `test/job-boards.cjs`,
 
 These rules were checked on a real public posting for each system Simplify and Jobright
 list, except SEEK, Tesla and JobDiva, which showed a bot check to the test browser.
+
+## Match card on job pages
+
+On the job systems Simplify shows its card on, a card sits just above the job's
+description, or at the top of the form on Lever and Ashby. It shows the chosen CV's
+keyword match: Good above 80, Fair above 40, otherwise Low. Its button opens the panel
+with the keywords. A job you applied to shows that instead. There is no card when
+you are signed out, have no CV, or Autofill is off on the site. Close it until the page
+reloads, or turn it off in Settings → **Show the match card on job pages**.
+`src/match-card.js`, `src/match-card-data.js`, `test/match-card.cjs`.
 
 ## Job systems with their own steps
 

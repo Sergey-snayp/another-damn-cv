@@ -1053,6 +1053,7 @@ if (window.CVAutofillLinkedIn?.isPage()) Fields.setScope(() => easyApplyDialog()
 
 function updateLauncher() {
   if (TINY_FRAME) return;
+  window.CVAutofillMatchCard?.update();
   scheduleStep();
   // Before anything returns: LinkedIn's Easy Apply changes steps inside a shadow root.
   watchShadowRoots();
@@ -1108,7 +1109,7 @@ const scheduleScan = () => {
     if (!scanTimer) scanTimer = setTimeout(() => { scanTimer = null; updateLauncher(); }, 300);
   } else { clearTimeout(scanTimer); scanTimer = setTimeout(updateLauncher, KNOWN_BOARD ? 140 : 600); }
 };
-const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel', 'adcv-fill-marks']);
+const OWN_NODES = new Set(['adcv-autofill-launcher', 'adcv-autofill-panel', 'adcv-fill-marks', 'adcv-match-card']);
 const pageWatcher = new MutationObserver(records => {
   reattachOwnElements();
   const changed = records.some(record => {

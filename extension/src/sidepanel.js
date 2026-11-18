@@ -1902,6 +1902,7 @@ $('eligibility-answers-list').addEventListener('click', async event => {
   catch (error) { button.disabled = false; button.textContent = error instanceof NotSignedInError ? 'Sign in first' : 'Try again'; }
 });
 $('animate-fill').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ animateFill: box.checked }); } catch { box.checked = !box.checked; } });
+$('match-card-shown').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ matchCardHidden: !box.checked }); } catch { box.checked = !box.checked; } });
 $('fill-marks').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ fillMarks: box.checked }); } catch { box.checked = !box.checked; } });
 $('continue-steps').addEventListener('change', async event => { const box = event.target; try { await chrome.storage.local.set({ continueSteps: box.checked }); continueSteps = box.checked; } catch { box.checked = !box.checked; } });
 // A later step of an armed form was filled by the page script.
@@ -1916,15 +1917,25 @@ $('fill-groups').addEventListener('change', async event => {
   const next = { ...fillGroups, [box.dataset.fillGroup]: box.checked };
   try { await chrome.storage.local.set({ autofillGroups: next }); fillGroups = next; } catch { box.checked = !box.checked; }
 });
-$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill', 'acknowledgeRequired', 'autofillDefaults']); $('acknowledge-required').checked = settings.acknowledgeRequired === true; useDefaults(settings.autofillDefaults); renderEligibilityAnswers(); $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); void renderSiteLogin(); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
+$('settings').addEventListener('click', async () => { try { const settings = await chrome.storage.local.get(['launcherEnabled', 'launcherDisabledHosts', 'autofillGroups', 'continueSteps', 'diversityAnswers', 'fillMarks', 'animateFill', 'acknowledgeRequired', 'autofillDefaults', 'matchCardHidden']); $('match-card-shown').checked = settings.matchCardHidden !== true; $('acknowledge-required').checked = settings.acknowledgeRequired === true; useDefaults(settings.autofillDefaults); renderEligibilityAnswers(); $('fill-marks').checked = settings.fillMarks !== false; $('animate-fill').checked = settings.animateFill !== false; $('continue-steps').checked = settings.continueSteps === true; diversityAnswers = settings.diversityAnswers ?? {}; $('launcher-enabled').checked = settings.launcherEnabled !== false; fillGroups = settings.autofillGroups ?? {}; renderFillGroups(); renderDisabledSites(Array.isArray(settings.launcherDisabledHosts) ? settings.launcherDisabledHosts : []); void renderSiteLogin(); $('settings-dialog').showModal(); } catch { status('auth-status', 'Could not read extension settings.', 'error'); } });
 $('launcher-enabled').addEventListener('change', async event => { const checkbox = event.target; checkbox.disabled = true; try { await chrome.storage.local.set({ launcherEnabled: checkbox.checked }); } catch { checkbox.checked = !checkbox.checked; } finally { checkbox.disabled = false; } });
 for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
 $('report').addEventListener('click', () => { $('report-text').value = ['Another Damn CV ' + chrome.runtime.getManifest().version, 'Site: ' + (scan?.host || 'Not detected'), 'Board: ' + (scan?.site || 'Not detected'), 'Detected fields: ' + (scan?.fields.map(f => f.key + ' (' + f.kind + ')').join(', ') || 'None'), 'Skipped demographic fields: ' + (scan?.skippedSensitive || 0)].join('\n'); status('report-status', ''); $('report-dialog').showModal(); });
 $('copy-report').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('report-text').value); status('report-status', 'Copied. You can paste this into your feedback.', 'success'); } catch { $('report-text').select(); status('report-status', 'Select and copy the report manually.', 'error'); } });
 $('close-panel').addEventListener('click', closePanel);
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && !document.querySelector('dialog[open]') && !cvMenu.open) closePanel(); });
+/** "View match details" on the page's match card: the panel opens with the keywords showing. */
+async function showKeywordsFromCard() {
+  const key = `showKeywords:${ownTabId}`;
+  if (!(await chrome.storage.session.get(key).catch(() => ({})))[key]) return;
+  await chrome.storage.session.remove(key).catch(() => {});
+  keptOpen.add('keywords'); keptOpen.add('resume');
+  selectTab('autofill');
+  renderAutofill();
+}
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session') {
+    if (changes[`showKeywords:${ownTabId}`]?.newValue) void showKeywordsFromCard();
     const handoff = changes[`fromLinkedIn:${ownTabId}`];
     if (handoff && JSON.stringify(handoff.oldValue?.job) !== JSON.stringify(handoff.newValue?.job)) {
       matchUrl = null; matchCapture = null; matchKeywords = null; match = null; ++matchRun;
@@ -1946,3 +1957,4 @@ chrome.tabs.onUpdated.addListener((id, info) => { if (id === currentTab?.id && (
 void refresh();
 void loadResumes();
 void syncAccount();
+void ownTab().then(showKeywordsFromCard).catch(() => {});

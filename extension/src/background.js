@@ -1,8 +1,9 @@
 import { matchAnswers, saveAnswers } from './answers.js';
 import { PAGE_SCRIPTS, PAGE_WORLD_SCRIPT } from './page-scripts.js';
+import { matchCardData } from './match-card-data.js';
 import { LINKEDIN_PAIRING_MS, tabOpenedBy } from './linkedin-handoff.js';
 import { forgetAnswer, removeDefault, saveDefault, saveProfileValues } from './defaults.js';
-import { captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
+import { APP_URL, captureTab, draftAnswer, jobForDraft, lookupJob, markApplied, NotSignedInError, sendCapture, unsendableReason } from './jobs.js';
 import { acceptOffer, attemptFor, confirmAttempt, dismissOffer, dropAttempt, noteAttempt, offerFor, offerSiteLogin, rememberSite } from './site-login.js';
 
 /**
@@ -239,6 +240,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (moved) chrome.runtime.sendMessage({ type: 'job-saved', url }).catch(() => {});
     }, () => {});
     sendResponse({ ok: true });
+    return false;
+  }
+  // The match card on a job page (src/match-card.js).
+  if (message?.type === 'match-card' && fromContent) {
+    matchCardData(message).then(sendResponse, () => sendResponse({ show: false }));
+    return true;
+  }
+  if (message?.type === 'match-card-open' && fromContent) {
+    void (async () => {
+      await chrome.storage.session.set({ [`showKeywords:${tabId}`]: true });
+      await setTabOpen(tabId, true);
+      try { await chrome.tabs.sendMessage(tabId, { type: 'panel-open' }, { frameId: 0 }); } catch { await injectPanel(tabId); }
+    })().catch(() => {});
+    return false;
+  }
+  if (message?.type === 'match-card-job' && fromContent && /^[\w-]{1,80}$/.test(message.jobId ?? '')) {
+    void chrome.tabs.create({ url: `${APP_URL}/jobs/${encodeURIComponent(message.jobId)}` }).catch(() => {});
     return false;
   }
   // A page that may hold a job or a form asks for the page scripts (src/page-check.js).
