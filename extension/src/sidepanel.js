@@ -213,6 +213,9 @@ async function askPage(message, tab = currentTab) {
   }
 }
 // ─── Frames ───────────────────────────────────────────────────────────────
+// The frame that shows the job when the top page is only its wrapper (iCIMS); 0 is the top page.
+let jobFrame = 0;
+const askJobFrame = (message, tab = currentTab) => askFrame(jobFrame, message, tab);
 // A form can sit in an iframe from another site (a Greenhouse form inside a
 // company's careers page). The page scripts run in every frame; the panel
 // asks each frame that holds application fields. Ids from a frame carry its
@@ -268,7 +271,10 @@ async function scanFrames(tab) {
   const total = (name) => scans.reduce((sum, entry) => sum + (entry.reply[name] ?? 0), 0);
   // The page's own Continue / Submit, in the frame that has the form (the top page's first).
   const next = scans.find(entry => entry.frameId === 0 && entry.reply.advance) ?? scans.find(entry => entry.reply.advance);
-  return { ...top, fields, skippedSensitive: total('skippedSensitive'), consentCount: total('consentCount'), canOpenForm: Boolean(top.canOpenForm) && !scans.some(entry => entry.reply !== top && entry.reply.fields?.length >= 2), frames: formFrames.length, advance: next?.reply.advance ?? null, advanceFrame: next?.frameId ?? 0 };
+  const shown = top.canOpenForm ? null : scans.find(entry => entry.reply !== top && entry.reply.site && entry.reply.canOpenForm);
+  jobFrame = shown?.frameId ?? 0;
+  const context = shown ? { ...top.context, ...shown.reply.context, company: shown.reply.context.company || top.context.company, logo: shown.reply.context.logo || top.context.logo } : top.context;
+  return { ...top, context, jobPage: top.jobPage || Boolean(shown), fields, skippedSensitive: total('skippedSensitive'), consentCount: total('consentCount'), canOpenForm: Boolean(shown) || (Boolean(top.canOpenForm) && !scans.some(entry => entry.reply !== top && entry.reply.fields?.length >= 2)), frames: formFrames.length, advance: next?.reply.advance ?? null, advanceFrame: next?.frameId ?? 0 };
 }
 /** The form's questions from every frame, with frame-qualified ids. */
 async function questionsFromFrames(tab = currentTab) {
@@ -462,7 +468,7 @@ async function openJobForm() {
   jobForm = null; jobFormLoading = true; jobProblem = ''; jobLoadProblem = ''; renderJobForm(); renderAutofill();
   $('job-form-back').focus();
   try {
-    const found = editing ? await getSavedJob(editing.id) : (await askPage({ type: 'job-details' }, tab).catch(() => null)) ?? {};
+    const found = editing ? await getSavedJob(editing.id) : (await askJobFrame({ type: 'job-details' }, tab).catch(() => null)) ?? {};
     if (tab?.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) return;
     // The page's own details first; the LinkedIn posting this tab came from fills the rest.
     const fromLinkedIn = editing ? [] : fillFromLinkedIn(found, linkedInJob);
@@ -539,7 +545,7 @@ function saveJob(payload = {}) {
       if (!await access) { jobProblem = 'Access to this site was not allowed.'; return; }
       const logo = jobLogo();
       const job = editId ? await updateSavedJob(editId, payload.details)
-        : (await sendCapture({ ...await captureTab(tab.id), ...(logo && { companyLogo: logo }), ...payload })).job;
+        : (await sendCapture({ ...await captureTab(tab.id, jobFrame), ...(logo && { companyLogo: logo }), ...payload })).job;
       if (tab?.id !== currentTab?.id || jobAddress(tab) !== jobAddress()) return;
       savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() }; jobForm = null; jobFormDirty = false;
       if (!editId) await recordOnSavedJob(jobAddress(tab), await answersOnPage(tab));
@@ -665,7 +671,7 @@ async function generateLetter(access) {
       if (reason) throw new Error(reason);
       if (!await access) throw new Error('Access to this site was not allowed.');
       const logo = jobLogo();
-      const capture = await captureTab(tab.id);
+      const capture = await captureTab(tab.id, jobFrame);
       if (capture.descriptionMissing) throw new Error('The job description is not available on this form yet. Open the job posting and try again.');
       job = (await sendCapture({ ...capture, ...(logo && { companyLogo: logo }) })).job;
       if (jobAddress(tab) === jobAddress()) savedJob = { url: jobAddress(tab), job, checkedAt: Date.now() };
@@ -1082,7 +1088,7 @@ function rememberTabJob(url, job) {
 /** Presses the job page's Apply button, then rescans once the form has loaded. */
 async function openForm() {
   const button = $('open-form'); if (button) { button.disabled = true; button.textContent = 'Opening the form…'; }
-  await askPage({ type: 'open-form' });
+  await askJobFrame({ type: 'open-form' });
   for (const delay of [800, 1500, 2500]) setTimeout(() => void refresh(), delay);
 }
 
@@ -1544,14 +1550,14 @@ async function updateMatch({ force = false } = {}) {
         try {
           // The page itself; a form step that cannot be read still has its saved job.
           let capture = null, readError = '';
-          try { capture = await captureTab(tab.id); } catch (error) { readError = error.message || 'The job description is not ready.'; }
+          try { capture = await captureTab(tab.id, jobFrame); } catch (error) { readError = error.message || 'The job description is not ready.'; }
           if (capture) {
             const job = jobFromCapture(capture), keywords = findKeywords(job.text);
             if (looksLikeJobPosting(capture, job, keywords)) return { keywords, error: '' };
           }
           // An apply page without the description: the job's own, from its job page (Jobvite) or
           // from the LinkedIn posting this tab came from.
-          const details = await askPage({ type: 'job-details' }, tab).catch(() => null);
+          const details = await askJobFrame({ type: 'job-details' }, tab).catch(() => null);
           let description = String(details?.description || linkedInJob?.description || '').trim();
           // A form step that links to no job page (Avature after sign-in): the saved job's description.
           if (description.length < 200) {
@@ -1656,7 +1662,7 @@ function improveMatch(mode) {
     try {
       if (!await access) { status('match-status', 'Access was not allowed, so nothing was saved.'); return; }
       const logo = jobLogo();
-      const capture = await captureTab(tab.id);
+      const capture = await captureTab(tab.id, jobFrame);
       // A form step without the description: the job saved from its job page, never the form.
       const known = capture.descriptionMissing ? await knownJob(tab) : null;
       if (capture.descriptionMissing && !known) throw new Error('The job description is not available on this form yet. Open the job posting and try Quick Tailoring again.');

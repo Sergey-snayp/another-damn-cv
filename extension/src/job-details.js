@@ -32,7 +32,10 @@
 
   const clean = (text) => String(text ?? '').replace(/\s+/g, ' ').trim();
   const htmlText = (html) => {
-    const body = new DOMParser().parseFromString(String(html ?? ''), 'text/html').body;
+    const parse = (text) => new DOMParser().parseFromString(String(text ?? ''), 'text/html').body;
+    let body = parse(html);
+    // Written twice over ("&lt;p&gt;…"): the first reading gives tags as plain text.
+    if (!body.children.length && /<\/?[a-z][^>]*>/i.test(body.textContent)) body = parse(body.textContent);
     body.querySelectorAll('br, p, li, h1, h2, h3, h4, div').forEach((node) => node.append('\n'));
     return body.textContent.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
   };
@@ -57,6 +60,15 @@
   /** The innermost pieces of text in an element, in order. */
   const leaves = (node) => [...(node?.querySelectorAll('*') ?? [])].filter((item) => !item.children.length).map((item) => clean(item.textContent)).filter((text) => /\p{L}/u.test(text));
   const microValue = (name) => { const node = document.querySelector(`[itemprop~="${name}" i]`); return clean(node?.getAttribute('content') || node?.textContent); };
+  const list = (selector) => [...document.querySelectorAll(selector)].map((node) => clean(node.textContent)).filter(Boolean).join(' · ');
+  /** The element after the one saying `label` ("Location:" and then the place). */
+  const labelled = (selector, label) => clean([...document.querySelectorAll(selector)].find((node) => label.test(clean(node.textContent)))?.nextElementSibling?.textContent);
+  /** BrassRing: a p.question, and its p.answer next. */
+  const answerTo = (label) => labelled('p.question', label);
+  /** Tal.net's description line: "Vacancy title: X. Location: Y. Closing Date: …". */
+  const vacancyMeta = () => clean(document.querySelector('meta[name="description"]')?.content).match(/Vacancy title:\s*(.+?)\.\s+Location:\s*(.+?)\.\s+Closing/i);
+  /** A board's rule: a selector for its text, or a function. */
+  const ask = (rule) => (typeof rule === 'string' ? textOf(rule) : rule?.() ?? '');
   const capital = (text) => text.replace(/(^|\s)(\p{Ll})/gu, (_, gap, letter) => gap + letter.toUpperCase());
   const BOARDS = [{
     host: /(^|\.)jobs\.smartrecruiters\.com$/i,
@@ -97,6 +109,164 @@
     company: () => clean([...document.images].find((image) => image.alt.trim() && image.naturalWidth > 100)?.alt),
     title: () => textOf('[id="requisitionDescriptionInterface.reqTitleLinkAction.row1"]') || clean(document.querySelector('meta[property="og:title"]')?.content),
     description: '#taleo_holder',
+  }, {
+    // Gusto's h1 holds the company, the title and "Remote · Full time" in that order.
+    host: /^jobs\.gusto\.com$/i,
+    title: () => textOf('h1 > span:nth-of-type(2)'),
+    company: () => textOf('h1 > span:nth-of-type(1)'),
+    location: () => textOf('h1 > span:nth-of-type(3)').split(/\s*·\s*/)[0],
+    descriptionHtml: () => [...document.querySelectorAll('.rich-text-container')].at(-1)?.innerHTML ?? '',
+  }, {
+    host: /^recruitingbypaycor\.com$/i,
+    title: () => textOf('#gnewtonJobPosition').replace(/^position:\s*/i, ''),
+    company: () => textOf('h4'),
+    location: () => textOf('#gnewtonJobLocationInfo'),
+    description: '#gnewtonJobDescriptionText',
+  }, {
+    host: /(^|\.)ripplehire\.com$/i,
+    title: () => textOf('.section-title h2'),
+    description: 'p.description',
+    logo: () => { const brand = document.querySelector('a.navbar-brand'); return brand ? getComputedStyle(brand).backgroundImage.match(/url\("?([^")]+)"?\)/)?.[1] ?? null : null; },
+  }, {
+    host: /(^|\.)saashr\.com$/i,
+    title: () => textOf('.c-career-search-details-view__title-heading-text'),
+    company: () => textOf('h1.c-applicant-header__comp-name'),
+    location: () => clean([...document.querySelectorAll('.c-one-column-layout__list-item')].find((item) => /^location/i.test(clean(item.textContent)))?.querySelector('.c-one-column-layout__value')?.textContent),
+    descriptionHtml: () => [...document.querySelectorAll('.c-career-search-details-view__details-section')].filter((section) => /^(description|requirements)$/i.test(clean(section.querySelector('.c-career-search-details-view__details-heading')?.textContent))).map((section) => section.innerHTML).join('\n'),
+    logo: () => document.querySelector('.c-applicant-header-logo img')?.src ?? null,
+  }, {
+    host: /(^|\.)hire\.trakstar\.com$/i,
+    title: () => textOf('.js-job-title'),
+    location: () => ['.meta-job-location-city', '.meta-job-location-state', '.meta-job-location-country'].map(textOf).filter(Boolean).join(', '),
+    description: '.jobdesciption',
+  }, {
+    host: /^app\.trinethire\.com$/i,
+    title: () => textOf('h3.job-name').replace(/^:\s*/, ''),
+    company: () => textOf('.header-links a').replace(/^jobs at\s+/i, ''),
+    location: () => textOf('ul.job-meta li:first-child'),
+  }, {
+    host: /(^|\.)zohorecruit\.[a-z.]+$/i,
+    location: () => {
+      const line = document.querySelector('.cw-jobheader-info > p:nth-of-type(2)')?.cloneNode(true);
+      line?.querySelector('.cw-small-size')?.remove();
+      return clean(line?.textContent);
+    },
+    type: () => clean([...document.querySelectorAll('.cw-summary li')].map((item) => clean(item.textContent)).find((text) => /^job type/i.test(text))?.replace(/^job type:?/i, '')),
+  }, {
+    // Its structured data's title ends in "| dentsu | Handshake".
+    host: /(^|\.)joinhandshake\.com$/i,
+    title: () => textOf('h1'),
+  }, {
+    host: /(^|\.)amazon\.jobs$/i,
+    company: () => 'Amazon',
+    location: () => list('div.association.location-icon li'),
+    description: '#job-detail-body div.content',
+  }, {
+    host: /^jobs\.apple\.com$/i,
+    location: '#jobdetails-joblocation',
+    descriptionHtml: 'section.hyperlink-underline',
+  }, {
+    host: /(^|\.)joinbytedance\.com$/i,
+    company: () => 'ByteDance',
+    location: () => labelled('p', /^location:?$/i),
+    descriptionHtml: 'div:has(> p.bd-title)',
+  }, {
+    host: /(^|\.)lifeattiktok\.com$/i,
+    company: () => 'TikTok',
+    location: () => labelled('p', /^location:?$/i),
+    descriptionHtml: 'div:has(> p.whitespace-pre-line)',
+  }, {
+    host: /^www\.google\.com$/i,
+    path: /^\/about\/careers\//,
+    title: () => clean(document.querySelector('meta[property="og:title"]')?.content) || textOf('div.DkhPwc h2.p1N2lc'),
+    location: () => list('div.DkhPwc span.r0wTof').replace(/\s*·\s*;\s*/g, ' · '),
+    descriptionHtml: 'div.KwJkGe, div.aG5W3, div.BDNOWe',
+  }, {
+    host: /^www\.hubspot\.com$/i,
+    path: /^\/careers\/jobs\//,
+    title: '#react-root-directory h2',
+    company: () => 'HubSpot',
+    location: '#react-root-directory h2 ~ h3:not(.careers-department)',
+    descriptionHtml: '#react-root-directory div:has(> .content-pay-transparency)',
+  }, {
+    host: /^careers\.ibm\.com$/i,
+    location: 'span.card-item-location',
+    description: '#jobDetailWidget .section__content',
+  }, {
+    host: /^www\.okta\.com$/i,
+    description: 'article.Job__content',
+  }, {
+    host: /^careers\.roblox\.com$/i,
+    location: '[class*="HeroJob_job__details"] span',
+    description: '[class*="JobContent_job-content__rich-text"]',
+  }, {
+    // Its structured data is often another job's: used only when the job numbers agree.
+    host: /^jobs\.uber\.com$/i,
+    checkPosting: true,
+    title: 'h1',
+    location: '[data-testid="job-page"] dl dd',
+    description: 'div.shrink-0 div.wysiwyg',
+  }, {
+    host: /^careers\.walmart\.com$/i,
+    location: () => clean([...document.querySelectorAll('[data-testid^="JobRoleTitleCard"] p.text-sm')].find((node) => node.getClientRects().length)?.textContent),
+    description: '[data-testid="JobDescription-htmldiv"]',
+  }, {
+    host: /^x\.company$/i,
+    location: () => clean(document.querySelectorAll('[class*="_subtitle_"] span')[1]?.textContent),
+    description: '[class*="_contentBody_"]',
+    logo: (page) => page.querySelector('a[aria-label="Go to X homepage."] img')?.getAttribute('src') || null,
+  }, {
+    host: /^cursor\.com$/i,
+    location: () => textOf('article header p.text-theme-text-sec').split(/\s*·\s*/).at(-1) ?? '',
+    description: 'div.prose.prose-lg',
+  }, {
+    host: /(^|\.)workatastartup\.com$/i,
+    company: 'a[href^="/companies/"]',
+    location: () => labelled('span.font-mono', /^location$/i),
+    description: '.variant2-prose',
+    logo: (page) => page.querySelector('img[alt$=" logo"]')?.getAttribute('src') || null,
+  }, {
+    host: /(^|\.)brassring\.com$/i,
+    location: () => answerTo(/^(location|city)\b/i) || answerTo(/^country\b/i),
+    descriptionHtml: '.jobDetailsLiner.mainDetails .questionClass',
+  }, {
+    host: /(^|\.)careers\.hibob\.com$/i,
+    title: '[data-testid="job-ad-title"]',
+    company: () => slugName(location.hostname.split('.')[0].replace(/-[0-9a-f]{8,}$/i, '')),
+    location: 'careers-ui-job-listing-details .subtitle-content',
+    description: 'careers-ui-job-listing-details .content',
+    type: '#display-value-employmenttype',
+  }, {
+    host: /(^|\.)tal\.net$/i,
+    title: () => vacancyMeta()?.[1] || textOf('h1.section').replace(/^view vacancy\s*-\s*/i, ''),
+    company: () => clean(document.title).split(/\s+-\s+/).at(-1) ?? '',
+    location: () => vacancyMeta()?.[2] ?? '',
+    descriptionHtml: '.htmltype-richtext .form-control-static',
+  }, {
+    host: /^apply\.appcast\.io$/i,
+    company: () => clean(document.querySelectorAll('app-uapp-job-details .job-details span')[0]?.textContent),
+    location: () => clean(document.querySelectorAll('app-uapp-job-details .job-details span')[1]?.textContent),
+  }, {
+    host: /(^|\.)careers-page\.com$/i,
+    company: () => { const spans = document.querySelectorAll('main .banner span'); return clean(spans[1]?.textContent) || clean(document.title).match(/\s-\s(.+?)\s*\|\s*Career Page$/i)?.[1] || ''; },
+    location: () => { const spans = document.querySelectorAll('main .banner span'); return spans.length > 1 ? clean(spans[0].textContent) : ''; },
+    description: '.redactor-styles',
+  }, {
+    host: /(^|\.)catsone\.com$/i,
+    company: () => clean(document.querySelector('img.logo-image')?.alt),
+    location: 'ul.job-tags li:first-child',
+    descriptionHtml: 'div.job-description',
+    logo: (page) => page.querySelector('img.logo-image')?.getAttribute('src') || null,
+  }, {
+    host: /(^|\.)(clearcompany|hrmdirect)\.com$/i,
+    company: () => clean(document.querySelector('img.cc-logo')?.alt) || clean(document.querySelector('meta[property="og:title"]')?.content).match(/\bat\s+(.+)$/i)?.[1] || '',
+    description: '.ccs-job-description-text',
+  }, {
+    host: /(^|\.)freshteam\.com$/i,
+    location: () => clean([...(document.querySelector('.job-details-header .stick-hide-in-mobile')?.childNodes ?? [])].find((node) => node.nodeType === Node.TEXT_NODE && clean(node.textContent))?.textContent),
+  }, {
+    host: /^jobs\.gohire\.io$/i,
+    location: '.jp-sidebar-item-data',
   }, {
     host: /^jobs\.ashbyhq\.com$/i,
     // Every place the job lists; its structured data has only the first.
@@ -164,9 +334,11 @@
     marker: 'meta[name="avature.portal.id"]',
     title: () => clean(document.querySelector('meta[property="og:title"]')?.content).replace(/\s+[-|]\s+(careers|jobs)$/i, '')
       || clean(document.querySelector('.banner--main .banner__text__title')?.textContent),
-    location: () => [...document.querySelectorAll('p')].map((node) => node.textContent.replace(/\s+/g, ' ').trim().match(/^Location:\s*(.+)$/i)?.[1]).find(Boolean) ?? '',
+    location: () => [...document.querySelectorAll('p')].map((node) => node.textContent.replace(/\s+/g, ' ').trim().match(/^Location:\s*(.+)$/i)?.[1]).find(Boolean) ?? textOf('.banner__text__subtitle p:first-child'),
     company: () => hiringOrganization() || clean(document.querySelector('.header__logo h1, [class*="logo"] h1')?.textContent).slice(0, 100),
     description: '.article__content--rich-text',
+    // Some themes have no rich-text block: the job is in the article's plain blocks.
+    descriptionHtml: () => (document.querySelector('.article__content--rich-text') ? '' : [...document.querySelectorAll('article.article--details .article__content')].map((node) => node.innerHTML).join('\n')),
     logo: (page) => page.querySelector('meta[property="og:image"]')?.content || null,
     jobUrl: () => {
       if (/\/JobDetail\//.test(location.pathname)) return `${location.origin}${location.pathname}`;
@@ -175,7 +347,7 @@
   }];
   /** "ubc" → "UBC" (a short tenant is an acronym); "salesforce" → "Salesforce". */
   const tenantName = (slug) => (slug && slug.length <= 4 ? slug.toUpperCase() : slugName(slug));
-  const board = () => BOARDS.find((item) => item.host.test(location.hostname)) ?? BOARDS.find((item) => item.marker && document.querySelector(item.marker)) ?? null;
+  const board = () => BOARDS.find((item) => item.host.test(location.hostname) && (!item.path || item.path.test(location.pathname))) ?? BOARDS.find((item) => item.marker && document.querySelector(item.marker)) ?? null;
   /** "varonis" → "Varonis"; "acme-corp" → "Acme Corp". */
   function slugName(slug) {
     if (!slug) return '';
@@ -195,14 +367,14 @@
   function title() {
     // The first h1 on screen: a page can keep a hidden one ("Internet Explorer is no longer supported").
     const heading = [...document.querySelectorAll('h1')].find((node) => node.getClientRects().length && clean(node.innerText));
-    return board()?.title?.() || clean(posting()?.title) || clean(heading?.innerText) || tabParts()?.title || clean(document.title);
+    return ask(board()?.title) || clean(posting()?.title) || clean(heading?.innerText) || tabParts()?.title || clean(document.title);
   }
   /**
    * The company: the board's own place for it, else the posting's structured
    * data (JobPosting.hiringOrganization.name, which most job boards include).
    */
   function company() {
-    return board()?.company?.() || hiringOrganization();
+    return ask(board()?.company) || hiringOrganization();
   }
   /** The employer the posting's structured data names. */
   function hiringOrganization() {
@@ -219,10 +391,12 @@
     if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.posting ?? null;
     for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
       let data;
-      try { data = JSON.parse(script.textContent); } catch { continue; }
+      // Raw line breaks inside its strings are common (Trakstar's) and break strict JSON.
+      try { data = JSON.parse(script.textContent.replace(/[\u0000-\u001f]/g, ' ')); } catch { continue; }
       const items = [data, ...(Array.isArray(data) ? data : []), ...(Array.isArray(data?.['@graph']) ? data['@graph'] : [])];
       const found = items.find((item) => [].concat(item?.['@type'] ?? []).includes('JobPosting'));
-      if (found) return found;
+      const jobNumber = (address) => String(address ?? '').match(/\d{4,}/g)?.at(-1);
+      if (found && (!board()?.checkPosting || !found.url || jobNumber(found.url) === jobNumber(location.pathname))) return found;
     }
     return microdataPosting();
   }
@@ -273,6 +447,7 @@
   function locationFrom(job) {
     const places = [].concat(job?.jobLocation ?? []).map((place) => {
       const address = place?.address ?? place;
+      if (typeof address === 'string') return clean(address);
       const country = typeof address?.addressCountry === 'string' ? address.addressCountry : address?.addressCountry?.name;
       // Boards write "-", "30", "BC,CA" or "North America" here: only real place names stay.
       const parts = [address?.addressLocality, address?.addressRegion, country].flatMap((part) => clean(part).split(/\s*,\s*/)).filter((part) => /\p{L}/u.test(part) && !CONTINENT.test(part));
@@ -315,9 +490,10 @@
   /** A salary range written in the page's text. Needs a currency, so "2015 – 2020" is not a salary. */
   function salaryInText(text) {
     const sign = `(?:US|HK|CA|AU|NZ|SG|C|A|S)\\$|[$€£₹₴¥]|zł|${CODES}`;
-    const number = '(\\d{1,3}(?:[ ,.\\u00a0]\\d{3})+|\\d+(?:[.,]\\d+)?)\\s*([kK])?';
+    const number = '(\\d{1,3}(?:[ ,.\\u00a0]\\d{3})+(?:[.,]\\d{1,2}(?!\\d))?|\\d+(?:[.,]\\d+)?)\\s*([kK])?';
+    const period = '(?:\\s*(?:per|an|a|/)\\s*(?:hour|hr|day|week|month|year|yr))?';
     // "$156,000 USD - $234,000 USD", "HK$20,159 to HK$24,503", "$14.71 To $15.21 Hourly".
-    const pattern = new RegExp(`(${sign})?\\s?${number}(?:\\s*(?:${CODES}))?\\s*(?:-|–|—|to|do)\\s*(${sign})?\\s?${number}\\s*(${sign})?`, 'gi');
+    const pattern = new RegExp(`(${sign})?\\s?${number}(?:\\s*(?:${CODES}))?${period}\\s*(?:-|–|—|‒|−|to|do)\\s*(?:(?:${CODES})\\s+)?(${sign})?\\s?${number}\\s*(${sign})?`, 'gi');
     const currencyOf = (found) => SIGNS[found.toUpperCase()] ?? SIGNS[found] ?? found.toUpperCase();
     for (const match of text.matchAll(pattern)) {
       const currencyText = match[1] || match[4] || match[7];
@@ -346,6 +522,16 @@
     return TYPES.find(([, words, code]) => words.test(text) || code.test(text))?.[0] ?? '';
   }
 
+  /** The posting's description, with its responsibilities and qualifications when those are separate (Meta). */
+  function postingText(job) {
+    let text = htmlText(job.description);
+    for (const part of [job.responsibilities, job.qualifications]) {
+      const more = typeof part === 'string' ? htmlText(part) : '';
+      if (more && !text.includes(more.slice(0, 80))) text += `\n\n${more}`;
+    }
+    return text.slice(0, 20000);
+  }
+
   /** A page's "Employment type: …" line, else the job's first words. */
   function typeFromText(text) {
     const stated = text.match(/\bemployment type:?\s+([a-z]+(?:[- ]time)?)/i)?.[1];
@@ -354,11 +540,15 @@
 
   /** The job's own text: a description element, else the main content without the application form. */
   function descriptionOnPage() {
+    const rule = board()?.descriptionHtml;
+    const html = typeof rule === 'string' ? [...document.querySelectorAll(rule)].map((node) => node.innerHTML).join('\n') : rule?.();
+    if (html) return htmlText(html).slice(0, 20000);
     const own = board()?.description;
     if (own) {
       const node = document.querySelector(own);
+      if (node) return htmlText(node.innerHTML).slice(0, 20000);
       // The board's own place: an apply page without it waits for the job page (readAsync).
-      return node ? htmlText(node.innerHTML).slice(0, 20000) : '';
+      if (board().jobUrl) return '';
     }
     const selectors = ['.job__description', '#job-description', '[data-qa="job-description"]', '[class*="job-description" i]', '[class*="jobDescription"]', '[class*="description" i]', 'article', 'main', '[role="main"]'];
     // A short "article" is usually a side note: the page's main part comes first, then anything.
@@ -366,8 +556,8 @@
     for (const longest of [600, 200]) for (const selector of selectors) {
       for (const node of document.querySelectorAll(selector)) {
         if (node.closest('form') || !node.getClientRects().length) continue;
-        // A cookie notice has a "description" too.
-        const notice = node.closest('[class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="consent" i], [class*="onetrust" i], [id*="onetrust" i], [class*="cmplz" i]');
+        // A cookie notice and a pay notice have a "description" too.
+        const notice = node.closest('[class*="pay-transparency" i], [class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="consent" i], [class*="onetrust" i], [id*="onetrust" i], [class*="cmplz" i]');
         if (notice && notice !== document.body && notice !== document.documentElement) continue;
         const copy = node.cloneNode(true);
         copy.querySelectorAll('form, input, select, textarea, button, script, style, nav, footer').forEach((child) => child.remove());
@@ -385,16 +575,16 @@
     const job = posting();
     const bodyText = clean(linkedin ? selected?.text ?? '' : document.body?.innerText ?? '').slice(0, 80000);
     // A board's own place for the description first (Workday's keeps its headings and lists), then the structured data's.
-    const own = !linkedin && board()?.description ? descriptionOnPage() : '';
-    const description = linkedin ? selected?.description ?? '' : own || (job?.description ? htmlText(job.description).slice(0, 20000) : descriptionOnPage());
+    const own = !linkedin && (board()?.description || board()?.descriptionHtml) ? descriptionOnPage() : '';
+    const description = linkedin ? selected?.description ?? '' : own || (job?.description ? postingText(job) : descriptionOnPage());
     const salary = salaryFrom(job) ?? salaryInText(bodyText) ?? { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null };
     const types = [].concat(job?.employmentType ?? []).join(' ');
     return {
       // A board's own place first: its structured data can be thinner than its page (Gem's "USA").
-      location: linkedin ? selected?.location || locationFrom(job) : board()?.location?.() || locationFrom(job) || locationOnPage(),
+      location: linkedin ? selected?.location || locationFrom(job) : ask(board()?.location) || locationFrom(job) || locationOnPage(),
       ...salary,
       // What the posting states wins; its text is read only when it states nothing.
-      employmentType: typeOf(board()?.type?.() ?? '') || (types ? typeOf(types) : typeFromText(linkedin ? `${clean(document.querySelector('.description__job-criteria-list')?.innerText)} ${bodyText}` : bodyText)),
+      employmentType: typeOf(ask(board()?.type)) || (types ? typeOf(types) : typeFromText(linkedin ? `${clean(document.querySelector('.description__job-criteria-list')?.innerText)} ${bodyText}` : bodyText)),
       description,
       country: window.CVAutofillFields?.jobCountry?.() ?? null,
     };

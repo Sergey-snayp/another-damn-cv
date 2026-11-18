@@ -24,8 +24,8 @@ let lastScan = { found: [], skipped: [] };
  * or the domain ("careers.zexter.com" → "Zexter"). A job board's own domain
  * (job-boards.greenhouse.io) never names the employer.
  */
-const BOARD_HOST = /(^|\.)(successfactors\.(?:com|eu)|sapsf\.(?:com|eu)|adp\.com|ultipro\.com|taleo\.net|rippling\.com|oraclecloud\.com|comeet\.com?|brassring\.com|applytojob\.com|personio\.(?:de|com)|hibob\.com|dayforcehcm\.com|indeed\.[a-z.]+|greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
-const PLATFORM_NAME = /\b(rippling|comeet|workday|greenhouse|lever|ashby|taleo|icims|ultipro|ukg|jobvite|smartrecruiters|successfactors|indeed|recruiting|recruitment|career center)\b/i;
+const BOARD_HOST = /(^|\.)(careers-page\.com|appcast\.io|catsone\.com|hrmdirect\.com|clearcompany\.com|tal\.net|governmentjobs\.com|workatastartup\.com|recruitingbypaycor\.com|saashr\.com|gusto\.com|trinethire\.com|trakstar\.com|successfactors\.(?:com|eu)|sapsf\.(?:com|eu)|adp\.com|ultipro\.com|taleo\.net|rippling\.com|oraclecloud\.com|comeet\.com?|brassring\.com|applytojob\.com|personio\.(?:de|com)|hibob\.com|dayforcehcm\.com|indeed\.[a-z.]+|greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
+const PLATFORM_NAME = /\b(rippling|comeet|workday|greenhouse|lever|ashby|taleo|icims|ultipro|ukg|manatal|appcast|clearcompany|catsone|trinet|trakstar|gusto|saashr|paycor|jobvite|smartrecruiters|successfactors|indeed|recruiting|recruitment|career center)\b/i;
 function companyName() {
   if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.company ?? '';
   // A job board's own place for it (Jobvite's header logo).

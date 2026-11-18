@@ -722,7 +722,7 @@
     ] },
     { name: 'paycomonline', hosts: [/(^|\.)paycomonline\.com$/, /(^|\.)paycomonline\.net$/], fields: [
     ] },
-    { name: 'paycor', hosts: [], fields: [
+    { name: 'paycor', hosts: [/^recruitingbypaycor\.com$/], fields: [
     ] },
     { name: 'personio', pages: [/^https?:\/\/([^\/]+\.)?personio\.de(?=[\/?#]|$)/, /^https?:\/\/([^\/]+\.)?personio\.com(?=[\/?#]|$)/], hosts: [], fields: [
     ] },
@@ -743,6 +743,8 @@
     { name: 'naukri', hosts: [/(^|\.)naukri\.com$/], fields: [
     ] },
     { name: 'welcometothejungle', hosts: [/(^|\.)welcometothejungle\.com$/], fields: [
+    ] },
+    { name: 'workatastartup', hosts: [/(^|\.)workatastartup\.com$/], fields: [
     ] },
     { name: 'handshake', hosts: [/(^|\.)joinhandshake\.com$/], fields: [
     ] },

@@ -39,15 +39,17 @@ export function requestSiteAccess(tab) {
   return chrome.permissions.request({ origins: [`${protocol}//${hostname}/*`] });
 }
 
-export async function captureTab(tabId) {
+/** Reads the job from the top page, or from the frame that shows it (iCIMS). */
+export async function captureTab(tabId, frameId = 0) {
   const tab = await chrome.tabs?.get?.(tabId).catch(() => null);
   const carried = tab ? await linkedInJobForTab(tab) : null;
+  const target = { tabId, frameIds: [frameId] };
   await chrome.scripting.executeScript({
-    target: { tabId },
+    target,
     files: ['src/linkedin.js', 'src/job-details.js', 'src/capture-sites.js', 'src/capture.js'],
   });
   const [result] = await chrome.scripting.executeScript({
-    target: { tabId },
+    target,
     args: [Boolean(carried?.description)],
     func: async haveOriginalDescription => {
       // Chrome can turn a rejected injected promise into an empty result.

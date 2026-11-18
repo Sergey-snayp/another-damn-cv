@@ -25,7 +25,7 @@
     const blocks = [];
     for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
       try {
-        blocks.push(JSON.parse(script.textContent));
+        blocks.push(JSON.parse(script.textContent.replace(/[\u0000-\u001f]/g, ' ')));
       } catch {
         // Broken JSON-LD is common; the text still gets through.
       }

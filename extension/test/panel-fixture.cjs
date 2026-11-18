@@ -10,10 +10,11 @@ const pageScripts = () => JSON.parse(fs.readFileSync(path.join(extension, 'src/p
  * passes its messages. `silentFor`: the page does not answer at first, as one
  * still loading. `server`: the account's job-site login ({ login, saves }).
  * `session`: what the background keeps in chrome.storage.session (a LinkedIn hand-off).
+ * `frame`: a second frame { url, replies: { scan, … } }, its answers by message type.
  * `stored`: more of chrome.storage.local. `server.account`: the profile on the server
  * (`server.down`: its read fails; `server.patches`: what the panel saved to it).
  */
-async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, server = { login: null, saves: [] }, offer = null, session = {}, stored = {} } = {}) {
+async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, server = { login: null, saves: [] }, offer = null, session = {}, stored = {}, frame = null } = {}) {
   const page = await browser.newPage();
   await page.setViewport({ width: 420, height: 900 });
   await page.exposeFunction('readJobPage', message => jobPage.evaluate(message => window.__ask(message), message));
@@ -59,7 +60,8 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
     } else if (address.origin === 'http://localhost:3001') json([]);
     else void request.respond({ status: 404, body: '' });
   });
-  await page.evaluateOnNewDocument(({ url, silentFor, profile, offer, session, stored }) => {
+  await page.evaluateOnNewDocument(({ url, silentFor, profile, offer, session, stored, frame }) => {
+    window.__frameAsked = [];
     // The background's side: an "Update your job-site password?" offer, and what the panel answered.
     window.__offer = offer; window.__answers = [];
     const background = message => {
@@ -87,14 +89,14 @@ async function panelFixture(browser, jobPage, { silentFor = 0, profile = {}, ser
       // Messages from the page reach the panel through window.__deliver(message), as Chrome passes them.
       runtime: { id: 'test', getURL: file => `http://extension.test/${file}`, getManifest: () => ({ version: 'test' }), onMessage: { addListener: listener => (window.__panelListeners ??= []).push(listener), removeListener() {} }, sendMessage: async message => background(message) },
       storage: { local: { get: async keys => Object.fromEntries([].concat(keys ?? Object.keys(store)).filter(key => key in store).map(key => [key, store[key]])), set: async value => Object.assign(store, value), remove: async keys => { for (const key of [].concat(keys)) delete store[key]; } }, session: { get: async key => (key in session ? { [key]: session[key] } : {}), set: async value => Object.assign(session, value) }, onChanged: event },
-      tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message) => { if (Date.now() < answersFrom) throw new Error('Could not establish connection. Receiving end does not exist.'); return window.readJobPage(message); }, onUpdated: event, onActivated: event, create: async () => ({}) },
-      webNavigation: { getAllFrames: async () => [{ frameId: 0, url }] },
+      tabs: { query: async () => [{ id: 1, url }], get: async () => ({ id: 1, url }), sendMessage: async (_, message, options) => { if (options?.frameId) { window.__frameAsked.push(message.type); return frame?.replies?.[message.type] ?? { ok: true }; } if (Date.now() < answersFrom) throw new Error('Could not establish connection. Receiving end does not exist.'); return window.readJobPage(message); }, onUpdated: event, onActivated: event, create: async () => ({}) },
+      webNavigation: { getAllFrames: async () => [{ frameId: 0, url }, ...(frame ? [{ frameId: 5, url: frame.url }] : [])] },
       scripting: { executeScript: async () => [] },
       permissions: { request: async () => true, contains: async () => true },
       identity: { getRedirectURL: () => 'https://fixture.chromiumapp.org/' },
       windows: { getCurrent: async () => ({ width: 1400, height: 900 }), onRemoved: event },
     };
-  }, { url: jobPage.url(), silentFor, profile, offer, session, stored });
+  }, { url: jobPage.url(), silentFor, profile, offer, session, stored, frame });
   await page.goto('http://extension.test/src/sidepanel.html');
   return page;
 }

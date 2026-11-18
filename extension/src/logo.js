@@ -26,7 +26,7 @@
   /** "The Box, Inc." → "box": for comparing a company name with alt text and domains. */
   const key = (text) => String(text ?? '').toLowerCase().replace(/&/g, ' and ').replace(LEGAL, ' ').replace(/^\s*the\s+/, '').replace(/[^a-z0-9]/g, '');
   // Nothing is no address: new URL('', page) would be the page itself.
-  const url = (value) => { const text = String(value ?? '').trim(); if (!text) return null; try { const parsed = new URL(text, location.href); return /^https?:$/.test(parsed.protocol) ? parsed : null; } catch { return null; } };
+  const url = (value) => { const text = String(value ?? '').trim(); if (!text) return null; try { const parsed = new URL(text, location.href); return /^https?:$/.test(parsed.protocol) && !/undefined/.test(parsed.hostname) ? parsed : null; } catch { return null; } };
   /** "careers.box.com" → "box.com"; "jobs.example.co.uk" → "example.co.uk". */
   function siteOf(hostname) {
     const parts = hostname.toLowerCase().split('.').filter(Boolean);
@@ -46,7 +46,7 @@
   function fromStructuredData() {
     for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
       let data;
-      try { data = JSON.parse(script.textContent); } catch { continue; }
+      try { data = JSON.parse(script.textContent.replace(/[\u0000-\u001f]/g, ' ')); } catch { continue; }
       const items = [data, ...(Array.isArray(data) ? data : []), ...(Array.isArray(data?.['@graph']) ? data['@graph'] : [])];
       for (const item of items) {
         const logo = item?.hiringOrganization?.logo;
@@ -96,7 +96,7 @@
     if (/powered/i.test(label) || namesBoard(label, company) || namesBoard(file, company)) return { score: 0 };
     if (image.closest('footer, [role="contentinfo"]') || near(image, /footer|powered|cookie|onetrust|consent/i, 5)) return { score: 0 };
     // A "your browser is not supported" notice.
-    if (/\/browsers?\//i.test(src.pathname) || /^(firefox|chrome|safari|edge|opera|ie)\b/i.test(file)) return { score: 0 };
+    if (/googlelogo/i.test(src.pathname) || /\/browsers?\//i.test(src.pathname) || /^(firefox|chrome|safari|edge|opera|ie)\b/i.test(file)) return { score: 0 };
     if (onDarkBackground(image)) return { score: 0 };
     let points = 0;
     const alt = key(label.replace(/\blogo(type)?\b|\bimage\b|\bicon\b/gi, ' '));
