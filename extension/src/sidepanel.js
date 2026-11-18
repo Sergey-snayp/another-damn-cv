@@ -1239,7 +1239,6 @@ let cvReport = { text: '', kind: '' };
 let switchingCv = false;
 function cvStatus(text, kind = '') {
   cvReport = { text, kind };
-  status('resume-status', text, kind);
   status('autofill-cv-status', text, kind);
 }
 const cvMenuNode = document.createElement('div');
@@ -1340,8 +1339,8 @@ function resumeEmpty() {
   if (loadingResumes) return '<div class="resume-empty"><p>Loading your CVs…</p></div>';
   return `<div class="resume-empty"><p>No CVs in Documents yet.</p><button class="ghost" data-open-documents>Open Documents</button></div>`;
 }
-/** Both tabs give the CV name a full row, with secondary actions underneath. */
-function cvPicker(id = 'cv-select') {
+/** The CV name gets a full row, with secondary actions underneath. */
+function cvPicker(id) {
   const chosen = resumes.chosen;
   if (!chosen) return resumeEmpty();
   const expanded = cvMenu.open && cvMenu.anchorId === id;
@@ -1355,12 +1354,10 @@ function cvPicker(id = 'cv-select') {
     ${long ? `<details class="cv-full-name"><summary>Full CV name</summary><p>${esc(chosen.name)}</p></details>` : ''}`;
 }
 function autofillCvCard() {
-  return `<details class="card resume-card" data-keep-open="resume" ${keptOpen.has('resume') ? 'open' : ''}><summary>${icon('file', 20)}Resume</summary><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div>${!groupOn('resume') ? '<p class="cv-note">CV uploads are off in Settings.</p>' : ''}<div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div>${resumes.chosen ? matchCard() : ''}</details>`;
+  return `<details class="card resume-card" data-keep-open="resume" ${keptOpen.has('resume') ? 'open' : ''}><summary>${icon('file', 20)}Resume</summary><div id="autofill-cv-picker">${cvPicker('autofill-cv-select')}</div>${!groupOn('resume') ? '<p class="cv-note">CV uploads are off in Settings.</p>' : ''}<div id="autofill-cv-status" class="status ${cvReport.kind}" role="status">${esc(cvReport.text)}</div>${resumes.chosen ? `${matchCard()}<button type="button" class="ghost small" data-open-documents>Open Documents</button>` : ''}</details>`;
 }
 function renderResume() {
-  $('resume-picker').innerHTML = cvPicker();
   if (cvMenu.open) { renderCvOptions(); placeCvMenu(); }
-  $('refresh-cvs').disabled = loadingResumes;
 }
 function rerenderResumes() { renderResume(); if (!filling) renderAutofill(); if (cvMenu.open) placeCvMenu(); }
 /** Fetches the backend's current collection, including an empty collection. */
@@ -1591,7 +1588,7 @@ async function rescore(run = ++matchRun) {
         // Suggest another CV only when it is clearly better, not one keyword ahead.
         const best = scored.filter(item => item.id !== chosen.id).sort((a, b) => b.score - a.score)[0];
         const better = best && best.score >= chosen.score + 10 ? { id: best.id, name: best.name, score: best.score, matched: best.matched.length } : null;
-        // Every CV's score, for the Resume tab's CV list.
+        // Every CV's score, for the CV list.
         next = { chosen, better, scores: Object.fromEntries(scored.map(item => [item.id, item.score])) };
       }
     } catch (error) { analysisError = `Could not analyze your CV: ${error.message}`; }
@@ -1757,8 +1754,7 @@ for (const tab of document.querySelectorAll('.tab')) {
 $('reload').addEventListener('click', () => { $('settings-dialog').close(); void refresh(); });
 
 $('sign-in').addEventListener('click', () => void doSignIn()); $('sign-out').addEventListener('click', () => void doSignOut()); $('pull-now').addEventListener('click', () => void doPull());
-$('refresh-cvs').addEventListener('click', () => void loadResumes());
-$('open-app').addEventListener('click', () => void openApp()); $('edit-profile').addEventListener('click', () => void openApp('/profile')); $('open-documents').addEventListener('click', () => void openApp('/documents'));
+$('open-app').addEventListener('click', () => void openApp()); $('edit-profile').addEventListener('click', () => void openApp('/profile'));
 $('copy-redirect').addEventListener('click', async () => { try { await navigator.clipboard.writeText(redirectUri()); $('copy-redirect').textContent = 'Copied'; } catch { status('auth-status', 'Select the redirect URI to copy it manually.', 'error'); } });
 // Settings → Job-site login: read from your account each time, shown hidden, copied on request.
 let siteLogin = null, siteLoginEditing = false;

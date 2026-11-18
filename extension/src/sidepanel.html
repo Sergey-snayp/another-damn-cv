@@ -19,22 +19,12 @@
   </header>
   <div class="tabs" role="tablist" aria-label="Autofill tools">
     <button class="tab" id="tab-autofill" role="tab" data-panel="autofill" aria-controls="panel-autofill" aria-selected="true"><span data-icon="edit"></span>Autofill</button>
-    <button class="tab" id="tab-resume" role="tab" data-panel="resume" aria-controls="panel-resume" aria-selected="false" tabindex="-1"><span data-icon="file"></span>Resume</button>
     <button class="tab" id="tab-profile" role="tab" data-panel="profile" aria-controls="panel-profile" aria-selected="false" tabindex="-1"><span data-icon="user"></span>Profile</button>
   </div>
   <main>
     <div id="login-offer" class="login-offer" role="region" aria-label="Job-site password" hidden></div>
     <section class="panel" id="panel-autofill" role="tabpanel" aria-labelledby="tab-autofill"><section class="job-context" aria-hidden="true"><div class="page-card skeleton-card"><span class="company-avatar skeleton"></span><span class="page-card-body"><span class="skeleton skeleton-line wide"></span><span class="skeleton skeleton-line"></span></span></div></section><div class="fill-block" aria-hidden="true"><div class="skeleton skeleton-button"></div></div><p class="visually-hidden" role="status">Reading this page…</p></section>
     <section class="panel" id="panel-job" aria-labelledby="job-form-heading" hidden></section>
-    <section class="panel" id="panel-resume" role="tabpanel" aria-labelledby="tab-resume" hidden>
-      <div class="card">
-        <div class="card-heading"><h2><span data-icon="file"></span>Your CV</h2><button class="icon-button" id="refresh-cvs" title="Refresh from the app" aria-label="Refresh CVs from the app"><span data-icon="refresh" data-size="18"></span></button></div>
-        <p>Autofill uploads this CV to application forms. Click its name to choose another CV from Documents.</p>
-        <div id="resume-picker"></div>
-        <div class="status" id="resume-status" role="status"></div>
-      </div>
-      <div class="card soft-card"><h2>Edit or tailor a CV</h2><p>Changes you save in the app are picked up the next time you press Autofill. The PDF matches Print / PDF in the app.</p><button class="ghost" id="open-documents">Open Documents<span data-icon="chevron"></span></button></div>
-    </section>
     <section class="panel" id="panel-profile" role="tabpanel" aria-labelledby="tab-profile" hidden>
       <div class="notice copy-hint"><span data-icon="copy"></span><div><strong>Click a detail to copy it</strong><p>Keep your information nearby while you apply.</p></div></div>
       <div id="profile-overview"></div>

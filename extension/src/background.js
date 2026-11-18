@@ -329,7 +329,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 /**
- * PDFs added by hand before 0.13.0 are removed: the Resume tab now uses the
+ * PDFs added by hand before 0.13.0 are removed: the panel now uses the
  * CVs from the app's Documents. Runs once per install or update.
  */
 async function removeLocalPdfs() {

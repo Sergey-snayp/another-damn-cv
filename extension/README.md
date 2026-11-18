@@ -15,7 +15,7 @@ when a company logo is not found on the page.
 2. Turn on **Developer mode** (top right)
 3. **Load unpacked** → select this `extension/` folder
 4. Pin the icon, click it, sign in on the **Profile** tab, and choose a CV in
-   the **Resume** tab
+   the **Resume** card on the **Autofill** tab
 
 After updating the extension files, click **Reload** on its card in
 `chrome://extensions`, then reload the pages you had open.
@@ -140,10 +140,10 @@ server does not answer within 3 seconds, Autofill uses the saved copy.
 
 ## CVs
 
-The **Resume** tab shows the CV that **Autofill This Page** uploads, as
+The **Resume** card on the **Autofill** tab shows the CV that **Autofill This Page** uploads, as
 `<CV name>.pdf` (sign in on the Profile tab first). **Change** opens the list
 of CVs from the app's Documents to pick another. Your primary CV is chosen
-until you pick another. The Autofill tab's Resume card has the same switcher. Text fields still come
+until you pick another. **Open Documents** opens your CVs in the app. Text fields still come
 from your profile, not from the CV.
 
 The list comes from `GET /api/extension/resumes`, the same backend collection
@@ -710,9 +710,8 @@ Profile copy actions, searches, saved data, form inputs and uploaded filenames
 keep their complete values. Multi-line headings and statuses also stay within
 two lines. Change `UI_TEXT_LIMIT` to adjust the default for the whole panel.
 
-Autofill and Resume use the same chosen CV. You can change it on either tab;
-if Autofill already attached a CV, changing it replaces that PDF on the form
-when the site allows replacement. Both tabs show the result.
+If Autofill already attached a CV, changing the chosen CV replaces that PDF on the
+form when the site allows replacement. The Resume card shows the result.
 
 The name layout follows [Maersk's truncation guidance](https://designsystem.maersk.com/content/truncation/index.html):
 wrap where possible, keep both ends of filenames, and offer access beyond hover.

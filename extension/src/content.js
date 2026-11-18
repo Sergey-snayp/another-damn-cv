@@ -142,7 +142,7 @@ function explain(element) {
       const what = field.key === 'requiresSponsorship' ? 'sponsorship' : 'work authorization';
       return field.country ? `No answer yet about ${what} for ${field.country}. Click to answer: it is saved for ${field.country} only.` : `No answer yet about ${what}. Click to answer.`;
     }
-    if (field.key === 'resume') return profile.resumeDataUrl ? 'Your CV upload did not finish. Try Autofill again or upload it yourself.' : 'No CV chosen. Choose one in the Resume tab.';
+    if (field.key === 'resume') return profile.resumeDataUrl ? 'Your CV upload did not finish. Try Autofill again or upload it yourself.' : 'No CV chosen. Choose one in the panel\'s Resume card.';
     if (field.key === 'workedHereBefore') return 'Could not tell from your CV. Click to answer once for every company.';
     if (field.kind === 'select' || field.kind === 'radio' || field.kind === 'combobox') return `None of the options matched your profile answer for "${label}". Click to choose one.`;
     return PROFILE_DEFAULTS.has(field.key) ? `Your profile has no value for "${label}". Click to add it.` : `Your profile has no value for "${label}". Add it in the app's Profile.`;
