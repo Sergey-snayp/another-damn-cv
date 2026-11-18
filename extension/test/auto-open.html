@@ -59,9 +59,17 @@
     if (mode.has('disabled') || mode.has('domain')) {
       expect(!panel.isOpen(), 'the saved global/domain disable setting stops automatic opening');
       expect(!runtimeMessages.some(message => message.type === 'panel-opened'), 'a disabled panel never flashes open');
-      // Turning the feature back on makes the detected form available again.
-      storageListeners.forEach(listener => listener({ launcherEnabled: { newValue: true }, launcherDisabledHosts: { newValue: [] } }, 'local'));
+      // As Simplify: the button stays, grey, and its × menu turns it back on.
+      const shown = document.getElementById('adcv-autofill-launcher')?.shadowRoot;
+      expect(Boolean(shown), 'a disabled site keeps the D! button, the way to turn it back on');
+      expect(shown?.querySelector('.launcher').classList.contains('off'), 'the button is grey while off');
+      const item = shown?.querySelector(mode.has('domain') ? '[data-hide="domain"]' : '[data-hide="all"]');
+      expect(item?.textContent === (mode.has('domain') ? 'Enable on this domain' : 'Enable on all pages'), `the menu offers to turn it back on (${item?.textContent})`);
+      shown?.querySelector('.dismiss').click();
+      item?.click();
       await wait(250);
+      expect(!shown?.querySelector('.launcher').classList.contains('off'), 'on again: the button has its colour back');
+      expect(shown?.querySelector('[data-hide="domain"]').textContent === 'Disable on this domain' && shown?.querySelector('[data-hide="all"]').textContent === 'Disable on all pages', 'the menu offers to disable again');
     }
     expect(panel.isOpen(), 'a detected application form opens the panel automatically');
     expect(document.querySelectorAll('#adcv-autofill-panel').length === 1, 'one panel is created');

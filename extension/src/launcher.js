@@ -37,18 +37,37 @@
     .menu button:hover,.menu button:focus-visible { background:var(--color-background); outline:none; }
     button:focus-visible { outline:2px solid var(--color-focus); outline-offset:3px; } .open:disabled { cursor:wait; opacity:.6; }
     .status { position:absolute; top:100%; right:8px; width:230px; padding:10px 12px; border:1px solid var(--color-border); border-radius:10px; background:var(--color-surface); box-shadow:0 4px 16px var(--color-shadow); color:var(--color-text); } [hidden] { display:none !important; }
+    .launcher.off .open img { filter:grayscale(1); opacity:.55; } .launcher.off { background:var(--color-surface); }
     @media(prefers-reduced-motion:reduce) { .launcher,.grip,.dismiss { transition:none; } }
   `;
   const removeHost = () => (window.CVAutofillTopLayer ? window.CVAutofillTopLayer.detach(host) : host.remove());
 
+  /**
+   * Disabled on this site or on all pages, as Simplify does it: the button stays,
+   * grey, as the way to turn it back on from its × menu ("Enable on this domain"),
+   * but the panel never opens and nothing fills by itself.
+   */
+  const disabledHere = () => !enabled || disabledHosts.includes(location.hostname);
+  function renderMenu() {
+    // Written only when changed: the page's own watchers see every write.
+    const set = (node, text) => { if (node.textContent !== text) node.textContent = text; };
+    set(shadow.querySelector('[data-hide="domain"]'), disabledHosts.includes(location.hostname) ? 'Enable on this domain' : 'Disable on this domain');
+    set(shadow.querySelector('[data-hide="all"]'), enabled ? 'Disable on all pages' : 'Enable on all pages');
+    const off = disabledHere();
+    if (launcher.classList.contains('off') !== off) launcher.classList.toggle('off', off);
+    const title = off ? 'Autofill is off on this site. Open it, or press × to turn it back on.' : 'Open Autofill';
+    if (open.title !== title) { open.title = title; open.setAttribute('aria-label', title); }
+  }
+
   function renderVisibility() {
     // Collapsing the panel always leaves the button as the way back to it, even
     // where it was hidden. A new hide choice from the × menu applies again.
-    const hiddenByChoice = !enabled || disabledHosts.includes(location.hostname) || dismissedUrl === location.href;
+    renderMenu();
+    const hiddenByChoice = dismissedUrl === location.href;
     // Open once for this page when an application form appears, including
     // forms found in iframes. Wait for saved hide/disable settings first.
     // Closing the panel leaves it closed through later scans of the same form.
-    if (settingsLoaded && available && formHere && !hiddenByChoice && !panelOpen && autoOpenedUrl !== location.href) {
+    if (settingsLoaded && available && formHere && !hiddenByChoice && !disabledHere() && !panelOpen && autoOpenedUrl !== location.href) {
       if (window.CVAutofillPanel?.open()) {
         autoOpened = true;
         console.info(`[Another Damn CV] Opened the panel by itself: ${openReason || 'an application form'} on this page.`);
@@ -112,9 +131,12 @@
     if (!choice) return;
     closeMenu();
     keepAfterPanel = false;
+    // The same item turns the site (or all pages) off, and on again.
     if (choice === 'visit') dismissedUrl = location.href;
-    else if (choice === 'domain') { disabledHosts = [...new Set([...disabledHosts, location.hostname])]; store({ launcherDisabledHosts: disabledHosts }); }
-    else { enabled = false; store({ launcherEnabled: false }); }
+    else if (choice === 'domain') {
+      disabledHosts = disabledHosts.includes(location.hostname) ? disabledHosts.filter(name => name !== location.hostname) : [...new Set([...disabledHosts, location.hostname])];
+      store({ launcherDisabledHosts: disabledHosts });
+    } else { enabled = !enabled; store({ launcherEnabled: enabled }); }
     renderVisibility();
   });
   let drag = null;

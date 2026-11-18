@@ -955,12 +955,26 @@ function showLauncher(next) {
   frameVerdict = own.show;
   window.top.postMessage({ adcvFrameForm: own.show }, '*');
 }
+/** Asks this page's own iframes to say again whether they hold a form (and theirs, in turn). */
+function askFrames() {
+  for (let index = 0; index < window.frames.length; index++) {
+    try { window.frames[index].postMessage({ adcvAskFrames: true }, '*'); } catch { /* gone */ }
+  }
+}
 if (IS_TOP) {
   // Announces a form only: opening the panel never fills or submits anything.
   addEventListener('message', (event) => {
     if (typeof event.data?.adcvFrameForm !== 'boolean' || event.source === window) return;
     if (event.data.adcvFrameForm) framesWithForms.add(event.source); else framesWithForms.delete(event.source);
     showLauncher();
+  });
+  // A frame that loaded first said so before this page listened: ask again.
+  askFrames();
+} else {
+  addEventListener('message', (event) => {
+    if (!event.data?.adcvAskFrames || event.source !== window.parent) return;
+    if (frameVerdict !== null) window.top.postMessage({ adcvFrameForm: frameVerdict }, '*');
+    askFrames();
   });
 }
 let lastLinkedInContext;
