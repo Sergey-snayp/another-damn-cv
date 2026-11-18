@@ -7,7 +7,8 @@ const { pageWithScripts } = require('./panel-fixture.cjs');
 // State/Province/City are select2 boxes that load their options as you search,
 // so the hidden <select> holds none. Filled as Simplify does: open, type, press
 // the match. Location lists countries, so it gets the country. Password and
-// Confirm get the saved job-site login, as Jobright fills Avature's.
+// Confirm get the saved job-site login, as Jobright fills Avature's. Legal
+// First and Last Name get the first and last name, as both apps fill them.
 // Synthetic page with a select2 stand-in.
 const URL = 'https://careers.lululemon.com/en_US/careers/ApplicationForm/65847';
 const box = (id, label) => `<label class="WizardFieldLabel" for="${id}">${label}</label>
@@ -16,6 +17,8 @@ const box = (id, label) => `<label class="WizardFieldLabel" for="${id}">${label}
 const page = `<!doctype html><head><meta name="avature.portal.id" content="4"></head><form>
   <label for="first">First name</label><input id="first">
   <label for="last">Last name</label><input id="last">
+  <label for="legal-first">Legal First Name</label><input id="legal-first">
+  <label for="legal-last">Legal Last Name</label><input id="legal-last">
   <label for="mail">Email</label><input id="mail" type="email">
   <label for="phone">Phone</label><input id="phone">
   <label for="addr">Address Line 1</label><input id="addr">
@@ -70,12 +73,13 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', email: 'sergey@examp
     const started = Date.now();
     await tab.evaluate((profile) => window.__ask({ type: 'fill', profile, answers: [] }), { ...profile, siteLogin: { email: 'sergey@example.com', password: 'Saved-Pass-123!' } });
     const took = Date.now() - started;
-    const state = await tab.evaluate(() => ({ location: document.getElementById('location').value, state: document.getElementById('state').value, shown: document.getElementById('location-shown').textContent, pw: document.getElementById('pw').value, pw2: document.getElementById('pw2').value, searches: window.searches }));
+    const state = await tab.evaluate(() => ({ location: document.getElementById('location').value, state: document.getElementById('state').value, shown: document.getElementById('location-shown').textContent, pw: document.getElementById('pw').value, pw2: document.getElementById('pw2').value, searches: window.searches, legal: [document.getElementById('legal-first').value, document.getElementById('legal-last').value] }));
+    assert.deepEqual(state.legal, ['Sergey', 'Proniuk'], 'Legal First and Last Name: the name again, not skipped as a second name field');
     assert.equal(state.location, 'Canada', `Location gets the country (${JSON.stringify(state.searches)})`);
     assert.equal(state.shown, 'Canada');
     assert.equal(state.state, 'British Columbia, Canada', 'the province: the option that starts with it, not the city one');
     assert.deepEqual([state.pw, state.pw2], ['Saved-Pass-123!', 'Saved-Pass-123!'], 'Password and Confirm, the saved job-site password');
-    console.log(`PASS select2 that loads options by search: Location gets the country, State/Province/City the province, typed and pressed as Simplify does; Password and Confirm from the saved job-site login (${took} ms)`);
+    console.log(`PASS select2 that loads options by search: Location gets the country, State/Province/City the province, typed and pressed as Simplify does; Password and Confirm from the saved job-site login; Legal First/Last Name from the name (${took} ms)`);
   } finally {
     await browser.close();
   }

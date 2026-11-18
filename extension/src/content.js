@@ -201,7 +201,8 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
 
   let done = 0;
   // One answer, one field: a contact or address value goes into the first field of a form that asks
-  // for it, never a second one ("Address Line 2" taken for the street), unless that one says "confirm".
+  // for it, never a second one ("Address Line 2" taken for the street), unless that one says "confirm"
+  // or asks for the legal name (Avature's "Legal First Name" under "First Name", filled with it as Simplify and Jobright do).
   const written = new Map();
   result.kept = [];
   for (const stop of stops) {
@@ -210,7 +211,7 @@ async function runPass({ found, profile, answers = [], hooks, explainIf = () => 
     if (stop.kind === 'field' && ONCE_PER_FORM.has(stop.field.key)) {
       const form = stop.element.closest('form') ?? Fields.rootOf?.(stop.element) ?? document;
       const id = `${stop.field.key}|${form === document ? '' : [...document.querySelectorAll('form')].indexOf(form)}`;
-      if (written.has(id) && !CONFIRM_LABEL.test(Fields.labelOf(stop.element))) continue;
+      if (written.has(id) && !SAME_AGAIN_LABEL.test(Fields.labelOf(stop.element))) continue;
       written.set(id, stop.element);
     }
     if (stop.kind === 'section') {
@@ -652,7 +653,7 @@ Marks?.setEditor(editorFor);
 
 /** Kinds of value a form asks for once; a second field for one of them is left empty. */
 const ONCE_PER_FORM = new Set(['firstName', 'lastName', 'middleName', 'preferredName', 'fullName', 'email', 'phone', 'addressLine', 'city', 'state', 'postalCode', 'location', 'linkedin', 'github', 'portfolio', 'website', 'twitter', 'telegram']);
-const CONFIRM_LABEL = /\b(confirm|re-?enter|re-?type|repeat|verify|again)\b/i;
+const SAME_AGAIN_LABEL = /\b(confirm|re-?enter|re-?type|repeat|verify|again|legal|official)\b/i;
 
 /**
  * After the pass, each field Autofill filled is read again, as Jobright checks

@@ -9,7 +9,10 @@
  *     (apply, vacancy, career, CV, резюме… in the address, title or headings), or
  *   - on a known job board, a resume field or 2+ fields (the original rule).
  *
- * Forms with a password, card fields, or a search box are never counted.
+ * Forms with card fields or a search box are never counted, nor one with a
+ * password unless it also asks for 4+ applicant details: Avature's application
+ * (Lululemon) makes the account on the same page as the name, phone and address,
+ * and Simplify and Jobright fill it. A sign-in or sign-up asks for 3 at most.
  */
 (() => {
   if (window.CVAutofillJobForm) return;
@@ -26,8 +29,8 @@
   /** The form a field belongs to; fields outside any <form> share the page. */
   const containerOf = element => element.closest('form, [role="form"]') ?? document.body;
 
-  function excluded(container) {
-    if (container.querySelector('input[type="password"]')) return true;
+  function excluded(container, applicant = 0) {
+    if (container.querySelector('input[type="password"]') && applicant < 4) return true;
     if (container.querySelector('input[autocomplete^="cc-"]')) return true;
     if ([...container.querySelectorAll('input')].some(input => CARD.test(`${input.name} ${input.id} ${input.placeholder} ${input.getAttribute('aria-label') ?? ''}`))) return true;
     // A search form: a search box and no applicant contact fields.
@@ -53,9 +56,9 @@
     }
     let fallback = { show: false, reason: 'no applicant form' };
     for (const [container, fields] of groups) {
-      if (excluded(container)) { fallback = { show: false, reason: 'login, search or payment form' }; continue; }
       const usable = fields.filter(field => field.key !== 'coverLetter');
       const keys = new Set(usable.map(field => field.key));
+      if (excluded(container, [...keys].filter(key => APPLICANT.has(key)).length)) { fallback = { show: false, reason: 'login, search or payment form' }; continue; }
       const resumeUpload = usable.some(field => field.key === 'resume' && ['file', 'drop', 'pick'].includes(field.kind));
       const contacts = [...keys].filter(key => CONTACT.has(key)).length;
       const applicant = [...keys].filter(key => APPLICANT.has(key)).length;
