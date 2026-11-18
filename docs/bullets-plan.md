@@ -3,6 +3,15 @@
 Written 2026-11-13, after Quick Tailor proposed removing a key bullet (the TLS
 certificate service) for Varonis and showed every bullet with score chips.
 
+**Status, checked 2026-11-17:**
+
+- Phase 1 is partly built. Quick Tailor's review no longer shows the meter, and each
+  line has one main button. Hiding punctuation-only changes was not found in the app.
+- Phase 2 is partly built. You can star bullets on the Profile, and the AI that chooses
+  bullets is told about them. A starred bullet is not yet guaranteed to stay.
+- Phase 3 is not built. `bulletRange()` still uses fixed counts per job.
+- Phases 4 and 5 were not re-checked.
+
 ## 1. Why a CV has bullets at all
 
 A bullet is **one piece of evidence for one thing the job asks for.** It has

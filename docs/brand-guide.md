@@ -4,8 +4,8 @@ Approved by Sergey on 1 November 2026. Use this guide for future site design
 and UI changes. The logo is used in the app header, sign-in page, and browser
 tab. The app uses the color palette below.
 
-The header shows only the logo. Clicking it opens Home (`/`); Dashboard remains
-at `/dashboard`. Home copies the supplied reference layout using this palette.
+The header shows the logo and the menu: Home, Dashboard, Resume, Interview and
+Profile. Clicking the logo also opens Home (`/`); Dashboard remains at `/dashboard`. Home copies the supplied reference layout using this palette.
 Its statistics and service cards are clearly marked as sample content. Preview
 goals and email choices do not update account settings or send emails. The
 sample values live in `frontend/src/home/homePreview.ts` until we connect real data.
@@ -65,7 +65,7 @@ the extension. Edit the frontend palette rather than the generated copy.
 - Use near-black text and icons on yellow buttons and highlights.
 - Keep most surfaces warm white or white. Use yellow for the main action and
   selected states.
-- Use the same colors across Dashboard, Documents, Interview Prep, and Profile.
+- Use the same colors across Home, Dashboard, Resume, Interview, and Profile.
 - Keep success and error messages clear with text or icons as well as color.
 - This palette belongs to the app interface. CV document themes can keep their
   own colors for previews and exports.

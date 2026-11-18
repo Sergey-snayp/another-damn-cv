@@ -38,8 +38,9 @@ Available now: **Profile → Import from CV** can parse an uploaded file or read
 saved CV. Users review and correct the text and select contact fields and career
 sections to save. Each imported section keeps its source label and import date.
 Imported work experience, education, skills and summary stay independent of later
-CV edits. Unselected sections keep their existing data; sections not imported yet
-still display the primary CV. The import never edits CVs or application attachments.
+CV edits. Unselected sections keep their existing data; sections not saved yet stay
+empty. The import never edits CVs or application attachments. Profile also keeps the
+languages you speak, and your work status for form questions.
 Imported text is not automatically marked as verified evidence. Follow-up questions,
 project-level history and generating CVs directly from Profile remain planned.
 
@@ -64,6 +65,14 @@ ask the user which is correct before replacing anything.
 | Cover letters and communication | Draft letters, recruiter replies, and question answers using the user's experience and the specific application. |
 | Interview preparation | Explain relevant strengths, missing information, and confirmed gaps. Prepare introductions, STAR stories, likely questions, and questions to ask the company. |
 | System design preparation | Practise requirements, scale estimates, architecture, data models, failure handling, and trade-offs. Connect exercises to the user's real projects where relevant. |
+
+The application assistant is available now in the extension. It fills forms from
+the Profile and chosen CV, including job and school lists on Workday and Avature.
+It keeps one job through all pages of an application, writes a cover letter when a
+form has a box for one, and keeps one encrypted login for job-site accounts. It never
+presses a form's Continue or Submit button by itself: the panel offers that button,
+and the user presses it. Details are in
+[the extension guide](../extension/README.md).
 
 Preparation uses the job opening, company information, interview stage, previous
 conversation notes, and the exact CV sent. A screening call and a technical round

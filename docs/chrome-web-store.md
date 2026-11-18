@@ -26,11 +26,13 @@ The Another Damn CV extension fills job application forms for you, using your pr
 
 • Fills applications on company career sites and applicant tracking systems (Greenhouse, Lever, Ashby, Workday and more), including multi-step forms and forms embedded in other pages.
 • Attaches the CV you choose and answers common questions from your saved answers.
+• Fills work history, education and languages on forms that ask for them, and can write a cover letter for the job from your CV.
+• Keeps one login for job-site accounts, encrypted on your account, and helps you create an account or sign in.
 • Saves job postings to your Another Damn CV account in one click, from the panel or the right-click menu, so you can track applications.
 • Opens Quick tailoring next to the posting: adjust your CV's summary and bullets for the job before you apply.
 • Marks a saved job as Applied when you submit its application.
 
-You need an Another Damn CV account to use the extension. It talks only to anotherdamn.cv. There are no ads, no analytics and no tracking.
+You need an Another Damn CV account to use the extension. Your data goes only to your account and to the forms you choose to fill. There are no ads, no analytics and no tracking.
 
 Privacy policy: https://anotherdamn.cv/privacy.html
 ```
@@ -55,8 +57,8 @@ Fill job application forms with the user's own profile and CVs from their Anothe
 
 | Permission | Justification |
 | --- | --- |
-| `storage` | Keeps the user's sign-in token, settings, a copy of their profile and the chosen CV on the device, so forms can be filled without asking the server each time. |
-| `unlimitedStorage` | CV files are attached to application forms from local storage; several CVs with their file data can exceed the default storage quota. |
+| `storage` | Keeps the user's sign-in token, settings, a copy of their profile and which CV is chosen on the device, so forms can be filled without asking the server each time. |
+| `unlimitedStorage` | The text of the user's CVs is kept on the device for keyword matching; several CVs can exceed the default storage quota. |
 | `activeTab` | Reads the current page when the user clicks the toolbar icon, to open the panel and find the application form. |
 | `scripting` | Injects the form-filling panel and filler into the page (and its frames) where the user opens it, including pages opened before the extension was installed. |
 | `tabs` | Reads the current tab's address and title to check whether that job is already saved, and opens the user's job in the Another Damn CV app. |
@@ -71,7 +73,9 @@ Fill job application forms with the user's own profile and CVs from their Anothe
 
 - Personally identifiable information: name, email, address, phone (the user's profile).
 - Health information: optional disability status the user saves for diversity questions.
-- Authentication information: the sign-in token.
+- Authentication information: the sign-in token, and the job-site email and password the user
+  keeps on their account. The password is stored encrypted on the server and is put only into
+  the job site's own form.
 - Location: the address in the user's profile.
 - Web history: the address of job pages the panel is opened on, to look up saved jobs.
 - User activity: the answers the user filled in an application form they submit.

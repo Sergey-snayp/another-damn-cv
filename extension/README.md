@@ -1,9 +1,13 @@
 # Another Damn CV
 
 A Chrome extension that recognises job application forms on any site and fills
-them from your profile, with a CV from the app. It also sends job postings to the app.
+them from your profile, with a CV from the app. It also saves job postings to the app.
 
-It talks only to your own app (`localhost:3001` and `:5173`); there is no telemetry.
+In development it talks to your own app (`localhost:3001` and `:5173`). The Chrome
+Web Store build talks to the live app instead (`scripts/pack-store.cjs`). There is
+no telemetry. A few other requests are made: the job site you are on (to read its
+job page or its own lists), LinkedIn's public job page, and Google's icon service
+when a company logo is not found on the page.
 
 ## Load it
 
@@ -23,10 +27,19 @@ forms loaded later or embedded in an iframe. It opens inside the page, on its
 right edge, over the page content. Closing it keeps it closed on that page;
 it can open automatically again on another application page.
 Open it again with the D! button on the page edge or the toolbar icon; collapse it with
-its `>` button or Esc. The D! button's × offers **Hide until next visit**, **Disable
-on this domain** or **Disable on all pages**; Settings in the panel turns the
-last two back on. These choices also stop automatic opening. Collapsing the panel always brings the D! button back on
+its `>` button or Esc. Collapsing the panel always brings the D! button back on
 that page, even where it was hidden. It reopens after you move to another page in the same tab.
+
+The D! button's × opens a menu:
+
+- **Hide until next visit** removes the button from this page.
+- **Disable on this domain** or **Disable on all pages** keeps the button, in grey.
+  The panel no longer opens by itself, and later form steps are no longer filled
+  by themselves. Pressing the button still opens the panel, and **Autofill This
+  Page** still works when you press it.
+- On a disabled site the same menu says **Enable on this domain** or **Enable on
+  all pages**, which turns it back on. Settings → **Turned off on these sites**
+  lists the disabled sites too.
 
 - The extension runs on every site, so the panel opens anywhere from the
   toolbar icon. Chrome lists this as "Read and change all your data on all
@@ -52,15 +65,20 @@ application form and should open the panel (or show the D! button after you clos
 - or one form with 3+ applicant fields (name, email, phone, LinkedIn, location…)
   on a page with a job sign: apply, application, job, career, vacancy, position,
   CV, resume, вакансія, резюме… in the address, title, headings or buttons;
-- on the known job boards in `src/sites.js`, a resume field or any 2 fields.
+- on a known job system, a resume field or any 2 fields. A system is known by its
+  address or by a mark in the page, so it also works on a company's own domain
+  (Lululemon's careers site is Avature). See `src/sites.js` and `src/site-fields.js`.
 
 Some pages (Greenhouse's job boards, built with React/Remix) replace their
 whole `<html>` element while starting, which removed the D! button. The page
 watcher observes the document itself, and the button, panel and icons put
 themselves back after any change. `test/rebuild.html` covers this.
 
-Forms with a password, card fields or a search box never count. Ordinary sites
-are rescanned less often than job boards, and pages without inputs are skipped.
+Forms with card fields, or a search box and no contact fields, never count. A form
+with a password counts only when it also asks for 4 or more applicant details: that
+is an application that also makes an account (Lululemon's). A plain sign-in or
+sign-up page does not count. Ordinary sites are rescanned less often than job
+boards, and pages without inputs are skipped.
 `test/job-form.html` checks these rules against sample pages:
 
 ```
@@ -99,9 +117,17 @@ The D! button appears on the page's right edge. Open the panel to see which
 fields were recognised and whether you have a value for each. Press **Autofill
 This Page**, then review everything before submitting.
 
-**Nothing is filled until you press Autofill This Page, and it never submits
+**Nothing is filled until you press Autofill This Page, and Autofill never submits
 anything.** Opening the panel, rescanning and page loads only read the form.
-`content.js` accepts a fill request only from the panel.
+`content.js` accepts a fill request only from the panel. The one exception is
+**Keep filling the next steps**, which you switch on yourself (see Multi-step forms).
+
+After Autofill, the panel shows the form's own next button under the result, with
+the form's own words: **Continue**, **Next**, **Save & Continue**, **Submit**. It
+presses that button on the page, and only when you press it. If the button may send
+the application, the panel says to check your answers first. It is found by the
+site's own rule or by its words, never in the page's header, menu or footer, and
+never Back, Cancel or Sign in (`advanceButton` in `src/sites.js`, `test/advance.cjs`).
 
 ## CVs
 
@@ -172,27 +198,33 @@ Fair (40+) or Low. It counts keywords only and does not judge experience depth.
 - Keywords come from a fixed list of about 250 skills in `src/match.js`, with
   spellings that count as one ("node", "nodejs", "Node.js"). Skills under
   Requirements or mentioned twice count double; "nice to have" counts once.
-- The page is read with the same capture as Send job. The card appears only for
-  the page's own JobPosting data, a site rule (LinkedIn, Indeed…), or a
+- The page is read with the same capture as saving a job. The card appears only
+  for the page's own JobPosting data, a site rule (LinkedIn, Indeed…), or a
   description with requirement/responsibility sections and 3+ skills.
+- A form page has no description of its own. The match then uses the job's page,
+  the LinkedIn posting you came from, or the saved job's description (see One job
+  through the whole application).
 - Each CV's text (no contact details) comes from
   `GET /api/extension/resumes/:id/text` and is kept until the CV changes. If
   another CV scores 10+ points higher, the card offers to switch.
-- **Improve my match** saves the job and opens it in the app with the chosen CV
-  selected for tailoring. Tailoring runs only when you press its button there.
+- **Quick Tailor** and **Full Tailoring** save the job and open it with the chosen
+  CV. Quick Tailor opens an unsaved draft, line by line. Full Tailoring opens the
+  full CV editor in the app.
 
 `node --test test/match.test.mjs` checks the matching rules.
 
-## Send a job to the app
+## Save a job to the app
 
-On any job page — LinkedIn, Indeed, a company's careers page — open the
-panel and press **Send this job to the app**. Sign in on the Profile tab first.
+On any job page (LinkedIn, Indeed, a company's careers page) open the panel. The
+job card at the top shows the job: green with a check when it is saved, gray with a
+plus when it is not. Press it, then **Save Job**. You can also right-click the page
+and choose **Save job to Another Damn CV**. Sign in on the Profile tab first.
 
-- It reads the page only when you press the button.
+- A job is also saved when Quick Tailor, Full Tailoring or a new cover letter needs it.
 - On search pages (LinkedIn, Indeed, Glassdoor) it captures the open job, not
   the list beside it. The rules for that are in `src/capture-sites.js`; when a
   site changes its layout, that is the file to update.
-- Sending the same job again updates it and keeps your edits and status.
+- Saving the same job again updates it and keeps your edits and status.
 
 `test/capture.html` runs the capture script against a LinkedIn-shaped page:
 
@@ -202,19 +234,67 @@ panel and press **Send this job to the app**. Sign in on the Profile tab first.
   --dump-dom "file://$PWD/test/capture.html?site=linkedin"
 ```
 
+## One job through the whole application
+
+An application has many pages: the job page, the upload page, sign-in, then each form
+step. Some of them do not say which job they are for. Lululemon's steps after
+sign-in have no description and no link back to the job. As Simplify does, the
+extension keeps one job across all of them. It looks in this order:
+
+1. The saved job with this exact address.
+2. The saved job on the same site with the same job number. `?jobId=65847` on a form
+   is `/JobDetail/…/65847` on the job page. The server does this
+   (`GET /api/jobs/lookup`, `postingKey` in the backend).
+3. The last job found in this browser tab, on the same site, when this page shows no
+   job number. A page with a different number never gets it (`jobOfThisTab` in
+   `src/sidepanel.js`).
+
+The keyword match, the cover letter and Quick Tailor then use the saved job's
+description, and the job card shows the saved job's logo on every step.
+`test/job-memory.cjs` covers this.
+
 ## How it works
 
 ```
-fields.js    finds inputs and guesses what each one is
-filler.js    writes values in a way React accepts
-content.js     answers the panel's scan and fill requests
-launcher.js    the D! button on the page edge
-job-form.js    decides whether a page looks like a job application form
-match.js       keyword match between a posting and your CVs
-panel-host.js  puts the panel frame into the page; opens and closes it
-background.js  toolbar icon, adding the panel to other sites, reopening after loads
-sidepanel.js   the panel itself; stores your profile in chrome.storage.local
-resumes.js     your app CVs, which one Autofill uploads, and its PDF
+On the page
+  fields.js          finds inputs and guesses what each one is
+  filler.js          writes values in a way the page accepts
+  sites.js           known job systems, their buttons and steps
+  site-fields.js     per-system facts: how to know it, and its field names
+  content.js         answers the panel's scan and fill requests; runs the fill
+  workday-history.js the lists on a form: Workday's My Experience, Avature's rows
+  account-form.js    finds and fills a job site's Create Account or Sign In form
+  job-form.js        decides whether a page looks like a job application form
+  job-details.js     reads the job's title, company and description on a page
+  logo.js            finds the company logo
+  linkedin.js        reads the selected LinkedIn job
+  marks.js           the icons beside fields, and the fill animation
+  launcher.js        the D! button on the page edge
+  panel-host.js      puts the panel frame into the page; opens and closes it
+  top-layer.js       keeps our elements usable over a page's top-layer window
+  page-world.js      runs in the page's own world, for widgets we cannot reach
+  bridge.js          runs only on the web app's page, to talk to the extension
+
+Added only when needed
+  capture.js, capture-sites.js   read the job page when a job is saved
+
+The panel and background
+  sidepanel.js       the panel itself
+  background.js      toolbar icon, right-click menu, next-step filling
+  auth.js            sign-in
+  resumes.js         your app CVs, which one Autofill uploads, and its PDF
+  career.js          your jobs, schools, skills and languages from the server
+  jobs.js            saves and finds jobs
+  job-capture.js     keeps the job description, never the form's text
+  linkedin-handoff.js  carries the LinkedIn job to the company's site
+  cover-letters.js   writes and reads the cover letter
+  answers.js         saved answers
+  defaults.js        default answers, per country or company
+  site-login.js      your job-site login
+  match.js           keyword match between a posting and your CVs
+  text-display.js    shortens long text for display
+  icons.js           the icon set
+  tailor.js          holds Quick Tailor in a window over the job page
 ```
 
 **Field detection** gathers every signal an input carries — its `<label>`,
@@ -257,8 +337,9 @@ render after load and change as you scroll.
 
 - **Teamtailor.** Recognised by its page structure, so company domains such as
   careers.zexter.com work, and filled by its field names (`src/sites.js`).
-  On a job page whose form is still closed, the panel offers **Open
-  application form**, which presses the site's Apply button.
+  On a job page whose form is still closed, the panel offers **Start
+  Application**, which presses the site's Apply button. This works on the other
+  known job systems too.
 - **Upload boxes.** Drag-and-drop boxes without a file input (Dropzone and
   similar) get the CV dropped on them, then are watched until the site shows
   the upload as finished. The fill result says "uploaded" or why not.
@@ -283,8 +364,23 @@ render after load and change as you scroll.
   the chosen option shown beside the empty input counts as the value, the
   hidden "required" helper input is ignored, and icons sit at the right of the
   visible box. `test/greenhouse.html` covers this.
+- **Dropdowns behind a widget** (select2 and jQuery UI, used by Avature, iCIMS and
+  BrassRing): the real list is hidden, so the value is set there and the widget is
+  told. A select2 that loads its options only as you search is opened, your answer is
+  typed, and the match is pressed, as Simplify does. A **Location** list of countries
+  gets your country. `test/widget-selects.cjs`, `test/select2-search.cjs`.
+- **Answers drawn as buttons** are pressed like radio buttons. `test/choice-buttons.cjs`.
 - **Whole-address questions** ("City, State/Province, Country and Zip Code")
   get "city, state, country, postal code" from the profile.
+  "State/Province/City" alone is one box for your state or province.
+- **One answer, one field.** A contact or address value goes into the first field of
+  a form that asks for it, not into a second one. Address lines 2 and 3 stay empty.
+  A second field is filled only when its label says "confirm", "repeat" and so on,
+  or "legal". **Legal First Name** gets your first name, as Simplify and Jobright do.
+- **Read back.** After a fill, each field is read again. A value the site cleared or
+  calls invalid gets a yellow icon. `test/fill-checks.cjs`.
+- **CV first.** Sites that read your CV into the form (Lever, iCIMS and others) get
+  the CV first; the other fields are filled when the site has finished reading it.
 - **Consent questions** are never answered, whether checkbox or dropdown.
 - **Still empty and required.** After Autofill, the panel lists required
   fields that are still blank (required, aria-required, or "*"/"Required" in
@@ -297,8 +393,12 @@ render after load and change as you scroll.
   note the country they name ("…to work legally for Box in Poland"). A
   per-country answer is used; the profile's general answer only for the
   profile's own country or a question naming none. Missing answers appear in
-  the Autofill tab as **Answer once** (Yes/No), kept in this browser and
-  listed in Settings with Remove.
+  the Autofill tab as **Answer once** (Yes/No), saved on your account and
+  listed in Settings → **Default answers**.
+- **Work status questions.** Citizen or permanent resident, SIN starting with 9,
+  and permit expiry are answered from the work status saved in the app's Profile.
+  With no status saved they are left for you, and the panel says what is missing.
+  `test/workday-questions.cjs`.
 - **Worked here before.** "Have you ever been employed at Box…" is answered
   from the chosen CV: Yes when that company is one of its employers, otherwise
   No, always with a yellow "check it" icon.
@@ -322,20 +422,61 @@ Teamtailor-shaped form with stand-in widgets:
   --dump-dom "file://$PWD/test/teamtailor.html" | grep -o '<pre id="result">.*</pre>'
 ```
 
+## Job systems with their own steps
+
+- **Workday.** My Information is filled, including phone type and "How did you hear".
+  My Experience adds one panel per job and school from the CV or Profile Autofill
+  uses, removes extra panels, replaces a wrong school or field of study, picks the
+  degree from Workday's own list, and adds the skills Workday knows and your
+  websites. Fields that already hold a value are kept. `test/workday-experience.cjs`,
+  `test/workday-information.cjs`.
+- **Avature** (Lululemon and others). **UPLOAD RESUME** takes the CV and goes on. On
+  "More about me", Work History gets one row per job, with rows added by **add
+  another** and extra rows removed by **remove**: company, title, Is Current
+  Position, and month dates. Education gets the school, Type of Qualification and
+  Qualification. Languages gets one row per language from your Profile.
+  `test/avature-upload.cjs`, `test/avature-history.cjs`.
+- **LinkedIn.** Autofill works only inside the Easy Apply window.
+
+## Job-site accounts and passwords
+
+Many job sites make you create an account. The extension keeps one job-site login
+for you, on your account on the server, encrypted. It never stores the password in
+the browser. See it in Settings → **Job-site login**.
+
+- On a Create Account or Sign In page, the panel offers **Create Account & Autofill**
+  or **Sign In & Autofill**. It fills the form and shows the button. You press it.
+  The first time, a strong password is made and saved.
+- If you change a password on one site and it works, the panel asks **Update your
+  job-site password?**, for that site only or for all sites.
+- An application that also asks for a password (Lululemon's Password and Password
+  Confirm) gets the same login when you press **Autofill This Page**. **Keep filling
+  the next steps** does not fill passwords.
+
+`test/account-step.cjs`, `test/site-login.test.mjs`.
+
+## Cover letters
+
+If the form has a cover letter box, required or not, and this job has no letter yet,
+**Autofill This Page** writes one from your chosen CV and attaches it. This uses the
+AI, so it takes a little time. The **Cover Letter** card shows the letter; you can
+read it, edit it, or generate it again. Switch this off in Settings → Fields to fill
+→ **CV and cover letter**. That group also stops the CV upload.
+
 ## Saved answers
 
-The company's own questions ("How did you hear about us?", "Fintech
-experience") have no profile field. After you answer them on a form, press
-**Save answers from this form** in the Autofill tab, tick the ones to keep and
-**Save selected**. They are stored on your account and editable in the app
-under **Profile → Saved answers**.
+The company's own questions ("How did you hear about us?", "Fintech experience") have
+no profile field. After Autofill, such a question gets a gray **+** icon. Click it,
+write your answer, then press **Save answer** to keep it, or **Just this time** to
+use it only on this form. Answers are stored on your account and can be edited in the
+app under **Profile → Saved answers**.
 
 On the next form, Autofill asks the server for matches (`src/answers.js`,
 `POST /api/extension/answers/match`) and fills only empty fields:
 
 - the same question, ignoring case, punctuation and "Required", fills as is;
-- similar wording ("Telegram account" / "Your Telegram") fills and is listed
-  under the result as "check it";
+- similar wording ("Telegram account" / "Your Telegram") fills and is marked
+  "check it";
 - an answer naming the company it was written for is not used for another
   company, and the result says so;
 - for dropdowns and yes/no questions the answer must match one of the options.
@@ -343,23 +484,17 @@ On the next form, Autofill asks the server for matches (`src/answers.js`,
 Settings → Fields to fill → **Saved answers** switches this off. Telegram is
 now a normal profile field (Links).
 
-## AI drafts
+## AI answers
 
-Questions with no saved answer appear in **Questions to answer** on the
-Autofill tab. **Draft with AI** (or **Draft all**) asks the server to draft
-one with the Claude CLI (`POST /api/extension/answers/draft`), from the chosen
-CV without contact details and the job posting on the page. Drafts run one at
-a time and only on your click, or when you press Autofill with Settings →
-**Draft unknown questions with AI** switched on (off by default).
+In the same icon menu, **✦ Generate answer** asks the server to write an answer with
+the Claude CLI (`POST /api/extension/answers/draft`), from the chosen CV without
+contact details and from the job. It runs only when you press it, one question at a
+time, and it is offered only for large text boxes.
 
 - Claims come only from the CV. Motivation, salary, availability, handles and
   similar personal facts come back as questions for you, not as answers;
-  "why us" drafts leave `[add your reason]`.
-- Choice questions get one of the form's options, number fields a number, and
-  text stays within the field's character limit.
-- A draft goes into an empty field with a yellow "AI draft" icon until you
-  edit it. A field you already filled is left alone; copy
-  the draft instead. **Save as answer** keeps a good draft for next time.
+  "why us" answers leave `[add your reason]`.
+- Read it, then save it or use it just this time.
 
 ## Fill status icons
 
@@ -382,6 +517,8 @@ page or on a neighbouring field (Country beside Phone). Hover for the reason.
   answer, or your CV attached.
 - **! yellow**: filled, but check it: an AI draft, a similar saved answer, an
   address with no suggestion picked, an upload still finishing.
+- **+ gray**: the form asks for it and you have no value yet, but it is not
+  required. Click to add one.
 - **× red**: required and still empty (the same list as "Still empty and
   required"), or not filled. It says why and what fixes it: the profile has
   no value for it, its group is off in Settings, sponsorship for a country
@@ -389,6 +526,10 @@ page or on a neighbouring field (Country beside Phone). Hover for the reason.
   setting), the company's own question (save an answer or draft one), a
   personal question Autofill never answers, no option matched, the upload
   did not finish, or a field it did not recognise. `test/reasons.html`.
+
+Click an icon to set or change the answer for that field: save it to your Profile or
+default answers, use it just this time, or take what you chose on the form. Which
+choices appear depends on the field.
 
 The reason shows at once in a bubble above and to the left of the icon (away from the panel on the right; below only when there is no room above) on hover or click, and the panel's
 "Still empty" list shows it under each field; its **Go to** opens the bubble
@@ -424,8 +565,9 @@ Settings → **Keep filling the next steps** (off by default). After you press
 minutes on that site. Fields that appear later, on the next step or the next
 page, fill from the same profile, CV and saved answers. Fields already seen are
 never touched again, so anything you cleared or changed stays as you left it.
-Switching the setting off stops it at once. `test/steps.html` runs the real page
-script against a stand-in for Chrome's APIs.
+Switching the setting off stops it at once. So does disabling the extension on that
+site or on all pages. `test/steps.html` runs the real page script against a stand-in
+for Chrome's APIs.
 
 ## Diversity questions
 
@@ -440,9 +582,16 @@ race question listing "Hispanic or Latino" stays the race question.
 `test/diversity.html` covers this.
 
 ## What it does not do yet
-- **Workday.** Multi-step, iframes, shadow DOM. Disproportionate effort.
-- **Forms inside iframes** from another site (a Greenhouse form embedded on a
-  company page).
+
+- Site rules ship inside the extension, so a broken site needs a new version.
+- Lists (jobs, schools, languages) are filled on Workday and Avature only, not on
+  other job systems.
+- Company questions are answered with AI one at a time, on your click.
+- Fields with no usable label are not recognised.
+- Sign-up pages such as Avature's Register do not show the D! button. Open the panel
+  from the toolbar icon there.
+
+The full list is in [docs/autofill-plan.md](../docs/autofill-plan.md).
 
 ## Adding a field
 
@@ -450,6 +599,25 @@ Add to `CATEGORIES` in `src/fields.js`, add its label and group in
 `src/sidepanel.js` (`FIELD_LABELS`, `PROFILE_GROUPS`), and it works.
 
 ## Development
+
+### Tests
+
+From `extension/`, with Chrome installed and the backend's packages installed:
+
+```sh
+node test/run.cjs                  # every test except the end-to-end ones
+node test/run.cjs advance job-form # only these
+node test/run.cjs --jobs 6         # up to 6 at once (default 4)
+node test/run.cjs --all            # end-to-end ones too (the app must be running)
+```
+
+The unit tests (`*.test.mjs`) need Node 22. Test pages use made-up forms and a fake
+server, so no account is used. `test/auto-open.html` also has `?domain` and
+`?disabled` modes for disabled sites; the runner opens only the normal mode, so open
+those by hand.
+
+`node scripts/real-forms.cjs <url>` tries the scanner and filler on a live form and
+submits nothing. `node scripts/pack-store.cjs` builds the Chrome Web Store package.
 
 ### LinkedIn job descriptions
 
@@ -460,7 +628,8 @@ and **Full Tailoring** use that posting through the existing backend flow.
 Opening Quick Tailor keeps the CV as a draft; **Save** creates the CV and PDF.
 
 Clicking **Apply** to open a company site keeps the original LinkedIn posting
-in browser session storage for that application tab. Quick Tailor saves its
+in browser session storage for that application tab, through every page of the
+application with the same job number. Quick Tailor saves its
 description as the backend job description immediately, with clean text,
 HTML and structured data. Application field labels and state/country options
 never replace that posting. Jobvite can also read the description from its
@@ -502,9 +671,9 @@ Keep this view compact and calm:
   Below its title, show **Company · Posted date**. Use the page's explicit
   posting date or the saved job's posting date; omit it when unavailable.
   Keep its original calendar day when a timestamp uses a different time zone.
-- Autofill is the main action. Below it, a collapsible **Resume** card groups
-  CV choice, a separate PDF preview icon, the real keyword-match gauge, and
-  **Tailor Resume**. Tailoring opens the existing workflow in the app.
+- Autofill is the main action. After a fill, the form's own next button sits under
+  it. Below, a collapsible **Resume** card groups CV choice, a separate PDF preview
+  icon, the real keyword-match gauge, **Quick Tailor** and **Full Tailoring**.
 - Keep errors and missing required fields visible. Show keyword details when
   the match count is clicked; routine fill notes and field previews also expand.
 - Keep sections open after a redraw. Use space and thin dividers to separate

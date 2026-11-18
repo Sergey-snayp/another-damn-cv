@@ -18,6 +18,14 @@ It was restored successfully into a separate temporary database. All 16 public
 tables were checked, and the temporary database was removed. The live database
 was left in place. `manifest.json` records table counts, migrations and checksums.
 
+## Later snapshots
+
+A database dump is also taken before each database change. These files are named
+`backups/cv_platform-before-<change>-<date>.dump`, each with a `.sha256` file to check
+it. The newest is from 17 November 2026 (`cv_platform-before-site-account-logins`).
+They were not test-restored like the snapshot above. The steps below describe that
+snapshot; its `RESTORE.md` is the reference for how to restore a dump.
+
 ## Restore later
 
 1. Extract the archive if the unpacked folder is missing.

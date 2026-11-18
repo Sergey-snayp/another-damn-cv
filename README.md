@@ -32,16 +32,22 @@ Reading job pages, tailoring and interview questions use the local Claude CLI
 needs a CLI version supporting `--restricted`, `--tools` and `--no-session-persistence`.
 Set `INTERVIEW_MODEL` to override `LLM_MODEL` for preparation. Calls consume your
 Claude account usage. Run `npx prisma migrate deploy` in `backend` after updating.
+Job-site passwords are stored encrypted. Set `SITE_LOGIN_KEY` to choose the key;
+without it, the key comes from `SESSION_SECRET`.
 
 The extension is loaded separately: `chrome://extensions` → Developer mode →
 **Load unpacked** → select `extension/`. See `extension/README.md`.
 
 ## Workspace
 
+The top menu is **Home**, **Dashboard**, **Resume**, **Interview** and **Profile**.
+Resume opens the Documents page (`/documents`) and Interview opens the Interview
+Prep page (`/interview-prep`).
+
 - **Dashboard** tracks active and archived applications in Board, List or Chart
   view. Search by role/company; filter by applied dates, job type, status and
   favorites. Drag cards or use their Move menu; recent moves and archives offer Undo.
-- **Documents** holds resumes and cover letters, with shared search, Add and sort
+- **Resume** (the Documents page) holds resumes and cover letters, with shared search, Add and sort
   controls, card sizes, pinning, selection and empty/loading layouts. Switching
   document types keeps the toolbar and grid aligned on desktop and mobile.
   Its centered layout, underlined tabs, panels and controls follow Profile's styling.
@@ -90,13 +96,18 @@ The extension is loaded separately: `chrome://extensions` → Developer mode →
   Removed notes stop contributing to new bullet suggestions and stay deleted after reload.
   File parsing uses Claude; choosing a saved CV makes no AI call. Neither action
   changes your documents or CV versions attached to applications.
+- **Profile → Complete your profile** appears while details are missing. It opens
+  five steps (Personal, Education, Work Experience, Skill, Equal Employment), each
+  filled from what the Profile already has, and then offers the extension.
+- **Profile → Languages** keeps the languages you speak, each with a level. The
+  extension uses them on forms that ask, such as Avature's Languages list.
 - **Profile → Saved answers** lists answers saved from application forms in
   the extension, with when each was last used. Edit or delete them here.
   **Personal info → Employment Information** shows editable ethnicity, US/Canada/UK
   work authorization, sponsorship, disability, LGBTQ+, gender and veteran answers.
   Unanswered values stay blank. Country authorization uses the same saved defaults
   as the extension, so an answer for Canada is never substituted for the US or UK.
-- **Interview Prep** collects active jobs in Screening or Interviewing, with
+- **Interview** (the Interview Prep page) collects active jobs in Screening or Interviewing, with
   search, status filters, job details and the saved application CV version.
   Jobs appear automatically from Dashboard; archived and other statuses stay out.
   Set, change or remove the next interview date, optional time and time zone from
@@ -138,12 +149,15 @@ currently filtered collection, descriptions, dates and attached resume versions.
 | Module | Routes | What it does |
 |---|---|---|
 | `auth` | `GET /api/auth/config`, `POST /api/auth/google`, `POST /api/auth/extension`, `GET /api/auth/me`, `POST /api/auth/logout` | Google ID-token sign-in, sessions in Postgres. The extension uses a bearer sync token instead |
-| `profiles` | `GET/PUT /api/profile`, `GET /api/profile/career`, `POST /api/profile/career/import`, sync-token and sync routes | Contact/autofill data and reviewed career imports. Saves selected contacts and career sections together; rejects stale reviews. Imported roles drive current-role autofill independently of CV edits |
+| `profiles` | `GET/PUT /api/profile`, `GET /api/profile/career`, `POST /api/profile/career/import`, sync-token and sync routes | Contact/autofill data and reviewed career imports. Saves selected contacts and career sections (summary, experience, education, skills, languages) together; rejects stale reviews. Imported roles drive current-role autofill independently of CV edits |
 | `resumes` | `POST /api/import/cv`, `GET /api/extension/resumes` and `GET /api/extension/resumes/:id/text` (extension token), `GET/POST /api/resumes`, `GET /api/resumes/:id`, `POST /api/resumes/:id/save`, `POST /api/resumes/:id/rewrite`, `POST /api/jobs/:id/tailor`, `GET/DELETE /api/resumes/:id/tailoring`, history, diff, revert | CV import, versioned resumes, line rewriting and job-specific tailoring in one module. PDF/DOCX/TXT/Markdown imports return an unsaved draft. Tailoring suggests summaries and bullets for review. Changed saves add snapshots; unchanged saves add none |
-| `jobs` | `POST /api/jobs/capture` (extension token), `GET/POST /api/jobs`, `GET/PATCH/DELETE /api/jobs/:id`, `POST /api/jobs/:id/reread`, `POST /api/jobs/:id/status/undo` | Saved postings. JSON-LD first, the Claude CLI when a page has none. Status runs Saved → Applied → Screening → Interview → Offer → Accepted / Rejected / Declined, or Dismissed; every move is logged and the latest can be undone |
+| `jobs` | `POST /api/jobs/capture` and `GET /api/jobs/lookup` (extension token), `GET/POST /api/jobs`, `GET/PATCH/DELETE /api/jobs/:id`, `POST /api/jobs/:id/reread`, `POST /api/jobs/:id/status/undo` | Saved postings. JSON-LD first, the Claude CLI when a page has none. Status runs Saved → Applied → Screening → Interview → Offer → Accepted / Rejected / Declined, or Dismissed; every move is logged and the latest can be undone. Lookup finds a saved job by its address, else by the same site and job number, so every page of an application finds its job |
 | applications | `POST /api/jobs/applications`, `GET /api/jobs/applications/export`, `POST /api/jobs/applications/import`, `PATCH /api/jobs/applications/preferences`, `PATCH /api/jobs/applications/:id/resume` | Structured application entry, CSV tools, account favorites/archives and versioned resume attachments |
 | answers | `GET /api/answers`, `PATCH/DELETE /api/answers/:id`, `POST /api/extension/answers`, `POST /api/extension/answers/match` and `POST /api/extension/answers/draft` (extension token) | Answers to employers' own application questions, saved from the extension and refilled on matching questions. Exact or similar wording; never reused when an answer names another company. Drafts new answers with the Claude CLI from a CV without contact details, asking for personal facts instead of inventing them |
-| interviews | `GET/PUT /api/jobs/:jobId/preparation` | Account-owned interview type, interviewer, instructions, notes and questions for the next interview. Opening the form does not create a record |
+| cover letters | `GET /api/cover-letters`, `GET/POST/PUT/DELETE /api/cover-letters/:jobId`, its `/pdf`, and `/api/extension/jobs/:jobId/cover-letter` (extension token) | One cover letter per saved job, written from a CV, editable, with a PDF for upload forms |
+| default answers | `GET/POST /api/defaults`, `PATCH/DELETE /api/defaults/:id`, `GET/POST /api/extension/defaults`, `DELETE /api/extension/defaults/:id` | Answers chosen once and reused on forms: work authorization and sponsorship per country, work status, relocation, "worked here before" |
+| job-site logins | `GET/PUT /api/extension/site-login`, `PUT/DELETE /api/extension/site-login/sites/:host/login`, `POST /api/extension/site-login/sites` (extension token) | The login the extension uses for job-site accounts, one per person plus one per site where the password differs. Passwords are encrypted (AES-256-GCM) |
+| interviews | `GET/PUT /api/jobs/:jobId/preparation`, `GET /api/jobs/:jobId/preparation/practice`, `POST /api/jobs/:jobId/preparation/practice/:kind` | Account-owned interview type, interviewer, instructions, notes and questions for the next interview. Opening the form does not create a record |
 
 From `backend/`, `npm run check` runs types, lint, formatting and unit/architecture
 tests. `npm run test:http` checks routes with fake dependencies. `npm run build`
@@ -151,6 +165,9 @@ builds the API; run `npm run build` in `frontend/` to build the web app.
 With the Vite server running, `npm run test:browser` in `frontend/` checks Quick
 Tailor's Save and the full editor's Save & export flow in headless Chrome with
 synthetic API responses.
+
+From `extension/`, `node test/run.cjs` runs the extension's tests in headless Chrome
+with made-up forms. See `extension/README.md`.
 
 `npm run test:integration` uses real Postgres and fake Google/AI providers. Set
 `TEST_DATABASE_URL` to a database ending in `_test`, or it uses `cv_test` on the
@@ -170,6 +187,11 @@ The [rewrite plan](docs/plan.md) tracks the migration steps and checks.
 [Data backups](docs/data-backups.md) records the verified local snapshot and how
 to restore saved app data later. The private backup files stay outside Git.
 The [brand guide](docs/brand-guide.md) records the approved logo and site colors.
+The [autofill plan](docs/autofill-plan.md) compares the extension with Simplify and
+Jobright and lists what is done and what is next. The [bullets plan](docs/bullets-plan.md)
+and the [interview preparation plan](docs/interview-preparation-plan.md) do the same
+for their features. The [Chrome Web Store notes](docs/chrome-web-store.md) hold the
+listing text and privacy answers.
 
 ## Non-negotiable rules
 

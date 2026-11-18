@@ -1,6 +1,8 @@
 # Autofill plan: catching up with Simplify
 
-Status: research done (2026-11-12), nothing built yet.
+Status: research done 2026-11-12. Updated 2026-11-17, at extension 0.81.0: the "Ours"
+column and the tick boxes show what is built now. The notes about other extensions
+are from the versions named in the tables.
 
 How the extension recognizes and fills application fields today, how other autofill
 extensions do it, and the work to close the gaps. The research comes from reading each
@@ -11,15 +13,15 @@ extension's shipped code (downloaded from the Chrome Web Store), not from their 
 | | Simplify (3.1.14) | Ours |
 | --- | --- | --- |
 | Sites it fills on | Only its 58 known job sites. Elsewhere: "Autofill isn't supported on this site". | Any site, including company career pages with their own forms. |
-| How it knows a field | Hand-written XPath rules per site and field: by `id`, then `name`, then label text. | Site rules for 47 sites ([site-fields.js](../extension/src/site-fields.js)), then guessing from the label ([fields.js](../extension/src/fields.js) `detectFields`) everywhere. |
+| How it knows a field | Hand-written XPath rules per site and field: by `id`, then `name`, then label text. | Facts for 81 job systems ([site-fields.js](../extension/src/site-fields.js)), 12 of them also known by a mark in the page, then guessing from the label ([fields.js](../extension/src/fields.js) `detectFields`) everywhere. |
 | Depth of site rules | 61 entries for Greenhouse alone: second and third copies of a question, widgets inside sections, buttons to press. | "This `id` or `name` is this field". |
-| Field types | About 164 (`veteran_v2`, `phone_stripped`, `city_state_full`, `behance`…). | About 35, plus diversity, "how did you hear", work setup and relocation. |
-| How it fills a widget | Each rule names the method: `react`, `click`, `selectCheckboxOrRadio`, `uploadResume`. | Works out the control and uses a general filler: text, select, radio, combobox, file, drop zone. |
-| Repeating sections | Presses "Add another" and fills each job and school. | Only current company, title, school and degree. |
-| Custom questions | Collects every leftover field (label, section, options), sends them in one batch; AI answers all of them, optionally automatically. | Saved answers matched on the server automatically; an AI draft only on click, one question at a time. |
-| Multi-step forms, frames | Per-site "Continue" buttons and embedded-form rules. | `all_frames` + `webNavigation`: each frame and step filled as it loads. |
+| Field types | About 164 (`veteran_v2`, `phone_stripped`, `city_state_full`, `behance`…). | About 45, plus diversity, "how did you hear", work setup and relocation. |
+| How it fills a widget | Each rule names the method: `react`, `click`, `selectCheckboxOrRadio`, `uploadResume`. | Works out the control and uses a general filler: text, select, radio, combobox, file, drop zone, buttons, select2 with search. Special code for Workday and Avature. |
+| Repeating sections | Presses "Add another" and fills each job and school. | Workday and Avature: adds a row per job and school and removes extra rows. Avature: languages too. Other systems: current company, title, school and degree only. |
+| Custom questions | Collects every leftover field (label, section, options), sends them in one batch; AI answers all of them, optionally automatically. | Saved answers matched on the server automatically; an AI answer only on click, one question at a time, from the field's icon. |
+| Multi-step forms, frames | Per-site "Continue" buttons and embedded-form rules. | `all_frames` + `webNavigation`: each frame filled. Next steps fill by themselves if you switch that on. After Autofill the panel offers the form's own Continue or Submit button. |
 | Knowing you applied | Per-site rules for the "submitted" page. | Notices the submit and marks the saved job Applied. |
-| Wrong fills | "Report bad autofill" sends the case to Simplify. | No reporting. |
+| Wrong fills | "Report bad autofill" sends the case to Simplify. | **Report** in the panel makes a text with the version and site to copy. Nothing is sent. |
 | Updating rules | Rules ship in the package (38 MB `remoteConfig.json`); the code also keeps a newer server-sent copy with a version. | In the code: every fix needs a release and a store review. |
 | Site access | `*://*/*` | `http://*/*`, `https://*/*` |
 
@@ -72,10 +74,12 @@ Order matters: phase 1 makes every later fix cheap to ship.
 
 ### Phase 3 — repeating sections
 
+- [x] Fill work history and education on Workday and Avature, with a row per entry and
+      extra rows removed (2026-11-17). Avature's languages too.
 - [ ] Site-rule shape for a section: container, "add first" button, "add another" button,
-      and the field rules inside one entry (Huntr's and Simplify's shape).
-- [ ] Fill work history and education from the profile, newest first, up to the count
-      the user picks.
+      and the field rules inside one entry (Huntr's and Simplify's shape), so other
+      systems need data, not code.
+- [ ] A limit the user picks for how many jobs to add. Today: up to 10 jobs, 5 schools.
 - [ ] Generic fallback: an "Add another" / "Add experience" button next to a group of
       job fields.
 
@@ -90,15 +94,17 @@ Order matters: phase 1 makes every later fix cheap to ship.
 
 ### Phase 5 — deeper site rules
 
-- [ ] More field types where forms ask for them: phone country, phone type, middle name,
-      email confirmation, city + state together, more social links.
-- [ ] Named fill types for widgets the general filler gets wrong (Workday dropdowns,
-      iCIMS searchable dropdowns, SmartRecruiters fields inside shadow DOM, date pickers).
+- [x] More field types: phone country, phone type, middle name, email confirmation,
+      "State/Province/City", legal names, work status questions.
+- [x] Workday dropdowns and dates; select2 and jQuery UI dropdowns; Avature's month dates.
+- [ ] iCIMS searchable dropdowns, SmartRecruiters fields inside shadow DOM, Oracle's
+      grid options.
 - [ ] Write and check each rule ourselves on a live form; don't copy another product's
       rule file wholesale.
 
 ### Phase 6 — report a bad fill
 
+- [x] A **Report** button in the panel that makes a text to copy (no field details yet).
 - [ ] "Wrong?" on each filled field in the panel: sends site, label, our field key, the
       control type and what we chose. Redact the value for personal fields.
 - [ ] A list of reports in the app, to turn into site-rule fixes (shipped via phase 1).
@@ -113,7 +119,7 @@ How each one decides (read from their code):
 | **Jobright** | The site is one it supports (built-in per-site code), and the user's "Default view" is "Expanded" (the default). | Floating button. | Default view Expanded/Minimized; hide on this site / everywhere. |
 | **Huntr** | Its site rules find the form fields, unless the user pressed "Set up later" (hidden until a reset date). | On a job posting (scored: schema.org JobPosting 40, Apply button 25, job-board domain 25, job sections 20…; 50+ = job) the button only animates. | "Set up later". |
 | **Careerflow** | The address matches a published form rule; for some sites only after a given element appears (the form after "Apply" is clicked), watched as the page changes. | Floating button. | Per-organization switch. |
-| **Ours** | Our check says it's an application form (CV upload + contact fields, or 3+ applicant fields on a job page, or 2+ fields on a known board) — on any site — or LinkedIn's Easy Apply dialog appears (a selected posting only shows the button). Once per address. | D! button, or nothing. | Hide this visit / on this site / everywhere. No "button only" option. |
+| **Ours** | Our check says it's an application form (CV upload + contact fields, or 3+ applicant fields on a job page, or 2+ fields on a known board) — on any site — or LinkedIn's Easy Apply dialog appears (a selected posting only shows the button). Once per address. | D! button, or nothing. | Hide this visit; disable on this site or everywhere (the button stays, grey, and its menu turns it back on). No "button only" option. |
 
 - [ ] Setting "Open the panel automatically" (on / button only), separate from hiding the button.
 - [x] LinkedIn: a selected posting shows the D! button only; the panel opens by itself when
@@ -125,4 +131,28 @@ How each one decides (read from their code):
 ### Later
 
 - Per-site "application submitted" rules, to mark Applied more reliably.
-- Per-site "Continue" buttons for multi-step forms.
+
+Done: the panel's Continue / Submit button after Autofill (2026-11-17), with Avature's
+own rule and word rules for other sites.
+
+### Next, from reading all of Simplify's and Jobright's rules
+
+**First**
+
+- [ ] Ignore hidden trap fields and text meant to fool AI.
+- [ ] Workday's diversity questions drawn as button dropdowns.
+- [ ] "Are you 18 or older?" (today the word "age" makes it skipped).
+- [ ] Today's date and signature fields.
+- [ ] Phone country-code boxes.
+
+**Then**
+
+- [ ] Job and school lists on more systems.
+- [ ] Per-site upload steps (Taleo, SuccessFactors, HiBob).
+- [ ] Job readers and Apply buttons for more systems.
+- [ ] A Create Account shortcut on sign-up pages such as Avature's Register.
+
+**Later**
+
+- [ ] AI answers for all company questions, dropdowns too (phase 2).
+- [ ] Notice a finished application by the site's success message.
