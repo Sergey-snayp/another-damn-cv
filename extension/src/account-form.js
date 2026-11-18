@@ -38,7 +38,9 @@
     const passwords = [...document.querySelectorAll('input[type="password"]')].filter(visible);
     if (!passwords.length) return null;
     const box = containerOf(passwords[0]);
-    const others = [...box.querySelectorAll(OTHER_FIELDS)].filter(visible);
+    // Counted on the whole form (its <form>, else the page), never only the box around the
+    // password: Lululemon's application has Password and Confirm in a small box of their own.
+    const others = [...(passwords[0].closest('form') ?? document.body).querySelectorAll(OTHER_FIELDS)].filter(visible);
     const choices = [...box.querySelectorAll('[role="combobox"]:not(input), [role="radiogroup"], input[type="file"]')].filter(visible);
     if (others.length + choices.length > 6) return null;
     const kind = passwords.length >= 2 ? 'create' : 'signin';

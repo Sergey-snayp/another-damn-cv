@@ -88,7 +88,8 @@
     for (let tries = 0; panels(list).length > keep && tries < 15; tries++) {
       const last = panels(list).at(-1);
       const remove = first(last, 'button[data-automation-id="panel-set-delete-button"], button[aria-label^="Delete"], a.removeDatasetRow, a[name^="removeRowFor"], a[id^="removeRowFor"]')
-        ?? [...last.querySelectorAll('button, [role="button"]')].find((button) => shown(button) && /^(delete|remove)\b/i.test(normal(button.textContent)));
+        // Avature's "remove" is a plain link in each row.
+        ?? [...last.querySelectorAll('button, [role="button"], a')].find((button) => shown(button) && /^(delete|remove)\b/i.test(normal(button.textContent)));
       if (!remove) break;
       const before = panels(list).length;
       press(remove);
@@ -675,7 +676,13 @@
     // Schools with a degree: a course (no degree) would leave Workday's required Degree empty.
     const schools = (history.educations ?? []).filter((school) => String(school.degree ?? '').trim());
     const start = (list) => panels(list)[0] ?? addButton(list);
-    const removed = (count, name) => (count ? [`Removed ${count} ${name} ${count === 1 ? 'entry' : 'entries'} not in ${where}.`] : []);
+    const removed = (count, name, list, keep) => {
+      const left = list ? panels(list).length - keep : 0;
+      return [
+        ...(count ? [`Removed ${count} ${name} ${count === 1 ? 'entry' : 'entries'} not in ${where}.`] : []),
+        ...(left > 0 ? [`${left} extra ${name} ${left === 1 ? 'entry is' : 'entries are'} still on the form: remove ${left === 1 ? 'it' : 'them'} there.`] : []),
+      ];
+    };
     const list = [];
     const section = (element, work) => {
       if (!element) return;
@@ -693,8 +700,8 @@
     };
     // Clean-up first, within its own list: panels beyond the CV's jobs and schools. A list the CV has nothing for is left alone.
     if (onAvature()) {
-      if (jobs.length && avatureSection('work')) section(start('work'), async () => ({ notes: removed(await trim('work', jobs.length), 'Work History'), filled: await fillAvatureWork(jobs, source) }));
-      if (schools.length && avatureSection('education')) section(start('education'), async () => ({ notes: removed(await trim('education', schools.length), 'Education'), filled: await fillAvatureEducation(schools, source) }));
+      if (jobs.length && avatureSection('work')) section(start('work'), async () => ({ notes: removed(await trim('work', jobs.length), 'Work History', 'work', jobs.length), filled: await fillAvatureWork(jobs, source) }));
+      if (schools.length && avatureSection('education')) section(start('education'), async () => ({ notes: removed(await trim('education', schools.length), 'Education', 'education', schools.length), filled: await fillAvatureEducation(schools, source) }));
       const languages = history.languages ?? [];
       if (languages.length && avatureSection('languages')) section(start('languages'), async () => ({ notes: removed(await trim('languages', languages.length), 'Language'), filled: await fillAvatureLanguages(languages, 'From your Profile') }));
       return list;

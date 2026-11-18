@@ -18,14 +18,14 @@ const workRow = (n, sample = false) => `<div id="multipleDatasetEntry_77_${n}" c
   ${select2(`current_${n}`, 'Is Current Position?', ['Yes', 'No'])}
   <div><label class="WizardFieldLabel" for="start_${n}">Start Date *</label><input id="start_${n}" type="month" class="WizardFieldInput"></div>
   <div class="end"><label class="WizardFieldLabel" for="end_${n}">End Date *</label><input id="end_${n}" type="month" class="WizardFieldInput"></div>
-  <a role="button" class="removeDatasetRow" href="#">remove</a></div>`;
+  <a href="#" class="row-link">remove</a></div>`;
 const page = `<!doctype html><head><meta name="avature.portal.id" content="4"></head><form>
   <fieldset class="Section"><legend class="WizardFieldLabel">More about me</legend>
     <label class="WizardFieldLabel" for="cur">Current Position</label><input id="cur">
     <label class="WizardFieldLabel" for="emp">Employer</label><input id="emp">
   </fieldset>
   <fieldset class="Section" id="work"><legend class="WizardFieldLabel">Work History *</legend>
-    ${workRow('sample', true)}${workRow(1)}
+    ${workRow('sample', true)}${workRow(1)}${workRow(2)}${workRow(3)}
     <a role="button" class="addDatasetRow" id="addRowForWork" href="#">add another</a></fieldset>
   <fieldset class="Section" id="edu"><legend class="WizardFieldLabel">Education</legend>
     <div id="multipleDatasetEntry_78_1">
@@ -54,6 +54,8 @@ const page = `<!doctype html><head><meta name="avature.portal.id" content="4"></
     next++;
     setTimeout(() => event.target.insertAdjacentHTML('beforebegin', html), 200);
   });
+  // A row's plain "remove" link takes it away.
+  document.addEventListener('click', (event) => { const link = event.target.closest('a.row-link'); if (link) { event.preventDefault(); link.closest('[id^=multipleDatasetEntry]').remove(); } });
   // "Is Current Position?" Yes hides the end date.
   document.addEventListener('change', (event) => { if (event.target.id?.startsWith('current_')) event.target.closest('[id^=multipleDatasetEntry]').querySelector('.end').style.display = event.target.value === 'Yes' ? 'none' : ''; });
 </script>`;
@@ -79,15 +81,15 @@ const profile = { firstName: 'Sergey', lastName: 'Proniuk', currentCompany: 'Cik
     const row1 = await Promise.all(['company_1', 'title_1', 'current_1', 'start_1', 'end_1'].map(value));
     assert.deepEqual(row1, ['Ciklum', 'Senior Software Engineer', 'Yes', '2024-10', ''], 'the current job: no end date');
     const row2 = await Promise.all(['company_2', 'title_2', 'current_2', 'start_2', 'end_2'].map(value));
-    assert.deepEqual(row2, ['EPAM Systems', 'Software Engineer', 'No', '2021-03', '2024-09'], 'the second job in a row added by "add another"');
-    assert.equal(await tab.$$eval('#work [id^=multipleDatasetEntry_]:not(.TableSampleRow)', (rows) => rows.length), 2, 'one row per job, no more');
+    assert.deepEqual(row2, ['EPAM Systems', 'Software Engineer', 'No', '2021-03', '2024-09'], 'the second job in the second row');
+    assert.equal(await tab.$$eval('#work [id^=multipleDatasetEntry_]:not(.TableSampleRow)', (rows) => rows.length), 2, 'one row per job: the extra third row removed by its plain "remove" link');
     assert.deepEqual(await Promise.all(['inst', 'qtype', 'qual'].map(value)), ['DIIT Institute', "Bachelor's Degree", "Bachelor's in Computer and Information Systems Security"]);
     assert.deepEqual(await Promise.all(['language_1', 'language_2'].map(value)), ['Ukrainian', 'English'], 'each language in its own row, the second added by "add another"');
     const kinds = await tab.evaluate(() => Object.fromEntries(window.CVAutofillFields.detectFields().found.map((field) => [field.element.id, field.key])));
     assert.equal(kinds.cover, 'coverLetter', 'the Cover Letter box is seen, so the panel writes and attaches a letter');
     assert.equal(kinds.portfolio, 'portfolio');
     assert.deepEqual(await Promise.all(['cur', 'emp'].map(value)), ['Senior Software Engineer', 'Ciklum'], 'Current Position and Employer, as before');
-    console.log('PASS Avature Work History and Education: each job in its own row (added by "add another"), Is Current Position Yes/No, month dates, the degree from Type of Qualification; each language in its own row; Cover Letter and URL Portfolio recognised');
+    console.log('PASS Avature Work History and Education: each job in its own row, an extra row removed by its plain "remove" link, Is Current Position Yes/No, month dates, the degree from Type of Qualification; each language in its own row; Cover Letter and URL Portfolio recognised');
   } finally {
     await browser.close();
   }
