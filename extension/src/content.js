@@ -86,6 +86,8 @@ function scan() {
     })),
     skippedSensitive: lastScan.skipped.filter((item) => item.reason === 'sensitive').length,
     consentCount: lastScan.skipped.filter((item) => item.reason === 'consent').length,
+    // The page's own Continue / Next / Submit, for the panel's button after Autofill (as Simplify's).
+    advance: (() => { const next = lastScan.found.length ? Sites.advanceButton?.() : null; return next ? { kind: next.kind, text: next.text.slice(0, 40) } : null; })(),
     // The job page has an Apply button that opens a form not loaded yet.
     canOpenForm: Boolean(Sites.formOpener()) && !lastScan.found.length,
     // A job posting by its address (Workday's job page): its Apply button may still be on its way.
@@ -899,6 +901,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Only when the person presses "Create Account & Autofill": never presses the page's button.
     void window.CVAutofillAccount.fill(message.login).then(sendResponse, () => sendResponse({ status: 'failed', filled: [] }));
     return true;
+  }
+  if (message.type === 'advance') {
+    // Only when the person presses the panel's Continue / Submit: the page's own button, once.
+    const target = Sites.advanceButton?.();
+    if (target) { target.element.scrollIntoView({ block: 'center' }); target.element.click(); }
+    sendResponse({ ok: Boolean(target), text: target?.text ?? '' });
+    return false;
   }
   if (message.type === 'open-form') {
     // Only when the person presses "Open application form" in the panel. Then,

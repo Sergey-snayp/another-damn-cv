@@ -253,7 +253,9 @@ async function scanFrames(tab) {
   if (!top) return null;
   const fields = [...new Map(scans.flatMap(entry => entry.reply.fields ?? []).map(field => [field.key, field])).values()];
   const total = (name) => scans.reduce((sum, entry) => sum + (entry.reply[name] ?? 0), 0);
-  return { ...top, fields, skippedSensitive: total('skippedSensitive'), consentCount: total('consentCount'), canOpenForm: Boolean(top.canOpenForm) && !fields.length, frames: formFrames.length };
+  // The page's own Continue / Submit, in the frame that has the form (the top page's first).
+  const next = scans.find(entry => entry.frameId === 0 && entry.reply.advance) ?? scans.find(entry => entry.reply.advance);
+  return { ...top, fields, skippedSensitive: total('skippedSensitive'), consentCount: total('consentCount'), canOpenForm: Boolean(top.canOpenForm) && !fields.length, frames: formFrames.length, advance: next?.reply.advance ?? null, advanceFrame: next?.frameId ?? 0 };
 }
 /** The form's questions from every frame, with frame-qualified ids. */
 async function questionsFromFrames(tab = currentTab) {
@@ -841,12 +843,13 @@ function drawAutofill() {
   for (const field of scan.fields) { if (!groups.has(field.group)) groups.set(field.group, []); groups.get(field.group).push(field); }
   const rows = [...groups].map(([group, fields]) => `<p class="group">${esc(group)}</p><ul class="fields">${fields.map(field => `<li><span class="key">${esc(FIELD_LABELS[field.key] || field.key)}</span>${!groupOn(field.key) ? '<span class="missing">Off in Settings</span>' : valueFor(field.key) ? `<span class="val">${esc(valueFor(field.key))}</span>` : '<span class="missing">Add a value</span>'}</li>`).join('')}</ul>`).join('');
   paint(host, `${pageCard()}
-    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
+    <div class="fill-block"><button class="primary fill-action" id="fill" ${ready && !switchingCv ? '' : 'disabled'}>${icon('bolt', 20)}Autofill This Page</button><div class="status${fillReport ? ` ${fillReport.kind}` : ''}" id="fill-status" role="status">${esc(fillReport?.text ?? '')}</div>${advanceButtonHtml()}${fillReportDetails()}${!ready ? '<button class="ghost" id="add-details">Add your details in the app</button>' : ''}</div>
     ${workStatusLine() || eligibilityCard()}
     ${autofillCvCard()}
     ${coverLetterCard()}
     <details class="card autofill-detail" data-keep-open="fields" ${keptOpen.has('fields') ? 'open' : ''}><summary>${icon('check', 18)}Fields to fill<span class="summary-count">${ready}/${scan.fields.length}</span></summary>${rows}${scan.skippedSensitive ? `<p class="hint">${scan.skippedSensitive} demographic question(s) will stay untouched.</p>` : ''}${scan.consentCount ? `<p class="hint">${scan.consentCount} consent checkbox(es) are left for you to tick.</p>` : ''}</details>`, 'fill', true);
   $('fill').addEventListener('click', runFill);
+  $('advance')?.addEventListener('click', advance);
   $('add-details')?.addEventListener('click', () => void openApp('/profile'));
 }
 async function runFill() {
@@ -1012,6 +1015,25 @@ document.addEventListener('click', event => {
   if (go) { const [frameId, fieldId] = splitKey(go.dataset.focusField); void askFrame(frameId, { type: 'focus-field', id: fieldId }); return; }
   if (event.target.closest('#check-required')) void checkRequired();
 });
+/**
+ * After Autofill, the page's own next button as a button here, as Simplify's
+ * "Continue Application" / "Submit Application": named by the page's words, and
+ * pressed only when the person presses it.
+ */
+function advanceButtonHtml() {
+  const next = scan?.advance;
+  if (!next || !fillReport || fillReport.url !== jobAddress()) return '';
+  const submit = next.kind === 'submit';
+  return `<button class="ghost advance-action${submit ? ' is-submit' : ''}" id="advance" type="button">${esc(next.text)}${submit ? '' : icon('arrow', 16)}</button>${submit ? `<p class="hint">Presses the form’s own “${esc(next.text)}” button, which may send your application. Check every answer first.</p>` : ''}`;
+}
+async function advance() {
+  const button = $('advance'); if (button) { button.disabled = true; button.textContent = 'Going on…'; }
+  const reply = await askFrame(scan?.advanceFrame ?? 0, { type: 'advance' });
+  if (!reply?.ok) status('fill-status', 'The form’s button is gone. Press it on the page.', 'error');
+  // The next step may load in place or as a new page: read it again as it comes.
+  for (const delay of [800, 1500, 2500]) setTimeout(() => void refresh(), delay);
+}
+
 /** Presses the job page's Apply button, then rescans once the form has loaded. */
 async function openForm() {
   const button = $('open-form'); if (button) { button.disabled = true; button.textContent = 'Opening the form…'; }

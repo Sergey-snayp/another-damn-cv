@@ -233,6 +233,57 @@ function formOpener() {
   return selector ? [...document.querySelectorAll(selector)].find((button) => button.getClientRects().length) ?? null : null;
 }
 
+/**
+ * The page's own button to the next step or to submit, as Simplify's panel
+ * finds it for its "Continue Application" / "Submit Application": a site's own
+ * button first (Avature's Save / Continue), else a button by its words
+ * ("Continue", "Next", "Save and continue", "Submit application"), never one
+ * in the page's header, menu or footer, a slideshow arrow, or Back / Cancel /
+ * Sign in. A submit button wins over a continue one, as in Simplify.
+ * Returns { kind: 'continue' | 'submit', text, element } or null.
+ */
+const ADVANCE_RULES = {
+  avature: {
+    submit: 'button[name="save"][type="submit"], input[name="save"][type="submit"]',
+    continue: 'button[type="submit"].tpt_uploadResumeNextButton, button[type="submit"][class*="tpt_uploadResumeNextButton"]',
+  },
+};
+const STRICT_CONTINUE = /^(continue|continue application|next|next step|save and continue|save & continue|review application|review and submit)$/i;
+const STRICT_SUBMIT = /^(submit|submit application|finish|send application)$/i;
+const NOT_ADVANCE = /\b(jobs?|positions?|openings?|listings?|pages?|results?|articles?|posts?|story|stories|slides?|photos?|images?|videos?|later|draft|exit|quit|close|cancel|back|previous|prev|cookies?|consent|shopping|cart|checkout|reading|browsing|website|site|home|log ?in|login|sign ?in|signin|sign ?up|signup|register|guest|google|linkedin|indeed|facebook|apple|email|newsletter|alerts?)\b/;
+const LOOSE_CONTINUE = [/^save (and )?(continue|next|proceed)( .*)?$/, /^(go to )?(the )?next( (step|section|stage))?$/, /^(continue|proceed)( to( the)?( next)? \S+( \S+){0,2})?$/, /^(go to )?review( (and )?(continue|submit|finish))?$/, /^review( (my|your))? application$/, /^(save and )?continue( (my|your))? application$/];
+const LOOSE_SUBMIT = [/^(submit|send|complete|finish)( (my|your|the))? application( now)?$/, /^(submit and finish|finish and submit|confirm and submit|submit now)$/];
+const PAGE_CHROME = 'header, nav, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [role="search"]';
+const CAROUSEL = '.owl-carousel, .swiper, .swiper-container, .slick-slider, .splide, .glide, .flickity-enabled, [aria-roledescription="carousel"], [data-bs-slide], [data-slide], [class*="carousel-control"]';
+const advanceText = (element) => String(element instanceof HTMLInputElement ? element.value : element.textContent).replace(/\s+/g, ' ').trim();
+function advanceKind(text) {
+  if (!text) return null;
+  if (STRICT_SUBMIT.test(text)) return 'submit';
+  if (STRICT_CONTINUE.test(text)) return 'continue';
+  if (text.length > 40) return null;
+  const plain = text.toLowerCase().replace(/&/g, ' and ').replace(/[›»→▶►❯>]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/^[\s.!:\-–—]+|[\s.!:\-–—]+$/g, '');
+  if (!plain || NOT_ADVANCE.test(plain)) return null;
+  if (LOOSE_SUBMIT.some((pattern) => pattern.test(plain))) return 'submit';
+  if (LOOSE_CONTINUE.some((pattern) => pattern.test(plain))) return 'continue';
+  return null;
+}
+function advanceButton() {
+  const usable = (element) => element.getClientRects().length > 0 && !element.disabled && element.getAttribute('aria-disabled') !== 'true' && !element.closest('#adcv-autofill-launcher, #adcv-autofill-panel');
+  const rules = ADVANCE_RULES[siteForPage()?.name];
+  for (const kind of ['submit', 'continue']) {
+    const own = rules?.[kind] && [...document.querySelectorAll(rules[kind])].find(usable);
+    if (own) return { kind, text: advanceText(own) || (kind === 'submit' ? 'Submit' : 'Continue'), element: own };
+  }
+  const found = { submit: null, continue: null };
+  for (const element of document.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"]')) {
+    if (!usable(element) || element.closest(PAGE_CHROME) || element.closest(CAROUSEL)) continue;
+    const text = advanceText(element);
+    const kind = advanceKind(text);
+    if (kind && !found[kind]) found[kind] = { kind, text, element };
+  }
+  return found.submit ?? found.continue;
+}
+
 /** A category key when the current site names this element explicitly. */
 function siteKeyFor(element, hostname = location.hostname) {
   const sites = rulesFor(hostname);
@@ -262,4 +313,4 @@ function siteKeyFor(element, hostname = location.hostname) {
   return null;
 }
 
-window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, isJobPage, applyOption, resumeGate, SITES };
+window.CVAutofillSites = { siteKeyFor, siteFor, siteForPage, formOpener, isJobPage, applyOption, resumeGate, advanceButton, advanceKind, SITES };

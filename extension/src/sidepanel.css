@@ -390,3 +390,5 @@ p.small { font-size: 12px; margin: -8px 0 8px; }
 .account-exists > svg { flex: none; margin-top: 1px; color: var(--color-success); }
 .account-exists strong { display: block; font-size: 14px; color: var(--color-text); }
 .account-exists span { display: block; margin-top: 2px; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }
+/* The form's own Continue / Submit, after Autofill. */
+.advance-action { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; min-height: 42px; font-weight: 600; }
