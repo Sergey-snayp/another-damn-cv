@@ -467,6 +467,11 @@ Teamtailor-shaped form with stand-in widgets:
   Position, and month dates. Education gets the school, Type of Qualification and
   Qualification. Languages gets one row per language from your Profile.
   `test/avature-upload.cjs`, `test/avature-history.cjs`.
+- **SAP SuccessFactors** (EY and others). The job page on the company's own domain is
+  read from its microdata: title, company, location, date and description. Create an
+  Account fills the email twice, name, phone country, phone, country and password, and
+  leaves the job-alert boxes alone. The panel then offers the form's **Create Account**
+  button. `test/successfactors.cjs`.
 - **LinkedIn.** Autofill works only inside the Easy Apply window.
 
 ## Job-site accounts and passwords

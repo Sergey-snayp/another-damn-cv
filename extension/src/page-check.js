@@ -32,6 +32,7 @@
     'head[data-ph-id^="ph-page-"]', 'body[data-ph-id^="ph-page-"]', 'script[src*="APPLY_form_renderer.js"]', 'link[href*="APPLY_form_renderer.js"]',
     'main[data-controller="careersite--jobs--form-overlay"]', 'script[src*="teamtailor-cdn.com"]', 'link[href*="teamtailor-cdn.com"]',
     'script[src*="recruiterflow.com"]', 'link[href*="recruiterflow.com"]',
+    'link[href*="rmkcdn.successfactors.com"]', 'script[src*="rmkcdn.successfactors.com"]', '[itemtype*="schema.org/JobPosting" i]',
     '[name^="candidate["]', 'turbo-frame#application_form', '[data-action*="form-overlay#showFormOverlay"]',
   ].join(',');
   const SHADOW_EVERY_MS = 5000, MOST_ELEMENTS = 30000;

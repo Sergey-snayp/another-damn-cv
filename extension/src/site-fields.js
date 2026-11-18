@@ -472,9 +472,11 @@
       ['id', 'website-input', 'website'],
       ['id', 'phone-number-input', 'phone'],
     ] },
-    { name: 'successfactors', hosts: [/(^|\.)ns2cloud\.com$/, /(^|\.)sapsf\.com$/, /(^|\.)sapsf\.eu$/, /(^|\.)successfactors\.com$/, /(^|\.)successfactors\.eu$/], fields: [
+    { name: 'successfactors', markers: ['link[href*="rmkcdn.successfactors.com"]', 'script[src*="rmkcdn.successfactors.com"]'], hosts: [/(^|\.)ns2cloud\.com$/, /(^|\.)sapsf\.com$/, /(^|\.)sapsf\.eu$/, /(^|\.)successfactors\.com$/, /(^|\.)successfactors\.eu$/], fields: [
+      ['id', 'fbclc_country', 'country'],
       ['id', 'fbclc_emailConf', 'email'],
       ['id', 'fbclc_fName', 'firstName'],
+      ['id', 'fbclc_ituCode', 'phoneCountryCode'],
       ['id', 'fbclc_lName', 'lastName'],
       ['id', 'fbclc_phoneNumber', 'phone'],
       ['id', 'fbclc_userName', 'email'],

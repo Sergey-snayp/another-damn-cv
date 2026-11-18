@@ -416,6 +416,8 @@ const LONG_LABEL = 60;
 const YES_NO = /^\s*(are|do|does|did|have|has|had|will|would|is|was|were|can|could|should|may)\b/i;
 
 const NAME_PARTS = new Set(['firstName', 'lastName', 'middleName', 'preferredName']);
+/** Typed values: a checkbox or radio mentioning one ("Email me new jobs", "in job title") is not that field. */
+const TYPED_KEYS = new Set([...NAME_PARTS, 'fullName', 'email', 'phone', 'currentCompany', 'currentTitle', 'linkedin', 'github', 'portfolio', 'website', 'addressLine', 'city', 'postalCode']);
 
 /**
  * "Company", "employer" and "title" turn up in labels about something else: "Why
@@ -453,6 +455,10 @@ function categorise(signals, { long = false, yesNo = false, label = '' } = {}) {
   // "State/Province/City" (Avature's) is one box for the region, as Simplify's state rule reads it.
   if (/\b(state|province)\s*\/\s*(province\s*\/\s*)?(city|town)\b/.test(signals) && !/\bcountry\b|\bzip\b|\bpostal\b/.test(signals)) {
     return { key: 'state', sensitive: false };
+  }
+  // "Country/Region" (SAP SuccessFactors) is one thing, and its "Code" is the phone's.
+  if (/\bcountry\s*(?:\/|or)\s*region\b/.test(signals) && !/\b(city|town|state|province|zip|postal|postcode)\b/.test(signals)) {
+    return { key: /\bcode\b/.test(signals) ? 'phoneCountryCode' : 'country', sensitive: false };
   }
   if (ADDRESS_PARTS.filter((words) => words.some((word) => mentions(signals, word))).length >= 2) {
     return { key: 'location', sensitive: false, compound: true };
@@ -662,7 +668,8 @@ function detectFields() {
     const fromAutocomplete = ['text', 'search', 'tel', ''].includes(element.type ?? '') && autocomplete ? addressTokens[autocomplete] ?? null : null;
     const label = labelOf(element);
     const { key: guessed, sensitive, compound, office } = categorise(signals, { long: label.length > LONG_LABEL, yesNo: YES_NO.test(label), label });
-    let key = fromSite ?? fromAutocomplete ?? guessed;
+    const typedInChoice = ['checkbox', 'radio'].includes(element.type) && TYPED_KEYS.has(guessed);
+    let key = fromSite ?? fromAutocomplete ?? (typedInChoice ? null : guessed);
     // UBC's "Please enter expiry date" follows its SIN question: the permit's expiry, by its place.
     if (!key && /\bexpir(y|ation)\b/.test(signals) && STATUS_KEYS.has(found.at(-1)?.key)) key = 'workPermitExpiry';
 

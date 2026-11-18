@@ -24,7 +24,7 @@ let lastScan = { found: [], skipped: [] };
  * or the domain ("careers.zexter.com" → "Zexter"). A job board's own domain
  * (job-boards.greenhouse.io) never names the employer.
  */
-const BOARD_HOST = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
+const BOARD_HOST = /(^|\.)(successfactors\.(?:com|eu)|sapsf\.(?:com|eu)|greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com|myworkdayjobs\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|jobvite\.com|icims\.com|breezy\.hr|personio\.(de|com)|pinpointhq\.com|rippling\.com)$/i;
 function companyName() {
   if (window.CVAutofillLinkedIn?.isPage()) return window.CVAutofillLinkedIn.read()?.company ?? '';
   // A job board's own place for it (Jobvite's header logo).
@@ -38,6 +38,11 @@ function companyName() {
     if (fromTitle) return fromTitle.slice(0, 100);
     const logo = document.querySelector('img[alt$=" logo" i]')?.alt.replace(/\s+logo$/i, '').trim();
     if (logo) return logo.slice(0, 100);
+    // SAP SuccessFactors: the career site's own menu ("Careers at EY").
+    for (const link of [...document.querySelectorAll('a')].slice(0, 40)) {
+      const named = link.textContent.replace(/\s+/g, ' ').trim().match(/^careers at (.{2,40})$/i)?.[1];
+      if (named) return named;
+    }
     return '';
   }
   const core = location.hostname.replace(/^(www|careers|jobs|apply|join)\./, '').split('.')[0] ?? '';

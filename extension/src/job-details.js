@@ -152,7 +152,30 @@
       const found = items.find((item) => [].concat(item?.['@type'] ?? []).includes('JobPosting'));
       if (found) return found;
     }
-    return null;
+    return microdataPosting();
+  }
+
+  /**
+   * The same details written as microdata, in JSON-LD's shape: SAP SuccessFactors'
+   * career sites (careers.ey.com) have no JSON-LD.
+   */
+  function microdataPosting() {
+    const root = document.querySelector('[itemtype*="schema.org/JobPosting" i]');
+    if (!root) return null;
+    const node = (name, within = root) => within?.querySelector(`[itemprop~="${name}" i]`) ?? null;
+    const value = (name, within) => { const found = node(name, within); return clean(found?.getAttribute('content') || found?.getAttribute('datetime') || found?.textContent); };
+    const posted = new Date(value('datePosted'));
+    const place = node('jobLocation');
+    const organization = node('hiringOrganization');
+    return {
+      '@type': 'JobPosting',
+      title: value('title'),
+      description: node('description')?.innerHTML ?? '',
+      employmentType: value('employmentType'),
+      ...(Number.isFinite(posted.getTime()) && { datePosted: posted.toISOString() }),
+      hiringOrganization: { '@type': 'Organization', name: clean(organization?.getAttribute('content')) || value('name', organization) || clean(organization?.textContent) },
+      ...(place && { jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: value('addressLocality', place), addressRegion: value('addressRegion', place), postalCode: value('postalCode', place), addressCountry: value('addressCountry', place) } } }),
+    };
   }
 
   /** Only a date explicitly labelled as the job's posting date, never an update/expiry date. */
@@ -322,5 +345,5 @@
     try { return found && /^https?:$/.test(new URL(found, location.href).protocol) ? new URL(found, location.href).href : null; } catch { return null; }
   }
 
-  window.CVAutofillJobDetails = { read, readAsync, logo, title, company, jobUrl, postedAt, salaryInText, typeOf };
+  window.CVAutofillJobDetails = { read, readAsync, logo, title, company, jobUrl, postedAt, salaryInText, typeOf, microdata: microdataPosting };
 })();

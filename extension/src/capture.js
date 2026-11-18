@@ -30,6 +30,8 @@
         // Broken JSON-LD is common; the text still gets through.
       }
     }
+    const microdata = globalThis.CVAutofillJobDetails?.microdata?.();
+    if (microdata) blocks.push(microdata);
     return blocks;
   }
 

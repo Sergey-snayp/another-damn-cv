@@ -154,7 +154,7 @@ const APPLY_BUTTONS = {
   jobscore: 'a.js-btn-apply',
   paylocity: 'a.apply-link-marker',
   pinpointhq: 'a[href$="/applications/new"]',
-  successfactors: 'button#applyButton_top, button#applyButton_bottom',
+  successfactors: 'button#applyButton_top, button#applyButton_bottom, button[href*="/talentcommunity/apply/"]',
   amazon: 'a#apply-button',
   seek: 'a[data-automation="job-detail-apply"]',
   oraclecloud: 'button.apply-now-button',
@@ -243,6 +243,10 @@ function formOpener() {
  * Returns { kind: 'continue' | 'submit', text, element } or null.
  */
 const ADVANCE_RULES = {
+  successfactors: {
+    submit: 'span[role="button"][id*="submitBtn"], button[name="fbja_apply"][type="submit"], button[name="fbqa_apply"], button#fbqa_apply',
+    continue: 'span[role="button"][id*="nextBtn"], button[name="fbclc_createAccountButton"]',
+  },
   avature: {
     submit: 'button[name="save"][type="submit"], input[name="save"][type="submit"]',
     continue: 'button[type="submit"].tpt_uploadResumeNextButton, button[type="submit"][class*="tpt_uploadResumeNextButton"]',
