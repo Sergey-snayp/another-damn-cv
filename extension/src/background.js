@@ -24,10 +24,12 @@ const stepKey = (tabId) => `steps:${tabId}`;
 async function armedSteps(tabId, url) {
   const { [stepKey(tabId)]: armed } = await chrome.storage.session.get(stepKey(tabId));
   if (!armed) return null;
-  let host = '';
-  try { host = new URL(url).host; } catch { /* no address */ }
-  const { continueSteps } = await chrome.storage.local.get('continueSteps');
-  if (armed.expires < Date.now() || armed.host !== host || continueSteps !== true) {
+  let host = '', hostname = '';
+  try { ({ host, hostname } = new URL(url)); } catch { /* no address */ }
+  const { continueSteps, launcherEnabled, launcherDisabledHosts = [] } = await chrome.storage.local.get(['continueSteps', 'launcherEnabled', 'launcherDisabledHosts']);
+  // Turned off on this site (the D! button's "Disable on this site") or everywhere: no filling by itself.
+  const disabled = launcherEnabled === false || (Array.isArray(launcherDisabledHosts) && launcherDisabledHosts.includes(hostname));
+  if (armed.expires < Date.now() || armed.host !== host || continueSteps !== true || disabled) {
     await chrome.storage.session.remove(stepKey(tabId));
     return null;
   }

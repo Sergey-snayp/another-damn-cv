@@ -53,7 +53,7 @@ const CATEGORIES = [
 
   // --- experience -----------------------------------------------------------
   { key: 'currentCompany', group: 'Experience', match: ['current company', 'current employer', 'company', 'employer'] },
-  { key: 'currentTitle', group: 'Experience', match: ['current title', 'job title', 'current role', 'title'] },
+  { key: 'currentTitle', group: 'Experience', match: ['current title', 'job title', 'current role', 'current position', 'current job title', 'title'] },
   { key: 'yearsExperience', group: 'Experience', match: ['years of experience', 'years experience', 'total experience'] },
 
   // --- education ------------------------------------------------------------

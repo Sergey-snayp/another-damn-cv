@@ -42,6 +42,7 @@
   };
 
   function panels(list) {
+    if (onAvature()) return avatureRows(list);
     return [...document.querySelectorAll('[data-automation-id], [role="group"][aria-labelledby]')]
       .filter((node) => LISTS[list].panel.test(node.getAttribute('data-automation-id') ?? '') || LISTS[list].panel.test(node.getAttribute('aria-labelledby') ?? ''))
       .filter((node) => node.querySelector('input, textarea, button') && !node.parentElement?.closest?.('[data-automation-id^="workExperience-"], [data-automation-id^="education-"], [data-automation-id^="websitePanelSet-"]'));
@@ -52,6 +53,7 @@
    * button under the section's heading ("Websites"), as Jobright finds it.
    */
   function addButton(list) {
+    if (onAvature()) return avatureAdd(list);
     const named = first(document, LISTS[list].add);
     if (named) return named;
     const heading = [...document.querySelectorAll('h2, h3, h4, [role="heading"], legend')]
@@ -85,8 +87,8 @@
     let removed = 0;
     for (let tries = 0; panels(list).length > keep && tries < 15; tries++) {
       const last = panels(list).at(-1);
-      const remove = first(last, 'button[data-automation-id="panel-set-delete-button"], button[aria-label^="Delete"]')
-        ?? [...last.querySelectorAll('button, [role="button"]')].find((button) => shown(button) && /^delete\b/i.test(normal(button.textContent)));
+      const remove = first(last, 'button[data-automation-id="panel-set-delete-button"], button[aria-label^="Delete"], a.removeDatasetRow, a[name^="removeRowFor"], a[id^="removeRowFor"]')
+        ?? [...last.querySelectorAll('button, [role="button"]')].find((button) => shown(button) && /^(delete|remove)\b/i.test(normal(button.textContent)));
       if (!remove) break;
       const before = panels(list).length;
       press(remove);
@@ -516,7 +518,121 @@
   }
 
   /** Whether this page is Workday's My Experience: one of its lists or its skills box. */
-  const here = () => Boolean(window.CVAutofillSites?.siteForPage()?.name === 'workday'
+  // --- Avature ("More about me" at Lululemon) -------------------------------
+  // Work History and Education are rows of a list, each added by its "add another"
+  // link and removed by its "remove" link: Simplify's Avature rules (containerPath,
+  // addButtonPath) and Jobright's dataset entries find them the same way. The
+  // fields are found by their labels in the row; dates are month boxes.
+  const onAvature = () => window.CVAutofillSites?.siteForPage()?.name === 'avature';
+  const ROW = 'div[id^="multipleDatasetEntry_"], fieldset.datasetField__row';
+  const ADD = 'a[id^="addRowFor"], a.addDatasetRow';
+  const sample = (row) => /(?:_|-)sample(?:$|[_-])/i.test(row.id) || Boolean(row.closest('.TableSampleRow, .datasetField__row--sample'));
+  const AVATURE_TITLES = {
+    work: /^(work|employment|professional|career) (history|experience)$|^(work|employment|experience)$|^(past|previous) (work|working) experience$/i,
+    education: /^(education|academic)( history| background| details)?$/i,
+  };
+  const titleText = (node) => normal(node.textContent).replace(/\*/g, '').trim();
+  function avatureSection(list) {
+    if (!AVATURE_TITLES[list]) return null;
+    const titles = [...document.querySelectorAll('legend, .WizardFieldLabel, h2, h3, h4, label, [role="heading"]')]
+      .filter((node) => !node.closest(ROW) && AVATURE_TITLES[list].test(titleText(node)));
+    for (const title of titles) {
+      for (let box = title.parentElement, depth = 0; box && depth < 6; box = box.parentElement, depth++) {
+        if (box.querySelector(`${ROW}, ${ADD}`)) return box;
+      }
+    }
+    return null;
+  }
+  function avatureRows(list) {
+    const section = avatureSection(list);
+    return section ? [...section.querySelectorAll(ROW)].filter((row) => !sample(row) && shown(row) && !row.parentElement?.closest(ROW)) : [];
+  }
+  function avatureAdd(list) {
+    const section = avatureSection(list);
+    if (!section) return null;
+    return [...section.querySelectorAll(ADD)].find((link) => shown(link) && !link.closest(ROW))
+      ?? [...section.querySelectorAll('a, button, [role="button"]')].find((link) => shown(link) && !link.closest(ROW) && /^add( another)?$/i.test(normal(link.textContent)));
+  }
+  /** A row's field by its label: a box, or a select whose widget (select2) is on screen. */
+  function control(row, pattern) {
+    const widget = (element) => Fields().selectWidget?.(element);
+    return [...row.querySelectorAll('input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]), select, textarea')]
+      .filter((element) => (element.tagName === 'SELECT' && widget(element) ? shown(widget(element)) : shown(element)))
+      .find((element) => pattern.test(normal(Fields().labelOf(element)).replace(/\*/g, '').trim())) ?? null;
+  }
+  /** An empty select set to the first of `values` it has: its own options, else select2's search. 1 when set. */
+  async function choose(select, values, reason) {
+    if (!select || !Fields().isEmpty(select)) return 0;
+    await visit(select);
+    for (const value of values.filter(Boolean)) {
+      if (Filler().fillSelect(select, value) || (Fields().selectWidget?.(select)?.matches('.select2-container') && await Filler().select2Search(select, value))) {
+        filledMark(select, reason);
+        return 1;
+      }
+    }
+    checkMark(select, `"${values.filter(Boolean)[0]}" is not one of its options. Choose the closest.`);
+    return 0;
+  }
+  /** A date box from "2023-04", in its own format: month "2023-04", date "2023-04-01", text "04/01/2023" (Simplify's three). */
+  async function avatureDate(input, value, reason) {
+    const match = String(value ?? '').match(/^(\d{4})(?:-(\d{2}))?/);
+    if (!input || !match || !Fields().isEmpty(input)) return 0;
+    const [, year, month = '01'] = match;
+    const text = input.type === 'month' ? `${year}-${month}` : input.type === 'date' ? `${year}-${month}-01` : `${month}/01/${year}`;
+    await visit(input);
+    Filler().setValue(input, text);
+    input.parentElement?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+    if (input.value !== text) { checkMark(input, `The date ${text} did not go in. Enter it yourself.`); return 0; }
+    filledMark(input, reason);
+    return 1;
+  }
+  const textOrChoice = (element, values, reason) => (element?.tagName === 'SELECT' ? choose(element, values, reason) : put(element, values[0], reason));
+
+  async function fillAvatureWork(experiences, source) {
+    let count = 0;
+    for (const [index, role] of experiences.entries()) {
+      const row = await panelAt('work', index);
+      if (!row) break;
+      count += await textOrChoice(control(row, /^(company|employer)\b/), [role.company], source);
+      count += await textOrChoice(control(row, /^(position|job title|title|role)\b/), [role.title], source);
+      const current = control(row, /\bcurrent(ly)?\b/);
+      if (current?.tagName === 'SELECT') count += await choose(current, [role.current ? 'Yes' : 'No'], source);
+      else if (role.current) {
+        const box = [...row.querySelectorAll('input[type="checkbox"]')].find((input) => shown(input) && /current/i.test(Fields().labelOf(input)));
+        if (box && !box.checked) { await visit(box); press(box); filledMark(box, source); count++; }
+      }
+      count += await avatureDate(control(row, /^(start date|from|start)\b/), role.from, source);
+      // A current job has no end date; Avature hides the box once "current" is Yes.
+      if (!role.current) count += await avatureDate(control(row, /^(end date|to|end)\b/), role.to, source);
+      const about = control(row, /description|duties|responsibilities/);
+      if (about?.tagName === 'TEXTAREA') count += await put(about, role.description, source);
+    }
+    return count;
+  }
+
+  async function fillAvatureEducation(schools, source) {
+    let count = 0;
+    for (const [index, school] of schools.entries()) {
+      const row = await panelAt('education', index);
+      if (!row) break;
+      count += await textOrChoice(control(row, /^(institute|institution|school|university|college)\b|\b(school|university|institution) name\b/), [school.institution], source);
+      // "Type of Qualification" (Lululemon), Degree, Education level: the CV's degree, picked as Simplify picks it.
+      const level = control(row, /^(type of qualification|qualification type|degree( type| level)?|education level|level of education|level)$/);
+      if (level?.tagName === 'SELECT' && school.degree && Fields().isEmpty(level)) {
+        const texts = [...level.options].map((option) => option.text);
+        const at = degreeOption(texts, school.degree, school.field);
+        count += await choose(level, [at === null ? null : texts[at], school.degree], source);
+      } else if (level) count += await put(level, school.degree, source);
+      count += await textOrChoice(control(row, /^(field of study|area of study|major|program|degree name|discipline|specialization)\b/), [school.field], source);
+      // "Qualification" on its own: the degree and its field, as on the CV.
+      count += await textOrChoice(control(row, /^qualification$/), [[school.degree, school.field].filter(Boolean).join(' in ')], source);
+      count += await avatureDate(control(row, /^(start date|from)\b/), school.from, source);
+      count += await avatureDate(control(row, /^(end date|graduation date|graduation month|to)\b/), school.to, source);
+    }
+    return count;
+  }
+
+  const here = () => Boolean(onAvature() && (avatureSection('work') || avatureSection('education'))) || Boolean(window.CVAutofillSites?.siteForPage()?.name === 'workday'
     && (first(document, LISTS.work.add) || first(document, LISTS.education.add) || panels('work').length || first(document, '[data-automation-id="formField-skills"] input')));
 
   const SKILLS_BOX = '[data-automation-id="formField-skills"] input, [data-automation-id="skillsSection"] input, [data-automation-id="formField-skillsPrompt"] input';
@@ -555,6 +671,11 @@
       });
     };
     // Clean-up first, within its own list: panels beyond the CV's jobs and schools. A list the CV has nothing for is left alone.
+    if (onAvature()) {
+      if (jobs.length && avatureSection('work')) section(start('work'), async () => ({ notes: removed(await trim('work', jobs.length), 'Work History'), filled: await fillAvatureWork(jobs, source) }));
+      if (schools.length && avatureSection('education')) section(start('education'), async () => ({ notes: removed(await trim('education', schools.length), 'Education'), filled: await fillAvatureEducation(schools, source) }));
+      return list;
+    }
     if (jobs.length) section(start('work'), async () => ({ notes: removed(await trim('work', jobs.length), 'Work Experience'), filled: await fillWork(jobs, source) }));
     if (schools.length) section(start('education'), async () => ({ notes: removed(await trim('education', schools.length), 'Education'), filled: await fillEducation(schools, source) }));
     if ((history.skills ?? []).length) section(first(document, SKILLS_BOX), async () => ({ filled: await fillSkills(history.skills, source) }));
@@ -574,6 +695,10 @@
 
   /** Whether a field belongs to one of the lists or the skills box: filled here, never by the general fill. */
   const owns = (element) => {
+    if (onAvature()) {
+      const row = element.closest?.(ROW);
+      return Boolean(row && ['work', 'education'].some((list) => avatureSection(list)?.contains(row)));
+    }
     for (let node = element; node && node !== document.body; node = node.parentElement) {
       const id = node.getAttribute?.('data-automation-id') ?? '', by = node.getAttribute?.('aria-labelledby') ?? '';
       if (Object.values(LISTS).some(({ panel }) => panel.test(id) || panel.test(by))) return true;

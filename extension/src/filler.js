@@ -1315,4 +1315,4 @@ function diversityChoiceFor(key, optionText) {
   return (DIVERSITY_VOCABULARY[key] ?? []).find((choice) => diversityOptionMatches(key, choice, optionText)) ?? null;
 }
 
-window.CVAutofillFiller = { fillListbox, chooseInListbox, reactFill, setValue, workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile, pickFile };
+window.CVAutofillFiller = { select2Search, fillListbox, chooseInListbox, reactFill, setValue, workDecision, controlKind, choicesFor, applyChoice, diversityChoiceFor, isTyping, fillAcknowledgement, fillOne, valueFor, typeText, fillField, fillAll, fillAnswer, fillDiversity, diversityOptionMatches, fillText, fillSelect, fillChoice, fillCombobox, attachFile, dropFile, pickFile };
