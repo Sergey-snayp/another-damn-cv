@@ -172,12 +172,14 @@ export function practiceHints(jobText: string, lineText: string, limit = 3): Pra
 }
 
 /**
- * The hints a rewrite may put in a CV line. Traffic numbers are worth pointing out
- * to the AI when it chooses, but "scalable" is a judgement about the system: the
- * line's own numbers say it better, so the word is not added to the line.
+ * The hints a rewrite may put in a CV line. "Scalable" is a judgement about the
+ * system, and "QA stakeholders" only says "QA" in a longer way: the line's own
+ * words say it better, so these are not added to it.
  */
 export const wordsForLine = (jobText: string, lineText: string, limit = 3): PracticeHint[] =>
-  practiceHints(jobText, lineText, limit).filter((hint) => !/\bscal|\bhigh[- ]/i.test(hint.term));
+  practiceHints(jobText, lineText, limit).filter(
+    (hint) => !/\bscal|\bhigh[- ]|\bstakeholder|\bcross[- ]functional/i.test(hint.term),
+  );
 
 /** The hints as lines for a prompt; '' when there are none. */
 export function practiceHintText(hints: PracticeHint[]): string {

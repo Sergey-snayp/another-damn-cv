@@ -58,7 +58,8 @@ async function check(browser) {
       if (pathname === '/api/jobs/job-1') return reply({ id: 'job-1', title: 'Engineer', company: 'Acme', description: 'Build Node.js services.' });
       if (pathname.endsWith('/score')) return reply({ score: 50, keywords: { matched: ['Node.js', 'TypeScript'], missing: ['Docker'], skillsOnly: ['TypeScript'] }, issues: [], job: { id: 'job-1', title: 'Engineer', company: 'Acme' } });
       if (pathname.endsWith('/tailor-summary/stream')) {
-        aiRequests.push(JSON.parse(request.postData() || '{}')); await fake(150);
+        // Long enough for the test to see the card while the AI works, on a busy machine too.
+        aiRequests.push(JSON.parse(request.postData() || '{}')); await pause(250);
         // The summary as it is written, the fix announced, then the checked result: one JSON object per line.
         const lines = [
           { type: 'draft', summary: 'Built services for **Ac' },
@@ -344,6 +345,10 @@ async function check(browser) {
       assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].some(button => button.textContent === 'Swap')), 'Swap keeps a bullet in its place');
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Remove').click());
       assert.deepEqual(await listed(), [bulletsBefore[0]], 'Remove takes the bullet off, the others stay');
+      await page.evaluate(() => document.querySelector('.qt-unit .qt-slot .qt-more').click());
+      await pause(50);
+      assert.equal(await page.$('.qt-unit .qt-screen-line'), null, 'and the card stays in the CV view, at the same text size');
+      assert.equal((await page.$$('.qt-unit .qt-slot')).length, 2);
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[0].querySelectorAll('button')].find(button => button.textContent === 'Use').click());
       assert.deepEqual(await listed(), ['Built Node.js payment APIs.'], 'the line before it is still found after the removal');
       await page.click(undo);

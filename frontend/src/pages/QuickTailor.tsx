@@ -221,6 +221,8 @@ function copyOfRegion(region: HTMLElement, scale: number, live = false): HTMLEle
   copy.classList.remove('qt-behind');
   // A live copy holds the new versions and their buttons: the page's own controls go.
   if (live) copy.querySelectorAll('button, .doc-bulletmeta, .doc-add, .doc-remove').forEach((el) => el.remove());
+  // The page's breaks push lines down with a margin; here they would be empty gaps between lines.
+  if (live) copy.querySelectorAll<HTMLElement>('[style*="margin-top"]').forEach((el) => el.style.removeProperty('margin-top'));
   copy.style.margin = '0';
   copy.style.width = `${region.offsetWidth}px`;
   copy.querySelectorAll('[contenteditable]').forEach((el) => el.removeAttribute('contenteditable'));
@@ -599,7 +601,6 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       const held = heldFrame.current;
       const windowHeight = held && held.run === tailoring.run && held.scale === scale ? held.height : Math.round(area.height + 2 * WINDOW_PAD);
       heldFrame.current = { run: tailoring.run, scale, height: windowHeight };
-      const lineHeight = parseFloat(style.lineHeight);
       // The text is set as on the CV: a bullet's marker and hanging indent, the column's width
       // (so lines break at the same words), the alignment (the summary is justified) and spacing.
       const anchor = tailoring.anchor;
@@ -608,10 +609,13 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
       const textStyle = getComputedStyle(text);
       const indent = item ? Math.max(0, Math.round(text.getBoundingClientRect().left - item.getBoundingClientRect().left)) : 0;
       const mark = item ? (parseFloat(getComputedStyle(item, '::before').left) || 0) * scale : 0;
+      // The size of the lines themselves: a job or section opens at its heading, which is larger.
+      const textSize = parseFloat(textStyle.fontSize);
+      const textLeading = parseFloat(textStyle.lineHeight);
       const font = {
-        fontFamily: style.fontFamily,
-        fontSize: `${parseFloat(style.fontSize) * scale}px`,
-        ...(Number.isFinite(lineHeight) && { lineHeight: `${lineHeight * scale}px` }),
+        fontFamily: textStyle.fontFamily,
+        fontSize: `${textSize * scale}px`,
+        ...(Number.isFinite(textLeading) && { lineHeight: `${textLeading * scale}px` }),
         textAlign: textStyle.textAlign,
         letterSpacing: textStyle.letterSpacing,
         wordSpacing: textStyle.wordSpacing,
@@ -619,7 +623,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         '--qt-column': `${Math.round(line.width)}px`,
         '--qt-indent': `${indent}px`,
         '--qt-mark': `${mark}px`,
-        '--qt-font': `${parseFloat(style.fontSize) * scale}px`,
+        '--qt-font': `${textSize * scale}px`,
       } as React.CSSProperties;
       const key = JSON.stringify([top, left, width, font, windowHeight]);
       if (key === placed.current) return;
@@ -973,8 +977,11 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   const keyOnPage = (key?: string) => Boolean(key && behind?.querySelector(`[data-edit-key="${CSS.escape(key)}"]`));
   // A job or a whole section: the new versions are drawn into the CV's own text, never a list in
   // another style, whenever every line is on the page (a skills line is not: it stays a list).
-  const inJob = Boolean(tailoring && tailoring.items.length > 1 && behind?.matches('article, .doc-section')
-    && tailoring.items.every((item) => keyOnPage(item.target.key ?? item.insertAfter)));
+  // Decided once per run: a bullet removed from the CV must not switch the card to another view.
+  const jobView = useRef<number | null>(null);
+  const inJob = Boolean(tailoring && (jobView.current === tailoring.run || (tailoring.items.length > 1 && behind?.matches('article, .doc-section')
+    && tailoring.items.every((item) => keyOnPage(item.target.key ?? item.insertAfter)))));
+  if (inJob && tailoring) jobView.current = tailoring.run;
   const run = tailoring?.run;
   const lineCount = tailoring?.items.length;
   useLayoutEffect(() => {
@@ -1020,6 +1027,21 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     ...draft.skills.map((skill) => skill.name),
   ].join('\n') : ''), [draft, job]);
   const working = Boolean(tailoring?.items.some((item) => item.busy));
+  // Whether the CV fits two pages as it stands: after some cuts, the others are optional.
+  const [fitsTwoPages, setFitsTwoPages] = useState(false);
+  const cardIsOpen = Boolean(tailoring);
+  useEffect(() => {
+    if (!cardIsOpen) return;
+    let second = 0;
+    // After the page has worked out its sheets again.
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        const page = canvas.current?.querySelector<HTMLElement>('.qt-zoom .page');
+        if (page) setFitsTwoPages(spareOnTwoPages(page) >= 0);
+      });
+    });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [cardIsOpen, draft, theme]);
   const elapsed = useElapsed(working);
 
   if (!jobId) return <div className="studio-message"><h1>Quick tailoring</h1><p className="error">Open this page from a job: the job is missing.</p></div>;
@@ -1080,9 +1102,12 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     if (item.decided) return extra ? <div className="ra-row qt-actions">{extra}</div> : null;
     const same = item.after !== undefined && (item.after.trim() === item.before.trim() || unchanged(item));
     const waits = item.busy || pending(item);
-    const main = !same && (item.after !== undefined || waits) && (
-      <button className="primary" disabled={saving || waits} onClick={() => use([item])}>{isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : 'Use'}</button>
-    );
+    const mainName = isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : 'Use';
+    const main = !same && (item.after !== undefined || waits) && (many ? (
+      <button className="primary qt-icon-button" disabled={saving || waits} title={isRemoval(item) ? 'Remove this bullet' : isAddition(item) ? 'Add this bullet' : 'Use this version'} onClick={() => use([item])}>
+        <DashboardIcon name="check" size={15} /><span className="qt-sr">{mainName}</span>
+      </button>
+    ) : <button className="primary" disabled={saving || waits} onClick={() => use([item])}>{mainName}</button>);
     const swapButton = (item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
       <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
     );
@@ -1100,10 +1125,14 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     return (
       <div className={`ra-row qt-actions${same ? ' is-quiet' : ''}`}>
         {main}
-        {item.after !== undefined && !same && <button className="ghost" onClick={() => decide([item.key], 'skipped')}>{isRemoval(item) ? 'Keep' : 'Skip'}</button>}
+        {item.after !== undefined && !same && (
+          <button className="ghost qt-icon-button" title={isRemoval(item) ? 'Keep this bullet' : 'Keep the line as it is'} onClick={() => decide([item.key], 'skipped')}>
+            <DashboardIcon name="close" size={15} /><span className="qt-sr">{isRemoval(item) ? 'Keep' : 'Skip'}</span>
+          </button>
+        )}
         {(swapButton || againButton) && (
           <>
-            <button type="button" className="qt-more" aria-label="More options" aria-expanded={open} title="More options" onClick={() => setMoreOpen(open ? null : item.key)}>⋯</button>
+            <button type="button" className="qt-more" aria-label="More options" aria-expanded={open} title="More options" onClick={() => setMoreOpen(open ? null : item.key)}><DashboardIcon name="more" size={15} /></button>
             <span className="qt-more-items" hidden={!open}>{swapButton}{againButton}</span>
           </>
         )}
@@ -1238,14 +1267,14 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         return createPortal(
                           <span className={`qt-slot-line${item.decided ? ` is-${item.decided}` : ''}${back && isRemoval(item) ? ' is-cut' : ''}`}>
                             {back && !unchanged(item) ? <DiffLine key={item.after} before={boldOnly(item.before.trim())} after={boldOnly(item.after!)} /> : withBold(item.before.trim())}
+                            {/* The buttons follow the line's last word, so the job still reads as the CV does. */}
+                            {!item.decided && itemActions(item, back ? sourceTag(item) : null)}
                             {back && isRemoval(item) && !item.decided && <span className="qt-slot-note qt-cut">{cutNote(item)}</span>}
                             {back && !isRemoval(item) && !unchanged(item) && READ_AS_PROSE.has(item.target.kind) && lineHints(item.after!).map((note, index) => (
                               <span key={`r${index}`} className="qt-slot-note qt-hint">{note}</span>
                             ))}
                             {item.error && !item.busy && <span className="qt-slot-note ra-error">{item.error}</span>}
-                            {item.decided
-                              ? <span className="qt-slot-note">{decidedNote(item)}</span>
-                              : itemActions(item, back ? sourceTag(item) : null)}
+                            {item.decided && <span className="qt-slot-note">{decidedNote(item)}</span>}
                             {back && item.cannotDo?.map((note, index) => <span key={index} className="qt-slot-note">⚠ {note}</span>)}
                           </span>,
                           slot,
@@ -1306,7 +1335,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
                         {waiting === 0 && !composing && (
                           <span className="qt-tally">{[
                             `${ready.length} ${ready.length === 1 ? 'change' : 'changes'}`,
-                            cuts.length ? `${cuts.length} suggested ${cuts.length === 1 ? 'cut' : 'cuts'}` : '',
+                            cuts.length ? `${cuts.length} ${fitsTwoPages ? 'optional' : 'suggested'} ${cuts.length === 1 ? 'cut' : 'cuts'}${fitsTwoPages ? ' (CV fits 2 pages)' : ''}` : '',
                             keptAsWritten ? `${keptAsWritten} kept as written` : '',
                           ].filter(Boolean).join(' · ')}</span>
                         )}

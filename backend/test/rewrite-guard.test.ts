@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { wordsForLine } from '../src/modules/resumes/domain/job-practices';
+import { checkedStack } from '../src/modules/resumes/domain/resume-assistant';
 import { ResumeAssistant } from '../src/modules/resumes/application/use-cases/resume-assistant';
 import { rewriteProblems } from '../src/modules/resumes/domain/tailoring/rewrite-guard';
 
@@ -106,4 +108,13 @@ test('a typed request gets its answer, in plain words', async () => {
     instruction: 'Add a metric',
   });
   assert.deepEqual(result.cannotDo, ["this job's lines show no metric."]);
+});
+
+test('"QA stakeholders" and a bare "API" are not offered', () => {
+  const job = 'Work with internal stakeholders on API design.';
+  assert.deepEqual(
+    wordsForLine(job, 'Planned test cases with QA before development started.').map((hint) => hint.term),
+    [],
+  );
+  assert.equal(checkedStack('API, Node.js', 'Node.js', 'Built a REST API.').list, 'Node.js');
 });

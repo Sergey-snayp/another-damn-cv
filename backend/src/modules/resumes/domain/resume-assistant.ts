@@ -181,6 +181,8 @@ export function checkedStack(
   const notes: string[] = [];
   for (const item of split(suggestion)) {
     if (has(kept, item)) continue;
+    // "API" is what the work was, not a tool the job used.
+    if (/^apis?$/i.test(item) && !has(before, item)) continue;
     if (has(before, item) || shownIn(evidence, item)) kept.push(item.slice(0, 80));
     else notes.push(`${item} left out: this job's lines do not show it.`);
   }
