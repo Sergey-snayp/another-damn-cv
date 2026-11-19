@@ -345,7 +345,8 @@ async function check(browser) {
       assert.ok(await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].some(button => button.textContent === 'Swap')), 'Swap keeps a bullet in its place');
       await page.evaluate(() => [...document.querySelectorAll('.qt-unit .qt-slot')[1].querySelectorAll('button')].find(button => button.textContent === 'Remove').click());
       assert.deepEqual(await listed(), [bulletsBefore[0]], 'Remove takes the bullet off, the others stay');
-      await page.evaluate(() => document.querySelector('.qt-unit .qt-slot .qt-more').click());
+      assert.equal(await page.$('.qt-unit .qt-more'), null, 'no ⋯: Tailor again is in view');
+      await page.evaluate(() => document.querySelector('.qt-unit .qt-ask').click());
       await pause(50);
       assert.equal(await page.$('.qt-unit .qt-screen-line'), null, 'and the card stays in the CV view, at the same text size');
       assert.equal((await page.$$('.qt-unit .qt-slot')).length, 2);

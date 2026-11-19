@@ -349,8 +349,6 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
   /** The window this runs in: a popup window, or Another Damn CV's window inside a job page. */
   const closeWindow = () => { if (embedded) closeEmbed(); else window.close(); };
   const [tailoring, setTailoring] = useState<Tailoring | null>(null);
-  /** The line whose "⋯" is open: its Swap and Tailor again show. */
-  const [moreOpen, setMoreOpen] = useState<string | null>(null);
   const [cardTop, setCardTop] = useState(0);
   /** One line's card sits over that line: its left edge, width and the CV's type at this zoom. */
   const [cardBox, setCardBox] = useState<{ left: number; width: number; font: React.CSSProperties; window: number } | null>(null);
@@ -897,7 +895,6 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     const { run, request } = current;
     // New bullets not yet added are chosen again with their job.
     const open = current.items.filter((item) => !item.decided && !isAddition(item));
-    setMoreOpen(null);
     setTailoring({ ...current, stage: 'generated', asking: false, notes: undefined, items: current.items.filter((item) => item.decided || !isAddition(item)) });
     const skills = open.filter((item) => item.target.kind === 'skills');
     const lines = open.filter((item) => item.target.kind !== 'skills');
@@ -1105,13 +1102,17 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
     const mainName = isRemoval(item) ? 'Remove' : isAddition(item) ? 'Add' : 'Use';
     const main = !same && (item.after !== undefined || waits) && (many ? (
       <button className="primary qt-icon-button" disabled={saving || waits} title={isRemoval(item) ? 'Remove this bullet' : isAddition(item) ? 'Add this bullet' : 'Use this version'} onClick={() => use([item])}>
-        <DashboardIcon name="check" size={15} /><span className="qt-sr">{mainName}</span>
+        <DashboardIcon name={isRemoval(item) ? 'trash' : 'check'} size={15} /><span className="qt-sr">{mainName}</span>
       </button>
     ) : <button className="primary" disabled={saving || waits} onClick={() => use([item])}>{mainName}</button>);
     const swapButton = (item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
       <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
     );
-    const againButton = !isAddition(item) && <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Tailor again</button>;
+    const againButton = !isAddition(item) && (many ? (
+      <button className="ghost qt-icon-button qt-again-line" disabled={saving || waits} title="Tailor again" onClick={() => retry(item)}>
+        <DashboardIcon name="refresh" size={14} /><span className="qt-sr">Tailor again</span>
+      </button>
+    ) : <button className="ghost" disabled={saving || waits} onClick={() => retry(item)}>Tailor again</button>);
     if (!many) return (
       <div className="ra-row qt-actions">
         {/* Nothing to change is said, not offered as a button. */}
@@ -1119,9 +1120,8 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         {swapButton}{againButton}{extra}
       </div>
     );
-    // Many lines: the decision stays in view, the rest waits behind "⋯". A line that stays
-    // as written shows no buttons until it is pointed at.
-    const open = moreOpen === item.key;
+    // Many lines: small buttons right after the line's last word. A line that stays as written
+    // shows its buttons only when it is pointed at.
     return (
       <div className={`ra-row qt-actions${same ? ' is-quiet' : ''}`}>
         {main}
@@ -1130,13 +1130,7 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
             <DashboardIcon name="close" size={15} /><span className="qt-sr">{isRemoval(item) ? 'Keep' : 'Skip'}</span>
           </button>
         )}
-        {(swapButton || againButton) && (
-          <>
-            <button type="button" className="qt-more" aria-label="More options" aria-expanded={open} title="More options" onClick={() => setMoreOpen(open ? null : item.key)}><DashboardIcon name="more" size={15} /></button>
-            <span className="qt-more-items" hidden={!open}>{swapButton}{againButton}</span>
-          </>
-        )}
-        {extra}
+        {swapButton}{againButton}{extra}
       </div>
     );
   };
