@@ -1105,9 +1105,11 @@ export function QuickTailor({ popup = false, jobRoute = false }: { popup?: boole
         <DashboardIcon name={isRemoval(item) ? 'trash' : 'check'} size={15} /><span className="qt-sr">{mainName}</span>
       </button>
     ) : <button className="primary" disabled={saving || waits} onClick={() => use([item])}>{mainName}</button>);
-    const swapButton = (item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (
-      <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>
-    );
+    const swapButton = (item.chosenId || isRemoval(item)) && Boolean(tailoring?.alternates?.[item.choiceGroup ?? '']?.length) && (many ? (
+      <button className="ghost qt-icon-button qt-swap-line" disabled={saving || waits} title="Swap for the next-best achievement" onClick={() => swap(item)}>
+        <DashboardIcon name="swap" size={14} /><span className="qt-sr">Swap</span>
+      </button>
+    ) : <button className="ghost" disabled={saving || waits} title="Use the next-best achievement for this job" onClick={() => swap(item)}>Swap</button>);
     const againButton = !isAddition(item) && (many ? (
       <button className="ghost qt-icon-button qt-again-line" disabled={saving || waits} title="Tailor again" onClick={() => retry(item)}>
         <DashboardIcon name="refresh" size={14} /><span className="qt-sr">Tailor again</span>

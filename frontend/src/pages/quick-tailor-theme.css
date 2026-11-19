@@ -418,7 +418,8 @@
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--qt-line); border-radius: 6px; background: var(--color-surface); color: var(--qt-stone); text-decoration: none; }
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button svg { display: block; }
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button:hover:not(:disabled) { border-color: var(--qt-stone); background: var(--qt-fill-strong); color: var(--qt-ink); }
-/* Colour says what a button does: green uses the line, red removes it, amber asks the AI again. */
+/* Colour says what a button does: green uses the line, red removes it, amber asks the AI again,
+   blue swaps in the next-best achievement. */
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .primary.qt-icon-button { border-color: var(--qt-have); background: var(--qt-have); color: #fff; }
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .primary.qt-icon-button:hover:not(:disabled) { border-color: var(--qt-pine-hover); background: var(--qt-pine-hover); color: #fff; }
 .qt .qt-unit.is-many .is-cut .qt-actions .primary.qt-icon-button { border-color: var(--qt-brick); background: var(--qt-brick); color: #fff; }
@@ -427,6 +428,9 @@
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button.qt-again-line { border-color: var(--qt-amber); background: var(--qt-amber); color: var(--qt-ink); }
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button.qt-again-line:hover:not(:disabled) { border-color: var(--qt-amber-hover); background: var(--qt-amber-hover); color: var(--qt-ink); }
 .qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button.qt-again-line:disabled { border-color: var(--qt-disabled); background: var(--qt-disabled); color: var(--qt-disabled-text); }
+.qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button.qt-swap-line { border-color: #2b5cad; background: #2b5cad; color: #fff; }
+.qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button.qt-swap-line:hover:not(:disabled) { border-color: #214a8e; background: #214a8e; color: #fff; }
+.qt .qt-unit.is-many :is(.qt-slot, .qt-screen-line) .qt-actions .qt-icon-button.qt-swap-line:disabled { border-color: var(--qt-disabled); background: var(--qt-disabled); color: var(--qt-disabled-text); }
 .qt :is(.qt-slot, .qt-screen-line) .qt-actions.is-quiet { position: absolute; right: 0; bottom: 0; z-index: 1; margin: 0; padding-left: 8px; background: var(--qt-fill); opacity: 0; transition: opacity .12s; }
 .qt :is(.qt-slot-line, .qt-screen-line):is(:hover, :focus-within) > .qt-actions.is-quiet { opacity: 1; }
 @media (hover: none) {
