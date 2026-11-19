@@ -4,7 +4,7 @@
  *   node test/run.cjs                     every test, except the end-to-end ones
  *   node test/run.cjs account-step heard  only the named ones (.cjs, .test.mjs or .html)
  *   node test/run.cjs --all               every test, end-to-end ones too
- *   node test/run.cjs --jobs 6            up to 6 at once (default 4: more overloads a laptop)
+ *   node test/run.cjs --jobs 6            up to 6 at once (default: 12, or fewer on a smaller machine)
  *
  * The slowest tests start first (their times are kept from the last run in
  * test/.durations.json, not in git), so one long test never finishes alone
@@ -36,7 +36,8 @@ const everything = args.includes('--all');
 const E2E = new Set(['tailor-window']);
 const DURATIONS = path.join(__dirname, '.durations.json');
 const jobsAt = args.indexOf('--jobs');
-const jobs = jobsAt >= 0 ? Math.max(1, Number(args[jobsAt + 1]) || 4) : 4;
+const defaultJobs = Math.min(12, Math.max(2, os.availableParallelism() - 2));
+const jobs = jobsAt >= 0 ? Math.max(1, Number(args[jobsAt + 1]) || defaultJobs) : defaultJobs;
 const names = (jobsAt >= 0 ? args.filter((_, index) => index !== jobsAt && index !== jobsAt + 1) : args).filter((name) => name !== '--all').map((name) => name.replace(/\.(cjs|test\.mjs|html)$/, ''));
 const puppeteer = require(require.resolve('puppeteer-core', { paths: [path.resolve(root, '../backend')] }));
 const chromePath = process.env.CHROME_PATH || (process.platform === 'darwin'

@@ -1,4 +1,5 @@
 const { readdirSync } = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -23,16 +24,35 @@ const files = findTests(root)
   })
   .sort();
 if (!files.length) throw new Error(`No ${mode} tests found.`);
+// Test files run side by side. Database tests share one database (each makes its own users),
+// so they get fewer places, and the migrations run once here instead of once per file.
+const cores = Math.max(1, os.availableParallelism() - 1);
+const jobs = Number(process.env.TEST_JOBS) || (mode === 'integration' ? Math.min(cores, 6) : cores);
+const env = { ...process.env };
+if (mode === 'integration') {
+  require('dotenv/config');
+  const address = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!address) throw new Error('Set DATABASE_URL (or TEST_DATABASE_URL) to reach Postgres.');
+  const url = new URL(address);
+  if (!process.env.TEST_DATABASE_URL) url.pathname = '/cv_test';
+  if (!url.pathname.endsWith('_test')) throw new Error(`Refusing to migrate "${url.pathname}": not a test database.`);
+  const migrated = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
+    env: { ...process.env, DATABASE_URL: url.toString(), PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
+  if (migrated.status !== 0) process.exit(migrated.status ?? 1);
+  env.TEST_DATABASE_MIGRATED = '1';
+}
 const result = spawnSync(
   process.execPath,
   [
     '--require',
     require.resolve('ts-node/register/transpile-only'),
     '--test',
-    '--test-concurrency=1',
+    `--test-concurrency=${jobs}`,
     ...files,
   ],
-  { stdio: 'inherit' },
+  { stdio: 'inherit', env },
 );
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;

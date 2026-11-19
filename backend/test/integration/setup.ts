@@ -35,6 +35,8 @@ process.env.PDF_RENDERING = 'off';
 
 /** Creates the test database if needed and applies any pending migrations. */
 export function migrateTestDatabase(): void {
+  // The test runner has already done it, once for all the files.
+  if (process.env.TEST_DATABASE_MIGRATED) return;
   execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: url, PRISMA_HIDE_UPDATE_MESSAGE: '1' },
     stdio: 'pipe',
